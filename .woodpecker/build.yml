@@ -42,4 +42,15 @@ steps:
       - ls -lah app/build/outputs/apk/debug || true
       - cp app/build/outputs/apk/debug/app-debug.apk WeatherWall-debug.apk
       - echo "APK built successfully!"
-      - echo "Size:" && du -h WeatherWall-debug.apk
+      - du -h WeatherWall-debug.apk
+      - sha256sum WeatherWall-debug.apk
+      - |
+        # Upload to transfer.sh for easy download (expires in 14 days)
+        echo "Uploading APK to transfer.sh..."
+        DOWNLOAD_URL=$(curl --upload-file WeatherWall-debug.apk https://transfer.sh/WeatherWall-debug.apk 2>/dev/null)
+        echo ""
+        echo "========================================"
+        echo "📥 APK DOWNLOAD LINK:"
+        echo "$DOWNLOAD_URL"
+        echo "========================================"
+        echo ""
