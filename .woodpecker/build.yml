@@ -11,7 +11,7 @@ steps:
         if [ ! -f "./gradlew" ]; then
           echo "Downloading Gradle wrapper..."
           mkdir -p gradle/wrapper
-          curl -sL -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.13/gradle/wrapper/gradle-wrapper.jar
+          curl -sL -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.13.0/gradle/wrapper/gradle-wrapper.jar
           cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
         distributionBase=GRADLE_USER_HOME
         distributionPath=wrapper/dists
@@ -21,7 +21,7 @@ steps:
         zipStoreBase=GRADLE_USER_HOME
         zipStorePath=wrapper/dists
         EOF
-          curl -sL -o gradlew https://raw.githubusercontent.com/gradle/gradle/v8.13/gradlew
+          curl -sL -o gradlew https://raw.githubusercontent.com/gradle/gradle/v8.13.0/gradlew
           chmod +x gradlew
         fi
       - chmod +x ./gradlew
