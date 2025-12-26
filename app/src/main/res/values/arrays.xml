@@ -7,4 +7,17 @@
         <item>20</item>
         <item>30</item>
     </string-array>
+
+    <string-array name="weather_options">
+        <item>None</item>
+        <item>Rain</item>
+        <item>Snow</item>
+        <item>Lightning</item>
+    </string-array>
+    <string-array name="weather_values">
+        <item>none</item>
+        <item>rain</item>
+        <item>snow</item>
+        <item>lightning</item>
+    </string-array>
 </resources>

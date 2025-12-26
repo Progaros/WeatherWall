@@ -4,11 +4,19 @@
         <SwitchPreferenceCompat
             android:key="pref_parallax_enabled"
             android:title="3D Parallax"
+            android:summary="Enable sensor-based parallax effect"
             android:defaultValue="true" />
 
         <SwitchPreferenceCompat
             android:key="pref_fog_enabled"
             android:title="Fog"
+            android:summary="Enable fog overlay effect"
+            android:defaultValue="true" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_daynight_enabled"
+            android:title="Day/Night Cycle"
+            android:summary="Change sky colors based on time of day"
             android:defaultValue="true" />
 
         <ListPreference
@@ -19,10 +27,34 @@
             android:defaultValue="30" />
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="Easter">
+    <PreferenceCategory android:title="Weather Effects">
+        <SwitchPreferenceCompat
+            android:key="pref_weather_enabled"
+            android:title="Enable Weather"
+            android:summary="Show weather particles on screen"
+            android:defaultValue="true" />
+
+        <ListPreference
+            android:key="pref_weather_type"
+            android:title="Weather Type"
+            android:summary="Select weather effect to display"
+            android:entries="@array/weather_options"
+            android:entryValues="@array/weather_values"
+            android:defaultValue="none"
+            android:dependency="pref_weather_enabled" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="Seasonal &amp; Easter Eggs">
+        <SwitchPreferenceCompat
+            android:key="pref_seasonal_enabled"
+            android:title="Seasonal Events"
+            android:summary="Christmas stars, New Year fireworks (Dec-Jan)"
+            android:defaultValue="true" />
+
         <SwitchPreferenceCompat
             android:key="pref_easter_enabled"
-            android:title="Enable Easter Egg"
+            android:title="Easter Egg"
+            android:summary="Multi-tap to toggle secret mode"
             android:defaultValue="true" />
     </PreferenceCategory>
 
