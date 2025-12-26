@@ -1,12 +1,47 @@
-<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <PreferenceCategory android:title="Visual">
+    <!-- Scene Settings -->
+    <PreferenceCategory android:title="Scene">
+        <SeekBarPreference
+            android:key="pref_tree_count"
+            android:title="Tree Count"
+            android:defaultValue="12"
+            android:max="30"
+            app:min="3"
+            app:showSeekBarValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_tree_size"
+            android:title="Tree Size"
+            android:summary="Adjust tree scale (100 = normal)"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="50"
+            app:showSeekBarValue="true" />
+    </PreferenceCategory>
+
+    <!-- 3D Parallax Settings -->
+    <PreferenceCategory android:title="3D Parallax">
         <SwitchPreferenceCompat
             android:key="pref_parallax_enabled"
-            android:title="3D Parallax"
-            android:summary="Enable sensor-based parallax effect"
+            android:title="Enable 3D Parallax"
+            android:summary="Sensor-based parallax effect"
             android:defaultValue="true" />
 
+        <SeekBarPreference
+            android:key="pref_parallax_strength"
+            android:title="Parallax Strength"
+            android:summary="How much the scene moves"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="10"
+            app:showSeekBarValue="true"
+            android:dependency="pref_parallax_enabled" />
+    </PreferenceCategory>
+
+    <!-- Visual Effects -->
+    <PreferenceCategory android:title="Visual Effects">
         <SwitchPreferenceCompat
             android:key="pref_fog_enabled"
             android:title="Fog"
@@ -27,6 +62,7 @@
             android:defaultValue="30" />
     </PreferenceCategory>
 
+    <!-- Weather Effects -->
     <PreferenceCategory android:title="Weather Effects">
         <SwitchPreferenceCompat
             android:key="pref_weather_enabled"
@@ -42,8 +78,14 @@
             android:entryValues="@array/weather_values"
             android:defaultValue="none"
             android:dependency="pref_weather_enabled" />
+
+        <Preference
+            android:key="pref_check_breezy"
+            android:title="Check Breezy Weather"
+            android:summary="Test connection to Breezy Weather app" />
     </PreferenceCategory>
 
+    <!-- Seasonal &amp; Easter Eggs -->
     <PreferenceCategory android:title="Seasonal &amp; Easter Eggs">
         <SwitchPreferenceCompat
             android:key="pref_seasonal_enabled"
@@ -54,8 +96,27 @@
         <SwitchPreferenceCompat
             android:key="pref_easter_enabled"
             android:title="Easter Egg"
-            android:summary="Multi-tap to toggle secret mode"
+            android:summary="Tap version 5 times to toggle secret mode"
             android:defaultValue="true" />
+    </PreferenceCategory>
+
+    <!-- About -->
+    <PreferenceCategory android:title="About">
+        <Preference
+            android:key="pref_version"
+            android:title="Version"
+            android:summary="Tap 5 times for Easter Egg"
+            android:selectable="true" />
+
+        <Preference
+            android:key="pref_export_log"
+            android:title="Export Debug Log"
+            android:summary="Generate log file for troubleshooting" />
+
+        <Preference
+            android:key="pref_preview"
+            android:title="Preview Wallpaper"
+            android:summary="Open wallpaper preview" />
     </PreferenceCategory>
 
 </PreferenceScreen>

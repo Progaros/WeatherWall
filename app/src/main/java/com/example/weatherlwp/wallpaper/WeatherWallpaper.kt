@@ -79,7 +79,11 @@ class WeatherWallpaper : WallpaperService() {
         override fun onTriggered(taps: Int) {
             val prefs = PreferenceManager.getDefaultSharedPreferences(this@WeatherWallpaper)
             val enabled = prefs.getBoolean("pref_easter_enabled", true)
-            if (enabled) easterMode = !easterMode
+            if (enabled) {
+                easterMode = !easterMode
+                // Also save to prefs so settings can read it
+                prefs.edit().putBoolean("easter_mode_active", easterMode).apply()
+            }
         }
 
         private fun loadPrefs() {
@@ -91,6 +95,12 @@ class WeatherWallpaper : WallpaperService() {
             seasonalEnabled = prefs.getBoolean("pref_seasonal_enabled", true)
             targetFps = prefs.getString("pref_max_fps", "30")?.toIntOrNull() ?: 30
             targetFps = targetFps.coerceIn(10, 60)
+
+            // Load easter mode from prefs (can be set from settings too)
+            easterMode = prefs.getBoolean("easter_mode_active", false)
+
+            // Reload scene settings
+            scene.loadSettings()
 
             // Weather type: none, rain, snow, lightning
             currentWeather = prefs.getString("pref_weather_type", "none") ?: "none"
