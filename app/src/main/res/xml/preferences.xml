@@ -1,0 +1,29 @@
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <PreferenceCategory android:title="Visual">
+        <SwitchPreferenceCompat
+            android:key="pref_parallax_enabled"
+            android:title="3D Parallax"
+            android:defaultValue="true" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_fog_enabled"
+            android:title="Fog"
+            android:defaultValue="true" />
+
+        <ListPreference
+            android:key="pref_max_fps"
+            android:title="Max FPS"
+            android:entries="@array/fps_options"
+            android:entryValues="@array/fps_values"
+            android:defaultValue="30" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="Easter">
+        <SwitchPreferenceCompat
+            android:key="pref_easter_enabled"
+            android:title="Enable Easter Egg"
+            android:defaultValue="true" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

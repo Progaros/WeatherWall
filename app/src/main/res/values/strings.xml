@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">WeatherWall</string>
+    <string name="wallpaper_description">Weather-reactive live wallpaper</string>
+</resources>

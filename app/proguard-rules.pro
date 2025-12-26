@@ -1,0 +1,3 @@
+-keep class com.example.weatherlwp.** { *; }
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile

@@ -1,0 +1,10 @@
+<resources>
+    <string-array name="fps_options">
+        <item>20 FPS</item>
+        <item>30 FPS</item>
+    </string-array>
+    <string-array name="fps_values">
+        <item>20</item>
+        <item>30</item>
+    </string-array>
+</resources>

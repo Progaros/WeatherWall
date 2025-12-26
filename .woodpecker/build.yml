@@ -1,0 +1,30 @@
+when:
+  event: [push, pull_request]
+
+steps:
+  - name: setup
+    image: ghcr.io/cirruslabs/android-sdk:35
+    environment:
+      GRADLE_USER_HOME: .gradle
+    commands:
+      - |
+        if [ ! -f "./gradlew" ]; then
+          echo "Generating Gradle wrapper..."
+          gradle wrapper --gradle-version 8.10.2
+        fi
+      - chmod +x ./gradlew
+
+  - name: test
+    image: ghcr.io/cirruslabs/android-sdk:35
+    environment:
+      GRADLE_USER_HOME: .gradle
+    commands:
+      - ./gradlew test --no-daemon --stacktrace
+
+  - name: assembleDebug
+    image: ghcr.io/cirruslabs/android-sdk:35
+    environment:
+      GRADLE_USER_HOME: .gradle
+    commands:
+      - ./gradlew assembleDebug --no-daemon --stacktrace
+      - ls -lah app/build/outputs/apk/debug || true
