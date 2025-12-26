@@ -53,10 +53,9 @@ steps:
         from_secret: forgejo_token
       files:
         - WeatherWall-debug.apk
-      title: "Dev Build ${CI_COMMIT_SHA:0:8}"
+      title: "${CI_COMMIT_TAG}"
       note: |
-        Automated build from commit ${CI_COMMIT_SHA}
-        Branch: ${CI_COMMIT_BRANCH}
+        Automated build from tag ${CI_COMMIT_TAG}
+        Commit: ${CI_COMMIT_SHA}
     when:
-      - event: push
-        branch: main
+      - event: tag
