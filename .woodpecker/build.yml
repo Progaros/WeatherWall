@@ -1,5 +1,5 @@
 when:
-  event: [push, pull_request]
+  event: [push, pull_request, tag]
 
 steps:
   - name: setup
@@ -44,13 +44,19 @@ steps:
       - echo "APK built successfully!"
       - du -h WeatherWall-debug.apk
       - sha256sum WeatherWall-debug.apk
-      - |
-        # Upload to transfer.sh for easy download (expires in 14 days)
-        echo "Uploading APK to transfer.sh..."
-        DOWNLOAD_URL=$(curl --upload-file WeatherWall-debug.apk https://transfer.sh/WeatherWall-debug.apk 2>/dev/null)
-        echo ""
-        echo "========================================"
-        echo "📥 APK DOWNLOAD LINK:"
-        echo "$DOWNLOAD_URL"
-        echo "========================================"
-        echo ""
+
+  - name: publish-release
+    image: thegeeklab/wp-gitea-release
+    settings:
+      base_url: https://git.olli.info
+      api_key:
+        from_secret: forgejo_token
+      files:
+        - WeatherWall-debug.apk
+      title: "Dev Build ${CI_COMMIT_SHA:0:8}"
+      note: |
+        Automated build from commit ${CI_COMMIT_SHA}
+        Branch: ${CI_COMMIT_BRANCH}
+    when:
+      - event: push
+        branch: main
