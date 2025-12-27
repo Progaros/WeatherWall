@@ -81,7 +81,8 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
     private val starPaint = Paint().apply { color = Color.WHITE; isAntiAlias = true; style = Paint.Style.FILL }
 
     // Reusable paths
-    private val mountainPath = Path()
+    private val mountainPathLeft = Path()
+    private val mountainPathRight = Path()
     private val treePath = Path()
 
     private var ox = 0f
@@ -100,8 +101,26 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
     // Star positions (x ratio, y ratio, size) - tiny white dots only (per ai.md)
     private val stars = Array(100) { floatArrayOf(Random.nextFloat(), Random.nextFloat() * 0.5f, 0.5f + Random.nextFloat() * 2f) }
 
-    // Mountain data (peakX, peakHeight, slopeWidth, depthFactor)
-    private data class MountainData(val peakX: Float, val peakHeight: Float, val slopeWidth: Float, val depthFactor: Float)
+    private data class MountainShape(
+        val stepsLeft: Int,
+        val stepsRight: Int,
+        val leftJitter: FloatArray,
+        val rightJitter: FloatArray,
+        val ridgeSteps: Int,
+        val ridgeJitterX: FloatArray,
+        val ridgeJitterY: FloatArray,
+        // Bias in [-0.125, 0.125] (roughly). Used to shift the ridge base away from center.
+        val baseCenterBias: Float,
+    )
+
+    // Mountain data (peakX, peakHeight, slopeWidth, depthFactor, shape)
+    private data class MountainData(
+        val peakX: Float,
+        val peakHeight: Float,
+        val slopeWidth: Float,
+        val depthFactor: Float,
+        val shape: MountainShape,
+    )
     private val mountains = mutableListOf<MountainData>()
 
     // Tree data (x ratio, y ratio, scale, depth factor)
@@ -167,8 +186,9 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             mountains.clear()
             if (mountainCount <= 0) return
             
-            // Use timestamp for variety but store it so it's consistent during a session
-            val random = Random(System.currentTimeMillis() / 60000)  // Changes every minute
+            // Use a time-based seed for variety per session. Shapes are precomputed so they remain
+            // stable frame-to-frame (no crawling/flicker).
+            val random = Random(System.currentTimeMillis() / 60000)
             
             // Generate mountains with truly random positions across the screen
             for (i in 0 until mountainCount) {
@@ -180,24 +200,29 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 
                 // Far mountains (low depth) are taller and more prominent
                 // Near mountains (high depth) are lower to create foreground hills
+                // NOTE: peakHeight is a Y ratio (0 = top). Larger value => peak is lower => mountain is shorter.
+                // Keep mountains a bit broader and less tall to avoid “needle” peaks (especially in short previews).
                 val baseHeight = when {
-                    depth < 0.3f -> 0.25f + random.nextFloat() * 0.15f  // Far: tall peaks (25-40%)
-                    depth < 0.6f -> 0.18f + random.nextFloat() * 0.12f  // Mid: medium (18-30%)
-                    else -> 0.12f + random.nextFloat() * 0.10f          // Near: low hills (12-22%)
+                    depth < 0.3f -> 0.32f + random.nextFloat() * 0.14f  // Far: prominent but not too tall (32-46%)
+                    depth < 0.6f -> 0.38f + random.nextFloat() * 0.12f  // Mid: medium (38-50%)
+                    else -> 0.45f + random.nextFloat() * 0.10f          // Near: low foothills (45-55%)
                 }
                 
                 // Wider slopes for far mountains, narrower for near
                 val slopeWidth = when {
-                    depth < 0.3f -> 0.30f + random.nextFloat() * 0.15f  // Far: wide
-                    depth < 0.6f -> 0.22f + random.nextFloat() * 0.12f  // Mid: medium
-                    else -> 0.15f + random.nextFloat() * 0.10f          // Near: narrow
+                    depth < 0.3f -> 0.40f + random.nextFloat() * 0.18f  // Far: wide
+                    depth < 0.6f -> 0.32f + random.nextFloat() * 0.16f  // Mid: medium
+                    else -> 0.24f + random.nextFloat() * 0.14f          // Near: still broad, avoids slim spikes
                 }
+
+                val shape = createMountainShape(random, slopeWidth)
                 
                 mountains.add(MountainData(
                     peakX = peakX,
                     peakHeight = baseHeight,
                     slopeWidth = slopeWidth,
-                    depthFactor = 0.10f + depth * 0.50f  // Far = 0.10, near = 0.60 (stronger parallax)
+                    depthFactor = 0.10f + depth * 0.50f,  // Far = 0.10, near = 0.60 (stronger parallax)
+                    shape = shape,
                 ))
             }
             
@@ -206,6 +231,52 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
         } catch (e: Exception) {
             Log.e(TAG, "Error generating mountains", e)
         }
+    }
+
+    private fun createMountainShape(random: Random, slopeWidth: Float): MountainShape {
+        // Wider mountains get more facets; narrower get fewer.
+        val stepsBase = (14 + (slopeWidth * 20f).toInt()).coerceIn(14, 26)
+        val stepsLeft = (stepsBase + random.nextInt(5)).coerceIn(14, 28)
+        val stepsRight = (stepsBase + random.nextInt(5)).coerceIn(14, 28)
+        val ridgeSteps = (7 + random.nextInt(5)).coerceIn(7, 12)
+
+        fun nextJitter(): Float {
+            // Bias towards smaller jitter; still allows sharp spikes.
+            val signed = random.nextFloat() * 2f - 1f
+            return signed * random.nextFloat()
+        }
+
+        val leftJitter = FloatArray((stepsLeft - 1).coerceAtLeast(0)) { nextJitter() }
+        val rightJitter = FloatArray((stepsRight - 1).coerceAtLeast(0)) { nextJitter() }
+        val ridgeJitterX = FloatArray((ridgeSteps - 1).coerceAtLeast(0)) { nextJitter() }
+        val ridgeJitterY = FloatArray((ridgeSteps - 1).coerceAtLeast(0)) { nextJitter() }
+
+        // Keep the ridge base slightly off-center for asymmetry.
+        val baseCenterBias = ((random.nextFloat() - 0.5f) * 0.25f).coerceIn(-0.125f, 0.125f)
+
+        return MountainShape(
+            stepsLeft = stepsLeft,
+            stepsRight = stepsRight,
+            leftJitter = leftJitter,
+            rightJitter = rightJitter,
+            ridgeSteps = ridgeSteps,
+            ridgeJitterX = ridgeJitterX,
+            ridgeJitterY = ridgeJitterY,
+            baseCenterBias = baseCenterBias,
+        )
+    }
+
+    private fun multiplyColor(color: Int, factor: Float): Int {
+        val a = Color.alpha(color)
+        val r = (Color.red(color) * factor).toInt().coerceIn(0, 255)
+        val g = (Color.green(color) * factor).toInt().coerceIn(0, 255)
+        val b = (Color.blue(color) * factor).toInt().coerceIn(0, 255)
+        return Color.argb(a, r, g, b)
+    }
+
+    private fun envelope(t: Float): Float {
+        // 0 at endpoints, 1 near center. (t*(1-t)*4) peaks at 1 when t=0.5
+        return (t * (1f - t) * 4f).coerceIn(0f, 1f)
     }
 
     /**
@@ -628,9 +699,10 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
 
             // Layer 0: Sky gradient (moves OPPOSITE direction for depth illusion - ai.md spec)
             // Sky should appear far behind, moving opposite to foreground
+            val overscan = 300f + kotlin.math.abs(ox) * 0.4f + kotlin.math.abs(oy) * 0.4f
             canvas.save()
             canvas.translate(-ox * 0.15f, -oy * 0.08f)  // Opposite direction, subtle movement
-            canvas.drawRect(-100f, -100f, w + 100f, h + 100f, skyPaint)
+            canvas.drawRect(-overscan, -overscan, w + overscan, h + overscan, skyPaint)
             canvas.restore()
 
             // Stars (night/dusk only) - tiny white dots per ai.md with subtle parallax
@@ -668,7 +740,7 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 val mountainParallax = 0.05f + normalizedDepth * 0.10f
                 canvas.save()
                 canvas.translate(ox * mountainParallax, oy * mountainParallax * 0.3f)
-                drawMountain(canvas, w, h, mountain.peakX, mountain.peakHeight, mountain.slopeWidth)
+                drawMountain(canvas, w, h, mountain)
                 canvas.restore()
             }
 
@@ -723,35 +795,85 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
     }
 
     /**
-     * Draw a single Fuji-style mountain peak with smooth curves.
+     * Draw a jagged low-poly mountain with a split ridge (light/shadow sides).
+     * The silhouette and ridge are deterministic (precomputed in MountainData.shape).
      */
-    private fun drawMountain(canvas: Canvas, w: Float, h: Float,
-                              peakX: Float, peakHeight: Float, slopeWidth: Float) {
-        mountainPath.reset()
-        
-        val peakCenterX = w * peakX
-        val peakY = h * peakHeight
-        val baseY = h  // Bottom of screen
-        
-        // Start from bottom left, outside screen
-        mountainPath.moveTo(-100f, baseY)
-        
-        // Left side rise with gentle curve
-        mountainPath.quadTo(
-            peakCenterX - w * slopeWidth * 0.5f, baseY * 0.85f,
-            peakCenterX, peakY
-        )
-        
-        // Right side descent with gentle curve
-        mountainPath.quadTo(
-            peakCenterX + w * slopeWidth * 0.5f, baseY * 0.85f,
-            w + 100f, baseY
-        )
-        
-        // Close along bottom
-        mountainPath.close()
-        
-        canvas.drawPath(mountainPath, mountainPaint)
+    private fun drawMountain(canvas: Canvas, w: Float, h: Float, mountain: MountainData) {
+        mountainPathLeft.reset()
+        mountainPathRight.reset()
+
+        val peakCenterX = w * mountain.peakX
+        val peakY = h * mountain.peakHeight
+        val baseY = h
+
+        val halfWidthPx = w * mountain.slopeWidth * 0.5f
+        val leftBaseX = (peakCenterX - halfWidthPx).coerceIn(-100f, w + 100f)
+        val rightBaseX = (peakCenterX + halfWidthPx).coerceIn(-100f, w + 100f)
+
+        val baseCenterX = (leftBaseX + (rightBaseX - leftBaseX) * (0.5f + mountain.shape.baseCenterBias))
+            .coerceIn(-100f, w + 100f)
+
+        val mountainHeightPx = (baseY - peakY).coerceAtLeast(1f)
+        val silhouetteRoughY = mountainHeightPx * 0.10f
+        val ridgeRoughX = (rightBaseX - leftBaseX).coerceAtLeast(1f) * 0.06f
+        val ridgeRoughY = mountainHeightPx * 0.05f
+
+        // Left (lit) side polygon
+        mountainPathLeft.moveTo(leftBaseX, baseY)
+        for (i in 1 until mountain.shape.stepsLeft) {
+            val t = i.toFloat() / mountain.shape.stepsLeft.toFloat()
+            val x = leftBaseX + (peakCenterX - leftBaseX) * t
+            val idealY = baseY + (peakY - baseY) * t
+            val jitter = mountain.shape.leftJitter.getOrNull(i - 1) ?: 0f
+            val y = idealY + jitter * silhouetteRoughY * envelope(t)
+            mountainPathLeft.lineTo(x, y)
+        }
+        mountainPathLeft.lineTo(peakCenterX, peakY)
+        for (i in 1 until mountain.shape.ridgeSteps) {
+            val t = i.toFloat() / mountain.shape.ridgeSteps.toFloat()
+            val idealX = peakCenterX + (baseCenterX - peakCenterX) * t
+            val idealY = peakY + (baseY - peakY) * t
+            val jitterX = mountain.shape.ridgeJitterX.getOrNull(i - 1) ?: 0f
+            val jitterY = mountain.shape.ridgeJitterY.getOrNull(i - 1) ?: 0f
+            val x = idealX + jitterX * ridgeRoughX * envelope(t)
+            val y = idealY + jitterY * ridgeRoughY * envelope(t)
+            mountainPathLeft.lineTo(x, y)
+        }
+        mountainPathLeft.lineTo(baseCenterX, baseY)
+        mountainPathLeft.close()
+
+        // Right (shadow) side polygon
+        mountainPathRight.moveTo(baseCenterX, baseY)
+        for (i in (mountain.shape.ridgeSteps - 1) downTo 1) {
+            val t = i.toFloat() / mountain.shape.ridgeSteps.toFloat()
+            val idealX = peakCenterX + (baseCenterX - peakCenterX) * t
+            val idealY = peakY + (baseY - peakY) * t
+            val jitterX = mountain.shape.ridgeJitterX.getOrNull(i - 1) ?: 0f
+            val jitterY = mountain.shape.ridgeJitterY.getOrNull(i - 1) ?: 0f
+            val x = idealX + jitterX * ridgeRoughX * envelope(t)
+            val y = idealY + jitterY * ridgeRoughY * envelope(t)
+            mountainPathRight.lineTo(x, y)
+        }
+        mountainPathRight.lineTo(peakCenterX, peakY)
+        for (i in 1 until mountain.shape.stepsRight) {
+            val t = i.toFloat() / mountain.shape.stepsRight.toFloat()
+            val x = peakCenterX + (rightBaseX - peakCenterX) * t
+            val idealY = peakY + (baseY - peakY) * t
+            val jitter = mountain.shape.rightJitter.getOrNull(i - 1) ?: 0f
+            val y = idealY + jitter * silhouetteRoughY * envelope(t)
+            mountainPathRight.lineTo(x, y)
+        }
+        mountainPathRight.lineTo(rightBaseX, baseY)
+        mountainPathRight.close()
+
+        val lightColor = mountainPaint.color
+        val darkColor = multiplyColor(lightColor, 0.82f)
+
+        mountainPaint.color = lightColor
+        canvas.drawPath(mountainPathLeft, mountainPaint)
+        mountainPaint.color = darkColor
+        canvas.drawPath(mountainPathRight, mountainPaint)
+        mountainPaint.color = lightColor
     }
 
     /**

@@ -1,8 +1,6 @@
 # WeatherWall
 
 [![Build Status](https://ci.olli.info/api/badges/4/status.svg)](https://ci.olli.info/repos/4)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Android API](https://img.shields.io/badge/API-26%2B-brightgreen.svg)](https://android-arsenal.com/api?level=26)
 
 **Open-source, privacy-respecting, battery-friendly Android Live Wallpaper** with low-poly vector layers, weather effects, seasonal events, and optional 3D parallax.
 

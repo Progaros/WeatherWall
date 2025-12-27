@@ -56,6 +56,9 @@ class MainActivity : AppCompatActivity() {
             else -> CloudLayer.CloudDensity.LIGHT
         })
         
+        previewSurface.setZOrderOnTop(true)
+        previewSurface.holder.setFormat(android.graphics.PixelFormat.TRANSPARENT)
+        
         previewSurface.holder.addCallback(object : SurfaceHolder.Callback {
             override fun surfaceCreated(holder: SurfaceHolder) {
                 Log.d(TAG, "Preview surface created, holder=$holder")

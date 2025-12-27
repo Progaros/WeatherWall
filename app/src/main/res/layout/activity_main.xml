@@ -17,8 +17,7 @@
     <SurfaceView
         android:id="@+id/preview_surface"
         android:layout_width="match_parent"
-        android:layout_height="120dp"
-        android:background="#000000" />
+        android:layout_height="120dp" />
 
     <FrameLayout
         android:id="@+id/settings_container"

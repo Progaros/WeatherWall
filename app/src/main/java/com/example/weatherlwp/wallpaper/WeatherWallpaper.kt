@@ -54,6 +54,33 @@ class WeatherWallpaper : WallpaperService() {
             }
         }
 
+        override fun onSurfaceCreated(holder: SurfaceHolder) {
+            super.onSurfaceCreated(holder)
+            try {
+                // Some wallpaper preview flows create a surface without reliably calling
+                // onVisibilityChanged(true) first. Treat a created surface as visible.
+                visible = true
+                loadPrefs()
+                if (parallaxEnabled) scene.start()
+                startRender()
+                // Paint at least one frame immediately so previews don't stay black.
+                drawFrame()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in onSurfaceCreated", e)
+            }
+        }
+
+        override fun onSurfaceDestroyed(holder: SurfaceHolder) {
+            try {
+                visible = false
+                stopRender()
+                scene.stop()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in onSurfaceDestroyed", e)
+            }
+            super.onSurfaceDestroyed(holder)
+        }
+
         override fun onVisibilityChanged(visible: Boolean) {
             this.visible = visible
             try {
