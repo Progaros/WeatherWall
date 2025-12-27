@@ -15,17 +15,19 @@ object WeatherRepository {
     private const val KEY_SUNRISE = "weather_sunrise"
     private const val KEY_SUNSET = "weather_sunset"
     private const val KEY_LAST_UPDATE = "weather_last_update"
+    private const val KEY_WIND_SPEED = "weather_wind_speed"  // Wind speed in m/s
     
-    fun updateWeather(context: Context, type: WeatherType, sunrise: Long, sunset: Long) {
+    fun updateWeather(context: Context, type: WeatherType, sunrise: Long, sunset: Long, windSpeed: Float = 0f) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         prefs.edit()
             .putString(KEY_WEATHER_TYPE, type.name)
             .putLong(KEY_SUNRISE, sunrise)
             .putLong(KEY_SUNSET, sunset)
+            .putFloat(KEY_WIND_SPEED, windSpeed)
             .putLong(KEY_LAST_UPDATE, System.currentTimeMillis())
             .apply()
         
-        Log.d(TAG, "Weather updated: type=$type, sunrise=$sunrise, sunset=$sunset")
+        Log.d(TAG, "Weather updated: type=$type, sunrise=$sunrise, sunset=$sunset, wind=$windSpeed m/s")
     }
     
     fun getWeatherType(context: Context): WeatherType {
@@ -46,6 +48,24 @@ object WeatherRepository {
     fun getSunset(context: Context): Long {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         return prefs.getLong(KEY_SUNSET, -1L)
+    }
+    
+    /**
+     * Get wind speed in m/s (0-50+ typical range).
+     * Returns 0 if no wind data available.
+     */
+    fun getWindSpeed(context: Context): Float {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        return prefs.getFloat(KEY_WIND_SPEED, 0f)
+    }
+    
+    /**
+     * Get normalized wind strength (0.0 to 1.0).
+     * Maps 0-20 m/s to 0-1 range (20+ m/s is strong wind/storm).
+     */
+    fun getNormalizedWindStrength(context: Context): Float {
+        val speed = getWindSpeed(context)
+        return (speed / 20f).coerceIn(0f, 1f)
     }
     
     fun getLastUpdate(context: Context): Long {

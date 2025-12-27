@@ -65,10 +65,14 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
             val sunrise = data.optLong("todaySunrise", -1)
             val sunset = data.optLong("todaySunset", -1)
             
-            // Store in repository
-            WeatherRepository.updateWeather(context, weatherType, sunrise, sunset)
+            // Wind speed in m/s (Breezy sends currentWindSpeed or windSpeed)
+            val windSpeed = data.optDouble("currentWindSpeed", 
+                data.optDouble("windSpeed", 0.0)).toFloat()
             
-            Log.i(TAG, "Weather updated: $weatherType (code=$conditionCode)")
+            // Store in repository
+            WeatherRepository.updateWeather(context, weatherType, sunrise, sunset, windSpeed)
+            
+            Log.i(TAG, "Weather updated: $weatherType (code=$conditionCode), wind=$windSpeed m/s")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse weather JSON", e)
         }

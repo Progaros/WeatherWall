@@ -7,7 +7,7 @@
             android:key="pref_mountain_count"
             android:title="Mountain Count"
             android:summary="Number of mountain peaks (0-10)"
-            android:defaultValue="3"
+            android:defaultValue="4"
             android:max="10"
             app:min="0"
             app:showSeekBarValue="true"
@@ -17,9 +17,19 @@
             android:key="pref_mountain_width"
             android:title="Mountain Width"
             android:summary="Width multiplier (50-300%)"
-            android:defaultValue="175"
+            android:defaultValue="200"
             android:max="300"
             app:min="50"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_mountain_height"
+            android:title="Mountain Height"
+            android:summary="Height multiplier (10-1000%)"
+            android:defaultValue="100"
+            android:max="1000"
+            app:min="10"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
 
@@ -27,9 +37,29 @@
             android:key="pref_hill_count"
             android:title="Hill Layers"
             android:summary="Rolling terrain layers (0-5)"
-            android:defaultValue="3"
+            android:defaultValue="5"
             android:max="5"
             app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_hill_lower_start"
+            android:title="Hills Start Position"
+            android:summary="Where far hills appear on screen (30-70%)"
+            android:defaultValue="55"
+            android:max="70"
+            app:min="30"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_hill_upper_end"
+            android:title="Hills End Position"
+            android:summary="Where near hills appear on screen (60-90%)"
+            android:defaultValue="75"
+            android:max="90"
+            app:min="60"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
 
@@ -37,7 +67,7 @@
             android:key="pref_tree_count"
             android:title="Tree Count"
             android:summary="Number of trees (0-100)"
-            android:defaultValue="20"
+            android:defaultValue="50"
             android:max="100"
             app:min="0"
             app:showSeekBarValue="true"
@@ -47,7 +77,7 @@
             android:key="pref_tree_size"
             android:title="Tree Size"
             android:summary="Size multiplier"
-            android:defaultValue="300"
+            android:defaultValue="200"
             android:max="1000"
             app:min="10"
             app:showSeekBarValue="true"
@@ -77,7 +107,7 @@
             android:title="Parallax Strength"
             android:summary="How much the scene moves"
             android:defaultValue="50"
-            android:max="100"
+            android:max="200"
             app:min="10"
             app:showSeekBarValue="true"
             app:updatesContinuously="true"

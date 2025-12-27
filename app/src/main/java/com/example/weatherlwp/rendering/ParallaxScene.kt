@@ -13,6 +13,7 @@ import android.graphics.Shader
 import android.util.Log
 import androidx.preference.PreferenceManager
 import com.example.weatherlwp.parallax.ParallaxSensorManager
+import com.example.weatherlwp.weather.WeatherRepository
 import java.util.Calendar
 import kotlin.random.Random
 
@@ -102,6 +103,18 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
     private var treeSegments = 3  // Global setting: 1-5 segments per tree
     private var mountainCount = 3
     private var mountainWidthScale = 1.0f
+    private var lastMountainWidthScale = 1.0f  // Track for live updates
+    private var mountainHeightScale = 1.0f     // Height multiplier (0.1 - 10.0)
+    
+    // Wind sway for trees (from Breezy Weather)
+    private var windSpeed = 0f  // 0-1 normalized wind strength
+    private var windTime = 0L   // Animation time
+    
+    // Hill vertical range settings
+    private var hillLowerStart = 0.55f  // Far hills start here (default)
+    private var hillUpperEnd = 0.75f    // Near hills end here (default)
+    private var lastHillLowerStart = 0.55f  // Track for live updates
+    private var lastHillUpperEnd = 0.75f    // Track for live updates
     
     // World generation bounds (wider than 0..1 to support landscape preview)
     // Extended to -4..5 to cover very wide aspect ratios (e.g. 4:1 preview strip)
@@ -195,6 +208,32 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             val rawMountainWidth = prefs.getInt("pref_mountain_width", 175)
             mountainWidthScale = (rawMountainWidth.toFloat() / 100f).coerceIn(0.5f, 3.0f)
             
+            // Mountain height (10-1000) - 100 = 1.0x scale
+            val rawMountainHeight = prefs.getInt("pref_mountain_height", 100)
+            mountainHeightScale = (rawMountainHeight.toFloat() / 100f).coerceIn(0.1f, 10f)
+            
+            // Hill vertical range settings
+            // Lower start (30-70%) - where far hills appear on screen
+            val rawHillLower = prefs.getInt("pref_hill_lower_start", 55)
+            hillLowerStart = (rawHillLower.toFloat() / 100f).coerceIn(0.30f, 0.70f)
+            
+            // Upper end (60-90%) - where near hills appear on screen
+            val rawHillUpper = prefs.getInt("pref_hill_upper_end", 75)
+            hillUpperEnd = (rawHillUpper.toFloat() / 100f).coerceIn(0.60f, 0.90f)
+            
+            // Ensure proper ordering (lower < upper)
+            if (hillLowerStart >= hillUpperEnd) {
+                hillUpperEnd = (hillLowerStart + 0.10f).coerceAtMost(0.90f)
+            }
+            
+            // Wind speed from Breezy Weather (normalized 0-1)
+            val useBreezyWeather = prefs.getBoolean("pref_use_breezy_weather", true)
+            windSpeed = if (useBreezyWeather) {
+                WeatherRepository.getNormalizedWindStrength(context)
+            } else {
+                0f
+            }
+            
             // Cloud settings
             val cloudsEnabled = prefs.getBoolean("pref_clouds_enabled", true)
             val cloudDensity = prefs.getString("pref_cloud_density", "auto") ?: "auto"
@@ -211,13 +250,20 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 }
             }
             
-            Log.d(TAG, "Settings loaded: trees=$treeCount, segments=$treeSegments, mountains=$mountainCount, hills=$hillCount, parallax=$parallaxStrength, mtnWidth=$mountainWidthScale, clouds=$cloudCount")
+            Log.d(TAG, "Settings loaded: trees=$treeCount, segments=$treeSegments, mountains=$mountainCount, hills=$hillCount, parallax=$parallaxStrength, mtnWidth=$mountainWidthScale, mtnHeight=$mountainHeightScale, hillRange=$hillLowerStart-$hillUpperEnd, clouds=$cloudCount")
 
-            if (mountains.size != mountainCount) {
+            // Regenerate mountains if count OR width changed (width affects shape generation)
+            if (mountains.size != mountainCount || mountainWidthScale != lastMountainWidthScale) {
+                lastMountainWidthScale = mountainWidthScale
                 generateMountains()
             }
-            if (hills.size != hillCount) {
+            // Regenerate hills if count OR vertical range changed
+            if (hills.size != hillCount || hillLowerStart != lastHillLowerStart || hillUpperEnd != lastHillUpperEnd) {
+                lastHillLowerStart = hillLowerStart
+                lastHillUpperEnd = hillUpperEnd
                 generateHills()
+                // Trees sit on hills, so regenerate them too when hills change
+                generateTrees()
             }
             if (trees.size != treeCount) {
                 generateTrees()
@@ -360,10 +406,9 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 val depth = (i.toFloat() / hillCount.coerceAtLeast(1)) // 0.0 to ~1.0
                 val depthFactor = 0.3f + depth * 0.2f  // 0.3 (far) to 0.5 (near) - matching tree parallax
                 
-                // Far hills (depth=0) are higher on screen (smaller heightOffset)
-                // Near hills (depth=1) are lower on screen (larger heightOffset)
-                // This creates proper depth perception
-                val heightOffset = TERRAIN_BASELINE_RATIO - 0.15f + depth * 0.20f  // Far: 0.55, Near: 0.75
+                // Far hills (depth=0) are at hillLowerStart, near hills (depth=1) at hillUpperEnd
+                // This creates proper depth perception with configurable vertical range
+                val heightOffset = hillLowerStart + depth * (hillUpperEnd - hillLowerStart)
                 
                 hills.add(HillData(
                     controlPoints = points,
@@ -766,6 +811,9 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 return
             }
             
+            // Update wind animation time
+            windTime = System.currentTimeMillis()
+            
             val theme = getThemeName()
             val timeOfDay = getTimeOfDay()
 
@@ -924,7 +972,7 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 val treeParallax = tree.depthFactor
                 canvas.save()
                 canvas.translate(ox * treeParallax, oy * treeParallax * 0.3f)
-                drawTree(canvas, tree.xRatio, h * tree.yRatio, tree.scale * treeScale, treeSegments, w, scaleX)
+                drawTree(canvas, tree.xRatio, h * tree.yRatio, tree.scale * treeScale, treeSegments, w, scaleX, tree.depthFactor)
                 canvas.restore()
             }
         } catch (e: Exception) {
@@ -941,8 +989,16 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
         mountainPathRight.reset()
 
         val peakCenterX = (mountain.peakX - 0.5f) * scaleX + w / 2f
-        val peakY = h * mountain.peakHeight
         val baseY = h
+        
+        // Apply height scale: mountainHeightScale affects how far the peak extends upward
+        // peakHeight is a Y ratio (0 = top, 1 = bottom). Lower value = taller mountain.
+        // With heightScale > 1, we reduce peakY to make the mountain extend higher.
+        // Formula: original height = baseY - (h * peakHeight) = h * (1 - peakHeight)
+        // New height = original * heightScale, so new peakY = baseY - height * heightScale
+        val originalHeight = h * (1f - mountain.peakHeight)
+        val scaledHeight = originalHeight * mountainHeightScale
+        val peakY = (baseY - scaledHeight).coerceAtLeast(h * 0.02f)  // Don't go above 2% of screen
 
         val halfWidthPx = scaleX * mountain.slopeWidth * 0.5f
         val leftBaseX = (peakCenterX - halfWidthPx).coerceIn(-100f, w + 100f)
@@ -1057,8 +1113,11 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
     /**
      * Draw a pine tree silhouette with variable segments (1-5).
      * Fewer segments = taller individual tiers.
+     * Wind sway: 2D sine wave - closer trees (higher depth) sway more.
+     * 
+     * @param depthFactor Tree's depth (0.3-0.5 range), used for wind sway intensity
      */
-    private fun drawTree(canvas: Canvas, xRatio: Float, baseY: Float, scale: Float, segments: Int, w: Float, scaleX: Float) {
+    private fun drawTree(canvas: Canvas, xRatio: Float, baseY: Float, scale: Float, segments: Int, w: Float, scaleX: Float, depthFactor: Float = 0.4f) {
         if (scale <= 0f || segments <= 0) return
         
         val x = (xRatio - 0.5f) * scaleX + w / 2f
@@ -1070,6 +1129,15 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
         
         // Height per segment - fewer segments = taller tiers
         val tierHeight = treeHeight / segments
+        
+        // Wind sway calculation
+        // - Closer trees (higher depthFactor) sway more
+        // - Use tree's X position for phase offset (so trees don't sway in sync)
+        // - Sway amount increases with height on tree (top sways more than base)
+        val normalizedDepth = ((depthFactor - 0.3f) / 0.2f).coerceIn(0f, 1f)  // 0 = far, 1 = near
+        val windIntensity = windSpeed * (0.3f + normalizedDepth * 0.7f)  // Far: 30%, Near: 100% of wind
+        val phaseOffset = xRatio * 3.14159f * 2f  // Different phase per tree position
+        val timeSeconds = windTime / 1000f
         
         // Draw each segment from bottom to top
         for (seg in 0 until segments) {
@@ -1083,11 +1151,25 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             val tierBottomY = baseY - seg * tierHeight * 0.65f  // Overlap tiers
             val tierTopY = tierBottomY - tierHeight
             
-            // Draw triangular tier
+            // Wind sway: Higher tiers sway more (top of tree moves most)
+            // Using sine wave with phase offset based on position and tier
+            val heightRatio = (seg + 1).toFloat() / segments  // 0 at base, 1 at top
+            val swayAmount = windIntensity * heightRatio * 25f * scale  // Max ~25px sway at full wind/scale
+            
+            // 2D sine wave: primary horizontal sway + subtle secondary wobble
+            val primarySway = kotlin.math.sin(timeSeconds * 2.5f + phaseOffset) * swayAmount
+            val secondarySway = kotlin.math.sin(timeSeconds * 4f + phaseOffset + 1.5f) * swayAmount * 0.3f
+            val totalSway = primarySway + secondarySway
+            
+            // Apply sway to X position (more at top, less at bottom)
+            val swayedX = x + totalSway
+            val bottomSwayedX = x + totalSway * 0.6f  // Bottom corners sway less
+            
+            // Draw triangular tier with wind sway
             treePath.reset()
-            treePath.moveTo(x, tierTopY)
-            treePath.lineTo(x - tierWidth, tierBottomY)
-            treePath.lineTo(x + tierWidth, tierBottomY)
+            treePath.moveTo(swayedX, tierTopY)
+            treePath.lineTo(bottomSwayedX - tierWidth, tierBottomY)
+            treePath.lineTo(bottomSwayedX + tierWidth, tierBottomY)
             treePath.close()
             canvas.drawPath(treePath, treePaint)
         }
