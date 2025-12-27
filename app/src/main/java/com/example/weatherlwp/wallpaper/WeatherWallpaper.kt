@@ -108,27 +108,43 @@ class WeatherWallpaper : WallpaperService() {
                 targetFps = prefs.getString("pref_max_fps", "30")?.toIntOrNull() ?: 30
                 targetFps = targetFps.coerceIn(10, 60)
                 
+                // Check if debug/simulation mode is enabled
+                val debugEnabled = prefs.getBoolean("pref_debug_enabled", false)
+                
                 // Reload scene settings (handles parallax, clouds, day/night, terrain)
                 scene.loadSettings()
 
-                // Weather type - can be auto (from Breezy Weather) or manual
+                // Weather type - check debug override first, then auto/manual
                 currentWeather = prefs.getString("pref_weather_type", "auto") ?: "auto"
                 
-                val effectiveWeather = if (currentWeather == "auto" && useBreezyWeather) {
-                    // Get weather from Breezy Weather data
-                    val breezyType = WeatherRepository.getWeatherType(this@WeatherWallpaper)
-                    when (breezyType) {
-                        WeatherType.RAIN -> WeatherLayer.WeatherType.RAIN
-                        WeatherType.SNOW -> WeatherLayer.WeatherType.SNOW
-                        WeatherType.THUNDERSTORM -> WeatherLayer.WeatherType.LIGHTNING
-                        else -> WeatherLayer.WeatherType.NONE
+                val effectiveWeather = when {
+                    // Debug mode: use the weather type setting directly (even if it's not "auto")
+                    debugEnabled && currentWeather != "auto" -> {
+                        when (currentWeather) {
+                            "rain" -> WeatherLayer.WeatherType.RAIN
+                            "snow" -> WeatherLayer.WeatherType.SNOW
+                            "lightning" -> WeatherLayer.WeatherType.LIGHTNING
+                            else -> WeatherLayer.WeatherType.NONE
+                        }
                     }
-                } else {
-                    when (currentWeather) {
-                        "rain" -> WeatherLayer.WeatherType.RAIN
-                        "snow" -> WeatherLayer.WeatherType.SNOW
-                        "lightning" -> WeatherLayer.WeatherType.LIGHTNING
-                        else -> WeatherLayer.WeatherType.NONE
+                    // Auto mode with Breezy Weather
+                    currentWeather == "auto" && useBreezyWeather -> {
+                        val breezyType = WeatherRepository.getWeatherType(this@WeatherWallpaper)
+                        when (breezyType) {
+                            WeatherType.RAIN -> WeatherLayer.WeatherType.RAIN
+                            WeatherType.SNOW -> WeatherLayer.WeatherType.SNOW
+                            WeatherType.THUNDERSTORM -> WeatherLayer.WeatherType.LIGHTNING
+                            else -> WeatherLayer.WeatherType.NONE
+                        }
+                    }
+                    // Manual selection (not in debug mode)
+                    else -> {
+                        when (currentWeather) {
+                            "rain" -> WeatherLayer.WeatherType.RAIN
+                            "snow" -> WeatherLayer.WeatherType.SNOW
+                            "lightning" -> WeatherLayer.WeatherType.LIGHTNING
+                            else -> WeatherLayer.WeatherType.NONE
+                        }
                     }
                 }
                 weather.setWeather(effectiveWeather)

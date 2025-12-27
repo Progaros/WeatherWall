@@ -514,16 +514,18 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 // Height: Top 40% of screen
                 val y = 0.05f + random.nextFloat() * 0.35f
                 
-                // Size variation
-                val size = 0.15f + random.nextFloat() * 0.15f
+                // Size variation - more variety (small wispy to large fluffy)
+                val size = 0.08f + random.nextFloat() * 0.25f
                 
-                // Speed: some move faster than others
-                val speed = 0.0005f + random.nextFloat() * 0.001f
+                // Speed: smaller clouds drift faster (appear higher/further)
+                val speed = 0.0003f + (1f - size / 0.33f) * 0.001f + random.nextFloat() * 0.0005f
                 
-                // Alpha variation for depth
-                val alpha = 100 + random.nextInt(100)
+                // Alpha based on size: smaller = more transparent (distant), larger = more opaque
+                // Small clouds (0.08): ~60 alpha, Large clouds (0.33): ~200 alpha
+                val sizeNormalized = ((size - 0.08f) / 0.25f).coerceIn(0f, 1f)
+                val alpha = (60 + sizeNormalized * 140).toInt() + random.nextInt(30)
                 
-                clouds.add(CloudData(x, y, size, speed, alpha))
+                clouds.add(CloudData(x, y, size, speed, alpha.coerceIn(50, 220)))
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error generating clouds", e)
@@ -1140,11 +1142,11 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
         val timeSeconds = windTime / 1000f
         
         // Draw each segment from bottom to top
+        // seg=0 is the BOTTOM (widest), seg=segments-1 is the TOP (narrowest)
         for (seg in 0 until segments) {
-            val tierIndex = segments - 1 - seg  // 0 = top, segments-1 = bottom
-            
-            // Width narrows as we go up
-            val widthRatio = 1f - (tierIndex.toFloat() / segments) * 0.6f  // Bottom = 1.0, Top = 0.4
+            // Width ratio: bottom segments are wide, top segments are narrow
+            // seg=0 (bottom) → widthRatio=1.0, seg=segments-1 (top) → widthRatio=0.4
+            val widthRatio = 1f - (seg.toFloat() / segments) * 0.6f
             val tierWidth = baseWidth * widthRatio
             
             // Position for this tier

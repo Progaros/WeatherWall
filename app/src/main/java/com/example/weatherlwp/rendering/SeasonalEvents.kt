@@ -11,7 +11,7 @@ import java.util.Calendar
 import kotlin.random.Random
 
 /**
- * Seasonal event effects: Christmas stars and New Year fireworks.
+ * Seasonal event effects: Christmas star with trail and New Year fireworks.
  * Active during December 15 - January 7, or when debug override is set.
  */
 class SeasonalEvents(private val context: Context? = null) {
@@ -25,7 +25,24 @@ class SeasonalEvents(private val context: Context? = null) {
         NEW_YEAR       // Dec 27 - Jan 7
     }
 
-    // Star particles for Christmas
+    // Christmas star (Bethlehem star with trail/Schweif)
+    private data class ChristmasStar(
+        val x: Float,      // Fixed position (top right area)
+        val y: Float,
+        val size: Float,
+        var twinkle: Float = 0f,
+        var twinkleSpeed: Float = 2f
+    )
+    
+    // Shooting star / trail particles
+    private data class TrailParticle(
+        var x: Float = 0f,
+        var y: Float = 0f,
+        var alpha: Int = 255,
+        var size: Float = 2f
+    )
+
+    // Background twinkling stars
     private data class Star(
         var x: Float = 0f,
         var y: Float = 0f,
@@ -48,10 +65,22 @@ class SeasonalEvents(private val context: Context? = null) {
     // Pre-allocated pools
     private val stars = Array(30) { Star() }
     private val fireworks = Array(100) { Firework() }
+    private val trailParticles = Array(20) { TrailParticle() }
+    private var christmasStar: ChristmasStar? = null
 
     // Pre-allocated paints
     private val starPaint = Paint().apply {
-        color = Color.WHITE  // White dots, not yellow (per ai.md)
+        color = Color.WHITE
+        isAntiAlias = true
+    }
+    
+    private val christmasStarPaint = Paint().apply {
+        color = Color.parseColor("#FFFFD700")  // Golden
+        isAntiAlias = true
+    }
+    
+    private val trailPaint = Paint().apply {
+        color = Color.parseColor("#FFFFD700")
         isAntiAlias = true
     }
 
@@ -126,13 +155,33 @@ class SeasonalEvents(private val context: Context? = null) {
     }
 
     private fun initParticles() {
-        // Initialize stars in upper portion of screen
+        // Initialize background twinkling stars in upper portion of screen
         for (s in stars) {
             s.x = Random.nextFloat() * screenWidth
             s.y = Random.nextFloat() * screenHeight * 0.4f
-            s.size = 8f + Random.nextFloat() * 12f
+            s.size = 2f + Random.nextFloat() * 4f  // Smaller background stars
             s.twinkle = Random.nextFloat() * 360f
             s.twinkleSpeed = 2f + Random.nextFloat() * 4f
+        }
+        
+        // Initialize the main Christmas star (Bethlehem star) - upper right area
+        christmasStar = ChristmasStar(
+            x = screenWidth * 0.75f + Random.nextFloat() * screenWidth * 0.15f,
+            y = screenHeight * 0.08f + Random.nextFloat() * screenHeight * 0.08f,
+            size = 25f + Random.nextFloat() * 15f,
+            twinkle = 0f,
+            twinkleSpeed = 3f
+        )
+        
+        // Initialize trail particles (emanating from the star)
+        for (i in trailParticles.indices) {
+            val t = i.toFloat() / trailParticles.size
+            trailParticles[i].apply {
+                x = 0f  // Will be set relative to star
+                y = 0f
+                alpha = (255 * (1f - t * 0.7f)).toInt()  // Fade along trail
+                size = 3f + (1f - t) * 8f  // Larger near star
+            }
         }
 
         // Reset fireworks
@@ -142,15 +191,74 @@ class SeasonalEvents(private val context: Context? = null) {
     }
 
     private fun renderChristmasStars(canvas: Canvas) {
+        // Render background twinkling stars
         for (s in stars) {
             s.twinkle += s.twinkleSpeed
-            val alpha = (155 + 100 * kotlin.math.sin(Math.toRadians(s.twinkle.toDouble()))).toInt()
-                .coerceIn(100, 255)
+            val alpha = (120 + 80 * kotlin.math.sin(Math.toRadians(s.twinkle.toDouble()))).toInt()
+                .coerceIn(80, 200)
 
             starPaint.alpha = alpha
-            // Draw as simple circle dots (per ai.md - no 5-point star shapes)
-            canvas.drawCircle(s.x, s.y, s.size * 0.3f, starPaint)
+            starPaint.color = Color.WHITE
+            canvas.drawCircle(s.x, s.y, s.size, starPaint)
         }
+        
+        // Render the main Christmas star (Bethlehem star) with trail
+        val star = christmasStar ?: return
+        star.twinkle += star.twinkleSpeed
+        
+        // Trail/Schweif - diagonal line going down-left from the star
+        val trailAngle = Math.toRadians(225.0)  // Down-left direction
+        val trailLength = star.size * 6f
+        
+        for (i in trailParticles.indices) {
+            val t = i.toFloat() / trailParticles.size
+            val particle = trailParticles[i]
+            
+            // Position along the trail
+            val dist = t * trailLength
+            particle.x = star.x + (dist * kotlin.math.cos(trailAngle)).toFloat()
+            particle.y = star.y + (dist * kotlin.math.sin(trailAngle)).toFloat()
+            
+            // Twinkle effect on trail
+            val twinkleFactor = 0.8f + 0.2f * kotlin.math.sin(star.twinkle * 0.1 + t * 3.14159).toFloat()
+            val alpha = (particle.alpha * twinkleFactor).toInt().coerceIn(30, 255)
+            
+            trailPaint.alpha = alpha
+            canvas.drawCircle(particle.x, particle.y, particle.size * twinkleFactor, trailPaint)
+        }
+        
+        // Main star - large with twinkle
+        val starAlpha = (200 + 55 * kotlin.math.sin(Math.toRadians(star.twinkle.toDouble()))).toInt()
+            .coerceIn(180, 255)
+        christmasStarPaint.alpha = starAlpha
+        
+        // Draw star as overlapping shapes for a "star burst" effect
+        // Central bright circle
+        canvas.drawCircle(star.x, star.y, star.size * 0.4f, christmasStarPaint)
+        
+        // 4-point star rays
+        val rayLength = star.size * 1.2f
+        val rayWidth = star.size * 0.15f
+        for (angle in listOf(0.0, 90.0, 45.0, 135.0)) {
+            val rad = Math.toRadians(angle)
+            val cos = kotlin.math.cos(rad).toFloat()
+            val sin = kotlin.math.sin(rad).toFloat()
+            
+            // Draw ray as a thin line
+            val startX = star.x - rayLength * cos
+            val startY = star.y - rayLength * sin
+            val endX = star.x + rayLength * cos
+            val endY = star.y + rayLength * sin
+            
+            christmasStarPaint.strokeWidth = if (angle == 0.0 || angle == 90.0) rayWidth else rayWidth * 0.7f
+            christmasStarPaint.style = Paint.Style.STROKE
+            canvas.drawLine(startX, startY, endX, endY, christmasStarPaint)
+        }
+        christmasStarPaint.style = Paint.Style.FILL
+        
+        // Outer glow
+        christmasStarPaint.alpha = (starAlpha * 0.3f).toInt()
+        canvas.drawCircle(star.x, star.y, star.size * 0.8f, christmasStarPaint)
     }
 
     private fun renderNewYearFireworks(canvas: Canvas) {

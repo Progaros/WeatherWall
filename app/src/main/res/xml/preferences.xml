@@ -140,7 +140,7 @@
         <SeekBarPreference
             android:key="pref_manual_time"
             android:title="Manual Time of Day"
-            android:summary="Set time in minutes (0-1439, i.e. 0:00-23:59)"
+            android:summary="Used when Auto Day/Night is OFF (0:00-23:59)"
             android:defaultValue="720"
             android:max="1439"
             app:min="0"
@@ -155,33 +155,24 @@
             android:defaultValue="30" />
     </PreferenceCategory>
 
-    <!-- Weather Effects -->
-    <PreferenceCategory android:title="Weather Effects">
+    <!-- Weather & Connections -->
+    <PreferenceCategory android:title="Weather &amp; Connections">
         <SwitchPreferenceCompat
             android:key="pref_use_breezy_weather"
             android:title="Use Breezy Weather"
             android:summary="Get weather data from Breezy Weather app"
             android:defaultValue="true" />
+
+        <Preference
+            android:key="pref_check_breezy"
+            android:title="Check Breezy Weather"
+            android:summary="Test connection to Breezy Weather app" />
     
         <SwitchPreferenceCompat
             android:key="pref_weather_enabled"
             android:title="Enable Weather Effects"
             android:summary="Show rain, snow, lightning particles"
             android:defaultValue="true" />
-
-        <ListPreference
-            android:key="pref_weather_type"
-            android:title="Weather Type"
-            android:summary="Auto uses Breezy Weather data"
-            android:entries="@array/weather_options"
-            android:entryValues="@array/weather_values"
-            android:defaultValue="auto"
-            android:dependency="pref_weather_enabled" />
-
-        <Preference
-            android:key="pref_check_breezy"
-            android:title="Check Breezy Weather"
-            android:summary="Test connection to Breezy Weather app" />
     </PreferenceCategory>
 
     <!-- Seasonal -->
@@ -189,44 +180,54 @@
         <SwitchPreferenceCompat
             android:key="pref_seasonal_enabled"
             android:title="Seasonal Events"
-            android:summary="Christmas stars, New Year fireworks (Dec-Jan)"
+            android:summary="Christmas star, New Year fireworks (Dec 15 - Jan 7)"
             android:defaultValue="true" />
     </PreferenceCategory>
 
-    <!-- Debug Settings -->
-    <PreferenceCategory android:title="Debug">
+    <!-- Simulation / Debug -->
+    <PreferenceCategory android:title="Simulation &amp; Debug">
         <SwitchPreferenceCompat
             android:key="pref_debug_enabled"
-            android:title="Enable Debug Mode"
-            android:summary="Override time, season, and clouds for testing"
+            android:title="Enable Simulation Mode"
+            android:summary="Override time, weather, and season for testing"
             android:defaultValue="false" />
 
         <ListPreference
             android:key="pref_debug_time"
-            android:title="Override Time"
-            android:summary="Force specific time of day"
+            android:title="Simulate Time of Day"
+            android:summary="Force specific time (overrides auto day/night)"
             android:entries="@array/time_options"
             android:entryValues="@array/time_values"
             android:defaultValue="auto"
             android:dependency="pref_debug_enabled" />
 
         <ListPreference
-            android:key="pref_debug_season"
-            android:title="Override Season"
-            android:summary="Force specific seasonal event"
-            android:entries="@array/season_options"
-            android:entryValues="@array/season_values"
+            android:key="pref_weather_type"
+            android:title="Simulate Weather"
+            android:summary="Force specific weather effects"
+            android:entries="@array/weather_options"
+            android:entryValues="@array/weather_values"
             android:defaultValue="auto"
             android:dependency="pref_debug_enabled" />
 
         <ListPreference
             android:key="pref_debug_cloud_override"
-            android:title="Override Cloud Density"
+            android:title="Simulate Cloud Density"
             android:summary="Force specific cloud amount"
             android:entries="@array/cloud_density_options"
             android:entryValues="@array/cloud_density_values"
-            android:defaultValue="light"
+            android:defaultValue="auto"
             android:dependency="pref_debug_enabled" />
+
+        <ListPreference
+            android:key="pref_debug_season"
+            android:title="Simulate Season"
+            android:summary="Force Christmas star or New Year fireworks"
+            android:entries="@array/season_options"
+            android:entryValues="@array/season_values"
+            android:defaultValue="auto"
+            android:dependency="pref_debug_enabled" />
+    </PreferenceCategory>
     </PreferenceCategory>
 
     <!-- About -->
