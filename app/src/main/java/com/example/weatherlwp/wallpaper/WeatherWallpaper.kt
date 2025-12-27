@@ -1,134 +1,172 @@
 package com.example.weatherlwp.wallpaper
 
-import android.graphics.Paint
-import android.service.wallpaper.WallpaperService
-import android.view.SurfaceHolder
 import android.graphics.Canvas
 import android.graphics.Color
 import android.os.SystemClock
+import android.service.wallpaper.WallpaperService
+import android.util.Log
+import android.view.SurfaceHolder
 import androidx.preference.PreferenceManager
-import com.example.weatherlwp.easter.MultiTapDetector
 import com.example.weatherlwp.rendering.DayNightCycle
-import com.example.weatherlwp.rendering.FogLayer
+import com.example.weatherlwp.rendering.CloudLayer
 import com.example.weatherlwp.rendering.ParallaxScene
 import com.example.weatherlwp.rendering.SeasonalEvents
 import com.example.weatherlwp.rendering.WeatherLayer
+import com.example.weatherlwp.weather.WeatherRepository
+import com.example.weatherlwp.weather.WeatherType
 
 class WeatherWallpaper : WallpaperService() {
+    companion object {
+        private const val TAG = "WeatherWallpaper"
+    }
+
     override fun onCreateEngine(): Engine = WeatherEngine()
 
-    inner class WeatherEngine : Engine(), MultiTapDetector.Listener {
+    inner class WeatherEngine : Engine() {
         private var renderThread: Thread? = null
         private var visible: Boolean = false
 
         private lateinit var scene: ParallaxScene
-        private val fog = FogLayer()
+        private lateinit var seasonal: SeasonalEvents
+        private val clouds = CloudLayer()
         private val weather = WeatherLayer()
         private val dayNight = DayNightCycle()
-        private val seasonal = SeasonalEvents()
-
-        private val tap = MultiTapDetector().apply { setListener(this@WeatherEngine) }
-        private var easterMode = false
 
         // Preferences
         private var targetFps = 30
-        private var fogEnabled = true
+        private var cloudsEnabled = true
         private var parallaxEnabled = true
         private var weatherEnabled = true
         private var dayNightEnabled = true
         private var seasonalEnabled = true
         private var currentWeather = "none"
-
-        // Pre-allocated paint for easter mode (no per-frame allocations)
-        private val easterPaint = Paint().apply {
-            color = Color.MAGENTA
-            alpha = 35
-        }
+        private var cloudDensity = "auto"  // "auto" uses Breezy Weather data
+        private var useBreezyWeather = true
 
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             super.onCreate(surfaceHolder)
-            scene = ParallaxScene(this@WeatherWallpaper)
-            loadPrefs()
+            try {
+                scene = ParallaxScene(this@WeatherWallpaper)
+                seasonal = SeasonalEvents(this@WeatherWallpaper)
+                loadPrefs()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in onCreate", e)
+            }
         }
 
         override fun onVisibilityChanged(visible: Boolean) {
             this.visible = visible
-            if (visible) {
-                loadPrefs()
-                if (parallaxEnabled) scene.start()
-                startRender()
-            } else {
-                stopRender()
-                scene.stop()
+            try {
+                if (visible) {
+                    loadPrefs()
+                    if (parallaxEnabled) scene.start()
+                    startRender()
+                } else {
+                    stopRender()
+                    scene.stop()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in onVisibilityChanged", e)
             }
         }
 
         override fun onDestroy() {
-            stopRender()
-            scene.stop()
+            try {
+                stopRender()
+                scene.stop()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in onDestroy", e)
+            }
             super.onDestroy()
         }
 
-        override fun onTouchEvent(event: android.view.MotionEvent) {
-            if (event.action == android.view.MotionEvent.ACTION_DOWN) {
-                tap.onTap()
-            }
-            super.onTouchEvent(event)
-        }
-
-        override fun onTriggered(taps: Int) {
-            val prefs = PreferenceManager.getDefaultSharedPreferences(this@WeatherWallpaper)
-            val enabled = prefs.getBoolean("pref_easter_enabled", true)
-            if (enabled) {
-                easterMode = !easterMode
-                // Also save to prefs so settings can read it
-                prefs.edit().putBoolean("easter_mode_active", easterMode).apply()
-            }
-        }
-
         private fun loadPrefs() {
-            val prefs = PreferenceManager.getDefaultSharedPreferences(this@WeatherWallpaper)
-            parallaxEnabled = prefs.getBoolean("pref_parallax_enabled", true)
-            fogEnabled = prefs.getBoolean("pref_fog_enabled", true)
-            weatherEnabled = prefs.getBoolean("pref_weather_enabled", true)
-            dayNightEnabled = prefs.getBoolean("pref_daynight_enabled", true)
-            seasonalEnabled = prefs.getBoolean("pref_seasonal_enabled", true)
-            targetFps = prefs.getString("pref_max_fps", "30")?.toIntOrNull() ?: 30
-            targetFps = targetFps.coerceIn(10, 60)
-
-            // Load easter mode from prefs (can be set from settings too)
-            easterMode = prefs.getBoolean("easter_mode_active", false)
-
-            // Reload scene settings
-            scene.loadSettings()
-
-            // Weather type: none, rain, snow, lightning
-            currentWeather = prefs.getString("pref_weather_type", "none") ?: "none"
-            weather.setWeather(
-                when (currentWeather) {
-                    "rain" -> WeatherLayer.WeatherType.RAIN
-                    "snow" -> WeatherLayer.WeatherType.SNOW
-                    "lightning" -> WeatherLayer.WeatherType.LIGHTNING
-                    else -> WeatherLayer.WeatherType.NONE
+            try {
+                val prefs = PreferenceManager.getDefaultSharedPreferences(this@WeatherWallpaper)
+                parallaxEnabled = prefs.getBoolean("pref_parallax_enabled", true)
+                cloudsEnabled = prefs.getBoolean("pref_clouds_enabled", true)
+                weatherEnabled = prefs.getBoolean("pref_weather_enabled", true)
+                dayNightEnabled = prefs.getBoolean("pref_daynight_enabled", true)
+                seasonalEnabled = prefs.getBoolean("pref_seasonal_enabled", true)
+                useBreezyWeather = prefs.getBoolean("pref_use_breezy_weather", true)
+                targetFps = prefs.getString("pref_max_fps", "30")?.toIntOrNull() ?: 30
+                targetFps = targetFps.coerceIn(10, 60)
+                
+                // Cloud density - can be auto (from Breezy Weather) or manual
+                cloudDensity = prefs.getString("pref_cloud_density", "auto") ?: "auto"
+                
+                val effectiveDensity = if (cloudDensity == "auto" && useBreezyWeather) {
+                    // Get cloud density from Breezy Weather data
+                    val breezyType = WeatherRepository.getWeatherType(this@WeatherWallpaper)
+                    when (breezyType) {
+                        WeatherType.CLEAR -> CloudLayer.CloudDensity.NONE
+                        WeatherType.CLOUDY -> CloudLayer.CloudDensity.MEDIUM
+                        WeatherType.RAIN, WeatherType.THUNDERSTORM -> CloudLayer.CloudDensity.HEAVY
+                        WeatherType.SNOW -> CloudLayer.CloudDensity.OVERCAST
+                        WeatherType.FOG -> CloudLayer.CloudDensity.HEAVY
+                    }
+                } else {
+                    when (cloudDensity) {
+                        "none" -> CloudLayer.CloudDensity.NONE
+                        "light" -> CloudLayer.CloudDensity.LIGHT
+                        "medium" -> CloudLayer.CloudDensity.MEDIUM
+                        "heavy" -> CloudLayer.CloudDensity.HEAVY
+                        "overcast" -> CloudLayer.CloudDensity.OVERCAST
+                        else -> CloudLayer.CloudDensity.LIGHT
+                    }
                 }
-            )
+                clouds.setDensity(effectiveDensity)
+
+                // Reload scene settings
+                scene.loadSettings()
+
+                // Weather type - can be auto (from Breezy Weather) or manual
+                currentWeather = prefs.getString("pref_weather_type", "auto") ?: "auto"
+                
+                val effectiveWeather = if (currentWeather == "auto" && useBreezyWeather) {
+                    // Get weather from Breezy Weather data
+                    val breezyType = WeatherRepository.getWeatherType(this@WeatherWallpaper)
+                    when (breezyType) {
+                        WeatherType.RAIN -> WeatherLayer.WeatherType.RAIN
+                        WeatherType.SNOW -> WeatherLayer.WeatherType.SNOW
+                        WeatherType.THUNDERSTORM -> WeatherLayer.WeatherType.LIGHTNING
+                        else -> WeatherLayer.WeatherType.NONE
+                    }
+                } else {
+                    when (currentWeather) {
+                        "rain" -> WeatherLayer.WeatherType.RAIN
+                        "snow" -> WeatherLayer.WeatherType.SNOW
+                        "lightning" -> WeatherLayer.WeatherType.LIGHTNING
+                        else -> WeatherLayer.WeatherType.NONE
+                    }
+                }
+                weather.setWeather(effectiveWeather)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading prefs", e)
+            }
         }
 
         private fun startRender() {
             if (renderThread != null) return
             renderThread = Thread {
-                val frameTimeMs = (1000L / targetFps.toLong()).coerceAtLeast(16L)
-                while (!Thread.currentThread().isInterrupted) {
-                    if (!visible) {
-                        SystemClock.sleep(250)
-                        continue
-                    }
+                try {
+                    val frameTimeMs = (1000L / targetFps.toLong()).coerceAtLeast(16L)
+                    while (!Thread.currentThread().isInterrupted) {
+                        if (!visible) {
+                            SystemClock.sleep(250)
+                            continue
+                        }
 
-                    val start = SystemClock.uptimeMillis()
-                    drawFrame()
-                    val dt = SystemClock.uptimeMillis() - start
-                    val sleep = frameTimeMs - dt
-                    if (sleep > 0) SystemClock.sleep(sleep)
+                        val start = SystemClock.uptimeMillis()
+                        drawFrame()
+                        val dt = SystemClock.uptimeMillis() - start
+                        val sleep = frameTimeMs - dt
+                        if (sleep > 0) SystemClock.sleep(sleep)
+                    }
+                } catch (e: InterruptedException) {
+                    // Normal exit
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in render thread", e)
                 }
             }.also { it.isDaemon = true; it.start() }
         }
@@ -156,8 +194,8 @@ class WeatherWallpaper : WallpaperService() {
                     scene.render(canvas)
                 }
 
-                // Fog overlay
-                fog.render(canvas, fogEnabled)
+                // Cloud layer
+                clouds.render(canvas, cloudsEnabled)
 
                 // Weather effects (rain, snow, lightning)
                 weather.render(canvas, weatherEnabled)
@@ -165,12 +203,16 @@ class WeatherWallpaper : WallpaperService() {
                 // Seasonal events (Christmas stars, New Year fireworks)
                 seasonal.render(canvas, seasonalEnabled)
 
-                // Easter mode: simple overlay hint
-                if (easterMode) {
-                    canvas.drawRect(0f, 0f, canvas.width.toFloat(), canvas.height.toFloat(), easterPaint)
-                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error drawing frame", e)
             } finally {
-                if (canvas != null) holder.unlockCanvasAndPost(canvas)
+                if (canvas != null) {
+                    try {
+                        holder.unlockCanvasAndPost(canvas)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error unlocking canvas", e)
+                    }
+                }
             }
         }
     }

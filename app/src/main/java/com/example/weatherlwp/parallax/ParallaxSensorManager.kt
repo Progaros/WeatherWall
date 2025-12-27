@@ -5,8 +5,13 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.util.Log
 
 class ParallaxSensorManager(context: Context) : SensorEventListener {
+    companion object {
+        private const val TAG = "ParallaxSensorManager"
+    }
+    
     interface Listener {
         fun onOffsetChanged(x: Float, y: Float)
     }
@@ -16,31 +21,47 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
 
     private var ax = 0f
     private var ay = 0f
-    private val alpha = 0.85f
+    private val alpha = 0.85f  // Smoothing factor
 
     private var listener: Listener? = null
+    private var isStarted = false
 
     fun setListener(l: Listener) { listener = l }
 
     fun start() {
-        // SENSOR_DELAY_UI: guter Kompromiss (Battery/UX) für Wallpaper
-        sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_UI)
+        if (accelerometer == null) {
+            Log.w(TAG, "No accelerometer sensor available")
+            return
+        }
+        if (!isStarted) {
+            sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME)
+            isStarted = true
+            Log.d(TAG, "Sensor started")
+        }
     }
 
     fun stop() {
-        sensorManager.unregisterListener(this)
+        if (isStarted) {
+            sensorManager.unregisterListener(this)
+            isStarted = false
+            Log.d(TAG, "Sensor stopped")
+        }
     }
 
     override fun onSensorChanged(event: SensorEvent) {
         if (event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
 
+        // Low-pass filter for smooth movement
         ax = alpha * ax + (1 - alpha) * event.values[0]
         ay = alpha * ay + (1 - alpha) * event.values[1]
 
-        val tiltX = (ay / 9.81f).coerceIn(-1f, 1f)
-        val tiltY = (ax / 9.81f).coerceIn(-1f, 1f)
+        // Normalize to -1..1 range (assuming max tilt at ~9.81 m/s²)
+        // X-axis (values[0]) = left/right tilt, Y-axis (values[1]) = forward/back tilt
+        val tiltX = (ax / 9.81f).coerceIn(-1f, 1f)
+        val tiltY = (ay / 9.81f).coerceIn(-1f, 1f)
 
-        val sensitivityPx = 50f
+        // Increased sensitivity for more noticeable parallax effect
+        val sensitivityPx = 150f
         listener?.onOffsetChanged(tiltX * sensitivityPx, tiltY * sensitivityPx)
     }
 

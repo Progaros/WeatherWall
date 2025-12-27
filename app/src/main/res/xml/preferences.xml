@@ -4,20 +4,48 @@
     <!-- Scene Settings -->
     <PreferenceCategory android:title="Scene">
         <SeekBarPreference
+            android:key="pref_mountain_count"
+            android:title="Mountain Count"
+            android:summary="Number of mountain peaks (0-10)"
+            android:defaultValue="3"
+            android:max="10"
+            app:min="0"
+            app:showSeekBarValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_hill_count"
+            android:title="Hill Layers"
+            android:summary="Rolling terrain layers (0-5)"
+            android:defaultValue="3"
+            android:max="5"
+            app:min="0"
+            app:showSeekBarValue="true" />
+
+        <SeekBarPreference
             android:key="pref_tree_count"
             android:title="Tree Count"
-            android:defaultValue="12"
-            android:max="30"
-            app:min="3"
+            android:summary="Number of trees (0-100)"
+            android:defaultValue="20"
+            android:max="100"
+            app:min="0"
             app:showSeekBarValue="true" />
 
         <SeekBarPreference
             android:key="pref_tree_size"
             android:title="Tree Size"
-            android:summary="Adjust tree scale (100 = normal)"
-            android:defaultValue="100"
-            android:max="200"
-            app:min="50"
+            android:summary="Size multiplier"
+            android:defaultValue="300"
+            android:max="1000"
+            app:min="10"
+            app:showSeekBarValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_tree_segments"
+            android:title="Tree Segments"
+            android:summary="Tiers per tree (1-5, fewer = taller)"
+            android:defaultValue="1"
+            android:max="5"
+            app:min="1"
             app:showSeekBarValue="true" />
     </PreferenceCategory>
 
@@ -43,16 +71,34 @@
     <!-- Visual Effects -->
     <PreferenceCategory android:title="Visual Effects">
         <SwitchPreferenceCompat
-            android:key="pref_fog_enabled"
-            android:title="Fog"
-            android:summary="Enable fog overlay effect"
+            android:key="pref_clouds_enabled"
+            android:title="Clouds"
+            android:summary="Enable moving clouds in the sky"
             android:defaultValue="true" />
+
+        <ListPreference
+            android:key="pref_cloud_density"
+            android:title="Cloud Density"
+            android:summary="Auto uses Breezy Weather data"
+            android:entries="@array/cloud_density_options"
+            android:entryValues="@array/cloud_density_values"
+            android:defaultValue="auto"
+            android:dependency="pref_clouds_enabled" />
 
         <SwitchPreferenceCompat
             android:key="pref_daynight_enabled"
-            android:title="Day/Night Cycle"
-            android:summary="Change sky colors based on time of day"
+            android:title="Auto Day/Night Cycle"
+            android:summary="Change sky colors based on real time"
             android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_manual_time"
+            android:title="Manual Time of Day"
+            android:summary="Set time (0-23 hours)"
+            android:defaultValue="12"
+            android:max="23"
+            app:min="0"
+            app:showSeekBarValue="true" />
 
         <ListPreference
             android:key="pref_max_fps"
@@ -65,18 +111,24 @@
     <!-- Weather Effects -->
     <PreferenceCategory android:title="Weather Effects">
         <SwitchPreferenceCompat
+            android:key="pref_use_breezy_weather"
+            android:title="Use Breezy Weather"
+            android:summary="Get weather data from Breezy Weather app"
+            android:defaultValue="true" />
+    
+        <SwitchPreferenceCompat
             android:key="pref_weather_enabled"
-            android:title="Enable Weather"
-            android:summary="Show weather particles on screen"
+            android:title="Enable Weather Effects"
+            android:summary="Show rain, snow, lightning particles"
             android:defaultValue="true" />
 
         <ListPreference
             android:key="pref_weather_type"
             android:title="Weather Type"
-            android:summary="Select weather effect to display"
+            android:summary="Auto uses Breezy Weather data"
             android:entries="@array/weather_options"
             android:entryValues="@array/weather_values"
-            android:defaultValue="none"
+            android:defaultValue="auto"
             android:dependency="pref_weather_enabled" />
 
         <Preference
@@ -85,19 +137,49 @@
             android:summary="Test connection to Breezy Weather app" />
     </PreferenceCategory>
 
-    <!-- Seasonal &amp; Easter Eggs -->
-    <PreferenceCategory android:title="Seasonal &amp; Easter Eggs">
+    <!-- Seasonal -->
+    <PreferenceCategory android:title="Seasonal">
         <SwitchPreferenceCompat
             android:key="pref_seasonal_enabled"
             android:title="Seasonal Events"
             android:summary="Christmas stars, New Year fireworks (Dec-Jan)"
             android:defaultValue="true" />
+    </PreferenceCategory>
 
+    <!-- Debug Settings -->
+    <PreferenceCategory android:title="Debug">
         <SwitchPreferenceCompat
-            android:key="pref_easter_enabled"
-            android:title="Easter Egg"
-            android:summary="Tap version 5 times to toggle secret mode"
-            android:defaultValue="true" />
+            android:key="pref_debug_enabled"
+            android:title="Enable Debug Mode"
+            android:summary="Override time, season, and clouds for testing"
+            android:defaultValue="false" />
+
+        <ListPreference
+            android:key="pref_debug_time"
+            android:title="Override Time"
+            android:summary="Force specific time of day"
+            android:entries="@array/time_options"
+            android:entryValues="@array/time_values"
+            android:defaultValue="auto"
+            android:dependency="pref_debug_enabled" />
+
+        <ListPreference
+            android:key="pref_debug_season"
+            android:title="Override Season"
+            android:summary="Force specific seasonal event"
+            android:entries="@array/season_options"
+            android:entryValues="@array/season_values"
+            android:defaultValue="auto"
+            android:dependency="pref_debug_enabled" />
+
+        <ListPreference
+            android:key="pref_debug_cloud_override"
+            android:title="Override Cloud Density"
+            android:summary="Force specific cloud amount"
+            android:entries="@array/cloud_density_options"
+            android:entryValues="@array/cloud_density_values"
+            android:defaultValue="light"
+            android:dependency="pref_debug_enabled" />
     </PreferenceCategory>
 
     <!-- About -->
@@ -105,8 +187,7 @@
         <Preference
             android:key="pref_version"
             android:title="Version"
-            android:summary="Tap 5 times for Easter Egg"
-            android:selectable="true" />
+            android:selectable="false" />
 
         <Preference
             android:key="pref_export_log"

@@ -1,17 +1,23 @@
 package com.example.weatherlwp.rendering
 
+import android.content.Context
+import android.content.SharedPreferences
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Path
+import android.util.Log
+import androidx.preference.PreferenceManager
 import java.util.Calendar
 import kotlin.random.Random
 
 /**
  * Seasonal event effects: Christmas stars and New Year fireworks.
- * Active during December 15 - January 7.
+ * Active during December 15 - January 7, or when debug override is set.
  */
-class SeasonalEvents {
+class SeasonalEvents(private val context: Context? = null) {
+    companion object {
+        private const val TAG = "SeasonalEvents"
+    }
 
     enum class Season {
         NONE,
@@ -45,15 +51,13 @@ class SeasonalEvents {
 
     // Pre-allocated paints
     private val starPaint = Paint().apply {
-        color = Color.YELLOW
+        color = Color.WHITE  // White dots, not yellow (per ai.md)
         isAntiAlias = true
     }
 
     private val fireworkPaint = Paint().apply {
         isAntiAlias = true
     }
-
-    private val starPath = Path()
 
     private var initialized = false
     private var screenWidth = 0
@@ -65,7 +69,26 @@ class SeasonalEvents {
         Color.MAGENTA, Color.WHITE, 0xFFFF6600.toInt()
     )
 
+    private val prefs: SharedPreferences? = context?.let { PreferenceManager.getDefaultSharedPreferences(it) }
+
     fun getCurrentSeason(): Season {
+        // Check for debug override
+        try {
+            if (prefs != null) {
+                val debugEnabled = prefs.getBoolean("pref_debug_enabled", false)
+                if (debugEnabled) {
+                    val debugSeason = prefs.getString("pref_debug_season", "auto") ?: "auto"
+                    when (debugSeason) {
+                        "christmas" -> return Season.CHRISTMAS
+                        "newyear" -> return Season.NEW_YEAR
+                        "none" -> return Season.NONE
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error reading debug prefs", e)
+        }
+
         val cal = Calendar.getInstance()
         val month = cal.get(Calendar.MONTH) // 0-indexed
         val day = cal.get(Calendar.DAY_OF_MONTH)
@@ -81,20 +104,24 @@ class SeasonalEvents {
     fun render(canvas: Canvas, enabled: Boolean) {
         if (!enabled) return
 
-        val season = getCurrentSeason()
-        if (season == Season.NONE) return
+        try {
+            val season = getCurrentSeason()
+            if (season == Season.NONE) return
 
-        if (!initialized || screenWidth != canvas.width || screenHeight != canvas.height) {
-            screenWidth = canvas.width
-            screenHeight = canvas.height
-            initParticles()
-            initialized = true
-        }
+            if (!initialized || screenWidth != canvas.width || screenHeight != canvas.height) {
+                screenWidth = canvas.width
+                screenHeight = canvas.height
+                initParticles()
+                initialized = true
+            }
 
-        when (season) {
-            Season.CHRISTMAS -> renderChristmasStars(canvas)
-            Season.NEW_YEAR -> renderNewYearFireworks(canvas)
-            Season.NONE -> {}
+            when (season) {
+                Season.CHRISTMAS -> renderChristmasStars(canvas)
+                Season.NEW_YEAR -> renderNewYearFireworks(canvas)
+                Season.NONE -> {}
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error rendering seasonal events", e)
         }
     }
 
@@ -121,32 +148,9 @@ class SeasonalEvents {
                 .coerceIn(100, 255)
 
             starPaint.alpha = alpha
-            drawStar(canvas, s.x, s.y, s.size, starPaint)
+            // Draw as simple circle dots (per ai.md - no 5-point star shapes)
+            canvas.drawCircle(s.x, s.y, s.size * 0.3f, starPaint)
         }
-    }
-
-    private fun drawStar(canvas: Canvas, cx: Float, cy: Float, size: Float, paint: Paint) {
-        starPath.reset()
-        val innerRadius = size * 0.4f
-
-        for (i in 0 until 5) {
-            val outerAngle = Math.toRadians((i * 72 - 90).toDouble())
-            val innerAngle = Math.toRadians((i * 72 + 36 - 90).toDouble())
-
-            val outerX = cx + (size * kotlin.math.cos(outerAngle)).toFloat()
-            val outerY = cy + (size * kotlin.math.sin(outerAngle)).toFloat()
-            val innerX = cx + (innerRadius * kotlin.math.cos(innerAngle)).toFloat()
-            val innerY = cy + (innerRadius * kotlin.math.sin(innerAngle)).toFloat()
-
-            if (i == 0) {
-                starPath.moveTo(outerX, outerY)
-            } else {
-                starPath.lineTo(outerX, outerY)
-            }
-            starPath.lineTo(innerX, innerY)
-        }
-        starPath.close()
-        canvas.drawPath(starPath, paint)
     }
 
     private fun renderNewYearFireworks(canvas: Canvas) {

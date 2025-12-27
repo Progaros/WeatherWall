@@ -13,25 +13,35 @@ import androidx.preference.PreferenceManager
 import com.example.weatherlwp.BuildConfig
 import com.example.weatherlwp.R
 import com.example.weatherlwp.wallpaper.WeatherWallpaper
-import java.io.File
+import java.io.BufferedReader
+import java.io.InputStreamReader
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.preference.SeekBarPreference
+import androidx.preference.SwitchPreferenceCompat
 
 class SettingsFragment : PreferenceFragmentCompat() {
-    private var versionTapCount = 0
-    private var lastTapTime = 0L
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         setPreferencesFromResource(R.xml.preferences, rootKey)
 
-        // Version preference with Easter Egg
+        // Version preference
         findPreference<Preference>("pref_version")?.apply {
             summary = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
-            setOnPreferenceClickListener {
-                handleVersionTap()
-                true
-            }
+        }
+
+        // Manual time slider - only enabled when auto day/night is OFF
+        val dayNightPref = findPreference<SwitchPreferenceCompat>("pref_daynight_enabled")
+        val manualTimePref = findPreference<SeekBarPreference>("pref_manual_time")
+        
+        // Set initial state
+        manualTimePref?.isEnabled = !(dayNightPref?.isChecked ?: true)
+        
+        // Listen for changes
+        dayNightPref?.setOnPreferenceChangeListener { _, newValue ->
+            manualTimePref?.isEnabled = !(newValue as Boolean)
+            true
         }
 
         // Preview wallpaper
@@ -53,33 +63,6 @@ class SettingsFragment : PreferenceFragmentCompat() {
         }
     }
 
-    private fun handleVersionTap() {
-        val now = System.currentTimeMillis()
-        if (now - lastTapTime > 1500) {
-            versionTapCount = 0
-        }
-        lastTapTime = now
-        versionTapCount++
-
-        when (versionTapCount) {
-            3 -> Toast.makeText(context, "2 more taps...", Toast.LENGTH_SHORT).show()
-            4 -> Toast.makeText(context, "1 more tap...", Toast.LENGTH_SHORT).show()
-            5 -> {
-                versionTapCount = 0
-                val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
-                val easterEnabled = prefs.getBoolean("pref_easter_enabled", true)
-                if (easterEnabled) {
-                    val currentMode = prefs.getBoolean("easter_mode_active", false)
-                    prefs.edit().putBoolean("easter_mode_active", !currentMode).apply()
-                    val msg = if (!currentMode) "🥚 Easter Mode Activated!" else "Easter Mode Deactivated"
-                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-                } else {
-                    Toast.makeText(context, "Easter Egg is disabled in settings", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-    }
-
     private fun openWallpaperPreview() {
         try {
             val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER)
@@ -94,25 +77,59 @@ class SettingsFragment : PreferenceFragmentCompat() {
     }
 
     private fun checkBreezyWeather() {
+        // First check if we're receiving weather data (this is the most important indicator)
+        val lastUpdate = com.example.weatherlwp.weather.WeatherRepository.getLastUpdate(requireContext())
+        val currentType = com.example.weatherlwp.weather.WeatherRepository.getWeatherType(requireContext())
+        val hasRecentData = lastUpdate > 0 && (System.currentTimeMillis() - lastUpdate) < 2 * 60 * 60 * 1000 // Less than 2 hours old
+        
+        if (hasRecentData) {
+            // We have recent data - BW is working!
+            val ageMinutes = (System.currentTimeMillis() - lastUpdate) / 60000
+            val dataAge = if (ageMinutes < 60) "${ageMinutes}min ago" else "${ageMinutes / 60}h ago"
+            
+            val message = "✅ Breezy Weather connected!\n" +
+                "Weather: $currentType\n" +
+                "Last update: $dataAge"
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            return
+        }
+        
+        // Data is stale or no data - check if BW is installed
+        val isStaleData = lastUpdate > 0 // We have data but it's old
         val pm = requireContext().packageManager
         val breezyPackages = listOf(
             "org.breezyweather",
-            "wangdaye.com.geometricweather"
+            "org.breezyweather.debug",
+            "org.breezyweather.freenet",
+            "wangdaye.com.geometricweather",
+            "com.breezyweather",
+            "com.breezyweather.debug"
         )
 
-        var found = false
+        var foundPkg: String? = null
         for (pkg in breezyPackages) {
             try {
                 pm.getPackageInfo(pkg, 0)
-                found = true
-                Toast.makeText(context, "✅ Breezy Weather found: $pkg", Toast.LENGTH_LONG).show()
+                foundPkg = pkg
                 break
             } catch (e: PackageManager.NameNotFoundException) {
                 // Continue checking
             }
         }
 
-        if (!found) {
+        if (foundPkg != null) {
+            if (isStaleData) {
+                val ageHours = (System.currentTimeMillis() - lastUpdate) / (60 * 60 * 1000)
+                val message = "⚠️ Breezy Weather data is stale (${ageHours}h old)\n\n" +
+                    "Last weather: $currentType\n" +
+                    "BW may have stopped sending updates."
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            } else {
+                val message = "⚠️ Breezy Weather found ($foundPkg) but no data received.\n\n" +
+                    "Please enable in BW:\nSettings → External Modules → Send Gadgetbridge data"
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            }
+        } else {
             Toast.makeText(context, "❌ Breezy Weather not installed", Toast.LENGTH_LONG).show()
         }
     }
@@ -129,15 +146,62 @@ class SettingsFragment : PreferenceFragmentCompat() {
             sb.appendLine("Android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
             sb.appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL}")
             sb.appendLine()
+            
             sb.appendLine("=== Settings ===")
             prefs.all.forEach { (key, value) ->
                 sb.appendLine("$key = $value")
             }
             sb.appendLine()
+            
+            // Capture recent logcat errors for WeatherWall
+            sb.appendLine("=== Recent Errors (Logcat) ===")
+            try {
+                val process = Runtime.getRuntime().exec(arrayOf(
+                    "logcat", "-d", "-t", "200", "-v", "time",
+                    "WeatherWallpaper:E", "ParallaxScene:E", "MainActivity:E", "*:S"
+                ))
+                val reader = BufferedReader(InputStreamReader(process.inputStream))
+                var line: String?
+                var errorCount = 0
+                while (reader.readLine().also { line = it } != null && errorCount < 50) {
+                    sb.appendLine(line)
+                    errorCount++
+                }
+                reader.close()
+                process.waitFor()
+                if (errorCount == 0) {
+                    sb.appendLine("(No recent errors found)")
+                }
+            } catch (e: Exception) {
+                sb.appendLine("(Could not read logcat: ${e.message})")
+            }
+            sb.appendLine()
+            
+            // Add all WeatherWall logs (not just errors)
+            sb.appendLine("=== All WeatherWall Logs ===")
+            try {
+                val process = Runtime.getRuntime().exec(arrayOf(
+                    "logcat", "-d", "-t", "100", "-v", "time",
+                    "WeatherWallpaper:*", "ParallaxScene:*", "MainActivity:*", "CloudLayer:*", "*:S"
+                ))
+                val reader = BufferedReader(InputStreamReader(process.inputStream))
+                var line: String?
+                var logCount = 0
+                while (reader.readLine().also { line = it } != null && logCount < 100) {
+                    sb.appendLine(line)
+                    logCount++
+                }
+                reader.close()
+                process.waitFor()
+                if (logCount == 0) {
+                    sb.appendLine("(No recent logs found)")
+                }
+            } catch (e: Exception) {
+                sb.appendLine("(Could not read logcat: ${e.message})")
+            }
+            sb.appendLine()
+            
             sb.appendLine("=== End of Log ===")
-
-            val logFile = File(requireContext().cacheDir, "weatherwall_debug.txt")
-            logFile.writeText(sb.toString())
 
             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"

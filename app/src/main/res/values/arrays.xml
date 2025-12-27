@@ -9,15 +9,65 @@
     </string-array>
 
     <string-array name="weather_options">
+        <item>Auto (Breezy Weather)</item>
         <item>None</item>
         <item>Rain</item>
         <item>Snow</item>
         <item>Lightning</item>
     </string-array>
     <string-array name="weather_values">
+        <item>auto</item>
         <item>none</item>
         <item>rain</item>
         <item>snow</item>
         <item>lightning</item>
+    </string-array>
+
+    <!-- Cloud density options -->
+    <string-array name="cloud_density_options">
+        <item>Auto (Breezy Weather)</item>
+        <item>None</item>
+        <item>Light</item>
+        <item>Medium</item>
+        <item>Heavy</item>
+        <item>Overcast</item>
+    </string-array>
+    <string-array name="cloud_density_values">
+        <item>auto</item>
+        <item>none</item>
+        <item>light</item>
+        <item>medium</item>
+        <item>heavy</item>
+        <item>overcast</item>
+    </string-array>
+
+    <!-- Debug time options -->
+    <string-array name="time_options">
+        <item>Auto (Real Time)</item>
+        <item>Night (0:00)</item>
+        <item>Dawn (6:00)</item>
+        <item>Day (12:00)</item>
+        <item>Dusk (19:00)</item>
+    </string-array>
+    <string-array name="time_values">
+        <item>auto</item>
+        <item>night</item>
+        <item>dawn</item>
+        <item>day</item>
+        <item>dusk</item>
+    </string-array>
+
+    <!-- Debug season options -->
+    <string-array name="season_options">
+        <item>Auto (Real Date)</item>
+        <item>Normal</item>
+        <item>Christmas</item>
+        <item>New Year</item>
+    </string-array>
+    <string-array name="season_values">
+        <item>auto</item>
+        <item>none</item>
+        <item>christmas</item>
+        <item>newyear</item>
     </string-array>
 </resources>
