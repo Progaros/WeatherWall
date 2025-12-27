@@ -299,6 +299,15 @@ render() uses the data (tree sway, rain particles, sky colors)
 
 ## 🐛 Debugging
 
+### Simulation Mode
+
+For testing without live weather data, enable **Debug Mode** in Settings:
+- **Simulation & Debug** section has override controls
+- Override time of day with slider (0-1439 minutes)
+- Override weather type (Rain, Snow, Thunderstorm, etc.)
+- Enable FPS display to monitor performance
+- Weather effects show in MainActivity preview when debug mode is on
+
 ### View Logs
 
 ```bash

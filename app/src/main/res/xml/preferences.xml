@@ -228,7 +228,6 @@
             android:defaultValue="auto"
             android:dependency="pref_debug_enabled" />
     </PreferenceCategory>
-    </PreferenceCategory>
 
     <!-- About -->
     <PreferenceCategory android:title="About">

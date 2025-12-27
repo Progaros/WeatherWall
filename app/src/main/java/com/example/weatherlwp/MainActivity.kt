@@ -12,6 +12,10 @@ import androidx.fragment.app.commit
 import androidx.preference.PreferenceManager
 import com.example.weatherlwp.prefs.SettingsFragment
 import com.example.weatherlwp.rendering.ParallaxScene
+import com.example.weatherlwp.rendering.SeasonalEvents
+import com.example.weatherlwp.rendering.WeatherLayer
+import com.example.weatherlwp.weather.WeatherRepository
+import com.example.weatherlwp.weather.WeatherType
 import com.google.android.material.appbar.MaterialToolbar
 
 class MainActivity : AppCompatActivity() {
@@ -22,6 +26,8 @@ class MainActivity : AppCompatActivity() {
     }
     
     private var previewScene: ParallaxScene? = null
+    private var weatherLayer: WeatherLayer? = null
+    private var seasonalEvents: SeasonalEvents? = null
     private var previewThread: Thread? = null
     @Volatile private var previewRunning = false
     @Volatile private var surfaceReady = false
@@ -32,6 +38,44 @@ class MainActivity : AppCompatActivity() {
         Log.d(TAG, "Preference changed: $key")
         // Reload settings on any preference change
         previewScene?.loadSettings()
+        loadPreviewEffects()
+    }
+    
+    private fun loadPreviewEffects() {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val debugEnabled = prefs.getBoolean("pref_debug_enabled", false)
+        val useBreezy = prefs.getBoolean("pref_use_breezy_weather", true)
+        val weatherSetting = prefs.getString("pref_weather_type", "auto") ?: "auto"
+        
+        // Determine effective weather type
+        val effectiveWeather = when {
+            debugEnabled && weatherSetting != "auto" -> {
+                when (weatherSetting) {
+                    "rain" -> WeatherLayer.WeatherType.RAIN
+                    "snow" -> WeatherLayer.WeatherType.SNOW
+                    "lightning" -> WeatherLayer.WeatherType.LIGHTNING
+                    else -> WeatherLayer.WeatherType.NONE
+                }
+            }
+            weatherSetting == "auto" && useBreezy -> {
+                val breezyType = WeatherRepository.getWeatherType(this)
+                when (breezyType) {
+                    WeatherType.RAIN -> WeatherLayer.WeatherType.RAIN
+                    WeatherType.SNOW -> WeatherLayer.WeatherType.SNOW
+                    WeatherType.THUNDERSTORM -> WeatherLayer.WeatherType.LIGHTNING
+                    else -> WeatherLayer.WeatherType.NONE
+                }
+            }
+            else -> {
+                when (weatherSetting) {
+                    "rain" -> WeatherLayer.WeatherType.RAIN
+                    "snow" -> WeatherLayer.WeatherType.SNOW
+                    "lightning" -> WeatherLayer.WeatherType.LIGHTNING
+                    else -> WeatherLayer.WeatherType.NONE
+                }
+            }
+        }
+        weatherLayer?.setWeather(effectiveWeather)
     }
     
     // FPS tracking for debugging
@@ -48,6 +92,8 @@ class MainActivity : AppCompatActivity() {
         // Setup live preview
         val previewSurface = findViewById<SurfaceView>(R.id.preview_surface)
         previewScene = ParallaxScene(this)
+        weatherLayer = WeatherLayer()
+        seasonalEvents = SeasonalEvents(this)
         
         // Register preference change listener for live updates
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
@@ -156,6 +202,13 @@ class MainActivity : AppCompatActivity() {
                     // Render scene (includes sky gradient and clouds)
                     previewScene?.render(canvas)
                     
+                    // Render weather effects (rain, snow, lightning)
+                    val prefs = PreferenceManager.getDefaultSharedPreferences(this@MainActivity)
+                    val weatherEnabled = prefs.getBoolean("pref_weather_enabled", true)
+                    val seasonalEnabled = prefs.getBoolean("pref_seasonal_enabled", true)
+                    weatherLayer?.render(canvas, weatherEnabled)
+                    seasonalEvents?.render(canvas, seasonalEnabled)
+                    
                     frameCount++
                     
                     // Log first 5 frames for debugging
@@ -228,6 +281,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         previewScene?.loadSettings()
+        loadPreviewEffects()
     }
     
     override fun onDestroy() {
