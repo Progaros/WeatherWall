@@ -13,6 +13,15 @@
             app:showSeekBarValue="true" />
 
         <SeekBarPreference
+            android:key="pref_mountain_width"
+            android:title="Mountain Width"
+            android:summary="Width multiplier (50-200%)"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="50"
+            app:showSeekBarValue="true" />
+
+        <SeekBarPreference
             android:key="pref_hill_count"
             android:title="Hill Layers"
             android:summary="Rolling terrain layers (0-5)"

@@ -2,11 +2,13 @@ package com.example.weatherlwp.rendering
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RectF
 import android.graphics.Shader
 import android.util.Log
 import androidx.preference.PreferenceManager
@@ -76,6 +78,13 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
 
     // Pre-allocated paints
     private val skyPaint = Paint()
+    private val cloudPaint = Paint().apply { 
+        color = Color.WHITE 
+        style = Paint.Style.FILL 
+        isAntiAlias = true 
+        alpha = 200
+        maskFilter = BlurMaskFilter(20f, BlurMaskFilter.Blur.NORMAL)
+    }
     private val mountainPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val treePaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val starPaint = Paint().apply { color = Color.WHITE; isAntiAlias = true; style = Paint.Style.FILL }
@@ -92,6 +101,12 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
     private var treeScale = 1.0f
     private var treeSegments = 3  // Global setting: 1-5 segments per tree
     private var mountainCount = 3
+    private var mountainWidthScale = 1.0f
+    
+    // World generation bounds (wider than 0..1 to support landscape preview)
+    // Extended to -4..5 to cover very wide aspect ratios (e.g. 4:1 preview strip)
+    private val WORLD_MIN_X = -4.0f
+    private val WORLD_MAX_X = 5.0f
 
     private var lastWidth = 0
     private var lastHeight = 0
@@ -100,6 +115,17 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
 
     // Star positions (x ratio, y ratio, size) - tiny white dots only (per ai.md)
     private val stars = Array(100) { floatArrayOf(Random.nextFloat(), Random.nextFloat() * 0.5f, 0.5f + Random.nextFloat() * 2f) }
+
+    // Cloud data (x, y, size, speed, alpha)
+    private data class CloudData(
+        var x: Float, 
+        val y: Float, 
+        val size: Float, 
+        val speed: Float,
+        val alpha: Int
+    )
+    private val clouds = mutableListOf<CloudData>()
+    private var cloudCount = 0
 
     private data class MountainShape(
         val stepsLeft: Int,
@@ -165,7 +191,27 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             // Tree segments (1-5) - global setting for all trees
             treeSegments = prefs.getInt("pref_tree_segments", 3).coerceIn(1, 5)
             
-            Log.d(TAG, "Settings loaded: trees=$treeCount, segments=$treeSegments, mountains=$mountainCount, hills=$hillCount, parallax=$parallaxStrength")
+            // Mountain width (50-200) - 100 = 1.0x
+            val rawMountainWidth = prefs.getInt("pref_mountain_width", 100)
+            mountainWidthScale = (rawMountainWidth.toFloat() / 100f).coerceIn(0.5f, 2.0f)
+            
+            // Cloud settings
+            val cloudsEnabled = prefs.getBoolean("pref_clouds_enabled", true)
+            val cloudDensity = prefs.getString("pref_cloud_density", "auto") ?: "auto"
+            
+            cloudCount = if (!cloudsEnabled) 0 else {
+                when (cloudDensity) {
+                    "none" -> 0
+                    "light" -> 3
+                    "medium" -> 6
+                    "heavy" -> 10
+                    "overcast" -> 15
+                    "auto" -> 6 // Default for now, ideally would check weather
+                    else -> 6
+                }
+            }
+            
+            Log.d(TAG, "Settings loaded: trees=$treeCount, segments=$treeSegments, mountains=$mountainCount, hills=$hillCount, parallax=$parallaxStrength, mtnWidth=$mountainWidthScale, clouds=$cloudCount")
 
             if (mountains.size != mountainCount) {
                 generateMountains()
@@ -175,6 +221,9 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             }
             if (trees.size != treeCount) {
                 generateTrees()
+            }
+            if (clouds.size != cloudCount) {
+                generateClouds()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error loading settings", e)
@@ -195,8 +244,8 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 // Assign depth randomly, not based on order
                 val depth = random.nextFloat()
                 
-                // Random X position across the entire screen (10-90%)
-                val peakX = 0.1f + random.nextFloat() * 0.8f
+                // Random X position across the wider world
+                val peakX = WORLD_MIN_X + random.nextFloat() * (WORLD_MAX_X - WORLD_MIN_X)
                 
                 // Far mountains (low depth) are taller and more prominent
                 // Near mountains (high depth) are lower to create foreground hills
@@ -209,11 +258,11 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 }
                 
                 // Wider slopes for far mountains, narrower for near
-                val slopeWidth = when {
+                val slopeWidth = (when {
                     depth < 0.3f -> 0.40f + random.nextFloat() * 0.18f  // Far: wide
                     depth < 0.6f -> 0.32f + random.nextFloat() * 0.16f  // Mid: medium
                     else -> 0.24f + random.nextFloat() * 0.14f          // Near: still broad, avoids slim spikes
-                }
+                }) * mountainWidthScale
 
                 val shape = createMountainShape(random, slopeWidth)
                 
@@ -294,9 +343,10 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             
             // Generate multiple hill layers with different depths
             for (i in 0 until hillCount) {
-                // Control points for the rolling hill shape (0.0 to 1.0 range)
+                // Control points for the rolling hill shape (WORLD_MIN_X to WORLD_MAX_X range)
                 // These define height offsets at evenly spaced x positions
-                val numPoints = 8 + random.nextInt(5)  // 8-12 control points
+                // Increase points to cover wider area (~9x original density for -4..5 range)
+                val numPoints = 60 + random.nextInt(20)
                 val points = mutableListOf<Float>()
                 
                 for (j in 0 until numPoints) {
@@ -330,17 +380,16 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
     }
 
     /**
-     * Get the Y position of a hill at a specific X ratio (0.0-1.0).
+     * Get the Y position of a hill at a specific X ratio (WORLD_MIN_X to WORLD_MAX_X).
      * Uses linear interpolation between control points to match drawHill's geometry.
      */
     private fun getHillY(xRatio: Float, hill: HillData): Float {
         val points = hill.controlPoints
         if (points.isEmpty()) return hill.heightOffset
         
-        // Map xRatio (0.0-1.0) to segment index
-        // Note: drawHill draws from -100 to w+100, so effective width is larger
-        // We simplify by assuming xRatio maps to the full range of control points
-        val indexFloat = xRatio * (points.size - 1)
+        // Map xRatio (WORLD_MIN_X to WORLD_MAX_X) to segment index
+        val normalizedX = (xRatio - WORLD_MIN_X) / (WORLD_MAX_X - WORLD_MIN_X)
+        val indexFloat = normalizedX * (points.size - 1)
         val index = indexFloat.toInt()
         val fraction = indexFloat - index
         
@@ -369,7 +418,7 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             // Generate trees that sit on the terrain
             // Trees are placed relative to the unified TERRAIN_BASELINE_RATIO
             for (i in 0 until treeCount) {
-                val xRatio = random.nextFloat()
+                val xRatio = WORLD_MIN_X + random.nextFloat() * (WORLD_MAX_X - WORLD_MIN_X)
                 
                 // Pick a random hill layer to sit on
                 // Bias towards nearer hills (higher index)
@@ -404,6 +453,56 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
         } catch (e: Exception) {
             Log.e(TAG, "Error generating trees", e)
         }
+    }
+
+    private fun generateClouds() {
+        try {
+            clouds.clear()
+            if (cloudCount <= 0) return
+
+            val random = Random(System.currentTimeMillis())
+            
+            for (i in 0 until cloudCount) {
+                // Random position in the wider world
+                val x = WORLD_MIN_X + random.nextFloat() * (WORLD_MAX_X - WORLD_MIN_X)
+                // Height: Top 40% of screen
+                val y = 0.05f + random.nextFloat() * 0.35f
+                
+                // Size variation
+                val size = 0.15f + random.nextFloat() * 0.15f
+                
+                // Speed: some move faster than others
+                val speed = 0.0005f + random.nextFloat() * 0.001f
+                
+                // Alpha variation for depth
+                val alpha = 100 + random.nextInt(100)
+                
+                clouds.add(CloudData(x, y, size, speed, alpha))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error generating clouds", e)
+        }
+    }
+
+    // Zeichnet eine "fluffige" Wolke statt eines Kreises (from ai.md)
+    private fun drawFluffyCloud(canvas: Canvas, centerX: Float, centerY: Float, size: Float, paint: Paint) {
+        val cloudPath = Path()
+        
+        // Basis-Form: Ein breites Oval in der Mitte (für die flache Unterseite)
+        val width = size * 1.5f
+        val height = size * 0.8f
+        val rect = RectF(centerX - width / 2, centerY - height / 2, centerX + width / 2, centerY + height / 2)
+        cloudPath.addOval(rect, Path.Direction.CW)
+
+        // "Fluffiness" hinzufügen: 3-4 zufällige Kreise oben drauf setzen
+        // Oben Links
+        cloudPath.addCircle(centerX - size * 0.4f, centerY - size * 0.2f, size * 0.5f, Path.Direction.CW)
+        // Oben Mitte (der Höchste)
+        cloudPath.addCircle(centerX, centerY - size * 0.4f, size * 0.6f, Path.Direction.CW)
+        // Oben Rechts
+        cloudPath.addCircle(centerX + size * 0.4f, centerY - size * 0.2f, size * 0.45f, Path.Direction.CW)
+
+        canvas.drawPath(cloudPath, paint)
     }
 
     private fun getThemeName(): String {
@@ -668,6 +767,18 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             val theme = getThemeName()
             val timeOfDay = getTimeOfDay()
 
+            // Calculate horizontal scale to maintain aspect ratio
+            // On portrait (9:16), scaleX should be w.
+            // On landscape (3:1), scaleX should be h * 0.5625f.
+            // We use a threshold to switch modes.
+            val scaleX = if (w / h > 0.8f) {
+                // Wide screen (tablet/preview) - maintain aspect ratio based on height
+                h * 0.5625f 
+            } else {
+                // Portrait phone - fit width (legacy behavior)
+                w
+            }
+
             // Calculate day/night ratio for star visibility
             dayNightRatio = when (theme) {
                 "night" -> 1.0f
@@ -720,6 +831,31 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 }
             }
 
+            // Clouds (Layer 0.5) - Behind mountains
+            if (cloudCount > 0) {
+                val cloudParallaxX = -ox * 0.08f // Move slightly with sky
+                val cloudParallaxY = -oy * 0.04f
+                
+                for (cloud in clouds) {
+                    // Animate cloud position (drift right)
+                    cloud.x += cloud.speed
+                    if (cloud.x > WORLD_MAX_X) {
+                        cloud.x = WORLD_MIN_X
+                    }
+                    
+                    cloudPaint.alpha = cloud.alpha
+                    // Apply night dimming to clouds too
+                    val cloudColor = applyNightMultiplier(Color.WHITE, dayNightRatio)
+                    cloudPaint.color = Color.argb(cloud.alpha, Color.red(cloudColor), Color.green(cloudColor), Color.blue(cloudColor))
+                    
+                    val cx = (cloud.x - 0.5f) * scaleX + w / 2f + cloudParallaxX
+                    val cy = cloud.y * h + cloudParallaxY
+                    val cSize = cloud.size * h * 0.5f // Scale relative to screen height
+                    
+                    drawFluffyCloud(canvas, cx, cy, cSize, cloudPaint)
+                }
+            }
+
             // Layer 1-N: Mountains (sorted by depth)
             // Per ai.md: Mountains have very subtle parallax (0.05-0.15), almost static
             val mountainNearColor = getMountainColor(isFar = false)
@@ -740,7 +876,7 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 val mountainParallax = 0.05f + normalizedDepth * 0.10f
                 canvas.save()
                 canvas.translate(ox * mountainParallax, oy * mountainParallax * 0.3f)
-                drawMountain(canvas, w, h, mountain)
+                drawMountain(canvas, w, h, mountain, scaleX)
                 canvas.restore()
             }
 
@@ -761,7 +897,7 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 val hillParallax = hill.depthFactor  // Already in 0.3-0.5 range
                 canvas.save()
                 canvas.translate(ox * hillParallax, oy * hillParallax * 0.3f)
-                drawHill(canvas, w, h, hill.controlPoints, hill.heightOffset)
+                drawHill(canvas, w, h, hill.controlPoints, hill.heightOffset, scaleX)
                 canvas.restore()
             }
 
@@ -786,7 +922,7 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 val treeParallax = tree.depthFactor
                 canvas.save()
                 canvas.translate(ox * treeParallax, oy * treeParallax * 0.3f)
-                drawTree(canvas, w * tree.xRatio, h * tree.yRatio, tree.scale * treeScale, treeSegments)
+                drawTree(canvas, tree.xRatio, h * tree.yRatio, tree.scale * treeScale, treeSegments, w, scaleX)
                 canvas.restore()
             }
         } catch (e: Exception) {
@@ -798,15 +934,15 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
      * Draw a jagged low-poly mountain with a split ridge (light/shadow sides).
      * The silhouette and ridge are deterministic (precomputed in MountainData.shape).
      */
-    private fun drawMountain(canvas: Canvas, w: Float, h: Float, mountain: MountainData) {
+    private fun drawMountain(canvas: Canvas, w: Float, h: Float, mountain: MountainData, scaleX: Float) {
         mountainPathLeft.reset()
         mountainPathRight.reset()
 
-        val peakCenterX = w * mountain.peakX
+        val peakCenterX = (mountain.peakX - 0.5f) * scaleX + w / 2f
         val peakY = h * mountain.peakHeight
         val baseY = h
 
-        val halfWidthPx = w * mountain.slopeWidth * 0.5f
+        val halfWidthPx = scaleX * mountain.slopeWidth * 0.5f
         val leftBaseX = (peakCenterX - halfWidthPx).coerceIn(-100f, w + 100f)
         val rightBaseX = (peakCenterX + halfWidthPx).coerceIn(-100f, w + 100f)
 
@@ -881,7 +1017,7 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
      * Creates a low-poly terrain look that matches getHillY() for perfect tree placement.
      * Uses TERRAIN_BASELINE_RATIO as reference for consistent ground level.
      */
-    private fun drawHill(canvas: Canvas, w: Float, h: Float, controlPoints: List<Float>, heightOffset: Float) {
+    private fun drawHill(canvas: Canvas, w: Float, h: Float, controlPoints: List<Float>, heightOffset: Float, scaleX: Float) {
         if (controlPoints.isEmpty()) return
         
         hillPath.reset()
@@ -889,17 +1025,20 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
         val baseY = h * heightOffset  // Where the hill baseline is (based on terrain constant)
         val hillHeight = h * 0.12f    // Maximum hill height variation (slightly reduced)
         
-        // Start from bottom left, outside screen
-        hillPath.moveTo(-100f, h + 50f)
+        // Start from far left of world
+        val startX = (WORLD_MIN_X - 0.5f) * scaleX + w / 2f
+        val endX = (WORLD_MAX_X - 0.5f) * scaleX + w / 2f
+        
+        hillPath.moveTo(startX - 100f, h + 50f)
         
         // Go up to the starting point
-        hillPath.lineTo(-100f, baseY + hillHeight * (1f - controlPoints[0]))
+        hillPath.lineTo(startX - 100f, baseY + hillHeight * (1f - controlPoints[0]))
         
         // Draw linear segments through control points (Low Poly style)
-        val segmentWidth = (w + 200f) / (controlPoints.size - 1)
+        val segmentWidth = (endX - startX) / (controlPoints.size - 1)
         
         for (i in 0 until controlPoints.size - 1) {
-            val x2 = -100f + (i + 1) * segmentWidth
+            val x2 = startX + (i + 1) * segmentWidth
             val y2 = baseY + hillHeight * (1f - controlPoints[i + 1])
             
             // Linear line to next point
@@ -907,7 +1046,7 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
         }
         
         // Close along bottom
-        hillPath.lineTo(w + 100f, h + 50f)
+        hillPath.lineTo(endX + 100f, h + 50f)
         hillPath.close()
         
         canvas.drawPath(hillPath, hillPaint)
@@ -917,8 +1056,10 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
      * Draw a pine tree silhouette with variable segments (1-5).
      * Fewer segments = taller individual tiers.
      */
-    private fun drawTree(canvas: Canvas, x: Float, baseY: Float, scale: Float, segments: Int) {
+    private fun drawTree(canvas: Canvas, xRatio: Float, baseY: Float, scale: Float, segments: Int, w: Float, scaleX: Float) {
         if (scale <= 0f || segments <= 0) return
+        
+        val x = (xRatio - 0.5f) * scaleX + w / 2f
         
         // Total tree height - fewer segments means each tier is taller
         val baseHeight = 160f * scale
