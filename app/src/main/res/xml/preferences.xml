@@ -34,6 +34,16 @@
             app:updatesContinuously="true" />
 
         <SeekBarPreference
+            android:key="pref_mountain_roughness"
+            android:title="Mountain Roughness"
+            android:summary="Jaggedness of silhouette (0-100%)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
             android:key="pref_hill_count"
             android:title="Hill Layers"
             android:summary="Rolling terrain layers (0-5)"
@@ -90,6 +100,16 @@
             android:defaultValue="1"
             android:max="5"
             app:min="1"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_tree_color_variation"
+            android:title="Tree Color Variation"
+            android:summary="Color diversity (0=uniform, 100=varied)"
+            android:defaultValue="30"
+            android:max="100"
+            app:min="0"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
     </PreferenceCategory>

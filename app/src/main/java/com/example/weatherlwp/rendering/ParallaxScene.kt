@@ -101,12 +101,15 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
     private var treeCount = 20
     private var treeScale = 1.0f
     private var treeSegments = 3  // Global setting: 1-5 segments per tree
+    private var treeColorVariation = 0.3f  // 0-1: how much color varies between trees
     private var mountainCount = 3
     private var lastMountainCount = 3         // Track for live updates
     private var mountainWidthScale = 1.0f
     private var lastMountainWidthScale = 1.0f  // Track for live updates
     private var mountainHeightScale = 1.0f     // Height multiplier (0.1 - 10.0)
     private var lastMountainHeightScale = 1.0f // Track for live updates
+    private var mountainRoughness = 0.5f       // 0-1: jaggedness of mountain silhouette
+    private var lastMountainRoughness = 0.5f   // Track for live updates
     
     // Wind sway for trees (from Breezy Weather)
     private var windSpeed = 0f  // 0-1 normalized wind strength
@@ -218,6 +221,14 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             val rawMountainHeight = prefs.getInt("pref_mountain_height", 100)
             mountainHeightScale = (rawMountainHeight.toFloat() / 100f).coerceIn(0.1f, 10f)
             
+            // Mountain roughness (0-100) - affects jaggedness of silhouette
+            val rawRoughness = prefs.getInt("pref_mountain_roughness", 50)
+            mountainRoughness = (rawRoughness.toFloat() / 100f).coerceIn(0f, 1f)
+            
+            // Tree color variation (0-100) - how much colors differ between trees
+            val rawTreeColorVar = prefs.getInt("pref_tree_color_variation", 30)
+            treeColorVariation = (rawTreeColorVar.toFloat() / 100f).coerceIn(0f, 1f)
+            
             // Hill vertical range settings
             // Lower start (30-70%) - where far hills appear on screen
             val rawHillLower = prefs.getInt("pref_hill_lower_start", 55)
@@ -258,24 +269,25 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             val (count, opacityMult) = if (!cloudsEnabled) Pair(0, 1.0f) else {
                 when (cloudDensity) {
                     "none" -> Pair(0, 1.0f)
-                    "light" -> Pair(3, 0.5f)       // Few, transparent
-                    "medium" -> Pair(6, 0.75f)    // Medium, semi-transparent
-                    "heavy" -> Pair(10, 1.0f)     // Many, opaque
-                    "overcast" -> Pair(15, 1.2f)  // Lots, very opaque
-                    "auto" -> Pair(6, 0.75f)
-                    else -> Pair(6, 0.75f)
+                    "light" -> Pair(8, 0.4f)       // Few, very transparent
+                    "medium" -> Pair(15, 0.65f)   // Medium, semi-transparent
+                    "heavy" -> Pair(25, 0.9f)     // Many, mostly opaque
+                    "overcast" -> Pair(40, 1.1f)  // Lots, very opaque
+                    "auto" -> Pair(12, 0.6f)
+                    else -> Pair(12, 0.6f)
                 }
             }
             cloudCount = count
             cloudOpacityMultiplier = opacityMult
             
-            Log.d(TAG, "Settings loaded: trees=$treeCount, segments=$treeSegments, mountains=$mountainCount, hills=$hillCount, parallax=$parallaxStrength, mtnWidth=$mountainWidthScale, mtnHeight=$mountainHeightScale, hillRange=$hillLowerStart-$hillUpperEnd, clouds=$cloudCount")
+            Log.d(TAG, "Settings loaded: trees=$treeCount, segments=$treeSegments, mountains=$mountainCount, hills=$hillCount, parallax=$parallaxStrength, mtnWidth=$mountainWidthScale, mtnHeight=$mountainHeightScale, mtnRough=$mountainRoughness, treeColorVar=$treeColorVariation, hillRange=$hillLowerStart-$hillUpperEnd, clouds=$cloudCount")
 
-            // Regenerate mountains if count, width, or height changed
-            if (mountainCount != lastMountainCount || mountainWidthScale != lastMountainWidthScale || mountainHeightScale != lastMountainHeightScale) {
+            // Regenerate mountains if count, width, height, or roughness changed
+            if (mountainCount != lastMountainCount || mountainWidthScale != lastMountainWidthScale || mountainHeightScale != lastMountainHeightScale || mountainRoughness != lastMountainRoughness) {
                 lastMountainCount = mountainCount
                 lastMountainWidthScale = mountainWidthScale
                 lastMountainHeightScale = mountainHeightScale
+                lastMountainRoughness = mountainRoughness
                 generateMountains()
             }
             // Regenerate hills if count OR vertical range changed
@@ -357,10 +369,13 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
         val stepsRight = (stepsBase + random.nextInt(5)).coerceIn(14, 28)
         val ridgeSteps = (7 + random.nextInt(5)).coerceIn(7, 12)
 
+        // Roughness affects jitter magnitude (0 = smooth, 1 = very jagged)
+        val roughnessMult = 0.3f + mountainRoughness * 1.4f  // 0.3 to 1.7
+        
         fun nextJitter(): Float {
             // Bias towards smaller jitter; still allows sharp spikes.
             val signed = random.nextFloat() * 2f - 1f
-            return signed * random.nextFloat()
+            return signed * random.nextFloat() * roughnessMult
         }
 
         val leftJitter = FloatArray((stepsLeft - 1).coerceAtLeast(0)) { nextJitter() }
@@ -904,13 +919,13 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             canvas.drawRect(-overscan, -overscan, w + overscan, h + overscan, skyPaint)
             canvas.restore()
 
-            // Stars (night/dusk only) - tiny white dots per ai.md with subtle parallax
+            // Stars (night/dusk only) - tiny white dots per ai.md with parallax similar to mountains
             if (theme == "night" || theme == "dusk") {
                 val time = System.currentTimeMillis()
                 val starAlphaBase = if (theme == "night") 150 else 80
-                // Stars move with sky (opposite direction, very subtle)
-                val starParallaxX = -ox * 0.10f
-                val starParallaxY = -oy * 0.05f
+                // Stars move with mountains (far background, noticeable parallax)
+                val starParallaxX = ox * 0.30f
+                val starParallaxY = oy * 0.15f
                 for (star in stars) {
                     val twinkle = kotlin.math.sin((time * 0.001 + star[0] * 10).toDouble())
                     val alpha = (starAlphaBase + 50 * twinkle).toInt().coerceIn(30, 220)
@@ -962,8 +977,8 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 
                 mountainPaint.color = mountainColor
                 
-                // Mountains are mostly static - very subtle parallax (0.05-0.15)
-                val mountainParallax = 0.05f + normalizedDepth * 0.10f
+                // Mountains have noticeable parallax (0.25-0.45) - more than trees
+                val mountainParallax = 0.25f + normalizedDepth * 0.20f
                 canvas.save()
                 canvas.translate(ox * mountainParallax, oy * mountainParallax * 0.3f)
                 drawMountain(canvas, w, h, mountain, scaleX)
@@ -983,8 +998,9 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 
                 hillPaint.color = hillColor
                 
-                // Hills use same parallax range as trees (0.3-0.5)
-                val hillParallax = hill.depthFactor  // Already in 0.3-0.5 range
+                // Hills barely move like trees (0.05-0.12) - foreground terrain
+                val normalizedHillParallax = ((hill.depthFactor - 0.3f) / 0.2f).coerceIn(0f, 1f)
+                val hillParallax = 0.05f + normalizedHillParallax * 0.07f
                 canvas.save()
                 canvas.translate(ox * hillParallax, oy * hillParallax * 0.3f)
                 drawHill(canvas, w, h, hill.controlPoints, hill.heightOffset, scaleX)
@@ -993,23 +1009,33 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
 
             // Layer N+: Trees (sorted by depth, use same parallax as hills so they move together)
             val baseTreeColor = getTreeColor()
-            for (tree in trees) {
+            for ((treeIndex, tree) in trees.withIndex()) {
                 // Far trees (low depthFactor) are darker, near trees (high depthFactor) are brighter
                 // tree.depthFactor ranges from 0.3 to 0.5 (same as hills)
                 val normalizedTreeDepth = ((tree.depthFactor - 0.3f) / 0.2f).coerceIn(0f, 1f)
                 val brightnessMultiplier = 0.6f + normalizedTreeDepth * 0.4f  // 0.6 (far/dark) to 1.0 (near/bright)
+                
+                // Add color variation per tree (uses tree index as seed for consistency)
+                val treeRandom = Random(treeIndex * 12345L)
+                val variation = (treeRandom.nextFloat() - 0.5f) * 2f * treeColorVariation  // -var to +var
+                
+                // Mostly green, but can shift towards brown (reduce green, increase red slightly)
+                val brownShift = if (variation > 0) variation * 0.3f else 0f  // Only positive variation adds brown
+                val greenShift = variation * 0.15f  // Slight green variation
+                
                 val brightnessAdjusted = Color.rgb(
-                    (Color.red(baseTreeColor) * brightnessMultiplier).toInt().coerceIn(0, 255),
-                    (Color.green(baseTreeColor) * brightnessMultiplier).toInt().coerceIn(0, 255),
+                    ((Color.red(baseTreeColor) * brightnessMultiplier) * (1f + brownShift)).toInt().coerceIn(0, 255),
+                    ((Color.green(baseTreeColor) * brightnessMultiplier) * (1f + greenShift - brownShift * 0.5f)).toInt().coerceIn(0, 255),
                     (Color.blue(baseTreeColor) * brightnessMultiplier).toInt().coerceIn(0, 255)
                 )
                 // Apply night-time blue overlay
                 val adjustedColor = applyNightMultiplier(brightnessAdjusted, dayNightRatio)
                 treePaint.color = adjustedColor
 
-                // Trees use the SAME parallax as their depth factor (0.3-0.5)
-                // This matches the hill parallax so trees move with the terrain
-                val treeParallax = tree.depthFactor
+                // Trees barely move (0.05-0.12) - they're in foreground, closest to viewer
+                // Normalized from depthFactor 0.3-0.5 to parallax 0.05-0.12
+                val normalizedTreeParallax = ((tree.depthFactor - 0.3f) / 0.2f).coerceIn(0f, 1f)
+                val treeParallax = 0.05f + normalizedTreeParallax * 0.07f
                 canvas.save()
                 canvas.translate(ox * treeParallax, oy * treeParallax * 0.3f)
                 drawTree(canvas, tree.xRatio, h * tree.yRatio, tree.scale * treeScale, treeSegments, w, scaleX, tree.depthFactor)

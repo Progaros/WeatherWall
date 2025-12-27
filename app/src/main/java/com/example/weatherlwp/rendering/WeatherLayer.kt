@@ -6,13 +6,14 @@ import android.graphics.Paint
 import kotlin.random.Random
 
 /**
- * Renders weather effects: Rain, Snow, Lightning
+ * Renders weather effects: Rain, Snow, Lightning, Fog
  * Uses particle pooling to avoid per-frame allocations.
+ * Supports intensity control for rain/snow (0.0-1.0).
  */
 class WeatherLayer {
 
     enum class WeatherType {
-        NONE, RAIN, SNOW, LIGHTNING
+        NONE, RAIN, SNOW, LIGHTNING, FOG
     }
 
     private data class Particle(
@@ -24,8 +25,12 @@ class WeatherLayer {
     )
 
     // Pre-allocated particle pools (no runtime allocations)
-    private val rainParticles = Array(150) { Particle() }
-    private val snowParticles = Array(80) { Particle() }
+    // Max pool sizes - actual active count depends on intensity
+    private val rainParticles = Array(300) { Particle() }
+    private val snowParticles = Array(200) { Particle() }
+    
+    // Intensity (0.0-1.0): controls how many particles are active
+    private var intensity = 0.5f  // Default medium intensity
 
     // Pre-allocated paints
     private val rainPaint = Paint().apply {
@@ -48,6 +53,10 @@ class WeatherLayer {
     private val flashPaint = Paint().apply {
         color = Color.argb(60, 255, 255, 255)
     }
+    
+    private val fogPaint = Paint().apply {
+        isAntiAlias = true
+    }
 
     private var initialized = false
     private var screenWidth = 0
@@ -66,6 +75,14 @@ class WeatherLayer {
             initialized = false
         }
     }
+    
+    /**
+     * Set precipitation intensity (0.0 = light, 1.0 = heavy).
+     * Affects number of active particles for rain/snow.
+     */
+    fun setIntensity(value: Float) {
+        intensity = value.coerceIn(0f, 1f)
+    }
 
     fun render(canvas: Canvas, enabled: Boolean) {
         if (!enabled || currentWeather == WeatherType.NONE) return
@@ -81,6 +98,7 @@ class WeatherLayer {
             WeatherType.RAIN -> renderRain(canvas)
             WeatherType.SNOW -> renderSnow(canvas)
             WeatherType.LIGHTNING -> renderLightning(canvas)
+            WeatherType.FOG -> renderFog(canvas)
             WeatherType.NONE -> {}
         }
     }
@@ -116,13 +134,18 @@ class WeatherLayer {
     }
 
     private fun renderRain(canvas: Canvas) {
-        for (p in rainParticles) {
+        // Active particle count based on intensity (30% to 100% of pool)
+        val activeCount = (rainParticles.size * (0.3f + intensity * 0.7f)).toInt()
+        
+        for (i in 0 until activeCount) {
+            val p = rainParticles[i]
             rainPaint.alpha = p.alpha
             canvas.drawLine(p.x, p.y, p.x - 2f, p.y + p.size, rainPaint)
 
-            // Update position
-            p.y += p.speed
-            p.x -= 1f // Slight wind effect
+            // Speed increases with intensity
+            val speedMult = 0.7f + intensity * 0.6f
+            p.y += p.speed * speedMult
+            p.x -= 1f * speedMult // Slight wind effect
 
             if (p.y > screenHeight) {
                 resetRainParticle(p)
@@ -131,12 +154,17 @@ class WeatherLayer {
     }
 
     private fun renderSnow(canvas: Canvas) {
-        for (p in snowParticles) {
+        // Active particle count based on intensity (20% to 100% of pool)
+        val activeCount = (snowParticles.size * (0.2f + intensity * 0.8f)).toInt()
+        
+        for (i in 0 until activeCount) {
+            val p = snowParticles[i]
             snowPaint.alpha = p.alpha
             canvas.drawCircle(p.x, p.y, p.size, snowPaint)
 
-            // Update position with gentle sway
-            p.y += p.speed
+            // Speed increases with intensity
+            val speedMult = 0.6f + intensity * 0.8f
+            p.y += p.speed * speedMult
             p.x += kotlin.math.sin((p.y * 0.02f).toDouble()).toFloat() * 0.8f
 
             if (p.y > screenHeight) {
@@ -188,6 +216,51 @@ class WeatherLayer {
             y += segmentHeight
             lightningPoints[i] = x
             lightningPoints[i + 1] = y
+        }
+    }
+    
+    /**
+     * Render fog as layered semi-transparent bands.
+     * Denser at bottom, thinner at top. Intensity affects opacity.
+     */
+    private fun renderFog(canvas: Canvas) {
+        // Base fog opacity depends on intensity (20-60%)
+        val baseAlpha = (50 + intensity * 100).toInt().coerceIn(30, 150)
+        
+        // Draw several fog layers from bottom to top
+        val layers = 5
+        for (i in 0 until layers) {
+            val layerRatio = i.toFloat() / layers
+            
+            // Lower layers are denser (higher alpha)
+            val layerAlpha = (baseAlpha * (1f - layerRatio * 0.7f)).toInt()
+            
+            // Fog color: grayish-white
+            fogPaint.color = Color.argb(layerAlpha, 200, 210, 220)
+            
+            // Each layer covers the bottom portion of screen
+            // Lower layers extend higher
+            val layerTop = screenHeight * (0.3f + layerRatio * 0.5f)
+            val layerBottom = screenHeight.toFloat()
+            
+            canvas.drawRect(0f, layerTop, screenWidth.toFloat(), layerBottom, fogPaint)
+        }
+        
+        // Add some wispy horizontal streaks
+        val time = System.currentTimeMillis()
+        for (i in 0 until 8) {
+            val yBase = screenHeight * (0.5f + i * 0.06f)
+            val xOffset = kotlin.math.sin((time * 0.0001 + i * 0.5).toDouble()).toFloat() * 50f
+            val streakAlpha = (baseAlpha * 0.4f).toInt()
+            
+            fogPaint.color = Color.argb(streakAlpha, 220, 225, 230)
+            canvas.drawRect(
+                -100f + xOffset, 
+                yBase - 10f, 
+                screenWidth + 100f + xOffset, 
+                yBase + 20f, 
+                fogPaint
+            )
         }
     }
 }

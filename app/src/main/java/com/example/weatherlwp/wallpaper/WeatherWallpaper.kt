@@ -1,5 +1,6 @@
 package com.example.weatherlwp.wallpaper
 
+import android.content.SharedPreferences
 import android.graphics.Canvas
 import android.graphics.Color
 import android.os.SystemClock
@@ -34,6 +35,14 @@ class WeatherWallpaper : WallpaperService() {
         private var seasonalEnabled = true
         private var currentWeather = "none"
         private var useBreezyWeather = true
+        
+        // Live weather update listener
+        private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == "weather_current_type" || key == "weather_wind_speed") {
+                loadPrefs()
+                Log.d(TAG, "Live weather update received: $key")
+            }
+        }
 
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             super.onCreate(surfaceHolder)
@@ -41,6 +50,9 @@ class WeatherWallpaper : WallpaperService() {
                 scene = ParallaxScene(this@WeatherWallpaper)
                 seasonal = SeasonalEvents(this@WeatherWallpaper)
                 loadPrefs()
+                // Register for live weather updates from Breezy Weather
+                val prefs = PreferenceManager.getDefaultSharedPreferences(this@WeatherWallpaper)
+                prefs.registerOnSharedPreferenceChangeListener(prefsListener)
             } catch (e: Exception) {
                 Log.e(TAG, "Error in onCreate", e)
             }
@@ -91,6 +103,9 @@ class WeatherWallpaper : WallpaperService() {
 
         override fun onDestroy() {
             try {
+                // Unregister weather update listener
+                val prefs = PreferenceManager.getDefaultSharedPreferences(this@WeatherWallpaper)
+                prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
                 stopRender()
                 scene.stop()
             } catch (e: Exception) {
@@ -124,6 +139,7 @@ class WeatherWallpaper : WallpaperService() {
                             "rain" -> WeatherLayer.WeatherType.RAIN
                             "snow" -> WeatherLayer.WeatherType.SNOW
                             "lightning" -> WeatherLayer.WeatherType.LIGHTNING
+                            "fog" -> WeatherLayer.WeatherType.FOG
                             else -> WeatherLayer.WeatherType.NONE
                         }
                     }
@@ -134,6 +150,7 @@ class WeatherWallpaper : WallpaperService() {
                             WeatherType.RAIN -> WeatherLayer.WeatherType.RAIN
                             WeatherType.SNOW -> WeatherLayer.WeatherType.SNOW
                             WeatherType.THUNDERSTORM -> WeatherLayer.WeatherType.LIGHTNING
+                            WeatherType.FOG -> WeatherLayer.WeatherType.FOG
                             else -> WeatherLayer.WeatherType.NONE
                         }
                     }
@@ -143,11 +160,22 @@ class WeatherWallpaper : WallpaperService() {
                             "rain" -> WeatherLayer.WeatherType.RAIN
                             "snow" -> WeatherLayer.WeatherType.SNOW
                             "lightning" -> WeatherLayer.WeatherType.LIGHTNING
+                            "fog" -> WeatherLayer.WeatherType.FOG
                             else -> WeatherLayer.WeatherType.NONE
                         }
                     }
                 }
                 weather.setWeather(effectiveWeather)
+                
+                // Set precipitation intensity based on wind speed (as proxy for storm intensity)
+                // Higher wind = heavier precipitation
+                val windIntensity = if (useBreezyWeather) {
+                    WeatherRepository.getNormalizedWindStrength(this@WeatherWallpaper)
+                } else {
+                    0.5f // Default medium
+                }
+                // Map wind to precipitation: 0.3 base + 0.7 * wind (so light rain at calm, heavy at windy)
+                weather.setIntensity(0.3f + windIntensity * 0.7f)
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading prefs", e)
             }
