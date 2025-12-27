@@ -37,12 +37,13 @@ class HillsTerrainTest {
     }
     
     @Test
-    fun `hill control points should create smooth terrain`() {
-        val minControlPoints = 8
-        val maxControlPoints = 12
+    fun `hill segments should create low poly terrain`() {
+        // Low poly terrain uses fewer segments for a jagged look
+        val minSegments = 3
+        val maxSegments = 8
         
-        assertTrue("Should have enough control points", minControlPoints >= 6)
-        assertTrue("Should not have too many control points", maxControlPoints <= 15)
+        assertTrue("Should have enough segments", minSegments >= 3)
+        assertTrue("Should not have too many segments", maxSegments <= 10)
     }
     
     @Test

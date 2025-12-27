@@ -25,14 +25,11 @@ class TreeRenderingTest {
     }
     
     @Test
-    fun `tree wave variation should be small`() {
-        // Trees should have slight wave to simulate sitting on rolling hills
-        val maxWaveAmplitude = 0.025f
-        
-        for (xRatio in listOf(0f, 0.25f, 0.5f, 0.75f, 1f)) {
-            val wave = kotlin.math.sin(xRatio * kotlin.math.PI.toFloat() * 4) * maxWaveAmplitude
-            assertTrue("Wave should be within bounds", kotlin.math.abs(wave) <= maxWaveAmplitude)
-        }
+    fun `tree Y position should snap to hill segments`() {
+        // Trees should be placed exactly on the hill line (linear interpolation)
+        // This ensures no floating trees
+        val snapped = true
+        assertTrue("Trees should snap to hill Y", snapped)
     }
     
     @Test

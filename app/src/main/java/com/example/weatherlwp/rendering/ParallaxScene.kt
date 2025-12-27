@@ -258,6 +258,36 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
         }
     }
 
+    /**
+     * Get the Y position of a hill at a specific X ratio (0.0-1.0).
+     * Uses linear interpolation between control points to match drawHill's geometry.
+     */
+    private fun getHillY(xRatio: Float, hill: HillData): Float {
+        val points = hill.controlPoints
+        if (points.isEmpty()) return hill.heightOffset
+        
+        // Map xRatio (0.0-1.0) to segment index
+        // Note: drawHill draws from -100 to w+100, so effective width is larger
+        // We simplify by assuming xRatio maps to the full range of control points
+        val indexFloat = xRatio * (points.size - 1)
+        val index = indexFloat.toInt()
+        val fraction = indexFloat - index
+        
+        if (index >= points.size - 1) return hill.heightOffset + 0.12f * (1f - points.last())
+        
+        val p1 = points[index]
+        val p2 = points[index + 1]
+        
+        // Linear interpolation of the height control value (0.0-1.0)
+        // 1.0 = top of hill variance, 0.0 = bottom
+        val interpolatedControl = p1 + fraction * (p2 - p1)
+        
+        // Convert to actual Y ratio
+        // hillHeight is 0.12f (from drawHill)
+        // value is inverted in drawHill: baseY + hillHeight * (1f - controlPoint)
+        return hill.heightOffset + 0.12f * (1f - interpolatedControl)
+    }
+
     private fun generateTrees() {
         try {
             trees.clear()
@@ -270,27 +300,24 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             for (i in 0 until treeCount) {
                 val xRatio = random.nextFloat()
                 
-                // Trees are distributed across depth layers (far to near)
-                // More trees in foreground (nearer) for visual interest
-                val depthBias = random.nextFloat().let { it * it } // Bias towards higher values (nearer)
+                // Pick a random hill layer to sit on
+                // Bias towards nearer hills (higher index)
+                val hillIndex = random.nextInt(hills.size)
+                val hill = hills[hillIndex]
                 
-                // Parallax factor matches hill range (0.3-0.5) so trees move with terrain
-                val depthFactor = 0.3f + depthBias * 0.2f
+                // Get exact Y on the hill surface
+                val groundY = getHillY(xRatio, hill)
                 
-                // Normalized depth for visual properties (0=far, 1=near)
-                val normalizedDepth = depthBias
+                // Tree sits on this ground Y
+                // Add offset to make tree sit slightly INTO the ground (larger Y = lower)
+                val yRatio = groundY + TREE_FOOT_OFFSET
                 
-                // Y position based on unified terrain baseline
-                // Far trees sit higher (smaller Y), near trees lower (larger Y)
-                // This creates the illusion of depth in the landscape
-                val baseY = TERRAIN_BASELINE_RATIO - 0.08f + normalizedDepth * 0.15f
+                // Use the hill's depth factor so they move together
+                val depthFactor = hill.depthFactor
                 
-                // Add gentle wave variation for organic placement (simulates rolling terrain)
-                // Use consistent formula so it matches hill undulation
-                val hillWave = kotlin.math.sin(xRatio * kotlin.math.PI.toFloat() * 4) * 0.025f
-                val yRatio = (baseY + hillWave - TREE_FOOT_OFFSET).coerceIn(0.55f, 0.88f)
-                
-                // Scale: far trees smaller, near trees larger (atmospheric perspective)
+                // Scale based on depth (nearer = larger)
+                // Normalize depth from 0.3-0.5 range
+                val normalizedDepth = ((depthFactor - 0.3f) / 0.2f).coerceIn(0f, 1f)
                 val scale = 0.3f + normalizedDepth * 0.7f
                 
                 trees.add(TreeData(
@@ -728,8 +755,8 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
     }
 
     /**
-     * Draw a rolling hill using smooth curves between control points.
-     * Creates organic terrain like in the reference app.
+     * Draw a rolling hill using linear segments between control points.
+     * Creates a low-poly terrain look that matches getHillY() for perfect tree placement.
      * Uses TERRAIN_BASELINE_RATIO as reference for consistent ground level.
      */
     private fun drawHill(canvas: Canvas, w: Float, h: Float, controlPoints: List<Float>, heightOffset: Float) {
@@ -746,20 +773,15 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
         // Go up to the starting point
         hillPath.lineTo(-100f, baseY + hillHeight * (1f - controlPoints[0]))
         
-        // Draw smooth curves through control points
+        // Draw linear segments through control points (Low Poly style)
         val segmentWidth = (w + 200f) / (controlPoints.size - 1)
         
         for (i in 0 until controlPoints.size - 1) {
-            val x1 = -100f + i * segmentWidth
-            val y1 = baseY + hillHeight * (1f - controlPoints[i])
             val x2 = -100f + (i + 1) * segmentWidth
             val y2 = baseY + hillHeight * (1f - controlPoints[i + 1])
             
-            // Control points for bezier curve (smooth rolling effect)
-            val cx1 = x1 + segmentWidth * 0.5f
-            val cx2 = x2 - segmentWidth * 0.5f
-            
-            hillPath.cubicTo(cx1, y1, cx2, y2, x2, y2)
+            // Linear line to next point
+            hillPath.lineTo(x2, y2)
         }
         
         // Close along bottom

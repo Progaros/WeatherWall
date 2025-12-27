@@ -178,10 +178,23 @@ class WeatherWallpaper : WallpaperService() {
 
         private fun drawFrame() {
             val holder = surfaceHolder
+            if (holder == null) return
+            
             var canvas: Canvas? = null
             try {
                 canvas = holder.lockCanvas()
-                if (canvas == null) return
+                if (canvas == null) {
+                    Log.w(TAG, "lockCanvas() returned null")
+                    return
+                }
+                
+                val w = canvas.width
+                val h = canvas.height
+                
+                if (w <= 0 || h <= 0) {
+                    Log.w(TAG, "Invalid canvas dimensions: ${w}x${h}")
+                    return
+                }
 
                 // Base black
                 canvas.drawColor(Color.BLACK)
@@ -199,8 +212,8 @@ class WeatherWallpaper : WallpaperService() {
 
                 // Weather effects (rain, snow, lightning)
                 weather.render(canvas, weatherEnabled)
-
-                // Seasonal events (Christmas stars, New Year fireworks)
+                
+                // Seasonal effects (fireworks, etc)
                 seasonal.render(canvas, seasonalEnabled)
 
             } catch (e: Exception) {
@@ -210,10 +223,11 @@ class WeatherWallpaper : WallpaperService() {
                     try {
                         holder.unlockCanvasAndPost(canvas)
                     } catch (e: Exception) {
-                        Log.e(TAG, "Error unlocking canvas", e)
+                        Log.e(TAG, "Error posting canvas", e)
                     }
                 }
             }
         }
+
     }
 }
