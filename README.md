@@ -55,10 +55,59 @@ cd WeatherWall
 adb install app/build/outputs/apk/debug/app-debug.apk
 ```
 
+### Build with Docker (Recommended for CI)
+
+For faster repeated builds, use the pre-cached Docker image:
+
+```bash
+# Build the cached builder image (one-time, ~5 min)
+docker build -t weatherwall-builder -f Dockerfile.build .
+
+# Run tests (~30 sec with cached image)
+docker run --rm -v "$PWD":/workspace -w /workspace weatherwall-builder "./gradlew test --no-daemon"
+
+# Build debug APK (~20 sec with cached image)
+docker run --rm -v "$PWD":/workspace -w /workspace weatherwall-builder "./gradlew assembleDebug --no-daemon"
+
+# Run tests and build together
+docker run --rm -v "$PWD":/workspace -w /workspace weatherwall-builder "./gradlew test assembleDebug --no-daemon"
+```
+
+**Without cached image** (slower, downloads Gradle each time):
+```bash
+docker run --rm -v "$PWD":/workspace -w /workspace ghcr.io/cirruslabs/android-sdk:35 ./gradlew test assembleDebug --no-daemon
+```
+
 ### Build Release
 ```bash
 ./gradlew assembleRelease
 ```
+
+## 🧪 Testing
+
+The project includes 71 unit tests covering all major features:
+
+```bash
+# Run all tests locally
+./gradlew test
+
+# Run tests in Docker
+docker run --rm -v "$PWD":/workspace -w /workspace weatherwall-builder "./gradlew test --no-daemon"
+
+# View test report
+open app/build/reports/tests/testDebugUnitTest/index.html
+```
+
+**Test Coverage:**
+- `ParallaxSceneTest` - Terrain baseline, parallax factors, color transitions
+- `ParallaxSensorManagerTest` - Accelerometer axis mapping, smoothing
+- `DayNightCycleTest` - Time periods, sunset colors, manual time override
+- `WeatherRepositoryTest` - Data freshness, staleness detection
+- `SeasonalEventsTest` - Christmas/New Year detection, debug overrides
+- `CloudLayerTest` - Soft edges, density levels
+- `TreeRenderingTest` - Placement, depth coloring, scaling
+- `HillsTerrainTest` - Layer ordering, parallax matching
+- `BuildConfigTest` - Version codes, surface lifecycle
 
 ## 🏗️ Project Structure
 

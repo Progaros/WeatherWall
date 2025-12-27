@@ -29,6 +29,10 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
     companion object {
         private const val TAG = "ParallaxScene"
         
+        // Unified terrain baseline - all ground elements share this reference
+        const val TERRAIN_BASELINE_RATIO = 0.70f  // 70% down the screen is the "ground line"
+        const val TREE_FOOT_OFFSET = 0.02f        // Trees sit slightly into the ground
+        
         // Mountain colors by time of day (from ai.md reference)
         // Night: Deep indigo/purple
         private val MOUNTAIN_NIGHT = Color.parseColor("#283593")      // Deep indigo
@@ -105,7 +109,7 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
     private val trees = mutableListOf<TreeData>()
     
     // Hill data (rolling terrain between mountains and trees)
-    private data class HillData(val controlPoints: List<Float>, val depthFactor: Float, val heightOffset: Float)
+    private data class HillData(val controlPoints: List<Float>, val depthFactor: Float, val heightOffset: Float, val hillIndex: Int)
     private val hills = mutableListOf<HillData>()
     private var hillCount = 3
     private val hillPath = Path()
@@ -207,13 +211,15 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
     /**
      * Generate rolling hills between mountains and trees (per ai.md layer order).
      * Uses simple sine wave composition for smooth terrain.
+     * Hills are generated with consistent seeds so trees can sample their heights.
      */
     private fun generateHills() {
         try {
             hills.clear()
             if (hillCount <= 0) return
             
-            val random = Random(System.currentTimeMillis() / 60000)
+            // Use fixed seed for consistent terrain that trees can reference
+            val random = Random(12345)
             
             // Generate multiple hill layers with different depths
             for (i in 0 until hillCount) {
@@ -228,18 +234,20 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                     points.add(baseHeight)
                 }
                 
-                // Hills go from near (front) to far (back)
+                // Hills go from far (back) to near (front)
                 // Near hills have higher depthFactor (more parallax)
                 val depth = (i.toFloat() / hillCount.coerceAtLeast(1)) // 0.0 to ~1.0
-                val depthFactor = 0.4f + depth * 0.3f  // 0.4 (far) to 0.7 (near)
+                val depthFactor = 0.3f + depth * 0.2f  // 0.3 (far) to 0.5 (near) - matching tree parallax
                 
-                // Far hills sit lower, near hills sit higher on screen
-                val heightOffset = 0.6f + depth * 0.1f  // 0.6 (far) to 0.7 (near)
+                // All hills use TERRAIN_BASELINE_RATIO as reference
+                // Near hills sit slightly lower (closer to viewer)
+                val heightOffset = TERRAIN_BASELINE_RATIO - 0.05f + depth * 0.08f
                 
                 hills.add(HillData(
                     controlPoints = points,
                     depthFactor = depthFactor,
-                    heightOffset = heightOffset
+                    heightOffset = heightOffset,
+                    hillIndex = i
                 ))
             }
             
@@ -257,43 +265,43 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             
             val random = Random(42)
 
-            // Generate trees that sit on hills
-            // Trees are assigned to hill layers so they move together with the terrain
+            // Generate trees that sit on the terrain
+            // Trees are placed relative to the unified TERRAIN_BASELINE_RATIO
             for (i in 0 until treeCount) {
                 val xRatio = random.nextFloat()
                 
-                // Assign tree to a hill layer based on depth distribution
-                // More trees on nearer hills (foreground)
+                // Trees are distributed across depth layers (far to near)
+                // More trees in foreground (nearer) for visual interest
                 val depthBias = random.nextFloat().let { it * it } // Bias towards higher values (nearer)
                 
-                // Calculate depth factor matching hill layers (0.4-0.7 range for hills)
-                // Trees extend slightly beyond hills (0.35-0.9)
-                val depthFactor = 0.35f + depthBias * 0.55f
+                // Parallax factor matches hill range (0.3-0.5) so trees move with terrain
+                val depthFactor = 0.3f + depthBias * 0.2f
                 
-                // Find which hill layer this tree belongs to (for height calculation)
-                // Trees on far layers (low depth) sit higher on screen
-                // Trees on near layers (high depth) sit lower
-                val normalizedDepth = (depthFactor - 0.35f) / 0.55f  // 0-1 range
+                // Normalized depth for visual properties (0=far, 1=near)
+                val normalizedDepth = depthBias
                 
-                // Base Y position: far trees at ~0.60, near trees at ~0.85
-                val baseY = 0.58f + normalizedDepth * 0.27f
+                // Y position based on unified terrain baseline
+                // Far trees sit higher (smaller Y), near trees lower (larger Y)
+                // This creates the illusion of depth in the landscape
+                val baseY = TERRAIN_BASELINE_RATIO - 0.08f + normalizedDepth * 0.15f
                 
-                // Add some random vertical variation (trees on hills have ups and downs)
-                val hillVariation = kotlin.math.sin(xRatio * 6.28f * 3) * 0.03f
-                val yRatio = baseY + hillVariation + random.nextFloat() * 0.02f
+                // Add gentle wave variation for organic placement (simulates rolling terrain)
+                // Use consistent formula so it matches hill undulation
+                val hillWave = kotlin.math.sin(xRatio * kotlin.math.PI.toFloat() * 4) * 0.025f
+                val yRatio = (baseY + hillWave - TREE_FOOT_OFFSET).coerceIn(0.55f, 0.88f)
                 
-                // Scale: far trees smaller, near trees larger
-                val scale = 0.25f + normalizedDepth * 0.75f
+                // Scale: far trees smaller, near trees larger (atmospheric perspective)
+                val scale = 0.3f + normalizedDepth * 0.7f
                 
                 trees.add(TreeData(
                     xRatio = xRatio,
-                    yRatio = yRatio.coerceIn(0.55f, 0.92f),
+                    yRatio = yRatio,
                     scale = scale,
                     depthFactor = depthFactor
                 ))
             }
 
-            // Sort by depth (far trees drawn first)
+            // Sort by depth (far trees drawn first, behind near trees)
             trees.sortBy { it.depthFactor }
         } catch (e: Exception) {
             Log.e(TAG, "Error generating trees", e)
@@ -638,32 +646,32 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             }
 
             // Hills layer (rolling terrain between mountains and trees)
-            // Per ai.md: Hills have medium parallax (0.3-0.5)
+            // Hills and trees share the same parallax range (0.3-0.5) so they move together
             val hillNearColor = getHillColor(isFar = false)
             val hillFarColor = getHillColor(isFar = true)
             
             for (hill in hills) {
-                val normalizedDepth = ((hill.depthFactor - 0.4f) / 0.3f).coerceIn(0f, 1f)
+                // Normalize depth within the hill range (0.3-0.5)
+                val normalizedDepth = ((hill.depthFactor - 0.3f) / 0.2f).coerceIn(0f, 1f)
                 val blendedColor = lerpColor(hillFarColor, hillNearColor, normalizedDepth)
                 val hillColor = applyNightMultiplier(blendedColor, dayNightRatio)
                 
                 hillPaint.color = hillColor
                 
-                // Hills have medium parallax (0.3-0.5)
-                val hillParallax = 0.3f + normalizedDepth * 0.2f
+                // Hills use same parallax range as trees (0.3-0.5)
+                val hillParallax = hill.depthFactor  // Already in 0.3-0.5 range
                 canvas.save()
                 canvas.translate(ox * hillParallax, oy * hillParallax * 0.3f)
                 drawHill(canvas, w, h, hill.controlPoints, hill.heightOffset)
                 canvas.restore()
             }
 
-            // Layer N+: Trees (sorted by depth, closer trees move more)
-            // Per ai.md: Trees have parallax matching their hill layer, darker at back, brighter at front
+            // Layer N+: Trees (sorted by depth, use same parallax as hills so they move together)
             val baseTreeColor = getTreeColor()
             for (tree in trees) {
                 // Far trees (low depthFactor) are darker, near trees (high depthFactor) are brighter
-                // tree.depthFactor ranges from 0.35 to 0.90
-                val normalizedTreeDepth = ((tree.depthFactor - 0.35f) / 0.55f).coerceIn(0f, 1f)
+                // tree.depthFactor ranges from 0.3 to 0.5 (same as hills)
+                val normalizedTreeDepth = ((tree.depthFactor - 0.3f) / 0.2f).coerceIn(0f, 1f)
                 val brightnessMultiplier = 0.6f + normalizedTreeDepth * 0.4f  // 0.6 (far/dark) to 1.0 (near/bright)
                 val brightnessAdjusted = Color.rgb(
                     (Color.red(baseTreeColor) * brightnessMultiplier).toInt().coerceIn(0, 255),
@@ -674,9 +682,9 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 val adjustedColor = applyNightMultiplier(brightnessAdjusted, dayNightRatio)
                 treePaint.color = adjustedColor
 
-                // Trees have parallax matching hill layers (0.3-0.5) so they move together
-                // This prevents "floating" effect where trees detach from terrain
-                val treeParallax = 0.3f + normalizedTreeDepth * 0.2f
+                // Trees use the SAME parallax as their depth factor (0.3-0.5)
+                // This matches the hill parallax so trees move with the terrain
+                val treeParallax = tree.depthFactor
                 canvas.save()
                 canvas.translate(ox * treeParallax, oy * treeParallax * 0.3f)
                 drawTree(canvas, w * tree.xRatio, h * tree.yRatio, tree.scale * treeScale, treeSegments)
@@ -722,14 +730,15 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
     /**
      * Draw a rolling hill using smooth curves between control points.
      * Creates organic terrain like in the reference app.
+     * Uses TERRAIN_BASELINE_RATIO as reference for consistent ground level.
      */
     private fun drawHill(canvas: Canvas, w: Float, h: Float, controlPoints: List<Float>, heightOffset: Float) {
         if (controlPoints.isEmpty()) return
         
         hillPath.reset()
         
-        val baseY = h * heightOffset  // Where the hill baseline is (0.6-0.7 of screen height)
-        val hillHeight = h * 0.15f    // Maximum hill height variation
+        val baseY = h * heightOffset  // Where the hill baseline is (based on terrain constant)
+        val hillHeight = h * 0.12f    // Maximum hill height variation (slightly reduced)
         
         // Start from bottom left, outside screen
         hillPath.moveTo(-100f, h + 50f)

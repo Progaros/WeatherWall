@@ -1,0 +1,39 @@
+# WeatherWall Build Environment
+# Pre-caches Gradle and Android SDK dependencies for faster CI builds
+#
+# Build: docker build -t weatherwall-builder -f Dockerfile.build .
+# Use:   docker run --rm -v "$PWD":/workspace -w /workspace weatherwall-builder ./gradlew test assembleDebug
+
+FROM ghcr.io/cirruslabs/android-sdk:35
+
+LABEL maintainer="WeatherWall Project"
+LABEL description="Cached build environment for WeatherWall Android app"
+
+# Set working directory
+WORKDIR /prebuild
+
+# Copy only the files needed to download dependencies
+COPY build.gradle.kts settings.gradle.kts gradle.properties ./
+COPY gradle/ gradle/
+COPY gradlew ./
+COPY app/build.gradle.kts app/
+
+# Make gradlew executable
+RUN chmod +x gradlew
+
+# Pre-download Gradle distribution and all dependencies
+# This caches everything in the Docker layer
+RUN ./gradlew dependencies --no-daemon || true
+RUN ./gradlew :app:dependencies --no-daemon || true
+
+# Pre-download build tools by running a dry-run build
+# (will fail due to missing source, but downloads all plugins)
+RUN ./gradlew tasks --no-daemon || true
+
+# Clean up prebuild directory (actual project will be mounted)
+WORKDIR /workspace
+RUN rm -rf /prebuild
+
+# Set entrypoint to bash for flexibility
+ENTRYPOINT ["/bin/bash", "-c"]
+CMD ["./gradlew test assembleDebug --no-daemon"]
