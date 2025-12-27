@@ -45,10 +45,10 @@ steps:
         VERSION=$(grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
         echo "Detected version: v$VERSION"
         echo "$VERSION" > .version
-        cp app/build/outputs/apk/debug/app-debug.apk "WeatherWall-v${VERSION}.apk"
+        cp app/build/outputs/apk/debug/app-debug.apk "WeatherWall-v$VERSION.apk"
         echo "APK built successfully!"
-        du -h "WeatherWall-v${VERSION}.apk"
-        sha256sum "WeatherWall-v${VERSION}.apk"
+        ls -la WeatherWall-*.apk
+        sha256sum WeatherWall-*.apk
 
   - name: publish-release
     image: ghcr.io/cirruslabs/android-sdk:35
@@ -58,7 +58,10 @@ steps:
     commands:
       - |
         VERSION=$(cat .version)
+        APK_FILE="WeatherWall-v$VERSION.apk"
         echo "Checking if release v$VERSION exists..."
+        echo "APK file: $APK_FILE"
+        ls -la "$APK_FILE" || { echo "APK not found!"; exit 1; }
         
         # Check if release already exists
         EXISTING=$(curl -s -o /dev/null -w "%{http_code}" \
@@ -76,7 +79,7 @@ steps:
         RELEASE_RESPONSE=$(curl -s -X POST \
           -H "Authorization: token $FORGEJO_TOKEN" \
           -H "Content-Type: application/json" \
-          -d "{\"tag_name\": \"v$VERSION\", \"name\": \"v$VERSION\", \"body\": \"Automated release v$VERSION\nCommit: ${CI_COMMIT_SHA}\"}" \
+          -d "{\"tag_name\": \"v$VERSION\", \"name\": \"v$VERSION\", \"body\": \"Automated release v$VERSION\"}" \
           "https://git.olli.info/api/v1/repos/Oliver/WeatherWall/releases")
         
         RELEASE_ID=$(echo "$RELEASE_RESPONSE" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
@@ -93,8 +96,8 @@ steps:
         curl -s -X POST \
           -H "Authorization: token $FORGEJO_TOKEN" \
           -H "Content-Type: application/octet-stream" \
-          --data-binary "@WeatherWall-v${VERSION}.apk" \
-          "https://git.olli.info/api/v1/repos/Oliver/WeatherWall/releases/$RELEASE_ID/assets?name=WeatherWall-v${VERSION}.apk"
+          --data-binary "@$APK_FILE" \
+          "https://git.olli.info/api/v1/repos/Oliver/WeatherWall/releases/$RELEASE_ID/assets?name=$APK_FILE"
         
         echo "Release v$VERSION published successfully!"
     when:

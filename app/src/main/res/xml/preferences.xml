@@ -16,9 +16,9 @@
         <SeekBarPreference
             android:key="pref_mountain_width"
             android:title="Mountain Width"
-            android:summary="Width multiplier (50-300%)"
+            android:summary="Width multiplier (50-1000%)"
             android:defaultValue="200"
-            android:max="300"
+            android:max="1000"
             app:min="50"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
@@ -248,6 +248,17 @@
             android:entries="@array/season_options"
             android:entryValues="@array/season_values"
             android:defaultValue="auto"
+            android:dependency="pref_debug_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_debug_wind_speed"
+            android:title="Simulate Wind Speed"
+            android:summary="Tree sway intensity (0-100%)"
+            android:defaultValue="0"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
             android:dependency="pref_debug_enabled" />
     </PreferenceCategory>
 

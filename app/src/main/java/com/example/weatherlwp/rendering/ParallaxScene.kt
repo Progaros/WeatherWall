@@ -140,7 +140,8 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
         val y: Float, 
         val size: Float, 
         val speed: Float,
-        val alpha: Int
+        val alpha: Int,
+        val shapeSeed: Long  // Unique seed for consistent cloud shape
     )
     private val clouds = mutableListOf<CloudData>()
     private var cloudCount = 0
@@ -231,9 +232,13 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 hillUpperEnd = (hillLowerStart + 0.10f).coerceAtMost(0.90f)
             }
             
-            // Wind speed from Breezy Weather (normalized 0-1)
+            // Wind speed - check debug override first, then Breezy Weather
+            val debugEnabled = prefs.getBoolean("pref_debug_enabled", false)
             val useBreezyWeather = prefs.getBoolean("pref_use_breezy_weather", true)
-            windSpeed = if (useBreezyWeather) {
+            windSpeed = if (debugEnabled) {
+                val debugWind = prefs.getInt("pref_debug_wind_speed", 0)
+                if (debugWind > 0) debugWind / 100f else if (useBreezyWeather) WeatherRepository.getNormalizedWindStrength(context) else 0f
+            } else if (useBreezyWeather) {
                 WeatherRepository.getNormalizedWindStrength(context)
             } else {
                 0f
@@ -241,7 +246,6 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             
             // Cloud settings - check debug override first
             val cloudsEnabled = prefs.getBoolean("pref_clouds_enabled", true)
-            val debugEnabled = prefs.getBoolean("pref_debug_enabled", false)
             val cloudDensity = if (debugEnabled) {
                 val debugCloud = prefs.getString("pref_debug_cloud_override", "auto") ?: "auto"
                 if (debugCloud != "auto") debugCloud else prefs.getString("pref_cloud_density", "auto") ?: "auto"
@@ -543,7 +547,7 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 val sizeNormalized = ((size - 0.08f) / 0.25f).coerceIn(0f, 1f)
                 val alpha = (60 + sizeNormalized * 140).toInt() + random.nextInt(30)
                 
-                clouds.add(CloudData(x, y, size, speed, alpha.coerceIn(50, 220)))
+                clouds.add(CloudData(x, y, size, speed, alpha.coerceIn(50, 220), random.nextLong()))
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error generating clouds", e)
@@ -552,12 +556,11 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
 
     // Zeichnet eine "fluffige" Wolke statt eines Kreises (from ai.md)
     // Added shape variation for more natural-looking clouds
-    private fun drawFluffyCloud(canvas: Canvas, centerX: Float, centerY: Float, size: Float, paint: Paint) {
+    private fun drawFluffyCloud(canvas: Canvas, centerX: Float, centerY: Float, size: Float, paint: Paint, shapeSeed: Long) {
         val cloudPath = Path()
         
-        // Use position-based seed for consistent shape per cloud
-        val seed = (centerX * 1000 + centerY * 100).toLong()
-        val shapeRandom = Random(seed)
+        // Use stable seed for consistent shape (doesn't change as cloud moves)
+        val shapeRandom = Random(shapeSeed)
         
         // Basis-Form: Ein breites Oval in der Mitte (für die flache Unterseite)
         // Add variation to base shape
@@ -939,7 +942,7 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                     val cy = cloud.y * h + cloudParallaxY
                     val cSize = cloud.size * h * 0.5f // Scale relative to screen height
                     
-                    drawFluffyCloud(canvas, cx, cy, cSize, cloudPaint)
+                    drawFluffyCloud(canvas, cx, cy, cSize, cloudPaint, cloud.shapeSeed)
                 }
             }
 
