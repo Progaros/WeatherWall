@@ -94,9 +94,13 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
     private val mountainPathLeft = Path()
     private val mountainPathRight = Path()
     private val treePath = Path()
+    private val cloudPath = Path()
 
     private var ox = 0f
     private var oy = 0f
+    private var targetOx = 0f  // Raw sensor input
+    private var targetOy = 0f  // Raw sensor input
+    private var centerDriftSpeed = 0.002f  // How fast offset drifts toward center (per frame)
     private var parallaxStrength = 1.0f
     private var treeCount = 20
     private var treeScale = 1.0f
@@ -181,6 +185,10 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
     private var hillCount = 3
     private val hillPath = Path()
     private val hillPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    
+    // Thread safety: lock for terrain data that may be modified from UI thread (prefs listener)
+    // while render thread is iterating
+    private val terrainLock = Any()
 
     init {
         sensor.setListener(this)
@@ -311,8 +319,9 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
     }
 
     private fun generateMountains() {
-        try {
-            mountains.clear()
+        synchronized(terrainLock) {
+            try {
+                mountains.clear()
             if (mountainCount <= 0) return
             
             // Use a time-based seed for variety per session. Shapes are precomputed so they remain
@@ -357,8 +366,9 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             
             // Sort by depth (far mountains first = drawn first = behind)
             mountains.sortBy { it.depthFactor }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error generating mountains", e)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error generating mountains", e)
+            }
         }
     }
 
@@ -417,12 +427,13 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
      * Hills are generated with consistent seeds so trees can sample their heights.
      */
     private fun generateHills() {
-        try {
-            hills.clear()
-            if (hillCount <= 0) return
-            
-            // Use fixed seed for consistent terrain that trees can reference
-            val random = Random(12345)
+        synchronized(terrainLock) {
+            try {
+                hills.clear()
+                if (hillCount <= 0) return
+                
+                // Use fixed seed for consistent terrain that trees can reference
+                val random = Random(12345)
             
             // Generate multiple hill layers with different depths
             for (i in 0 until hillCount) {
@@ -457,8 +468,9 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             
             // Sort by depth (far hills first = drawn first = behind)
             hills.sortBy { it.depthFactor }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error generating hills", e)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error generating hills", e)
+            }
         }
     }
 
@@ -492,87 +504,91 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
     }
 
     private fun generateTrees() {
-        try {
-            trees.clear()
-            if (treeCount <= 0) return
-            
-            val random = Random(42)
+        synchronized(terrainLock) {
+            try {
+                trees.clear()
+                if (treeCount <= 0) return
+                
+                val random = Random(42)
 
-            // Generate trees that sit on the terrain
-            // Trees are placed relative to the unified TERRAIN_BASELINE_RATIO
-            for (i in 0 until treeCount) {
-                val xRatio = WORLD_MIN_X + random.nextFloat() * (WORLD_MAX_X - WORLD_MIN_X)
-                
-                // Pick a random hill layer to sit on
-                // Bias towards nearer hills (higher index)
-                val hillIndex = random.nextInt(hills.size)
-                val hill = hills[hillIndex]
-                
-                // Get exact Y on the hill surface
-                val groundY = getHillY(xRatio, hill)
-                
-                // Tree sits on this ground Y
-                // Add offset to make tree sit slightly INTO the ground (larger Y = lower)
-                val yRatio = groundY + TREE_FOOT_OFFSET
-                
-                // Use the hill's depth factor so they move together
-                val depthFactor = hill.depthFactor
-                
-                // Scale based on depth (nearer = larger)
-                // Normalize depth from 0.3-0.5 range
-                val normalizedDepth = ((depthFactor - 0.3f) / 0.2f).coerceIn(0f, 1f)
-                val scale = 0.3f + normalizedDepth * 0.7f
-                
-                trees.add(TreeData(
-                    xRatio = xRatio,
-                    yRatio = yRatio,
-                    scale = scale,
-                    depthFactor = depthFactor
-                ))
+                // Generate trees that sit on the terrain
+                // Trees are placed relative to the unified TERRAIN_BASELINE_RATIO
+                for (i in 0 until treeCount) {
+                    val xRatio = WORLD_MIN_X + random.nextFloat() * (WORLD_MAX_X - WORLD_MIN_X)
+                    
+                    // Pick a random hill layer to sit on
+                    // Bias towards nearer hills (higher index)
+                    val hillIndex = random.nextInt(hills.size)
+                    val hill = hills[hillIndex]
+                    
+                    // Get exact Y on the hill surface
+                    val groundY = getHillY(xRatio, hill)
+                    
+                    // Tree sits on this ground Y
+                    // Add offset to make tree sit slightly INTO the ground (larger Y = lower)
+                    val yRatio = groundY + TREE_FOOT_OFFSET
+                    
+                    // Use the hill's depth factor so they move together
+                    val depthFactor = hill.depthFactor
+                    
+                    // Scale based on depth (nearer = larger)
+                    // Normalize depth from 0.3-0.5 range
+                    val normalizedDepth = ((depthFactor - 0.3f) / 0.2f).coerceIn(0f, 1f)
+                    val scale = 0.3f + normalizedDepth * 0.7f
+                    
+                    trees.add(TreeData(
+                        xRatio = xRatio,
+                        yRatio = yRatio,
+                        scale = scale,
+                        depthFactor = depthFactor
+                    ))
+                }
+
+                // Sort by depth (far trees drawn first, behind near trees)
+                trees.sortBy { it.depthFactor }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error generating trees", e)
             }
-
-            // Sort by depth (far trees drawn first, behind near trees)
-            trees.sortBy { it.depthFactor }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error generating trees", e)
         }
     }
 
     private fun generateClouds() {
-        try {
-            clouds.clear()
-            if (cloudCount <= 0) return
+        synchronized(terrainLock) {
+            try {
+                clouds.clear()
+                if (cloudCount <= 0) return
 
-            val random = Random(System.currentTimeMillis())
-            
-            for (i in 0 until cloudCount) {
-                // Random position in the wider world
-                val x = WORLD_MIN_X + random.nextFloat() * (WORLD_MAX_X - WORLD_MIN_X)
-                // Height: Top 40% of screen
-                val y = 0.05f + random.nextFloat() * 0.35f
+                val random = Random(System.currentTimeMillis())
                 
-                // Size variation - more variety (small wispy to large fluffy)
-                val size = 0.08f + random.nextFloat() * 0.25f
-                
-                // Speed: smaller clouds drift faster (appear higher/further)
-                val speed = 0.0003f + (1f - size / 0.33f) * 0.001f + random.nextFloat() * 0.0005f
-                
-                // Alpha based on size: smaller = more transparent (distant), larger = more opaque
-                // Small clouds (0.08): ~60 alpha, Large clouds (0.33): ~200 alpha
-                val sizeNormalized = ((size - 0.08f) / 0.25f).coerceIn(0f, 1f)
-                val alpha = (60 + sizeNormalized * 140).toInt() + random.nextInt(30)
-                
-                clouds.add(CloudData(x, y, size, speed, alpha.coerceIn(50, 220), random.nextLong()))
+                for (i in 0 until cloudCount) {
+                    // Random position in the wider world
+                    val x = WORLD_MIN_X + random.nextFloat() * (WORLD_MAX_X - WORLD_MIN_X)
+                    // Height: Top 40% of screen
+                    val y = 0.05f + random.nextFloat() * 0.35f
+                    
+                    // Size variation - more variety (small wispy to large fluffy)
+                    val size = 0.08f + random.nextFloat() * 0.25f
+                    
+                    // Speed: smaller clouds drift faster (appear higher/further)
+                    val speed = 0.0003f + (1f - size / 0.33f) * 0.001f + random.nextFloat() * 0.0005f
+                    
+                    // Alpha based on size: smaller = more transparent (distant), larger = more opaque
+                    // Small clouds (0.08): ~60 alpha, Large clouds (0.33): ~200 alpha
+                    val sizeNormalized = ((size - 0.08f) / 0.25f).coerceIn(0f, 1f)
+                    val alpha = (60 + sizeNormalized * 140).toInt() + random.nextInt(30)
+                    
+                    clouds.add(CloudData(x, y, size, speed, alpha.coerceIn(50, 220), random.nextLong()))
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error generating clouds", e)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error generating clouds", e)
         }
     }
 
     // Zeichnet eine "fluffige" Wolke statt eines Kreises (from ai.md)
     // Added shape variation for more natural-looking clouds
     private fun drawFluffyCloud(canvas: Canvas, centerX: Float, centerY: Float, size: Float, paint: Paint, shapeSeed: Long) {
-        val cloudPath = Path()
+        cloudPath.reset()  // Reuse pre-allocated path
         
         // Use stable seed for consistent shape (doesn't change as cloud moves)
         val shapeRandom = Random(shapeSeed)
@@ -653,6 +669,70 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
         val b = (Color.blue(baseColor) + (255 - Color.blue(baseColor)) * nightRatio * blueB).toInt()
         
         return Color.rgb(r.coerceIn(0, 255), g.coerceIn(0, 255), b.coerceIn(0, 255))
+    }
+    
+    /**
+     * Calculate day/night ratio (0.0 = day, 1.0 = night) based on actual sunrise/sunset
+     * from Breezy Weather if available, otherwise falls back to getTimeOfDay().
+     * Uses 45-minute transition periods for smooth dawn/dusk.
+     */
+    private fun updateDayNightRatio() {
+        val autoDayNight = prefs.getBoolean("pref_daynight_enabled", true)
+        if (!autoDayNight) {
+            // Use manual time-based calculation
+            val time = getTimeOfDay()
+            dayNightRatio = when {
+                time >= 21f || time < 5f -> 1.0f
+                time < 7f -> 1.0f - (time - 5f) / 2f  // Dawn
+                time < 17f -> 0.0f
+                else -> (time - 17f) / 4f  // Dusk
+            }
+            return
+        }
+        
+        // Try to use Breezy Weather sunrise/sunset data
+        val sunriseSec = WeatherRepository.getSunrise(context)
+        val sunsetSec = WeatherRepository.getSunset(context)
+        
+        // Fallback to time-based if no valid data (stored as Unix seconds)
+        if (sunriseSec <= 0L || sunsetSec <= 0L) {
+            val time = getTimeOfDay()
+            dayNightRatio = when {
+                time >= 21f || time < 5f -> 1.0f
+                time < 7f -> 1.0f - (time - 5f) / 2f
+                time < 17f -> 0.0f
+                else -> (time - 17f) / 4f
+            }
+            return
+        }
+        
+        val now = System.currentTimeMillis()
+        val sunrise = sunriseSec * 1000L
+        val sunset = sunsetSec * 1000L
+        val transitionDuration = 45 * 60 * 1000L  // 45 minutes for smooth dawn/dusk
+        
+        dayNightRatio = when {
+            // Night (before dawn)
+            now < (sunrise - transitionDuration) -> 1.0f
+            
+            // Dawn (sunrise transition: night -> day)
+            now < (sunrise + transitionDuration) -> {
+                val progress = (now - (sunrise - transitionDuration)).toFloat() / (transitionDuration * 2)
+                1.0f - progress.coerceIn(0f, 1f)
+            }
+            
+            // Day
+            now < (sunset - transitionDuration) -> 0.0f
+            
+            // Dusk (sunset transition: day -> night)
+            now < (sunset + transitionDuration) -> {
+                val progress = (now - (sunset - transitionDuration)).toFloat() / (transitionDuration * 2)
+                progress.coerceIn(0f, 1f)
+            }
+            
+            // Night (after dusk)
+            else -> 1.0f
+        }
     }
     
     /**
@@ -850,8 +930,14 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
     fun stop() = sensor.stop()
 
     override fun onOffsetChanged(x: Float, y: Float) {
-        ox = x * parallaxStrength
-        oy = y * parallaxStrength
+        // Store raw sensor offset - actual ox/oy will drift toward center
+        targetOx = x * parallaxStrength
+        targetOy = y * parallaxStrength
+        
+        // Immediately follow sensor but with a slight bias toward center
+        // This creates a "floating" effect where the scene slowly returns to center
+        ox = targetOx * 0.85f  // Reduce immediate effect slightly
+        oy = targetOy * 0.85f
     }
 
     fun render(canvas: Canvas) {
@@ -864,6 +950,11 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 return
             }
             
+            // Slowly drift offset toward center so movement is always visible
+            // This prevents the parallax from getting "stuck" at an extreme angle
+            ox *= (1f - centerDriftSpeed)
+            oy *= (1f - centerDriftSpeed)
+            
             // Update wind animation time
             windTime = System.currentTimeMillis()
             
@@ -871,24 +962,13 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             val timeOfDay = getTimeOfDay()
 
             // Calculate horizontal scale to maintain aspect ratio
-            // On portrait (9:16), scaleX should be w.
-            // On landscape (3:1), scaleX should be h * 0.5625f.
-            // We use a threshold to switch modes.
-            val scaleX = if (w / h > 0.8f) {
-                // Wide screen (tablet/preview) - maintain aspect ratio based on height
-                h * 0.5625f 
-            } else {
-                // Portrait phone - fit width (legacy behavior)
-                w
-            }
+            // Always base scaling on height to maintain consistent proportions
+            // regardless of canvas width (preview strip vs actual wallpaper).
+            // 0.5625 = 9/16 ratio, so on a 9:16 phone, scaleX ≈ screen width
+            val scaleX = h * 0.5625f
 
-            // Calculate day/night ratio for star visibility
-            dayNightRatio = when (theme) {
-                "night" -> 1.0f
-                "dusk", "dawn" -> 0.5f
-                "rain" -> 0.3f
-                else -> 0.0f
-            }
+            // Update day/night ratio using Breezy Weather sunrise/sunset when available
+            updateDayNightRatio()
 
             // Get continuous sky colors based on time
             val (skyTop, skyBottom) = if (theme == "rain") {
@@ -935,14 +1015,16 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             }
 
             // Clouds (Layer 0.5) - Behind mountains
-            if (cloudCount > 0) {
-                val cloudParallaxX = -ox * 0.08f // Move slightly with sky
-                val cloudParallaxY = -oy * 0.04f
-                
-                for (cloud in clouds) {
-                    // Animate cloud position (drift right)
-                    cloud.x += cloud.speed
-                    if (cloud.x > WORLD_MAX_X) {
+            // Synchronized to prevent ConcurrentModificationException from preference changes
+            synchronized(terrainLock) {
+                if (cloudCount > 0) {
+                    val cloudParallaxX = -ox * 0.08f // Move slightly with sky
+                    val cloudParallaxY = -oy * 0.04f
+                    
+                    for (cloud in clouds) {
+                        // Animate cloud position (drift right)
+                        cloud.x += cloud.speed
+                        if (cloud.x > WORLD_MAX_X) {
                         cloud.x = WORLD_MIN_X
                     }
                     
@@ -1041,6 +1123,7 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 drawTree(canvas, tree.xRatio, h * tree.yRatio, tree.scale * treeScale, treeSegments, w, scaleX, tree.depthFactor)
                 canvas.restore()
             }
+            } // End synchronized(terrainLock)
         } catch (e: Exception) {
             Log.e(TAG, "Error rendering scene", e)
         }

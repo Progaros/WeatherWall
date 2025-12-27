@@ -145,8 +145,8 @@ class SeasonalEvents(private val context: Context? = null) {
         if (!enabled) return
 
         try {
-            // Reload settings each frame for live updates
-            loadSettings()
+            // Settings are loaded on init and preference changes via listener
+            // Don't poll SharedPreferences every frame (performance optimization)
             
             val season = getCurrentSeason()
             if (season == Season.NONE) return

@@ -25,18 +25,26 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
         Log.d(TAG, "Received intent: ${intent.action}")
         
         if (intent.action == ACTION_WEATHER) {
-            try {
-                // Data is sent as JSON string
-                val jsonString = intent.getStringExtra("WeatherJson")
-                if (jsonString != null) {
-                    Log.d(TAG, "Received weather JSON: ${jsonString.take(200)}...")
-                    parseWeatherData(context, jsonString)
-                } else {
-                    Log.w(TAG, "No WeatherJson in intent")
+            // Use goAsync() to avoid ANR - JSON parsing can take time
+            val pendingResult = goAsync()
+            
+            Thread {
+                try {
+                    // Data is sent as JSON string
+                    val jsonString = intent.getStringExtra("WeatherJson")
+                    if (jsonString != null) {
+                        Log.d(TAG, "Received weather JSON: ${jsonString.take(200)}...")
+                        parseWeatherData(context, jsonString)
+                    } else {
+                        Log.w(TAG, "No WeatherJson in intent")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error parsing weather data", e)
+                } finally {
+                    // Must call finish() to release the BroadcastReceiver
+                    pendingResult.finish()
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error parsing weather data", e)
-            }
+            }.start()
         }
     }
 

@@ -34,7 +34,9 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             return
         }
         if (!isStarted) {
-            sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME)
+            // Use SENSOR_DELAY_UI (60ms) instead of SENSOR_DELAY_GAME (20ms)
+            // for better battery life - parallax doesn't need high-frequency updates
+            sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_UI)
             isStarted = true
             Log.d(TAG, "Sensor started")
         }

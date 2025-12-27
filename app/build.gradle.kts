@@ -11,8 +11,8 @@ android {
         applicationId = "com.example.weatherlwp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 12
-        versionName = "0.5.4"
+        versionCode = 15
+        versionName = "0.5.7"
     }
 
     buildFeatures {
