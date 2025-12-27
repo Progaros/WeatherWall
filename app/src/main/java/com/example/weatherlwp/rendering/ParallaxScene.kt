@@ -102,13 +102,18 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
     private var treeScale = 1.0f
     private var treeSegments = 3  // Global setting: 1-5 segments per tree
     private var mountainCount = 3
+    private var lastMountainCount = 3         // Track for live updates
     private var mountainWidthScale = 1.0f
     private var lastMountainWidthScale = 1.0f  // Track for live updates
     private var mountainHeightScale = 1.0f     // Height multiplier (0.1 - 10.0)
+    private var lastMountainHeightScale = 1.0f // Track for live updates
     
     // Wind sway for trees (from Breezy Weather)
     private var windSpeed = 0f  // 0-1 normalized wind strength
     private var windTime = 0L   // Animation time
+    
+    // Cloud opacity multiplier based on density setting
+    private var cloudOpacityMultiplier = 0.75f
     
     // Hill vertical range settings
     private var hillLowerStart = 0.55f  // Far hills start here (default)
@@ -189,7 +194,7 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             mountainCount = prefs.getInt("pref_mountain_count", 3).coerceIn(0, 10)
             
             // Hill count (0-5) - rolling terrain layers
-            hillCount = prefs.getInt("pref_hill_count", 3).coerceIn(0, 5)
+            hillCount = prefs.getInt("pref_hill_count", 3).coerceIn(0, 25)
             
             // Tree count (0-100) - use raw value directly
             val rawTreeCount = prefs.getInt("pref_tree_count", 20)
@@ -234,27 +239,39 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 0f
             }
             
-            // Cloud settings
+            // Cloud settings - check debug override first
             val cloudsEnabled = prefs.getBoolean("pref_clouds_enabled", true)
-            val cloudDensity = prefs.getString("pref_cloud_density", "auto") ?: "auto"
+            val debugEnabled = prefs.getBoolean("pref_debug_enabled", false)
+            val cloudDensity = if (debugEnabled) {
+                val debugCloud = prefs.getString("pref_debug_cloud_override", "auto") ?: "auto"
+                if (debugCloud != "auto") debugCloud else prefs.getString("pref_cloud_density", "auto") ?: "auto"
+            } else {
+                prefs.getString("pref_cloud_density", "auto") ?: "auto"
+            }
             
-            cloudCount = if (!cloudsEnabled) 0 else {
+            // Cloud count AND opacity multiplier based on density
+            // Light = few wispy clouds, Overcast = many thick clouds
+            val (count, opacityMult) = if (!cloudsEnabled) Pair(0, 1.0f) else {
                 when (cloudDensity) {
-                    "none" -> 0
-                    "light" -> 3
-                    "medium" -> 6
-                    "heavy" -> 10
-                    "overcast" -> 15
-                    "auto" -> 6 // Default for now, ideally would check weather
-                    else -> 6
+                    "none" -> Pair(0, 1.0f)
+                    "light" -> Pair(3, 0.5f)       // Few, transparent
+                    "medium" -> Pair(6, 0.75f)    // Medium, semi-transparent
+                    "heavy" -> Pair(10, 1.0f)     // Many, opaque
+                    "overcast" -> Pair(15, 1.2f)  // Lots, very opaque
+                    "auto" -> Pair(6, 0.75f)
+                    else -> Pair(6, 0.75f)
                 }
             }
+            cloudCount = count
+            cloudOpacityMultiplier = opacityMult
             
             Log.d(TAG, "Settings loaded: trees=$treeCount, segments=$treeSegments, mountains=$mountainCount, hills=$hillCount, parallax=$parallaxStrength, mtnWidth=$mountainWidthScale, mtnHeight=$mountainHeightScale, hillRange=$hillLowerStart-$hillUpperEnd, clouds=$cloudCount")
 
-            // Regenerate mountains if count OR width changed (width affects shape generation)
-            if (mountains.size != mountainCount || mountainWidthScale != lastMountainWidthScale) {
+            // Regenerate mountains if count, width, or height changed
+            if (mountainCount != lastMountainCount || mountainWidthScale != lastMountainWidthScale || mountainHeightScale != lastMountainHeightScale) {
+                lastMountainCount = mountainCount
                 lastMountainWidthScale = mountainWidthScale
+                lastMountainHeightScale = mountainHeightScale
                 generateMountains()
             }
             // Regenerate hills if count OR vertical range changed
@@ -268,6 +285,7 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             if (trees.size != treeCount) {
                 generateTrees()
             }
+            // Regenerate clouds if count changed (happens when density setting changes)
             if (clouds.size != cloudCount) {
                 generateClouds()
             }
@@ -533,22 +551,37 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
     }
 
     // Zeichnet eine "fluffige" Wolke statt eines Kreises (from ai.md)
+    // Added shape variation for more natural-looking clouds
     private fun drawFluffyCloud(canvas: Canvas, centerX: Float, centerY: Float, size: Float, paint: Paint) {
         val cloudPath = Path()
         
+        // Use position-based seed for consistent shape per cloud
+        val seed = (centerX * 1000 + centerY * 100).toLong()
+        val shapeRandom = Random(seed)
+        
         // Basis-Form: Ein breites Oval in der Mitte (für die flache Unterseite)
-        val width = size * 1.5f
-        val height = size * 0.8f
+        // Add variation to base shape
+        val widthMult = 1.3f + shapeRandom.nextFloat() * 0.4f  // 1.3-1.7
+        val heightMult = 0.6f + shapeRandom.nextFloat() * 0.4f  // 0.6-1.0
+        val width = size * widthMult
+        val height = size * heightMult
         val rect = RectF(centerX - width / 2, centerY - height / 2, centerX + width / 2, centerY + height / 2)
         cloudPath.addOval(rect, Path.Direction.CW)
 
-        // "Fluffiness" hinzufügen: 3-4 zufällige Kreise oben drauf setzen
-        // Oben Links
-        cloudPath.addCircle(centerX - size * 0.4f, centerY - size * 0.2f, size * 0.5f, Path.Direction.CW)
-        // Oben Mitte (der Höchste)
-        cloudPath.addCircle(centerX, centerY - size * 0.4f, size * 0.6f, Path.Direction.CW)
-        // Oben Rechts
-        cloudPath.addCircle(centerX + size * 0.4f, centerY - size * 0.2f, size * 0.45f, Path.Direction.CW)
+        // "Fluffiness" hinzufügen: 3-5 zufällige Kreise oben drauf setzen
+        // Number of puffs varies per cloud
+        val numPuffs = 3 + shapeRandom.nextInt(3)  // 3-5 puffs
+        
+        for (i in 0 until numPuffs) {
+            // Randomize position around top of cloud
+            val angle = -0.8f + shapeRandom.nextFloat() * 1.6f  // -0.8 to 0.8 (mostly top half)
+            val dist = 0.3f + shapeRandom.nextFloat() * 0.3f   // 0.3-0.6 of size
+            val puffX = centerX + kotlin.math.cos(angle.toDouble()).toFloat() * size * dist
+            val puffY = centerY - size * (0.1f + shapeRandom.nextFloat() * 0.4f)  // Above center
+            val puffSize = size * (0.35f + shapeRandom.nextFloat() * 0.35f)  // 0.35-0.7 of size
+            
+            cloudPath.addCircle(puffX, puffY, puffSize, Path.Direction.CW)
+        }
 
         canvas.drawPath(cloudPath, paint)
     }
@@ -895,10 +928,12 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                         cloud.x = WORLD_MIN_X
                     }
                     
-                    cloudPaint.alpha = cloud.alpha
+                    // Apply density-based opacity multiplier to base cloud alpha
+                    val effectiveAlpha = (cloud.alpha * cloudOpacityMultiplier).toInt().coerceIn(20, 255)
+                    cloudPaint.alpha = effectiveAlpha
                     // Apply night dimming to clouds too
                     val cloudColor = applyNightMultiplier(Color.WHITE, dayNightRatio)
-                    cloudPaint.color = Color.argb(cloud.alpha, Color.red(cloudColor), Color.green(cloudColor), Color.blue(cloudColor))
+                    cloudPaint.color = Color.argb(effectiveAlpha, Color.red(cloudColor), Color.green(cloudColor), Color.blue(cloudColor))
                     
                     val cx = (cloud.x - 0.5f) * scaleX + w / 2f + cloudParallaxX
                     val cy = cloud.y * h + cloudParallaxY
@@ -1146,7 +1181,8 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
         for (seg in 0 until segments) {
             // Width ratio: bottom segments are wide, top segments are narrow
             // seg=0 (bottom) → widthRatio=1.0, seg=segments-1 (top) → widthRatio=0.4
-            val widthRatio = 1f - (seg.toFloat() / segments) * 0.6f
+            val segProgress = if (segments > 1) seg.toFloat() / (segments - 1) else 0f
+            val widthRatio = 1f - segProgress * 0.6f
             val tierWidth = baseWidth * widthRatio
             
             // Position for this tier

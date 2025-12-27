@@ -33,6 +33,18 @@ steps:
     commands:
       - ./gradlew test --no-daemon --stacktrace
 
+  - name: extract-version
+    image: ghcr.io/cirruslabs/android-sdk:35
+    environment:
+      GRADLE_USER_HOME: .gradle
+    commands:
+      - |
+        # Extract version from build.gradle.kts
+        VERSION=$(grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
+        echo "Detected version: v$VERSION"
+        echo "v$VERSION" > .version
+        cat .version
+
   - name: assembleDebug
     image: ghcr.io/cirruslabs/android-sdk:35
     environment:
@@ -40,10 +52,11 @@ steps:
     commands:
       - ./gradlew assembleDebug --no-daemon --stacktrace
       - ls -lah app/build/outputs/apk/debug || true
-      - cp app/build/outputs/apk/debug/app-debug.apk WeatherWall-debug.apk
+      - VERSION=$(cat .version)
+      - cp app/build/outputs/apk/debug/app-debug.apk "WeatherWall-${VERSION}.apk"
       - echo "APK built successfully!"
-      - du -h WeatherWall-debug.apk
-      - sha256sum WeatherWall-debug.apk
+      - du -h "WeatherWall-${VERSION}.apk"
+      - sha256sum "WeatherWall-${VERSION}.apk"
 
   - name: publish-release
     image: thegeeklab/wp-gitea-release
@@ -52,10 +65,10 @@ steps:
       api_key:
         from_secret: forgejo_token
       files:
-        - WeatherWall-debug.apk
-      title: "${CI_COMMIT_TAG}"
+        - WeatherWall-*.apk
+      title: ${CI_COMMIT_TAG}
       note: |
-        Automated build from tag ${CI_COMMIT_TAG}
+        Automated release from tag ${CI_COMMIT_TAG}
         Commit: ${CI_COMMIT_SHA}
     when:
       - event: tag

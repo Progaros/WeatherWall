@@ -99,6 +99,17 @@ class SeasonalEvents(private val context: Context? = null) {
     )
 
     private val prefs: SharedPreferences? = context?.let { PreferenceManager.getDefaultSharedPreferences(it) }
+    
+    // Settings-controlled values
+    private var starSizeMultiplier = 1.0f
+    private var trailLengthMultiplier = 1.0f
+    
+    private fun loadSettings() {
+        prefs?.let {
+            starSizeMultiplier = (it.getInt("pref_christmas_star_size", 100) / 100f).coerceIn(0.5f, 2.0f)
+            trailLengthMultiplier = (it.getInt("pref_christmas_star_trail", 100) / 100f).coerceIn(0f, 2.0f)
+        }
+    }
 
     fun getCurrentSeason(): Season {
         // Check for debug override
@@ -134,6 +145,9 @@ class SeasonalEvents(private val context: Context? = null) {
         if (!enabled) return
 
         try {
+            // Reload settings each frame for live updates
+            loadSettings()
+            
             val season = getCurrentSeason()
             if (season == Season.NONE) return
 
@@ -206,25 +220,31 @@ class SeasonalEvents(private val context: Context? = null) {
         val star = christmasStar ?: return
         star.twinkle += star.twinkleSpeed
         
+        // Apply size multiplier
+        val effectiveSize = star.size * starSizeMultiplier
+        
         // Trail/Schweif - diagonal line going down-left from the star
         val trailAngle = Math.toRadians(225.0)  // Down-left direction
-        val trailLength = star.size * 6f
+        val trailLength = effectiveSize * 6f * trailLengthMultiplier
         
-        for (i in trailParticles.indices) {
-            val t = i.toFloat() / trailParticles.size
-            val particle = trailParticles[i]
-            
-            // Position along the trail
-            val dist = t * trailLength
-            particle.x = star.x + (dist * kotlin.math.cos(trailAngle)).toFloat()
-            particle.y = star.y + (dist * kotlin.math.sin(trailAngle)).toFloat()
-            
-            // Twinkle effect on trail
-            val twinkleFactor = 0.8f + 0.2f * kotlin.math.sin(star.twinkle * 0.1 + t * 3.14159).toFloat()
-            val alpha = (particle.alpha * twinkleFactor).toInt().coerceIn(30, 255)
-            
-            trailPaint.alpha = alpha
-            canvas.drawCircle(particle.x, particle.y, particle.size * twinkleFactor, trailPaint)
+        // Only render trail if length > 0
+        if (trailLengthMultiplier > 0.01f) {
+            for (i in trailParticles.indices) {
+                val t = i.toFloat() / trailParticles.size
+                val particle = trailParticles[i]
+                
+                // Position along the trail
+                val dist = t * trailLength
+                particle.x = star.x + (dist * kotlin.math.cos(trailAngle)).toFloat()
+                particle.y = star.y + (dist * kotlin.math.sin(trailAngle)).toFloat()
+                
+                // Twinkle effect on trail
+                val twinkleFactor = 0.8f + 0.2f * kotlin.math.sin(star.twinkle * 0.1 + t * 3.14159).toFloat()
+                val alpha = (particle.alpha * twinkleFactor).toInt().coerceIn(30, 255)
+                
+                trailPaint.alpha = alpha
+                canvas.drawCircle(particle.x, particle.y, particle.size * twinkleFactor * starSizeMultiplier, trailPaint)
+            }
         }
         
         // Main star - large with twinkle
@@ -234,11 +254,11 @@ class SeasonalEvents(private val context: Context? = null) {
         
         // Draw star as overlapping shapes for a "star burst" effect
         // Central bright circle
-        canvas.drawCircle(star.x, star.y, star.size * 0.4f, christmasStarPaint)
+        canvas.drawCircle(star.x, star.y, effectiveSize * 0.4f, christmasStarPaint)
         
         // 4-point star rays
-        val rayLength = star.size * 1.2f
-        val rayWidth = star.size * 0.15f
+        val rayLength = effectiveSize * 1.2f
+        val rayWidth = effectiveSize * 0.15f
         for (angle in listOf(0.0, 90.0, 45.0, 135.0)) {
             val rad = Math.toRadians(angle)
             val cos = kotlin.math.cos(rad).toFloat()

@@ -11,8 +11,8 @@ android {
         applicationId = "com.example.weatherlwp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7  // Incremented for fresh install - uninstall old version first if conflict
-        versionName = "1.6.0"
+        versionCode = 8
+        versionName = "0.5.0"
     }
 
     buildFeatures {

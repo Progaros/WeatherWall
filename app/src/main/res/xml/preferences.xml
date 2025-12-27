@@ -38,7 +38,7 @@
             android:title="Hill Layers"
             android:summary="Rolling terrain layers (0-5)"
             android:defaultValue="5"
-            android:max="5"
+            android:max="25"
             app:min="0"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
@@ -182,6 +182,28 @@
             android:title="Seasonal Events"
             android:summary="Christmas star, New Year fireworks (Dec 15 - Jan 7)"
             android:defaultValue="true" />
+            
+        <SeekBarPreference
+            android:key="pref_christmas_star_size"
+            android:title="Christmas Star Size"
+            android:summary="Size of Bethlehem star (50-200%)"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="50"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_seasonal_enabled" />
+            
+        <SeekBarPreference
+            android:key="pref_christmas_star_trail"
+            android:title="Star Trail Length"
+            android:summary="Length of the trailing Schweif (0-200%)"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_seasonal_enabled" />
     </PreferenceCategory>
 
     <!-- Simulation / Debug -->
