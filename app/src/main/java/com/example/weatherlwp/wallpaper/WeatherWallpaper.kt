@@ -7,8 +7,6 @@ import android.service.wallpaper.WallpaperService
 import android.util.Log
 import android.view.SurfaceHolder
 import androidx.preference.PreferenceManager
-import com.example.weatherlwp.rendering.DayNightCycle
-import com.example.weatherlwp.rendering.CloudLayer
 import com.example.weatherlwp.rendering.ParallaxScene
 import com.example.weatherlwp.rendering.SeasonalEvents
 import com.example.weatherlwp.rendering.WeatherLayer
@@ -28,19 +26,13 @@ class WeatherWallpaper : WallpaperService() {
 
         private lateinit var scene: ParallaxScene
         private lateinit var seasonal: SeasonalEvents
-        private val clouds = CloudLayer()
         private val weather = WeatherLayer()
-        private val dayNight = DayNightCycle()
 
         // Preferences
         private var targetFps = 30
-        private var cloudsEnabled = true
-        private var parallaxEnabled = true
         private var weatherEnabled = true
-        private var dayNightEnabled = true
         private var seasonalEnabled = true
         private var currentWeather = "none"
-        private var cloudDensity = "auto"  // "auto" uses Breezy Weather data
         private var useBreezyWeather = true
 
         override fun onCreate(surfaceHolder: SurfaceHolder) {
@@ -61,7 +53,7 @@ class WeatherWallpaper : WallpaperService() {
                 // onVisibilityChanged(true) first. Treat a created surface as visible.
                 visible = true
                 loadPrefs()
-                if (parallaxEnabled) scene.start()
+                scene.start()  // Start sensors
                 startRender()
                 // Paint at least one frame immediately so previews don't stay black.
                 drawFrame()
@@ -86,7 +78,7 @@ class WeatherWallpaper : WallpaperService() {
             try {
                 if (visible) {
                     loadPrefs()
-                    if (parallaxEnabled) scene.start()
+                    scene.start()  // Start sensors
                     startRender()
                 } else {
                     stopRender()
@@ -110,41 +102,13 @@ class WeatherWallpaper : WallpaperService() {
         private fun loadPrefs() {
             try {
                 val prefs = PreferenceManager.getDefaultSharedPreferences(this@WeatherWallpaper)
-                parallaxEnabled = prefs.getBoolean("pref_parallax_enabled", true)
-                cloudsEnabled = prefs.getBoolean("pref_clouds_enabled", true)
                 weatherEnabled = prefs.getBoolean("pref_weather_enabled", true)
-                dayNightEnabled = prefs.getBoolean("pref_daynight_enabled", true)
                 seasonalEnabled = prefs.getBoolean("pref_seasonal_enabled", true)
                 useBreezyWeather = prefs.getBoolean("pref_use_breezy_weather", true)
                 targetFps = prefs.getString("pref_max_fps", "30")?.toIntOrNull() ?: 30
                 targetFps = targetFps.coerceIn(10, 60)
                 
-                // Cloud density - can be auto (from Breezy Weather) or manual
-                cloudDensity = prefs.getString("pref_cloud_density", "auto") ?: "auto"
-                
-                val effectiveDensity = if (cloudDensity == "auto" && useBreezyWeather) {
-                    // Get cloud density from Breezy Weather data
-                    val breezyType = WeatherRepository.getWeatherType(this@WeatherWallpaper)
-                    when (breezyType) {
-                        WeatherType.CLEAR -> CloudLayer.CloudDensity.NONE
-                        WeatherType.CLOUDY -> CloudLayer.CloudDensity.MEDIUM
-                        WeatherType.RAIN, WeatherType.THUNDERSTORM -> CloudLayer.CloudDensity.HEAVY
-                        WeatherType.SNOW -> CloudLayer.CloudDensity.OVERCAST
-                        WeatherType.FOG -> CloudLayer.CloudDensity.HEAVY
-                    }
-                } else {
-                    when (cloudDensity) {
-                        "none" -> CloudLayer.CloudDensity.NONE
-                        "light" -> CloudLayer.CloudDensity.LIGHT
-                        "medium" -> CloudLayer.CloudDensity.MEDIUM
-                        "heavy" -> CloudLayer.CloudDensity.HEAVY
-                        "overcast" -> CloudLayer.CloudDensity.OVERCAST
-                        else -> CloudLayer.CloudDensity.LIGHT
-                    }
-                }
-                clouds.setDensity(effectiveDensity)
-
-                // Reload scene settings
+                // Reload scene settings (handles parallax, clouds, day/night, terrain)
                 scene.loadSettings()
 
                 // Weather type - can be auto (from Breezy Weather) or manual
@@ -226,16 +190,8 @@ class WeatherWallpaper : WallpaperService() {
                 // Base black
                 canvas.drawColor(Color.BLACK)
 
-                // Day/Night sky gradient
-                dayNight.render(canvas, dayNightEnabled)
-
-                // Parallax scene (mountains, trees)
-                if (parallaxEnabled) {
-                    scene.render(canvas)
-                }
-
-                // Cloud layer
-                clouds.render(canvas, cloudsEnabled)
+                // Parallax scene (sky, clouds, mountains, trees)
+                scene.render(canvas)
 
                 // Weather effects (rain, snow, lightning)
                 weather.render(canvas, weatherEnabled)

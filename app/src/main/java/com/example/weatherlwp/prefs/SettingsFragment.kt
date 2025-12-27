@@ -35,10 +35,24 @@ class SettingsFragment : PreferenceFragmentCompat() {
         val dayNightPref = findPreference<SwitchPreferenceCompat>("pref_daynight_enabled")
         val manualTimePref = findPreference<SeekBarPreference>("pref_manual_time")
         
-        // Set initial state
-        manualTimePref?.isEnabled = !(dayNightPref?.isChecked ?: true)
+        // Format time display (minutes -> HH:MM)
+        fun formatTimeMinutes(minutes: Int): String {
+            val h = minutes / 60
+            val m = minutes % 60
+            return String.format("%02d:%02d", h, m)
+        }
         
-        // Listen for changes
+        // Set initial state and summary
+        manualTimePref?.isEnabled = !(dayNightPref?.isChecked ?: true)
+        manualTimePref?.summary = "Time: ${formatTimeMinutes(manualTimePref?.value ?: 720)}"
+        
+        // Update summary on change
+        manualTimePref?.setOnPreferenceChangeListener { pref, newValue ->
+            (pref as SeekBarPreference).summary = "Time: ${formatTimeMinutes(newValue as Int)}"
+            true
+        }
+        
+        // Listen for day/night toggle changes
         dayNightPref?.setOnPreferenceChangeListener { _, newValue ->
             manualTimePref?.isEnabled = !(newValue as Boolean)
             true

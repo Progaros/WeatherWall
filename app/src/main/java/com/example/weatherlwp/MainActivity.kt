@@ -1,5 +1,6 @@
 package com.example.weatherlwp
 
+import android.content.SharedPreferences
 import android.graphics.Color
 import android.os.Bundle
 import android.os.SystemClock
@@ -10,7 +11,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.commit
 import androidx.preference.PreferenceManager
 import com.example.weatherlwp.prefs.SettingsFragment
-import com.example.weatherlwp.rendering.CloudLayer
 import com.example.weatherlwp.rendering.ParallaxScene
 import com.google.android.material.appbar.MaterialToolbar
 
@@ -22,11 +22,17 @@ class MainActivity : AppCompatActivity() {
     }
     
     private var previewScene: ParallaxScene? = null
-    private var cloudLayer: CloudLayer? = null
     private var previewThread: Thread? = null
     @Volatile private var previewRunning = false
     @Volatile private var surfaceReady = false
     private var surfaceHolder: SurfaceHolder? = null
+    
+    // Preference change listener for live preview updates
+    private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        Log.d(TAG, "Preference changed: $key")
+        // Reload settings on any preference change
+        previewScene?.loadSettings()
+    }
     
     // FPS tracking for debugging
     private var frameCount = 0
@@ -42,19 +48,10 @@ class MainActivity : AppCompatActivity() {
         // Setup live preview
         val previewSurface = findViewById<SurfaceView>(R.id.preview_surface)
         previewScene = ParallaxScene(this)
-        cloudLayer = CloudLayer()
         
-        // Set cloud density from preferences
+        // Register preference change listener for live updates
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        val cloudDensity = prefs.getString("pref_debug_cloud_override", "light") ?: "light"
-        cloudLayer?.setDensity(when (cloudDensity) {
-            "none" -> CloudLayer.CloudDensity.NONE
-            "light" -> CloudLayer.CloudDensity.LIGHT
-            "medium" -> CloudLayer.CloudDensity.MEDIUM
-            "heavy" -> CloudLayer.CloudDensity.HEAVY
-            "overcast" -> CloudLayer.CloudDensity.OVERCAST
-            else -> CloudLayer.CloudDensity.LIGHT
-        })
+        prefs.registerOnSharedPreferenceChangeListener(prefListener)
         
         previewSurface.setZOrderOnTop(true)
         previewSurface.holder.setFormat(android.graphics.PixelFormat.TRANSPARENT)
@@ -156,11 +153,8 @@ class MainActivity : AppCompatActivity() {
                     // Clear canvas with a fallback color first (helps debug)
                     canvas.drawColor(Color.BLACK)
                     
-                    // Render scene (includes sky gradient)
+                    // Render scene (includes sky gradient and clouds)
                     previewScene?.render(canvas)
-                    
-                    // Render clouds on top
-                    cloudLayer?.render(canvas, true)
                     
                     frameCount++
                     
@@ -234,21 +228,12 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         previewScene?.loadSettings()
-        
-        // Reload cloud settings
-        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        val cloudDensity = prefs.getString("pref_debug_cloud_override", "light") ?: "light"
-        cloudLayer?.setDensity(when (cloudDensity) {
-            "none" -> CloudLayer.CloudDensity.NONE
-            "light" -> CloudLayer.CloudDensity.LIGHT
-            "medium" -> CloudLayer.CloudDensity.MEDIUM
-            "heavy" -> CloudLayer.CloudDensity.HEAVY
-            "overcast" -> CloudLayer.CloudDensity.OVERCAST
-            else -> CloudLayer.CloudDensity.LIGHT
-        })
     }
     
     override fun onDestroy() {
+        // Unregister preference listener
+        PreferenceManager.getDefaultSharedPreferences(this)
+            .unregisterOnSharedPreferenceChangeListener(prefListener)
         stopPreview()
         previewScene?.stop()
         super.onDestroy()

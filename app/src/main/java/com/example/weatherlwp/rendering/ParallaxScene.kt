@@ -191,9 +191,9 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             // Tree segments (1-5) - global setting for all trees
             treeSegments = prefs.getInt("pref_tree_segments", 3).coerceIn(1, 5)
             
-            // Mountain width (50-200) - 100 = 1.0x
-            val rawMountainWidth = prefs.getInt("pref_mountain_width", 100)
-            mountainWidthScale = (rawMountainWidth.toFloat() / 100f).coerceIn(0.5f, 2.0f)
+            // Mountain width (50-300) - 100 = 1.0x, default 175 = 1.75x
+            val rawMountainWidth = prefs.getInt("pref_mountain_width", 175)
+            mountainWidthScale = (rawMountainWidth.toFloat() / 100f).coerceIn(0.5f, 3.0f)
             
             // Cloud settings
             val cloudsEnabled = prefs.getBoolean("pref_clouds_enabled", true)
@@ -360,9 +360,10 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 val depth = (i.toFloat() / hillCount.coerceAtLeast(1)) // 0.0 to ~1.0
                 val depthFactor = 0.3f + depth * 0.2f  // 0.3 (far) to 0.5 (near) - matching tree parallax
                 
-                // All hills use TERRAIN_BASELINE_RATIO as reference
-                // Near hills sit slightly lower (closer to viewer)
-                val heightOffset = TERRAIN_BASELINE_RATIO - 0.05f + depth * 0.08f
+                // Far hills (depth=0) are higher on screen (smaller heightOffset)
+                // Near hills (depth=1) are lower on screen (larger heightOffset)
+                // This creates proper depth perception
+                val heightOffset = TERRAIN_BASELINE_RATIO - 0.15f + depth * 0.20f  // Far: 0.55, Near: 0.75
                 
                 hills.add(HillData(
                     controlPoints = points,
@@ -566,8 +567,9 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             val cal = Calendar.getInstance()
             cal.get(Calendar.HOUR_OF_DAY) + cal.get(Calendar.MINUTE) / 60f
         } else {
-            // Use manual time setting (0-23 hours)
-            prefs.getInt("pref_manual_time", 12).toFloat()
+            // Use manual time setting (0-1439 minutes) -> convert to hours
+            val minutes = prefs.getInt("pref_manual_time", 720)  // Default noon (12:00)
+            minutes / 60f
         }
     }
     

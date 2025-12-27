@@ -10,16 +10,18 @@
             android:defaultValue="3"
             android:max="10"
             app:min="0"
-            app:showSeekBarValue="true" />
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
 
         <SeekBarPreference
             android:key="pref_mountain_width"
             android:title="Mountain Width"
-            android:summary="Width multiplier (50-200%)"
-            android:defaultValue="100"
-            android:max="200"
+            android:summary="Width multiplier (50-300%)"
+            android:defaultValue="175"
+            android:max="300"
             app:min="50"
-            app:showSeekBarValue="true" />
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
 
         <SeekBarPreference
             android:key="pref_hill_count"
@@ -28,7 +30,8 @@
             android:defaultValue="3"
             android:max="5"
             app:min="0"
-            app:showSeekBarValue="true" />
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
 
         <SeekBarPreference
             android:key="pref_tree_count"
@@ -37,7 +40,8 @@
             android:defaultValue="20"
             android:max="100"
             app:min="0"
-            app:showSeekBarValue="true" />
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
 
         <SeekBarPreference
             android:key="pref_tree_size"
@@ -46,7 +50,8 @@
             android:defaultValue="300"
             android:max="1000"
             app:min="10"
-            app:showSeekBarValue="true" />
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
 
         <SeekBarPreference
             android:key="pref_tree_segments"
@@ -55,7 +60,8 @@
             android:defaultValue="1"
             android:max="5"
             app:min="1"
-            app:showSeekBarValue="true" />
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
     </PreferenceCategory>
 
     <!-- 3D Parallax Settings -->
@@ -74,6 +80,7 @@
             android:max="100"
             app:min="10"
             app:showSeekBarValue="true"
+            app:updatesContinuously="true"
             android:dependency="pref_parallax_enabled" />
     </PreferenceCategory>
 
@@ -103,11 +110,12 @@
         <SeekBarPreference
             android:key="pref_manual_time"
             android:title="Manual Time of Day"
-            android:summary="Set time (0-23 hours)"
-            android:defaultValue="12"
-            android:max="23"
+            android:summary="Set time in minutes (0-1439, i.e. 0:00-23:59)"
+            android:defaultValue="720"
+            android:max="1439"
             app:min="0"
-            app:showSeekBarValue="true" />
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
 
         <ListPreference
             android:key="pref_max_fps"
