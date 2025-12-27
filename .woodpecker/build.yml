@@ -41,25 +41,62 @@ steps:
       - ./gradlew assembleDebug --no-daemon --stacktrace
       - ls -lah app/build/outputs/apk/debug || true
       - |
-        # Extract version from build.gradle.kts
+        # Extract version from build.gradle.kts and save for later steps
         VERSION=$(grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
         echo "Detected version: v$VERSION"
+        echo "$VERSION" > .version
         cp app/build/outputs/apk/debug/app-debug.apk "WeatherWall-v${VERSION}.apk"
         echo "APK built successfully!"
         du -h "WeatherWall-v${VERSION}.apk"
         sha256sum "WeatherWall-v${VERSION}.apk"
 
   - name: publish-release
-    image: thegeeklab/wp-gitea-release
-    settings:
-      base_url: https://git.olli.info
-      api_key:
+    image: ghcr.io/cirruslabs/android-sdk:35
+    environment:
+      FORGEJO_TOKEN:
         from_secret: forgejo_token
-      files:
-        - WeatherWall-*.apk
-      title: ${CI_COMMIT_TAG}
-      note: |
-        Automated release from tag ${CI_COMMIT_TAG}
-        Commit: ${CI_COMMIT_SHA}
+    commands:
+      - |
+        VERSION=$(cat .version)
+        echo "Checking if release v$VERSION exists..."
+        
+        # Check if release already exists
+        EXISTING=$(curl -s -o /dev/null -w "%{http_code}" \
+          -H "Authorization: token $FORGEJO_TOKEN" \
+          "https://git.olli.info/api/v1/repos/Oliver/WeatherWall/releases/tags/v$VERSION")
+        
+        if [ "$EXISTING" = "200" ]; then
+          echo "Release v$VERSION already exists, skipping publish"
+          exit 0
+        fi
+        
+        echo "Creating new release v$VERSION..."
+        
+        # Create the release
+        RELEASE_RESPONSE=$(curl -s -X POST \
+          -H "Authorization: token $FORGEJO_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d "{\"tag_name\": \"v$VERSION\", \"name\": \"v$VERSION\", \"body\": \"Automated release v$VERSION\nCommit: ${CI_COMMIT_SHA}\"}" \
+          "https://git.olli.info/api/v1/repos/Oliver/WeatherWall/releases")
+        
+        RELEASE_ID=$(echo "$RELEASE_RESPONSE" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+        
+        if [ -z "$RELEASE_ID" ]; then
+          echo "Failed to create release"
+          echo "$RELEASE_RESPONSE"
+          exit 1
+        fi
+        
+        echo "Created release ID: $RELEASE_ID"
+        
+        # Upload APK
+        curl -s -X POST \
+          -H "Authorization: token $FORGEJO_TOKEN" \
+          -H "Content-Type: application/octet-stream" \
+          --data-binary "@WeatherWall-v${VERSION}.apk" \
+          "https://git.olli.info/api/v1/repos/Oliver/WeatherWall/releases/$RELEASE_ID/assets?name=WeatherWall-v${VERSION}.apk"
+        
+        echo "Release v$VERSION published successfully!"
     when:
-      - event: tag
+      - event: push
+        branch: main
