@@ -18,11 +18,11 @@ package info.olli.weatherlwp.parallax
  */
 class ParallaxCalculator {
     companion object {
-        /** How quickly velocity input is integrated into position */
-        private const val VELOCITY_SCALE = 3f
+        /** How quickly velocity input is integrated into position (reduced from 3 to 1.2) */
+        private const val VELOCITY_SCALE = 1.2f
         
         /** How fast position drifts back to center when idle (per frame) */
-        private const val CENTER_DRIFT_RATE = 0.02f
+        private const val CENTER_DRIFT_RATE = 0.015f
         
         /** Frames without input before starting center drift */
         private const val IDLE_FRAMES_BEFORE_DRIFT = 30
@@ -45,10 +45,10 @@ class ParallaxCalculator {
     
     // User-configurable settings
     var strength = 1.0f                 // Sensitivity multiplier
-    var maxOffsetPx = 100f              // Maximum offset in any direction
+    var maxOffsetPx = 80f               // Maximum offset in any direction (reduced from 100)
     var centerDriftRate = CENTER_DRIFT_RATE  // How fast to return to center
-    var smoothing = 0.3f                // Velocity smoothing factor (0=instant, 1=very smooth)
-    var depthSeparation = 0.5f          // How much depth affects movement (0=all same, 1=max difference)
+    var smoothing = 0.4f                // Velocity smoothing factor (0.4 = 40% filter)
+    var depthSeparation = 0.25f         // How much depth affects movement (reduced from 0.5)
     
     /**
      * Update from sensor input.
@@ -73,11 +73,12 @@ class ParallaxCalculator {
     fun update(deltaTimeMs: Long = 16L) {
         val deltaScale = deltaTimeMs / 16f  // Normalize to ~60fps
         
-        // Smoothing: lerp raw velocity to smoothed velocity
-        // Higher smoothing = slower response, smoother movement
-        val smoothFactor = 1f - smoothing.coerceIn(0f, 0.99f)  // 0.01 to 1.0
-        smoothedVelocityX = smoothedVelocityX + (pendingVelocityX - smoothedVelocityX) * smoothFactor
-        smoothedVelocityY = smoothedVelocityY + (pendingVelocityY - smoothedVelocityY) * smoothFactor
+        // Smoothing: lerp smoothed velocity toward pending velocity
+        // Higher smoothing = more filtering = smoother but slower response
+        // Fixed formula: smoothing is the filter strength (0 = instant, 0.95 = very smooth)
+        val filterStrength = smoothing.coerceIn(0f, 0.95f)
+        smoothedVelocityX = smoothedVelocityX * filterStrength + pendingVelocityX * (1f - filterStrength)
+        smoothedVelocityY = smoothedVelocityY * filterStrength + pendingVelocityY * (1f - filterStrength)
         
         // Apply smoothed velocity to position
         val velocityMagnitude = kotlin.math.sqrt(
@@ -88,12 +89,34 @@ class ParallaxCalculator {
             // Move position based on smoothed velocity
             val dx = smoothedVelocityX * VELOCITY_SCALE * strength * maxOffsetPx * deltaScale
             val dy = smoothedVelocityY * VELOCITY_SCALE * strength * maxOffsetPx * deltaScale
+            
+            val oldPosX = positionX
+            val oldPosY = positionY
             positionX += dx
             positionY += dy
             
             // Clamp to bounds
             positionX = positionX.coerceIn(-maxOffsetPx, maxOffsetPx)
             positionY = positionY.coerceIn(-maxOffsetPx, maxOffsetPx)
+            
+            // Fix boundary momentum: clear velocity when hitting edge in same direction
+            // This allows instant reversal when tilting back from edge
+            if (positionX == maxOffsetPx && smoothedVelocityX > 0f) {
+                smoothedVelocityX = 0f
+                pendingVelocityX = 0f
+            }
+            if (positionX == -maxOffsetPx && smoothedVelocityX < 0f) {
+                smoothedVelocityX = 0f
+                pendingVelocityX = 0f
+            }
+            if (positionY == maxOffsetPx && smoothedVelocityY > 0f) {
+                smoothedVelocityY = 0f
+                pendingVelocityY = 0f
+            }
+            if (positionY == -maxOffsetPx && smoothedVelocityY < 0f) {
+                smoothedVelocityY = 0f
+                pendingVelocityY = 0f
+            }
         }
         
         // Clear pending velocity for next frame (but keep smoothed for decay)
@@ -137,14 +160,16 @@ class ParallaxCalculator {
      * @return (x, y) offset to apply to this layer
      * 
      * Depth separation controls how much the layers differ:
-     * - depthSeparation=0: all layers move the same amount
-     * - depthSeparation=1: background barely moves, foreground moves full amount
+     * - depthSeparation=0: all layers move the same amount (flat)
+     * - depthSeparation=1: background barely moves, foreground moves full amount (max 3D)
+     * 
+     * Formula: effectiveDepth = depthFactor * depthSeparation
+     * - Background (depthFactor=0) moves 0%
+     * - Foreground (depthFactor=1) moves depthSeparation * 100%
      */
     fun getOffsetForDepth(depthFactor: Float): Pair<Float, Float> {
-        // Apply depth separation: mix between uniform movement (all same) and depth-based
-        // minScale = 1 - depthSeparation (how much background moves)
-        val minScale = 1f - depthSeparation
-        val effectiveDepth = minScale + depthFactor * depthSeparation
+        // Simplified depth formula: foreground moves more, background moves less
+        val effectiveDepth = depthFactor * depthSeparation
         return Pair(positionX * effectiveDepth, positionY * effectiveDepth)
     }
     
@@ -152,8 +177,7 @@ class ParallaxCalculator {
      * Get X offset for a specific depth.
      */
     fun getOffsetXForDepth(depthFactor: Float): Float {
-        val minScale = 1f - depthSeparation
-        val effectiveDepth = minScale + depthFactor * depthSeparation
+        val effectiveDepth = depthFactor * depthSeparation
         return positionX * effectiveDepth
     }
     
@@ -161,8 +185,7 @@ class ParallaxCalculator {
      * Get Y offset for a specific depth.
      */
     fun getOffsetYForDepth(depthFactor: Float): Float {
-        val minScale = 1f - depthSeparation
-        val effectiveDepth = minScale + depthFactor * depthSeparation
+        val effectiveDepth = depthFactor * depthSeparation
         return positionY * effectiveDepth
     }
     

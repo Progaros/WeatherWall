@@ -156,20 +156,20 @@ class ParallaxScene(
             val rawStrength = (sensitivityVal / 10f).coerceIn(0f, 5f)
             parallaxStrength = if (parallaxEnabled) rawStrength else 0f
             
-            // Max offset slider: 5..200 px (default 100 for velocity-based system)
-            parallaxMaxOffsetPx = (prefs.getInt("pref_parallax_max_offset", 100)).toFloat().coerceIn(5f, 200f)
+            // Max offset slider: 5..200 px (default 80)
+            parallaxMaxOffsetPx = (prefs.getInt("pref_parallax_max_offset", 80)).toFloat().coerceIn(5f, 200f)
             
-            // Return speed slider: map 1..100 -> 0.01f..0.10f
+            // Return speed slider: map 1..100 -> 0.005f..0.05f (faster return = lower center drift)
             val returnSpeed = prefs.getInt("pref_parallax_return_speed", 50).coerceIn(1, 100)
-            parallaxReturnRate = 0.01f + (returnSpeed / 100f) * 0.09f
+            parallaxReturnRate = 0.005f + (returnSpeed / 100f) * 0.045f
             
-            // Smoothing slider: map 1..100 -> 0.05f..0.5f (higher = more smooth but still responsive)
-            // At max (100), smoothFactor in calculator = 1-0.5 = 0.5, meaning 50% of new velocity applied per frame
-            val smoothingVal = prefs.getInt("pref_parallax_smoothing", 30).coerceIn(1, 100)
-            val smoothingFactor = 0.05f + (smoothingVal / 100f) * 0.45f
+            // Smoothing slider: map 1..100 -> 0.1f..0.9f (filter strength)
+            // Higher = more filtering = smoother but slower response
+            val smoothingVal = prefs.getInt("pref_parallax_smoothing", 40).coerceIn(1, 100)
+            val smoothingFactor = 0.1f + (smoothingVal / 100f) * 0.8f
             
-            // Depth separation slider: map 0..100 -> 0f..1f (default 100 = max 3D)
-            val depthVal = prefs.getInt("pref_parallax_depth", 100).coerceIn(0, 100)
+            // Depth separation slider: map 0..100 -> 0f..1f (default 25 = subtle 3D)
+            val depthVal = prefs.getInt("pref_parallax_depth", 25).coerceIn(0, 100)
             val depthSeparation = depthVal / 100f
             
             // Apply to parallax calculator

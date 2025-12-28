@@ -22,14 +22,14 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     companion object {
         private const val TAG = "ParallaxSensorManager"
         
-        // Smoothing for raw sensor input (higher = smoother but more lag)
-        private const val SENSOR_ALPHA = 0.7f
+        // Smoothing for raw sensor input (higher = snappier response)
+        private const val SENSOR_ALPHA = 0.8f
         
-        // Sensitivity multiplier for velocity
-        private const val VELOCITY_SCALE = 15f
+        // Sensitivity multiplier for velocity (reduced from 15 to 8 to prevent double scaling)
+        private const val VELOCITY_SCALE = 8f
         
-        // Minimum movement threshold (dead zone for tiny jitters)
-        private const val MIN_VELOCITY = 0.02f
+        // Minimum movement threshold (stricter dead zone for tiny jitters)
+        private const val MIN_VELOCITY = 0.01f
     }
     
     interface Listener {
