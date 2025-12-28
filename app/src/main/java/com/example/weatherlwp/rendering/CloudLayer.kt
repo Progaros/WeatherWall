@@ -37,8 +37,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
         color = Color.WHITE
         style = Paint.Style.FILL
         isAntiAlias = true
-        alpha = 100  // Lower alpha for atmospheric softness
-        maskFilter = BlurMaskFilter(35f, BlurMaskFilter.Blur.NORMAL)  // Larger blur for wispy effect
+        alpha = 80  // Lower alpha for atmospheric softness
+        maskFilter = BlurMaskFilter(40f, BlurMaskFilter.Blur.NORMAL)  // Larger blur for wispier effect
     }
     
     private val path = Path()
@@ -76,8 +76,10 @@ class CloudLayer(private val context: Context) : SceneLayer {
             val size = 0.08f + random.nextFloat() * 0.25f
             // Base speed - smaller clouds move faster (further away)
             val speed = 0.05f + (1f - size / 0.33f) * 0.1f
-            // Lower alpha for atmospheric softness (30-80)
-            val alpha = (30 + size * 150).toInt().coerceIn(30, 80)
+            // Lower alpha for lighter, more see-through clouds
+            // Small clouds (far/thin) are more transparent: 15-40
+            // Large clouds (near/thick) are slightly more opaque: 40-60
+            val alpha = (15 + size * 135).toInt().coerceIn(15, 60)
             // Horizontal elongation for wispy appearance (1.5-3.0)
             val elongation = 1.5f + random.nextFloat() * 1.5f
             

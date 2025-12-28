@@ -184,30 +184,11 @@
             android:summary="Enable moving clouds in the sky"
             android:defaultValue="true" />
 
-        <ListPreference
-            android:key="pref_cloud_density"
-            android:title="Cloud Density"
-            android:summary="Auto uses Breezy Weather data"
-            android:entries="@array/cloud_density_options"
-            android:entryValues="@array/cloud_density_values"
-            android:defaultValue="auto"
-            android:dependency="pref_clouds_enabled" />
-
         <SwitchPreferenceCompat
             android:key="pref_daynight_enabled"
             android:title="Auto Day/Night Cycle"
             android:summary="Change sky colors based on real time"
             android:defaultValue="true" />
-
-        <SeekBarPreference
-            android:key="pref_manual_time"
-            android:title="Manual Time of Day"
-            android:summary="Minutes since midnight when Auto is OFF (0-1439)"
-            android:defaultValue="720"
-            android:max="1439"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true" />
 
         <ListPreference
             android:key="pref_max_fps"
@@ -273,8 +254,19 @@
         <SwitchPreferenceCompat
             android:key="pref_debug_enabled"
             android:title="Enable Simulation Mode"
-            android:summary="Override weather and season for testing"
+            android:summary="Override weather, time, and season for testing"
             android:defaultValue="false" />
+
+        <SeekBarPreference
+            android:key="pref_manual_time"
+            android:title="Simulate Time of Day"
+            android:summary="Minutes since midnight (0-1439)"
+            android:defaultValue="720"
+            android:max="1439"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_debug_enabled" />
 
         <ListPreference
             android:key="pref_weather_type"

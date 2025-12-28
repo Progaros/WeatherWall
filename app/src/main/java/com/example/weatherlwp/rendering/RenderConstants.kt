@@ -71,7 +71,7 @@ object RenderConstants {
     // Ambient tint colors (for global tinting per ai.md)
     val AMBIENT_NIGHT: Int = Color.parseColor("#2A2040")      // Purple-blue night tint
     val AMBIENT_DAWN: Int = Color.parseColor("#FF9966")       // Warm orange dawn tint
-    val AMBIENT_DAY: Int = Color.parseColor("#88CCFF")        // Neutral blue-white
+    val AMBIENT_DAY: Int = Color.parseColor("#E8F0F8")        // Very light neutral (nearly white with hint of sky)
     val AMBIENT_DUSK: Int = Color.parseColor("#FF7744")       // Orange-red dusk tint
     
     // ============== Time Thresholds (hours) ==============
@@ -184,8 +184,9 @@ object RenderConstants {
      */
     fun applyAmbientTint(baseColor: Int, ambientColor: Int, distance: Float): Float {
         // More distant objects blend more with ambient (atmospheric perspective)
-        // Foreground: 20% ambient, Background: 60% ambient
-        return 0.2f + distance * 0.4f
+        // Foreground: 5% ambient, Background: 45% ambient
+        // Reduced from 20-60% to preserve foreground colors, especially tree greens during day
+        return 0.05f + distance * 0.4f
     }
     
     /**

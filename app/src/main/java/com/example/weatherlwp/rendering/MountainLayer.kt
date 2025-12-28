@@ -176,6 +176,10 @@ class MountainLayer(private val context: Context) : SceneLayer {
         val random = Random(mountain.shapeSeed)
         val segments = (10 + mountainRoughness * 20).toInt()
         
+        // Base noise amplitude scales with screen height for consistent roughness
+        // across different canvas sizes (preview vs full wallpaper)
+        val noiseBase = height * 0.015f * mountainRoughness
+        
         // Left side
         pathLeft.moveTo(peakCenterX, peakY)
         
@@ -183,7 +187,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
             val progress = (i + 1).toFloat() / segments
             val targetX = peakCenterX - halfWidthPx * progress
             val targetY = peakY + (baseY - peakY) * progress
-            val noise = (random.nextFloat() - 0.5f) * 30f * mountainRoughness
+            val noise = (random.nextFloat() - 0.5f) * noiseBase
             pathLeft.lineTo(targetX, targetY + noise)
         }
         pathLeft.lineTo(peakCenterX - halfWidthPx, baseY)
@@ -197,7 +201,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
             val progress = (i + 1).toFloat() / segments
             val targetX = peakCenterX + halfWidthPx * progress
             val targetY = peakY + (baseY - peakY) * progress
-            val noise = (random.nextFloat() - 0.5f) * 30f * mountainRoughness
+            val noise = (random.nextFloat() - 0.5f) * noiseBase
             pathRight.lineTo(targetX, targetY + noise)
         }
         pathRight.lineTo(peakCenterX + halfWidthPx, baseY)

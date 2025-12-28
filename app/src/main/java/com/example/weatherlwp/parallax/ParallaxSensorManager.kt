@@ -14,6 +14,8 @@ import android.util.Log
  * - Continuously tracks a moving average baseline
  * - Parallax responds to tilts relative to this baseline
  * - This means parallax works whether phone is flat, upright, or any angle
+ * 
+ * Fast startup adaptation ensures consistent behavior between preview and wallpaper
  */
 class ParallaxSensorManager(context: Context) : SensorEventListener {
     companion object {
@@ -22,9 +24,13 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         // Smoothing for raw sensor input
         private const val SENSOR_ALPHA = 0.85f
         
-        // Baseline adaptation rate - slower = more stable, faster = more responsive
-        // 0.01 means baseline adjusts slowly to where user holds the phone
-        private const val BASELINE_ADAPT_RATE = 0.01f
+        // Baseline adaptation rates
+        // Fast rate during startup (first few seconds) to quickly find neutral position
+        private const val BASELINE_ADAPT_RATE_FAST = 0.15f
+        // Slow rate after stabilization for smooth parallax
+        private const val BASELINE_ADAPT_RATE_SLOW = 0.01f
+        // How long to use fast adaptation (in sensor readings, ~60/sec)
+        private const val FAST_ADAPT_READINGS = 180 // ~3 seconds
         
         // Minimum tilt angle (in g-force) before parallax responds
         // This creates a small "dead zone" at center for stability
@@ -49,6 +55,9 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     private var baselineX = 0f
     private var baselineY = 0f
     private var baselineInitialized = false
+    
+    // Readings counter for fast startup adaptation
+    private var readingsCount = 0
 
     private var listener: Listener? = null
     private var isStarted = false
@@ -61,8 +70,9 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             return
         }
         if (!isStarted) {
-            // Reset baseline on start
+            // Reset baseline and readings counter on start
             baselineInitialized = false
+            readingsCount = 0
             sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_UI)
             isStarted = true
             Log.d(TAG, "Sensor started")
@@ -92,11 +102,19 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             Log.d(TAG, "Baseline initialized: x=$baselineX, y=$baselineY")
         }
         
-        // Slowly adapt baseline toward current position
-        // This allows parallax to work at any phone orientation
-        // The baseline drifts toward where the user holds the phone
-        baselineX += (ax - baselineX) * BASELINE_ADAPT_RATE
-        baselineY += (ay - baselineY) * BASELINE_ADAPT_RATE
+        // Increment readings counter
+        readingsCount++
+        
+        // Adapt baseline toward current position
+        // Use fast adaptation during startup for quick convergence,
+        // then slow adaptation for stable parallax
+        val adaptRate = if (readingsCount < FAST_ADAPT_READINGS) {
+            BASELINE_ADAPT_RATE_FAST
+        } else {
+            BASELINE_ADAPT_RATE_SLOW
+        }
+        baselineX += (ax - baselineX) * adaptRate
+        baselineY += (ay - baselineY) * adaptRate
         
         // Calculate tilt relative to adaptive baseline
         var deltaX = ax - baselineX

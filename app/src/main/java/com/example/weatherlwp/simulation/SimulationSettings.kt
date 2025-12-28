@@ -55,8 +55,15 @@ class SimulationSettings(context: Context) {
      * Reload all settings from SharedPreferences.
      */
     fun reload() {
-        // Time
-        useRealTime = prefs.getBoolean("pref_daynight_enabled", true)
+        // Debug mode toggle
+        debugEnabled = prefs.getBoolean("pref_debug_enabled", false)
+        
+        // Time - in debug mode, use manual time; otherwise check auto day/night
+        if (debugEnabled) {
+            useRealTime = false  // Debug mode always uses manual time
+        } else {
+            useRealTime = prefs.getBoolean("pref_daynight_enabled", true)
+        }
         manualTimeMinutes = prefs.getInt("pref_manual_time", 720)
         
         // Weather - for now we always use real weather from Breezy
@@ -83,7 +90,6 @@ class SimulationSettings(context: Context) {
         }
         
         // Debug - also handle cloud and weather overrides from simulation mode
-        debugEnabled = prefs.getBoolean("pref_debug_enabled", false)
         if (debugEnabled) {
             // Weather override - pref_weather_type is the actual key
             debugWeatherOverride = prefs.getString("pref_weather_type", "auto")

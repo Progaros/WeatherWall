@@ -52,8 +52,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
             }
         }
 
-        // Manual time slider - only enabled when auto day/night is OFF
-        val dayNightPref = findPreference<SwitchPreferenceCompat>("pref_daynight_enabled")
+        // Manual time slider - now controlled by pref_debug_enabled via XML dependency
         val manualTimePref = findPreference<SeekBarPreference>("pref_manual_time")
         
         // Format time display (minutes -> HH:MM)
@@ -63,19 +62,12 @@ class SettingsFragment : PreferenceFragmentCompat() {
             return String.format("%02d:%02d", h, m)
         }
         
-        // Set initial state and summary
-        manualTimePref?.isEnabled = !(dayNightPref?.isChecked ?: true)
+        // Set initial summary
         manualTimePref?.summary = "Time: ${formatTimeMinutes(manualTimePref?.value ?: 720)}"
         
         // Update summary on change
         manualTimePref?.setOnPreferenceChangeListener { pref, newValue ->
             (pref as SeekBarPreference).summary = "Time: ${formatTimeMinutes(newValue as Int)}"
-            true
-        }
-        
-        // Listen for day/night toggle changes
-        dayNightPref?.setOnPreferenceChangeListener { _, newValue ->
-            manualTimePref?.isEnabled = !(newValue as Boolean)
             true
         }
 
@@ -260,7 +252,6 @@ class SettingsFragment : PreferenceFragmentCompat() {
         versionTapCount++
         
         when (versionTapCount) {
-            3 -> Toast.makeText(context, "Keep tapping... 👀", Toast.LENGTH_SHORT).show()
             5 -> {
                 // Show random easter egg message
                 val message = easterEggMessages.random()
