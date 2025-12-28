@@ -155,7 +155,7 @@
         <SeekBarPreference
             android:key="pref_parallax_strength"
             android:title="Input Sensitivity"
-            android:summary="Tilt sensitivity (0=off, 50=5x, logarithmic)"
+            android:summary="Tilt sensitivity (0=off, 25=2.5x default, 50=5x)"
             android:defaultValue="25"
             android:max="50"
             app:min="0"
@@ -199,8 +199,8 @@
         <SeekBarPreference
             android:key="pref_parallax_depth"
             android:title="Depth Separation"
-            android:summary="Foreground vs background movement difference"
-            android:defaultValue="50"
+            android:summary="Foreground vs background movement (0=flat, 100=max 3D)"
+            android:defaultValue="100"
             android:max="100"
             app:min="0"
             app:showSeekBarValue="true"

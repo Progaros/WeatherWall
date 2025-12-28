@@ -45,6 +45,10 @@ class MountainLayer(private val context: Context) : SceneLayer {
     private var width = 0f
     private var height = 0f
     
+    // Cached haze gradient to avoid per-frame allocation
+    private var cachedHazeAmbient = 0
+    private var cachedHazeHeight = 0f
+    
     private data class MountainData(
         val peakX: Float,      // 0.0 to 1.0 (relative to screen width)
         val height: Float,     // 0.0 to 1.0 (relative to screen height)
@@ -145,25 +149,29 @@ class MountainLayer(private val context: Context) : SceneLayer {
         val hazeStartY = height * 0.55f  // Start at 55% down
         val hazeEndY = height * 0.85f    // Fade to 85% down
         
-        // Haze color blends with ambient for consistent atmosphere
-        val hazeColor = Color.argb(
-            25,
-            Color.red(ambientColor),
-            Color.green(ambientColor),
-            Color.blue(ambientColor)
-        )
+        // Only recreate gradient if ambient color or height changed (avoids per-frame allocation)
+        if (ambientColor != cachedHazeAmbient || height != cachedHazeHeight) {
+            cachedHazeAmbient = ambientColor
+            cachedHazeHeight = height
+            
+            // Haze color blends with ambient for consistent atmosphere
+            val hazeColor = Color.argb(
+                25,
+                Color.red(ambientColor),
+                Color.green(ambientColor),
+                Color.blue(ambientColor)
+            )
+            
+            hazePaint.shader = LinearGradient(
+                0f, hazeStartY,
+                0f, hazeEndY,
+                Color.TRANSPARENT,
+                hazeColor,
+                Shader.TileMode.CLAMP
+            )
+        }
         
-        val hazeGradient = LinearGradient(
-            0f, hazeStartY,
-            0f, hazeEndY,
-            Color.TRANSPARENT,
-            hazeColor,
-            Shader.TileMode.CLAMP
-        )
-        
-        hazePaint.shader = hazeGradient
         canvas.drawRect(0f, hazeStartY, width, hazeEndY, hazePaint)
-        hazePaint.shader = null
     }
     
     @Suppress("UNUSED_PARAMETER")

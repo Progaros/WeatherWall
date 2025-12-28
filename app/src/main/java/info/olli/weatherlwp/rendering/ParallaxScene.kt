@@ -148,21 +148,12 @@ class ParallaxScene(
         try {
             val parallaxEnabled = prefs.getBoolean("pref_parallax_enabled", true)
             
-            // Input sensitivity: slider 0-50 maps to 0-5 with logarithmic scale
-            // 0 = off, 25 = 1.0 (default), 50 = 5.0
-            // Using exponential: strength = (slider/25)^2, so 0->0, 25->1, 50->4
-            // Or simpler log: strength = 5^(slider/50) - 1, gives 0->0, 25->1.24, 50->4
-            // Using quadratic for smooth feel: (slider/25)^2 gives 0->0, 12.5->0.25, 25->1, 50->4
+            // Input sensitivity: slider 0-50 maps to 0-5 with smoother curve
+            // Default 25 = 2.5x, centered feel
+            // Using sqrt for smoother low-end: sqrt(slider/10) * sqrt(5) ≈ slider/10 * 0.7
+            // Actually simpler: linear slider/10 gives 0->0, 25->2.5, 50->5
             val sensitivityVal = prefs.getInt("pref_parallax_strength", 25).coerceIn(0, 50)
-            val rawStrength = if (sensitivityVal == 0) 0f else {
-                // Logarithmic scale: 10^(slider/25 - 1) gives 0.1 at 0, 1.0 at 25, 10 at 50
-                // But we want 0-5, so: (slider/10)^2 / 25 * 5 = slider^2 / 500
-                // Simpler: (slider / 10)^1.5 gives 0->0, 10->3.16, 25->15.8, 50->35
-                // Best: exponential with base adjustment: 5^(slider/50) - 1 mapped to 0-5
-                // Actually simplest: quadratic (slider/50)^2 * 5 = 0->0, 25->1.25, 50->5
-                val normalized = sensitivityVal / 50f
-                (normalized * normalized * 5f).coerceIn(0f, 5f)
-            }
+            val rawStrength = (sensitivityVal / 10f).coerceIn(0f, 5f)
             parallaxStrength = if (parallaxEnabled) rawStrength else 0f
             
             // Max offset slider: 5..200 px (default 100 for velocity-based system)
@@ -177,8 +168,8 @@ class ParallaxScene(
             val smoothingVal = prefs.getInt("pref_parallax_smoothing", 30).coerceIn(1, 100)
             val smoothingFactor = 0.05f + (smoothingVal / 100f) * 0.45f
             
-            // Depth separation slider: map 0..100 -> 0f..1f
-            val depthVal = prefs.getInt("pref_parallax_depth", 50).coerceIn(0, 100)
+            // Depth separation slider: map 0..100 -> 0f..1f (default 100 = max 3D)
+            val depthVal = prefs.getInt("pref_parallax_depth", 100).coerceIn(0, 100)
             val depthSeparation = depthVal / 100f
             
             // Apply to parallax calculator

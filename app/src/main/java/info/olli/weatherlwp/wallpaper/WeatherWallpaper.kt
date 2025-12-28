@@ -186,8 +186,19 @@ class WeatherWallpaper : WallpaperService() {
             }
         }
 
+        // Performance tracking for debug logging
+        private var frameCount = 0L
+        private var totalDrawTimeMs = 0L
+        private var lastLogTime = 0L
+        private var maxFrameTimeMs = 0L
+        
         private fun startRender() {
             if (renderThread != null) return
+            frameCount = 0L
+            totalDrawTimeMs = 0L
+            lastLogTime = SystemClock.uptimeMillis()
+            maxFrameTimeMs = 0L
+            
             renderThread = Thread {
                 try {
                     val frameTimeMs = (1000L / targetFps.toLong()).coerceAtLeast(16L)
@@ -200,6 +211,23 @@ class WeatherWallpaper : WallpaperService() {
                         val start = SystemClock.uptimeMillis()
                         drawFrame()
                         val dt = SystemClock.uptimeMillis() - start
+                        
+                        // Track performance
+                        frameCount++
+                        totalDrawTimeMs += dt
+                        if (dt > maxFrameTimeMs) maxFrameTimeMs = dt
+                        
+                        // Log performance stats every 5 seconds
+                        if (start - lastLogTime > 5000) {
+                            val avgFrameMs = if (frameCount > 0) totalDrawTimeMs / frameCount else 0
+                            val actualFps = if (avgFrameMs > 0) 1000 / avgFrameMs else 0
+                            Log.d(TAG, "Perf: ${frameCount} frames, avg=${avgFrameMs}ms, max=${maxFrameTimeMs}ms, ~${actualFps}fps")
+                            frameCount = 0L
+                            totalDrawTimeMs = 0L
+                            maxFrameTimeMs = 0L
+                            lastLogTime = start
+                        }
+                        
                         val sleep = frameTimeMs - dt
                         if (sleep > 0) SystemClock.sleep(sleep)
                     }
