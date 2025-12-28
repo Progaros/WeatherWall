@@ -2,10 +2,17 @@ package com.example.weatherlwp.rendering
 
 import android.graphics.Canvas
 import com.example.weatherlwp.parallax.ParallaxCalculator
+import com.example.weatherlwp.simulation.SimulationState
 
 /**
  * Interface for a distinct layer in the parallax scene.
  * Each layer is responsible for its own rendering and parallax handling.
+ * 
+ * Layers receive a SimulationState that contains:
+ * - Time (for animations and day/night)
+ * - Weather (for effects)
+ * - Wind (for tree sway and cloud movement)
+ * - Screen dimensions
  */
 interface SceneLayer {
     /**
@@ -15,22 +22,19 @@ interface SceneLayer {
 
     /**
      * Called every frame to update state (animations, physics).
+     * @param state Current simulation state
      * @param deltaTimeMs Time since last frame in milliseconds
      */
-    fun update(deltaTimeMs: Long)
+    fun update(state: SimulationState, deltaTimeMs: Long)
 
     /**
      * Draw the layer.
      * @param canvas The canvas to draw on
+     * @param state Current simulation state
      * @param parallaxCalculator The calculator to retrieve depth-based offsets
      */
-    fun draw(canvas: Canvas, parallaxCalculator: ParallaxCalculator)
+    fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator)
 
-    /**
-     * Update theme/weather settings.
-     */
-    fun updateTheme(theme: String, isNight: Boolean)
-    
     /**
      * Reload preferences/settings.
      */

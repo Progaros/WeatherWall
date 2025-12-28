@@ -85,11 +85,21 @@
 
         <SeekBarPreference
             android:key="pref_tree_size"
-            android:title="Tree Size"
-            android:summary="Size multiplier"
+            android:title="Tree Height"
+            android:summary="Height multiplier (100 = 1x)"
             android:defaultValue="200"
             android:max="1000"
             app:min="10"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_tree_width"
+            android:title="Tree Width"
+            android:summary="Width as % of height (100 = proportional)"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="20"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
 

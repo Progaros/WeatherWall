@@ -313,7 +313,81 @@ app/build/outputs/apk/debug/app-debug.apk
 
 ---
 
-## 10. Known Issues / Future Work
+## 10. Simulation Architecture (Dec 2025 Refactor)
+
+### Overview
+The rendering system has been refactored to use a centralized Simulation module that provides consistent state across all layers.
+
+### Components
+
+| Component | Purpose |
+|-----------|---------|
+| `SimulationClock` | Manages time (real or manual), provides consistent time values |
+| `SimulationState` | Immutable snapshot of all simulation parameters |
+| `SimulationSettings` | Reads preferences, handles debug overrides |
+| `SimulationController` | Coordinates clock, settings, weather to produce state |
+
+### SimulationState Properties
+
+```kotlin
+data class SimulationState(
+    timeOfDayHours: Float,      // 0-24
+    timeSeconds: Float,         // Absolute time for animations
+    absoluteTimeMs: Long,       // Epoch time for consistent positions
+    isNight: Boolean,
+    isDawn: Boolean,
+    isDusk: Boolean,
+    dayProgress: Float,         // 0-1
+    weather: WeatherType,
+    cloudDensity: CloudDensity,
+    windStrength: Float,        // 0-1 normalized
+    windDirection: Float,       // Degrees
+    screenWidth: Float,
+    screenHeight: Float,
+    isDebugMode: Boolean
+)
+```
+
+### Layer Interface
+
+All scene layers now receive SimulationState:
+
+```kotlin
+interface SceneLayer {
+    fun resize(w: Float, h: Float)
+    fun update(state: SimulationState, deltaTimeMs: Long)
+    fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator)
+    fun reloadSettings()
+    fun destroy()
+}
+```
+
+### Benefits
+
+| Benefit | Description |
+|---------|-------------|
+| Consistent animations | All layers use same time values |
+| Deterministic positions | Clouds, trees use absolute time for stable positions |
+| Easier testing | SimulationState can be mocked for unit tests |
+| Centralized settings | All settings flow through SimulationController |
+| Debug overrides | Time/weather overrides work consistently |
+
+### Test Coverage
+
+| Test Class | Coverage |
+|------------|----------|
+| `SimulationClockTest.kt` | Time modes, night/dawn/dusk detection, manual time |
+| `SimulationStateTest.kt` | Cloud counts, wind components, immutability |
+
+### Test Results (Dec 2025)
+- **Total Tests**: 120
+- **Passed**: 120  
+- **Failed**: 0
+- **Status**: ✅ ALL PASSING
+
+---
+
+## 11. Known Issues / Future Work
 
 | Issue | Status | Notes |
 |-------|--------|-------|

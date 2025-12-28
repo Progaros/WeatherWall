@@ -4,16 +4,33 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import com.example.weatherlwp.parallax.ParallaxCalculator
+import com.example.weatherlwp.simulation.SimulationState
+import com.example.weatherlwp.weather.WeatherType as AppWeatherType
 import kotlin.random.Random
 
 /**
  * Renders weather effects: Rain, Snow, Lightning, Fog
+ * 
+ * Uses SimulationState for:
+ * - weather (what effects to show)
+ * - windStrength (affects particle drift)
+ * - timeSeconds (for storm cloud animation)
+ * 
  * Uses particle pooling to avoid per-frame allocations.
  * Supports intensity control for rain/snow (0.0-1.0).
  */
 class WeatherLayer : SceneLayer {
 
+    /**
+     * Effect type for weather rendering.
+     * @deprecated Use EffectType instead. This typealias is kept for backwards compatibility.
+     */
     enum class WeatherType {
+        NONE, RAIN, SNOW, LIGHTNING, FOG
+    }
+    
+    // Internal effect type
+    enum class EffectType {
         NONE, RAIN, SNOW, LIGHTNING, FOG
     }
 
@@ -68,12 +85,40 @@ class WeatherLayer : SceneLayer {
     private var lightningX = 0f
     private var lightningPoints = FloatArray(20)
 
-    private var currentWeather = WeatherType.NONE
+    private var currentEffect = EffectType.NONE
 
-    fun setWeather(type: WeatherType) {
-        if (currentWeather != type) {
-            currentWeather = type
+    fun setEffect(type: EffectType) {
+        if (currentEffect != type) {
+            currentEffect = type
             initialized = false
+        }
+    }
+    
+    /**
+     * Set weather for backwards compatibility.
+     * @deprecated Use SimulationState for weather instead
+     */
+    fun setWeather(type: WeatherType) {
+        val effect = when (type) {
+            WeatherType.RAIN -> EffectType.RAIN
+            WeatherType.SNOW -> EffectType.SNOW
+            WeatherType.LIGHTNING -> EffectType.LIGHTNING
+            WeatherType.FOG -> EffectType.FOG
+            WeatherType.NONE -> EffectType.NONE
+        }
+        setEffect(effect)
+    }
+    
+    /**
+     * Convert app WeatherType to render effect type.
+     */
+    private fun weatherToEffect(weather: AppWeatherType): EffectType {
+        return when (weather) {
+            AppWeatherType.RAIN -> EffectType.RAIN
+            AppWeatherType.SNOW -> EffectType.SNOW
+            AppWeatherType.THUNDERSTORM -> EffectType.LIGHTNING
+            AppWeatherType.FOG -> EffectType.FOG
+            else -> EffectType.NONE
         }
     }
     
@@ -84,9 +129,13 @@ class WeatherLayer : SceneLayer {
     fun setIntensity(value: Float) {
         intensity = value.coerceIn(0f, 1f)
     }
-
+    
+    /**
+     * Render with enabled flag for backwards compatibility.
+     * @deprecated Use render(canvas, state) instead
+     */
     fun render(canvas: Canvas, enabled: Boolean) {
-        if (!enabled || currentWeather == WeatherType.NONE) return
+        if (!enabled || currentEffect == EffectType.NONE) return
 
         if (!initialized || screenWidth != canvas.width || screenHeight != canvas.height) {
             screenWidth = canvas.width
@@ -95,12 +144,93 @@ class WeatherLayer : SceneLayer {
             initialized = true
         }
 
-        when (currentWeather) {
-            WeatherType.RAIN -> renderRain(canvas)
-            WeatherType.SNOW -> renderSnow(canvas)
-            WeatherType.LIGHTNING -> renderLightning(canvas)
-            WeatherType.FOG -> renderFog(canvas)
-            WeatherType.NONE -> {}
+        // Use default state values for wind
+        val defaultWindStrength = 0.5f
+        val defaultTimeSeconds = System.currentTimeMillis() / 1000f
+
+        when (currentEffect) {
+            EffectType.RAIN -> renderRainLegacy(canvas, defaultWindStrength)
+            EffectType.SNOW -> renderSnowLegacy(canvas, defaultWindStrength)
+            EffectType.LIGHTNING -> renderLightningLegacy(canvas, defaultTimeSeconds)
+            EffectType.FOG -> renderFog(canvas)
+            EffectType.NONE -> {}
+        }
+    }
+    
+    // Legacy render methods that don't use SimulationState
+    private fun renderRainLegacy(canvas: Canvas, windStrength: Float) {
+        val activeCount = (rainParticles.size * (0.3f + intensity * 0.7f)).toInt()
+        val windDrift = windStrength * 3f
+        
+        for (i in 0 until activeCount) {
+            val p = rainParticles[i]
+            rainPaint.alpha = p.alpha
+            canvas.drawLine(p.x, p.y, p.x - 2f - windDrift, p.y + p.size, rainPaint)
+            val speedMult = 0.7f + intensity * 0.6f
+            p.y += p.speed * speedMult
+            p.x -= (1f + windDrift) * speedMult
+            if (p.y > screenHeight) resetRainParticle(p)
+        }
+    }
+    
+    private fun renderSnowLegacy(canvas: Canvas, windStrength: Float) {
+        val activeCount = (snowParticles.size * (0.2f + intensity * 0.8f)).toInt()
+        val windDrift = windStrength * 2f
+        
+        for (i in 0 until activeCount) {
+            val p = snowParticles[i]
+            snowPaint.alpha = p.alpha
+            canvas.drawCircle(p.x, p.y, p.size, snowPaint)
+            val speedMult = 0.6f + intensity * 0.8f
+            p.y += p.speed * speedMult
+            p.x += kotlin.math.sin((p.y * 0.02f).toDouble()).toFloat() * 0.8f + windDrift * 0.5f
+            if (p.y > screenHeight) resetSnowParticle(p)
+        }
+    }
+    
+    private fun renderLightningLegacy(canvas: Canvas, timeSeconds: Float) {
+        drawStormClouds(canvas, timeSeconds)
+        lightningTimer++
+        if (lightningTimer > 90 + Random.nextInt(150)) {
+            lightningTimer = 0
+            lightningFlash = true
+            lightningX = screenWidth * 0.15f + Random.nextFloat() * screenWidth * 0.7f
+            generateLightningBolt()
+        }
+        if (lightningFlash) {
+            flashPaint.color = Color.argb(100, 255, 255, 255)
+            canvas.drawRect(0f, 0f, screenWidth.toFloat(), screenHeight.toFloat(), flashPaint)
+            flashPaint.color = Color.argb(60, 255, 255, 255)
+            lightningPaint.strokeWidth = 8f
+            lightningPaint.color = Color.argb(80, 180, 200, 255)
+            drawLightningBolt(canvas)
+            lightningPaint.strokeWidth = 3f
+            lightningPaint.color = Color.WHITE
+            drawLightningBolt(canvas)
+            if (lightningTimer > 4) lightningFlash = false
+        }
+    }
+
+    fun render(canvas: Canvas, state: SimulationState) {
+        // Update effect based on state
+        val effect = weatherToEffect(state.weather)
+        setEffect(effect)
+        
+        if (currentEffect == EffectType.NONE) return
+
+        if (!initialized || screenWidth != canvas.width || screenHeight != canvas.height) {
+            screenWidth = canvas.width
+            screenHeight = canvas.height
+            initParticles()
+            initialized = true
+        }
+
+        when (currentEffect) {
+            EffectType.RAIN -> renderRain(canvas, state)
+            EffectType.SNOW -> renderSnow(canvas, state)
+            EffectType.LIGHTNING -> renderLightning(canvas, state)
+            EffectType.FOG -> renderFog(canvas)
+            EffectType.NONE -> {}
         }
     }
 
@@ -134,19 +264,22 @@ class WeatherLayer : SceneLayer {
         p.alpha = 180 + Random.nextInt(75)
     }
 
-    private fun renderRain(canvas: Canvas) {
+    private fun renderRain(canvas: Canvas, state: SimulationState) {
         // Active particle count based on intensity (30% to 100% of pool)
         val activeCount = (rainParticles.size * (0.3f + intensity * 0.7f)).toInt()
+        
+        // Wind affects horizontal drift
+        val windDrift = state.windStrength * 3f
         
         for (i in 0 until activeCount) {
             val p = rainParticles[i]
             rainPaint.alpha = p.alpha
-            canvas.drawLine(p.x, p.y, p.x - 2f, p.y + p.size, rainPaint)
+            canvas.drawLine(p.x, p.y, p.x - 2f - windDrift, p.y + p.size, rainPaint)
 
             // Speed increases with intensity
             val speedMult = 0.7f + intensity * 0.6f
             p.y += p.speed * speedMult
-            p.x -= 1f * speedMult // Slight wind effect
+            p.x -= (1f + windDrift) * speedMult // Wind-affected drift
 
             if (p.y > screenHeight) {
                 resetRainParticle(p)
@@ -154,9 +287,12 @@ class WeatherLayer : SceneLayer {
         }
     }
 
-    private fun renderSnow(canvas: Canvas) {
+    private fun renderSnow(canvas: Canvas, state: SimulationState) {
         // Active particle count based on intensity (20% to 100% of pool)
         val activeCount = (snowParticles.size * (0.2f + intensity * 0.8f)).toInt()
+        
+        // Wind affects horizontal drift
+        val windDrift = state.windStrength * 2f
         
         for (i in 0 until activeCount) {
             val p = snowParticles[i]
@@ -166,7 +302,7 @@ class WeatherLayer : SceneLayer {
             // Speed increases with intensity
             val speedMult = 0.6f + intensity * 0.8f
             p.y += p.speed * speedMult
-            p.x += kotlin.math.sin((p.y * 0.02f).toDouble()).toFloat() * 0.8f
+            p.x += kotlin.math.sin((p.y * 0.02f).toDouble()).toFloat() * 0.8f + windDrift * 0.5f
 
             if (p.y > screenHeight) {
                 resetSnowParticle(p)
@@ -174,9 +310,9 @@ class WeatherLayer : SceneLayer {
         }
     }
 
-    private fun renderLightning(canvas: Canvas) {
+    private fun renderLightning(canvas: Canvas, state: SimulationState) {
         // Draw dark storm clouds first
-        drawStormClouds(canvas)
+        drawStormClouds(canvas, state.timeSeconds)
         
         lightningTimer++
 
@@ -224,7 +360,7 @@ class WeatherLayer : SceneLayer {
         }
     }
     
-    private fun drawStormClouds(canvas: Canvas) {
+    private fun drawStormClouds(canvas: Canvas, timeSeconds: Float) {
         // Dark, ominous storm clouds at the top of screen
         val stormCloudPaint = Paint().apply {
             isAntiAlias = true
@@ -238,8 +374,6 @@ class WeatherLayer : SceneLayer {
             Triple(0.18f, Color.argb(140, 50, 55, 65), 0.7f)    // Front layer - lighter
         )
         
-        val time = System.currentTimeMillis()
-        
         for ((baseY, color, sizeMultiplier) in cloudLayers) {
             stormCloudPaint.color = color
             
@@ -250,8 +384,8 @@ class WeatherLayer : SceneLayer {
                 val yPos = screenHeight * baseY
                 val cloudSize = screenWidth * 0.25f * sizeMultiplier
                 
-                // Slight animated movement
-                val drift = kotlin.math.sin((time / 3000.0 + i * 0.5).toDouble()).toFloat() * 10f
+                // Slight animated movement using consistent timeSeconds
+                val drift = kotlin.math.sin((timeSeconds * 0.3 + i * 0.5).toDouble()).toFloat() * 10f
                 
                 canvas.drawCircle(xPos + drift, yPos, cloudSize, stormCloudPaint)
                 canvas.drawCircle(xPos + cloudSize * 0.6f + drift, yPos + cloudSize * 0.2f, cloudSize * 0.8f, stormCloudPaint)
@@ -348,21 +482,12 @@ class WeatherLayer : SceneLayer {
         initialized = false
     }
 
-    override fun update(deltaTimeMs: Long) {
+    override fun update(state: SimulationState, deltaTimeMs: Long) {
         // Animation handled in render for now
     }
 
-    override fun draw(canvas: Canvas, parallaxCalculator: ParallaxCalculator) {
-        render(canvas, true)
-    }
-
-    override fun updateTheme(theme: String, isNight: Boolean) {
-        val type = when {
-            theme.contains("rain") -> WeatherType.RAIN
-            theme.contains("snow") -> WeatherType.SNOW
-            else -> WeatherType.NONE
-        }
-        setWeather(type)
+    override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
+        render(canvas, state)
     }
 
     override fun reloadSettings() {

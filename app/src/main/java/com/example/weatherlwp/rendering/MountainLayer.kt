@@ -7,8 +7,16 @@ import android.graphics.Paint
 import android.graphics.Path
 import androidx.preference.PreferenceManager
 import com.example.weatherlwp.parallax.ParallaxCalculator
+import com.example.weatherlwp.simulation.SimulationState
 import kotlin.random.Random
 
+/**
+ * Renders mountain silhouettes in the background.
+ * 
+ * Uses SimulationState for:
+ * - isNight (affects mountain color tint)
+ * - No time-based animation (mountains are static)
+ */
 class MountainLayer(private val context: Context) : SceneLayer {
     private val paint = Paint().apply { 
         style = Paint.Style.FILL 
@@ -25,7 +33,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
         val peakX: Float,      // 0.0 to 1.0 (relative to screen width)
         val height: Float,     // 0.0 to 1.0 (relative to screen height)
         val width: Float,      // Width multiplier
-        val color: Int,
+        val dayColor: Int,     // Color during day
         val depthFactor: Float, // 0.0 (far) to 1.0 (near)
         val shapeSeed: Long
     )
@@ -58,7 +66,6 @@ class MountainLayer(private val context: Context) : SceneLayer {
             val depthFactor = 0.25f + depth * 0.20f
             
             // Position: spread across width
-            // Use wider range so they cover landscape too
             val peakX = -0.2f + random.nextFloat() * 1.4f
             
             // Height: 0.3 to 0.6 of screen height
@@ -69,9 +76,9 @@ class MountainLayer(private val context: Context) : SceneLayer {
             
             // Color: Darker/bluer for far mountains (atmospheric perspective)
             val baseGray = 40 + (depth * 60).toInt() // 40..100
-            val color = Color.rgb(baseGray, baseGray + 5, baseGray + 15)
+            val dayColor = Color.rgb(baseGray, baseGray + 5, baseGray + 15)
             
-            mountains.add(MountainData(peakX, h, w, color, depthFactor, random.nextLong()))
+            mountains.add(MountainData(peakX, h, w, dayColor, depthFactor, random.nextLong()))
         }
         
         // Sort: Far mountains first (drawn behind)
@@ -83,16 +90,13 @@ class MountainLayer(private val context: Context) : SceneLayer {
         height = h
     }
 
-    override fun update(deltaTimeMs: Long) {
+    override fun update(state: SimulationState, deltaTimeMs: Long) {
         // Mountains don't animate
     }
 
-    override fun draw(canvas: Canvas, parallaxCalculator: ParallaxCalculator) {
+    override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         if (width <= 0 || height <= 0) return
         
-        // Calculate scale based on height to maintain proportions
-        // This ensures mountains look the same size relative to screen height
-        // on both portrait and landscape
         val scaleX = height * REFERENCE_ASPECT_RATIO
         
         for (mountain in mountains) {
@@ -101,25 +105,19 @@ class MountainLayer(private val context: Context) : SceneLayer {
             canvas.save()
             canvas.translate(px, py)
             
-            drawMountain(canvas, mountain, scaleX)
+            drawMountain(canvas, mountain, scaleX, state.isNight)
             
             canvas.restore()
         }
     }
     
-    private fun drawMountain(canvas: Canvas, mountain: MountainData, scaleX: Float) {
+    private fun drawMountain(canvas: Canvas, mountain: MountainData, scaleX: Float, isNight: Boolean) {
         pathLeft.reset()
         pathRight.reset()
         
-        // Center X in pixels
-        // Map 0..1 range to center of screen with scaleX width
         val peakCenterX = (mountain.peakX - 0.5f) * scaleX + width / 2f
-        
-        // Peak Y in pixels (from bottom)
         val peakY = height * (1f - mountain.height)
         val baseY = height
-        
-        // Width in pixels
         val halfWidthPx = scaleX * mountain.width * 0.5f
         
         // Generate jagged shape
@@ -128,20 +126,13 @@ class MountainLayer(private val context: Context) : SceneLayer {
         
         // Left side
         pathLeft.moveTo(peakCenterX, peakY)
-        var currentX = peakCenterX
-        var currentY = peakY
         
         for (i in 0 until segments) {
             val progress = (i + 1).toFloat() / segments
             val targetX = peakCenterX - halfWidthPx * progress
             val targetY = peakY + (baseY - peakY) * progress
-            
-            // Add noise
             val noise = (random.nextFloat() - 0.5f) * 30f * mountainRoughness
-            
-            currentX = targetX
-            currentY = targetY + noise
-            pathLeft.lineTo(currentX, currentY)
+            pathLeft.lineTo(targetX, targetY + noise)
         }
         pathLeft.lineTo(peakCenterX - halfWidthPx, baseY)
         pathLeft.lineTo(peakCenterX, baseY)
@@ -149,39 +140,41 @@ class MountainLayer(private val context: Context) : SceneLayer {
         
         // Right side (shadow side)
         pathRight.moveTo(peakCenterX, peakY)
-        currentX = peakCenterX
-        currentY = peakY
         
         for (i in 0 until segments) {
             val progress = (i + 1).toFloat() / segments
             val targetX = peakCenterX + halfWidthPx * progress
             val targetY = peakY + (baseY - peakY) * progress
-            
             val noise = (random.nextFloat() - 0.5f) * 30f * mountainRoughness
-            
-            currentX = targetX
-            currentY = targetY + noise
-            pathRight.lineTo(currentX, currentY)
+            pathRight.lineTo(targetX, targetY + noise)
         }
         pathRight.lineTo(peakCenterX + halfWidthPx, baseY)
         pathRight.lineTo(peakCenterX, baseY)
         pathRight.close()
         
-        // Draw
-        paint.color = mountain.color
+        // Apply night tint if needed
+        val color = if (isNight) {
+            // Add blue tint at night
+            Color.rgb(
+                (Color.red(mountain.dayColor) * 0.7f).toInt(),
+                (Color.green(mountain.dayColor) * 0.7f).toInt(),
+                (Color.blue(mountain.dayColor) * 0.9f + 30).toInt().coerceAtMost(255)
+            )
+        } else {
+            mountain.dayColor
+        }
+        
+        // Draw left side
+        paint.color = color
         canvas.drawPath(pathLeft, paint)
         
         // Shadow side slightly darker
         paint.color = Color.rgb(
-            (Color.red(mountain.color) * 0.8f).toInt(),
-            (Color.green(mountain.color) * 0.8f).toInt(),
-            (Color.blue(mountain.color) * 0.9f).toInt()
+            (Color.red(color) * 0.8f).toInt(),
+            (Color.green(color) * 0.8f).toInt(),
+            (Color.blue(color) * 0.9f).toInt()
         )
         canvas.drawPath(pathRight, paint)
-    }
-
-    override fun updateTheme(theme: String, isNight: Boolean) {
-        // Could adjust colors based on theme
     }
 
     override fun reloadSettings() {
