@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.weatherlwp"
+    namespace = "info.olli.weatherlwp"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.weatherlwp"
+        applicationId = "info.olli.weatherlwp"
         minSdk = 26
         targetSdk = 35
         versionCode = 25

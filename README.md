@@ -110,7 +110,7 @@ open app/build/reports/tests/testDebugUnitTest/index.html
 ## 🏗️ Project Structure
 
 ```
-app/src/main/java/com/example/weatherlwp/
+app/src/main/java/info/olli/weatherlwp/
 ├── MainActivity.kt              # Settings activity
 ├── easter/
 │   └── MultiTapDetector.kt      # Easter egg gesture detection
