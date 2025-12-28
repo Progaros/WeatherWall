@@ -26,6 +26,7 @@ class MainActivity : AppCompatActivity() {
         private const val TAG = "MainActivity"
         private const val TARGET_FPS = 20
         private const val FRAME_TIME_MS = 1000L / TARGET_FPS
+        private const val PREF_RELOAD_THROTTLE_MS = 100L  // Max 10 reloads per second
     }
     
     private var previewScene: ParallaxScene? = null
@@ -40,12 +41,37 @@ class MainActivity : AppCompatActivity() {
     @Volatile private var surfaceReady = false
     private var surfaceHolder: SurfaceHolder? = null
     
+    // Preference change throttling
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var pendingPrefReload: Runnable? = null
+    private var lastPrefReloadTime = 0L
+    
     // Preference change listener for live preview updates
     private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         Log.d(TAG, "Preference changed: $key")
-        // Reload settings on any preference change
+        
+        // Throttle preference reloads to avoid flickering during slider drags
+        val now = SystemClock.elapsedRealtime()
+        val timeSinceLastReload = now - lastPrefReloadTime
+        
+        // Cancel any pending reload
+        pendingPrefReload?.let { mainHandler.removeCallbacks(it) }
+        
+        if (timeSinceLastReload >= PREF_RELOAD_THROTTLE_MS) {
+            // Enough time has passed, reload immediately
+            doPreferenceReload()
+        } else {
+            // Schedule reload after throttle delay
+            val delay = PREF_RELOAD_THROTTLE_MS - timeSinceLastReload
+            pendingPrefReload = Runnable { doPreferenceReload() }
+            mainHandler.postDelayed(pendingPrefReload!!, delay)
+        }
+    }
+    
+    private fun doPreferenceReload() {
+        lastPrefReloadTime = SystemClock.elapsedRealtime()
         previewScene?.loadPrefs()
-        seasonalEvents?.loadSettings()  // Reload seasonal settings (Christmas star, etc.)
+        seasonalEvents?.loadSettings()
         loadPreviewEffects()
     }
     

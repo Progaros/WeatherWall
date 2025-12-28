@@ -94,11 +94,11 @@ class SettingsTest {
         val density = mockPrefs.getString("pref_cloud_density", "auto")
         val cloudCount = when (density) {
             "none" -> 0
-            "light" -> 4
-            "medium" -> 10
-            "heavy" -> 20
-            "overcast" -> 35
-            else -> 10
+            "light" -> 15
+            "medium" -> 40
+            "heavy" -> 80
+            "overcast" -> 150
+            else -> 40
         }
         
         assertEquals("None should have 0 clouds", 0, cloudCount)
@@ -112,14 +112,14 @@ class SettingsTest {
         val density = mockPrefs.getString("pref_cloud_density", "auto")
         val cloudCount = when (density) {
             "none" -> 0
-            "light" -> 4
-            "medium" -> 10
-            "heavy" -> 20
-            "overcast" -> 35
-            else -> 10
+            "light" -> 15
+            "medium" -> 40
+            "heavy" -> 80
+            "overcast" -> 150
+            else -> 40
         }
         
-        assertEquals("Overcast should have 35 clouds", 35, cloudCount)
+        assertEquals("Overcast should have 150 clouds", 150, cloudCount)
     }
 
     // C4: Test all cloud density values
@@ -127,21 +127,21 @@ class SettingsTest {
     fun testAllCloudDensityValues() {
         val expectedCounts = mapOf(
             "none" to 0,
-            "light" to 4,
-            "medium" to 10,
-            "heavy" to 20,
-            "overcast" to 35,
-            "auto" to 10
+            "light" to 15,
+            "medium" to 40,
+            "heavy" to 80,
+            "overcast" to 150,
+            "auto" to 40
         )
         
         expectedCounts.forEach { (density, expected) ->
             val cloudCount = when (density) {
                 "none" -> 0
-                "light" -> 4
-                "medium" -> 10
-                "heavy" -> 20
-                "overcast" -> 35
-                else -> 10
+                "light" -> 15
+                "medium" -> 40
+                "heavy" -> 80
+                "overcast" -> 150
+                else -> 40
             }
             assertEquals("$density should have $expected clouds", expected, cloudCount)
         }

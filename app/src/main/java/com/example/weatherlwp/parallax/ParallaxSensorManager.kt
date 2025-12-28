@@ -57,11 +57,20 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         ax = alpha * ax + (1 - alpha) * event.values[0]
         ay = alpha * ay + (1 - alpha) * event.values[1]
 
-        // Normalize to -1..1 range (assuming max tilt at ~5 m/s² for typical phone use)
-        // Use smaller divisor for more sensitivity
-        // X-axis (values[0]) = left/right tilt, Y-axis (values[1]) = forward/back tilt
+        // Reference baseline depends on phone orientation:
+        // - Phone flat: ax~0, ay~0, az~9.8
+        // - Phone upright (portrait): ax~0, ay~9.8, az~0
+        // - Phone tilted 45°: ax~0, ay~6.9, az~6.9
+        // 
+        // For natural use, we want parallax centered when phone is held at typical angle (~60° from flat).
+        // At 60°: ay ≈ 8.5, at 45°: ay ≈ 6.9
+        // We use a reference baseline of ~5.5 m/s² for Y axis (comfortable viewing angle ~55°)
+        val yBaseline = 5.5f
+        
+        // X-axis (values[0]) = left/right tilt - no baseline needed
+        // Y-axis (values[1]) = forward/back tilt - subtract baseline for upright usage
         val tiltX = (ax / 5f).coerceIn(-1f, 1f)
-        val tiltY = (ay / 5f).coerceIn(-1f, 1f)  // Y is typically smaller range when phone is upright
+        val tiltY = ((ay - yBaseline) / 5f).coerceIn(-1f, 1f)
 
         // Send normalized values (-1 to 1) to the listener
         listener?.onOffsetChanged(tiltX, tiltY)

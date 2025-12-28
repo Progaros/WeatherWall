@@ -3,8 +3,10 @@ package com.example.weatherlwp.rendering
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.Shader
 import androidx.preference.PreferenceManager
 import com.example.weatherlwp.parallax.ParallaxCalculator
 import com.example.weatherlwp.simulation.SimulationState
@@ -16,11 +18,25 @@ import kotlin.random.Random
  * Uses SimulationState for:
  * - isNight (affects mountain color tint)
  * - No time-based animation (mountains are static)
+ * 
+ * Uses RenderConstants for:
+ * - Reference aspect ratio
+ * - Parallax depth range
+ * - Mountain color values
+ * 
+ * Design notes (from ai.md):
+ * - Mountains should have gradient shading (atmospheric perspective)
+ * - Lighter/bluer at base simulates fog/mist
+ * - Add atmospheric haze overlay at bottom of mountains
  */
 class MountainLayer(private val context: Context) : SceneLayer {
     private val paint = Paint().apply { 
         style = Paint.Style.FILL 
         isAntiAlias = true 
+    }
+    
+    private val hazePaint = Paint().apply {
+        isAntiAlias = true
     }
     
     private val pathLeft = Path()
@@ -34,7 +50,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
         val height: Float,     // 0.0 to 1.0 (relative to screen height)
         val width: Float,      // Width multiplier
         val dayColor: Int,     // Color during day
-        val depthFactor: Float, // 0.0 (far) to 1.0 (near)
+        val depthFactor: Float, // Parallax depth
         val shapeSeed: Long
     )
     
@@ -45,10 +61,6 @@ class MountainLayer(private val context: Context) : SceneLayer {
     private var mountainHeightScale = 1.0f
     private var mountainWidthScale = 1.0f
     private var mountainRoughness = 0.5f
-    
-    companion object {
-        private const val REFERENCE_ASPECT_RATIO = 0.5625f // 9:16
-    }
     
     init {
         reloadSettings()
@@ -62,8 +74,9 @@ class MountainLayer(private val context: Context) : SceneLayer {
             // Depth: 0 is far, 1 is near
             val depth = i.toFloat() / mountainCount.coerceAtLeast(1)
             
-            // Parallax factor: 0.25 (far) to 0.45 (near)
-            val depthFactor = 0.25f + depth * 0.20f
+            // Parallax factor based on depth using centralized constants
+            val depthFactor = RenderConstants.PARALLAX_MOUNTAIN_MIN + 
+                depth * (RenderConstants.PARALLAX_MOUNTAIN_MAX - RenderConstants.PARALLAX_MOUNTAIN_MIN)
             
             // Position: spread across width
             val peakX = -0.2f + random.nextFloat() * 1.4f
@@ -75,7 +88,8 @@ class MountainLayer(private val context: Context) : SceneLayer {
             val w = (0.8f + random.nextFloat() * 0.6f) * mountainWidthScale
             
             // Color: Darker/bluer for far mountains (atmospheric perspective)
-            val baseGray = 40 + (depth * 60).toInt() // 40..100
+            val baseGray = RenderConstants.MOUNTAIN_GRAY_MIN + 
+                (depth * (RenderConstants.MOUNTAIN_GRAY_MAX - RenderConstants.MOUNTAIN_GRAY_MIN)).toInt()
             val dayColor = Color.rgb(baseGray, baseGray + 5, baseGray + 15)
             
             mountains.add(MountainData(peakX, h, w, dayColor, depthFactor, random.nextLong()))
@@ -97,7 +111,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         if (width <= 0 || height <= 0) return
         
-        val scaleX = height * REFERENCE_ASPECT_RATIO
+        val scaleX = height * RenderConstants.REFERENCE_ASPECT_RATIO
         
         for (mountain in mountains) {
             val (px, py) = parallaxCalculator.getOffsetForDepth(mountain.depthFactor)
@@ -109,6 +123,38 @@ class MountainLayer(private val context: Context) : SceneLayer {
             
             canvas.restore()
         }
+        
+        // Draw atmospheric haze at the base of mountains (ai.md: fog overlay)
+        // This blends the mountains into the terrain and adds depth
+        drawAtmosphericHaze(canvas, state.isNight)
+    }
+    
+    /**
+     * Draw a soft atmospheric haze at the bottom portion of the screen.
+     * This simulates fog/mist at the base of mountains as described in ai.md.
+     */
+    private fun drawAtmosphericHaze(canvas: Canvas, isNight: Boolean) {
+        val hazeStartY = height * 0.55f  // Start at 55% down
+        val hazeEndY = height * 0.85f    // Fade to 85% down
+        
+        // Haze color: subtle blue-gray that matches the atmosphere
+        val hazeColor = if (isNight) {
+            Color.argb(25, 40, 50, 80)  // Darker blue haze at night
+        } else {
+            Color.argb(20, 180, 190, 210)  // Light blue-gray during day
+        }
+        
+        val hazeGradient = LinearGradient(
+            0f, hazeStartY,
+            0f, hazeEndY,
+            Color.TRANSPARENT,
+            hazeColor,
+            Shader.TileMode.CLAMP
+        )
+        
+        hazePaint.shader = hazeGradient
+        canvas.drawRect(0f, hazeStartY, width, hazeEndY, hazePaint)
+        hazePaint.shader = null
     }
     
     private fun drawMountain(canvas: Canvas, mountain: MountainData, scaleX: Float, isNight: Boolean) {
@@ -153,28 +199,55 @@ class MountainLayer(private val context: Context) : SceneLayer {
         pathRight.close()
         
         // Apply night tint if needed
-        val color = if (isNight) {
-            // Add blue tint at night
-            Color.rgb(
-                (Color.red(mountain.dayColor) * 0.7f).toInt(),
-                (Color.green(mountain.dayColor) * 0.7f).toInt(),
-                (Color.blue(mountain.dayColor) * 0.9f + 30).toInt().coerceAtMost(255)
-            )
+        val baseColor = if (isNight) {
+            RenderConstants.applyNightTint(mountain.dayColor)
         } else {
             mountain.dayColor
         }
         
-        // Draw left side
-        paint.color = color
+        // Create atmospheric gradient: lighter/bluer at base (fog effect)
+        // Peaks are darker/more distinct, base fades into atmospheric haze
+        val peakColor = baseColor
+        val baseAtmoColor = Color.rgb(
+            ((Color.red(baseColor) + 40).coerceAtMost(180)),
+            ((Color.green(baseColor) + 45).coerceAtMost(190)),
+            ((Color.blue(baseColor) + 60).coerceAtMost(210))
+        )
+        
+        // Vertical gradient shader (peak color at top, atmospheric at bottom)
+        val gradient = LinearGradient(
+            peakCenterX, peakY,
+            peakCenterX, baseY,
+            peakColor, baseAtmoColor,
+            Shader.TileMode.CLAMP
+        )
+        
+        // Draw left side with gradient
+        paint.shader = gradient
         canvas.drawPath(pathLeft, paint)
         
-        // Shadow side slightly darker
-        paint.color = Color.rgb(
-            (Color.red(color) * 0.8f).toInt(),
-            (Color.green(color) * 0.8f).toInt(),
-            (Color.blue(color) * 0.9f).toInt()
+        // Shadow side: slightly darker gradient
+        val shadowPeakColor = Color.rgb(
+            (Color.red(peakColor) * 0.8f).toInt(),
+            (Color.green(peakColor) * 0.8f).toInt(),
+            (Color.blue(peakColor) * 0.9f).toInt()
         )
+        val shadowBaseColor = Color.rgb(
+            (Color.red(baseAtmoColor) * 0.85f).toInt(),
+            (Color.green(baseAtmoColor) * 0.85f).toInt(),
+            (Color.blue(baseAtmoColor) * 0.95f).toInt()
+        )
+        val shadowGradient = LinearGradient(
+            peakCenterX, peakY,
+            peakCenterX, baseY,
+            shadowPeakColor, shadowBaseColor,
+            Shader.TileMode.CLAMP
+        )
+        paint.shader = shadowGradient
         canvas.drawPath(pathRight, paint)
+        
+        // Reset shader
+        paint.shader = null
     }
 
     override fun reloadSettings() {

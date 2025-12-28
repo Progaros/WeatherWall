@@ -4,6 +4,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.RadialGradient
 import android.graphics.Shader
 import com.example.weatherlwp.parallax.ParallaxCalculator
 import com.example.weatherlwp.simulation.SimulationState
@@ -12,11 +13,20 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Renders the sky background with gradient colors and stars.
+ * Renders the sky background with gradient colors, stars, and vignette.
  * 
  * Uses SimulationState for:
  * - Time of day (colors, star visibility)
  * - absoluteTimeMs (star twinkle animation)
+ * 
+ * Uses RenderConstants for:
+ * - Sky colors for different times
+ * - Parallax factors
+ * - Time thresholds
+ * 
+ * Design notes (from ai.md):
+ * - Night scenes should have darker corners (vignette effect)
+ * - Creates focus and atmosphere
  */
 class SkyLayer : SceneLayer {
     private val skyPaint = Paint()
@@ -25,35 +35,19 @@ class SkyLayer : SceneLayer {
         isAntiAlias = true 
         style = Paint.Style.FILL 
     }
+    private val vignettePaint = Paint().apply {
+        isAntiAlias = true
+    }
     
     private var width = 0f
     private var height = 0f
     
     // Stars - generated once with fixed seed for consistency
     private val stars = ArrayList<FloatArray>()
-    private val starCount = 100
     
     // Current gradient colors
     private var skyTop = Color.BLUE
     private var skyBottom = Color.CYAN
-    
-    companion object {
-        private const val SKY_PARALLAX_FACTOR = -0.15f
-        private const val STAR_PARALLAX_FACTOR = 0.30f
-        
-        // Sky colors for different times
-        private val NIGHT_TOP = Color.parseColor("#0B1026")
-        private val NIGHT_BOTTOM = Color.parseColor("#1A1A3A")
-        
-        private val DAWN_TOP = Color.parseColor("#FF8C42")
-        private val DAWN_BOTTOM = Color.parseColor("#FFD166")
-        
-        private val DAY_TOP = Color.parseColor("#1E90FF")
-        private val DAY_BOTTOM = Color.parseColor("#87CEEB")
-        
-        private val DUSK_TOP = Color.parseColor("#FF6B35")
-        private val DUSK_BOTTOM = Color.parseColor("#FFB347")
-    }
 
     init {
         generateStars()
@@ -62,7 +56,7 @@ class SkyLayer : SceneLayer {
     private fun generateStars() {
         stars.clear()
         val random = Random(42) // Fixed seed for consistency
-        for (i in 0 until starCount) {
+        for (i in 0 until RenderConstants.STAR_COUNT) {
             stars.add(floatArrayOf(
                 random.nextFloat(), // x (0-1)
                 random.nextFloat() * 0.6f, // y (0-0.6, top 60%)
@@ -78,7 +72,6 @@ class SkyLayer : SceneLayer {
     }
 
     override fun update(state: SimulationState, deltaTimeMs: Long) {
-        // Update sky colors based on time of day
         updateColorsForTime(state)
     }
     
@@ -86,29 +79,45 @@ class SkyLayer : SceneLayer {
         val hour = state.timeOfDayHours
         
         val (newTop, newBottom) = when {
-            hour < 5f -> Pair(NIGHT_TOP, NIGHT_BOTTOM)
-            hour < 6f -> {
+            hour < RenderConstants.TIME_NIGHT_END -> {
+                Pair(RenderConstants.SKY_NIGHT_TOP, RenderConstants.SKY_NIGHT_BOTTOM)
+            }
+            hour < RenderConstants.TIME_DAWN_START + 1f -> {
                 // Transition from night to dawn
-                val t = hour - 5f
-                Pair(lerpColor(NIGHT_TOP, DAWN_TOP, t), lerpColor(NIGHT_BOTTOM, DAWN_BOTTOM, t))
+                val t = hour - RenderConstants.TIME_NIGHT_END
+                Pair(
+                    RenderConstants.lerpColor(RenderConstants.SKY_NIGHT_TOP, RenderConstants.SKY_DAWN_TOP, t),
+                    RenderConstants.lerpColor(RenderConstants.SKY_NIGHT_BOTTOM, RenderConstants.SKY_DAWN_BOTTOM, t)
+                )
             }
-            hour < 7.5f -> {
-                // Dawn
+            hour < RenderConstants.TIME_DAWN_END -> {
+                // Dawn to day
                 val t = (hour - 6f) / 1.5f
-                Pair(lerpColor(DAWN_TOP, DAY_TOP, t), lerpColor(DAWN_BOTTOM, DAY_BOTTOM, t))
+                Pair(
+                    RenderConstants.lerpColor(RenderConstants.SKY_DAWN_TOP, RenderConstants.SKY_DAY_TOP, t),
+                    RenderConstants.lerpColor(RenderConstants.SKY_DAWN_BOTTOM, RenderConstants.SKY_DAY_BOTTOM, t)
+                )
             }
-            hour < 17f -> Pair(DAY_TOP, DAY_BOTTOM)
-            hour < 18.5f -> {
-                // Transition to dusk
-                val t = (hour - 17f) / 1.5f
-                Pair(lerpColor(DAY_TOP, DUSK_TOP, t), lerpColor(DAY_BOTTOM, DUSK_BOTTOM, t))
+            hour < RenderConstants.TIME_DAY_END -> {
+                Pair(RenderConstants.SKY_DAY_TOP, RenderConstants.SKY_DAY_BOTTOM)
             }
-            hour < 20f -> {
+            hour < RenderConstants.TIME_DAY_END + 1.5f -> {
+                // Day to dusk
+                val t = (hour - RenderConstants.TIME_DAY_END) / 1.5f
+                Pair(
+                    RenderConstants.lerpColor(RenderConstants.SKY_DAY_TOP, RenderConstants.SKY_DUSK_TOP, t),
+                    RenderConstants.lerpColor(RenderConstants.SKY_DAY_BOTTOM, RenderConstants.SKY_DUSK_BOTTOM, t)
+                )
+            }
+            hour < RenderConstants.TIME_DUSK_END -> {
                 // Dusk to night
                 val t = (hour - 18.5f) / 1.5f
-                Pair(lerpColor(DUSK_TOP, NIGHT_TOP, t), lerpColor(DUSK_BOTTOM, NIGHT_BOTTOM, t))
+                Pair(
+                    RenderConstants.lerpColor(RenderConstants.SKY_DUSK_TOP, RenderConstants.SKY_NIGHT_TOP, t),
+                    RenderConstants.lerpColor(RenderConstants.SKY_DUSK_BOTTOM, RenderConstants.SKY_NIGHT_BOTTOM, t)
+                )
             }
-            else -> Pair(NIGHT_TOP, NIGHT_BOTTOM)
+            else -> Pair(RenderConstants.SKY_NIGHT_TOP, RenderConstants.SKY_NIGHT_BOTTOM)
         }
         
         if (newTop != skyTop || newBottom != skyBottom) {
@@ -116,13 +125,6 @@ class SkyLayer : SceneLayer {
             skyBottom = newBottom
             updateGradient()
         }
-    }
-    
-    private fun lerpColor(start: Int, end: Int, ratio: Float): Int {
-        val r = ((Color.red(start) + ratio * (Color.red(end) - Color.red(start))).toInt()).coerceIn(0, 255)
-        val g = ((Color.green(start) + ratio * (Color.green(end) - Color.green(start))).toInt()).coerceIn(0, 255)
-        val b = ((Color.blue(start) + ratio * (Color.blue(end) - Color.blue(start))).toInt()).coerceIn(0, 255)
-        return Color.rgb(r, g, b)
     }
 
     private fun updateGradient() {
@@ -142,7 +144,7 @@ class SkyLayer : SceneLayer {
         val overscan = 300f + abs(px) * 0.4f + abs(py) * 0.4f
         
         canvas.save()
-        canvas.translate(px * SKY_PARALLAX_FACTOR, py * SKY_PARALLAX_FACTOR)
+        canvas.translate(px * RenderConstants.PARALLAX_SKY, py * RenderConstants.PARALLAX_SKY)
         canvas.drawRect(-overscan, -overscan, width + overscan, height + overscan, skyPaint)
         canvas.restore()
 
@@ -151,11 +153,11 @@ class SkyLayer : SceneLayer {
             val time = state.absoluteTimeMs
             val starAlphaBase = if (state.isNight) 150 else 80
             
-            val starParallaxX = px * STAR_PARALLAX_FACTOR
-            val starParallaxY = py * STAR_PARALLAX_FACTOR
+            val starParallaxX = px * RenderConstants.PARALLAX_STARS
+            val starParallaxY = py * RenderConstants.PARALLAX_STARS
             
             for (star in stars) {
-                val twinkle = sin((time * 0.001 + star[0] * 10).toDouble())
+                val twinkle = sin((time * RenderConstants.STAR_TWINKLE_SPEED + star[0] * 10).toDouble())
                 val alpha = (starAlphaBase + 50 * twinkle).toInt().coerceIn(30, 220)
                 starPaint.alpha = alpha
                 
@@ -165,6 +167,38 @@ class SkyLayer : SceneLayer {
                 canvas.drawCircle(x, y, star[2], starPaint)
             }
         }
+        
+        // Vignette effect for night/dusk - darker corners for atmosphere
+        if (state.isNight || state.isDusk) {
+            val vignetteAlpha = if (state.isNight) 80 else 40
+            drawVignette(canvas, vignetteAlpha)
+        }
+    }
+    
+    /**
+     * Draw a radial vignette (darker corners) for atmospheric effect.
+     */
+    private fun drawVignette(canvas: Canvas, alpha: Int) {
+        val centerX = width / 2f
+        val centerY = height / 2f
+        val radius = kotlin.math.max(width, height) * 0.9f
+        
+        // Radial gradient: transparent center, dark edges
+        val vignetteGradient = RadialGradient(
+            centerX, centerY, radius,
+            intArrayOf(
+                Color.TRANSPARENT,
+                Color.TRANSPARENT,
+                Color.argb(alpha / 2, 0, 0, 20),
+                Color.argb(alpha, 5, 5, 30)
+            ),
+            floatArrayOf(0f, 0.5f, 0.8f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        
+        vignettePaint.shader = vignetteGradient
+        canvas.drawRect(0f, 0f, width, height, vignettePaint)
+        vignettePaint.shader = null
     }
 
     override fun reloadSettings() {

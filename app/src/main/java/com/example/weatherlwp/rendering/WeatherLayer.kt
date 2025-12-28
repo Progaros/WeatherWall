@@ -18,6 +18,11 @@ import kotlin.random.Random
  * 
  * Uses particle pooling to avoid per-frame allocations.
  * Supports intensity control for rain/snow (0.0-1.0).
+ * 
+ * Design notes (from ai.md):
+ * - Rain should include a semi-transparent grey dimming overlay
+ * - Fog uses smooth gradients, not solid colors
+ * - Weather effects should "sell the feeling" of the weather
  */
 class WeatherLayer : SceneLayer {
 
@@ -74,6 +79,10 @@ class WeatherLayer : SceneLayer {
     
     private val fogPaint = Paint().apply {
         isAntiAlias = true
+    }
+    
+    private val rainDimPaint = Paint().apply {
+        style = Paint.Style.FILL
     }
 
     private var initialized = false
@@ -159,6 +168,11 @@ class WeatherLayer : SceneLayer {
     
     // Legacy render methods that don't use SimulationState
     private fun renderRainLegacy(canvas: Canvas, windStrength: Float) {
+        // Dim the world during rain
+        val dimAlpha = (20 + intensity * 40).toInt()
+        rainDimPaint.color = Color.argb(dimAlpha, 100, 105, 115)
+        canvas.drawRect(0f, 0f, screenWidth.toFloat(), screenHeight.toFloat(), rainDimPaint)
+        
         val activeCount = (rainParticles.size * (0.3f + intensity * 0.7f)).toInt()
         val windDrift = windStrength * 3f
         
@@ -265,6 +279,12 @@ class WeatherLayer : SceneLayer {
     }
 
     private fun renderRain(canvas: Canvas, state: SimulationState) {
+        // Dim the world during rain (atmospheric effect from ai.md)
+        // Intensity affects dimming: light rain = subtle, heavy = more dim
+        val dimAlpha = (20 + intensity * 40).toInt()
+        rainDimPaint.color = Color.argb(dimAlpha, 100, 105, 115)
+        canvas.drawRect(0f, 0f, screenWidth.toFloat(), screenHeight.toFloat(), rainDimPaint)
+        
         // Active particle count based on intensity (30% to 100% of pool)
         val activeCount = (rainParticles.size * (0.3f + intensity * 0.7f)).toInt()
         
@@ -361,17 +381,18 @@ class WeatherLayer : SceneLayer {
     }
     
     private fun drawStormClouds(canvas: Canvas, timeSeconds: Float) {
-        // Dark, ominous storm clouds at the top of screen
+        // Dark, ominous storm clouds covering top of screen
+        // Position: -10% (above screen) to 20% from top
         val stormCloudPaint = Paint().apply {
             isAntiAlias = true
             style = Paint.Style.FILL
         }
         
-        // Multiple layers of dark clouds
+        // Multiple layers of dark clouds using centralized constants
         val cloudLayers = listOf(
-            Triple(0.08f, Color.argb(180, 30, 35, 45), 0.5f),   // Back layer - darkest
-            Triple(0.12f, Color.argb(160, 40, 45, 55), 0.6f),   // Middle layer
-            Triple(0.18f, Color.argb(140, 50, 55, 65), 0.7f)    // Front layer - lighter
+            Triple(RenderConstants.STORM_CLOUD_Y1, RenderConstants.STORM_CLOUD_COLOR_BACK, RenderConstants.STORM_CLOUD_SIZE_BACK),
+            Triple(RenderConstants.STORM_CLOUD_Y2, RenderConstants.STORM_CLOUD_COLOR_MID, RenderConstants.STORM_CLOUD_SIZE_MID),
+            Triple(RenderConstants.STORM_CLOUD_Y3, RenderConstants.STORM_CLOUD_COLOR_FRONT, RenderConstants.STORM_CLOUD_SIZE_FRONT)
         )
         
         for ((baseY, color, sizeMultiplier) in cloudLayers) {
@@ -382,7 +403,7 @@ class WeatherLayer : SceneLayer {
             for (i in 0 until numPuffs) {
                 val xPos = (i.toFloat() / numPuffs) * screenWidth * 1.3f - screenWidth * 0.15f
                 val yPos = screenHeight * baseY
-                val cloudSize = screenWidth * 0.25f * sizeMultiplier
+                val cloudSize = screenWidth * RenderConstants.STORM_CLOUD_BASE_SIZE * sizeMultiplier
                 
                 // Slight animated movement using consistent timeSeconds
                 val drift = kotlin.math.sin((timeSeconds * 0.3 + i * 0.5).toDouble()).toFloat() * 10f
@@ -415,10 +436,10 @@ class WeatherLayer : SceneLayer {
         // Base fog opacity depends on intensity (30-70%)
         val baseAlpha = (60 + intensity * 120).toInt().coerceIn(50, 170)
         
-        // Fog color - slightly bluish grey
-        val fogR = 210
-        val fogG = 215
-        val fogB = 225
+        // Fog color from centralized constants
+        val fogR = RenderConstants.FOG_R
+        val fogG = RenderConstants.FOG_G
+        val fogB = RenderConstants.FOG_B
         
         // Create a smooth vertical gradient from bottom (dense) to top (clear)
         val gradientShader = android.graphics.LinearGradient(

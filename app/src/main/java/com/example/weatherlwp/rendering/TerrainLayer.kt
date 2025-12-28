@@ -18,6 +18,12 @@ import kotlin.random.Random
  * - windStrength (affects tree sway amplitude)
  * - timeSeconds (for consistent wind animation across reloads)
  * - isNight (affects color tinting)
+ * 
+ * Uses RenderConstants for:
+ * - World coordinate bounds
+ * - Reference aspect ratio
+ * - Parallax depth range
+ * - Base colors
  */
 class TerrainLayer(private val context: Context) : SceneLayer {
     private val hillPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
@@ -57,12 +63,6 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private var treeColorVariation = 1.0f
     private var treeSegments = 1
     private var windStrengthSetting = 0.5f
-    
-    companion object {
-        private const val REFERENCE_ASPECT_RATIO = 0.5625f
-        private const val WORLD_MIN_X = -4.0f
-        private const val WORLD_MAX_X = 5.0f
-    }
 
     init {
         reloadSettings()
@@ -76,11 +76,12 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private fun generateHills() {
         hills.clear()
         val random = Random(12345) // Fixed seed
-        val baseGreen = Color.rgb(30, 80, 40)
         
         for (i in 0 until hillCount) {
             val depth = i.toFloat() / hillCount.coerceAtLeast(1)
-            val depthFactor = 0.5f + depth * 0.5f
+            // Use centralized parallax constants
+            val depthFactor = RenderConstants.PARALLAX_HILLS_MIN + 
+                depth * (RenderConstants.PARALLAX_HILLS_MAX - RenderConstants.PARALLAX_HILLS_MIN)
             val heightOffset = hillStartY + depth * (hillEndY - hillStartY)
             
             val numPoints = 60 + random.nextInt(20)
@@ -91,9 +92,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             
             val brightness = 0.6f + depth * 0.4f
             val dayColor = Color.rgb(
-                (Color.red(baseGreen) * brightness).toInt(),
-                (Color.green(baseGreen) * brightness).toInt(),
-                (Color.blue(baseGreen) * brightness).toInt()
+                (Color.red(RenderConstants.HILL_BASE_COLOR) * brightness).toInt(),
+                (Color.green(RenderConstants.HILL_BASE_COLOR) * brightness).toInt(),
+                (Color.blue(RenderConstants.HILL_BASE_COLOR) * brightness).toInt()
             )
             
             hills.add(HillData(points, depthFactor, heightOffset, dayColor))
@@ -112,21 +113,21 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             val (groundY, depthFactor) = if (hill != null) {
                 Pair(getHillY(xRatio, hill), hill.depthFactor)
             } else {
-                Pair(0.8f, 0.5f)
+                Pair(0.8f, RenderConstants.PARALLAX_HILLS_MIN)
             }
             
             val yRatio = groundY + 0.02f
-            val normalizedDepth = ((depthFactor - 0.5f) / 0.5f).coerceIn(0f, 1f)
+            val normalizedDepth = ((depthFactor - RenderConstants.PARALLAX_HILLS_MIN) / 
+                (RenderConstants.PARALLAX_HILLS_MAX - RenderConstants.PARALLAX_HILLS_MIN)).coerceIn(0f, 1f)
             val scale = 0.5f + normalizedDepth * 0.5f
             
-            val baseColor = Color.rgb(20, 60, 30)
             val variationAmount = (20 * treeColorVariation).toInt()
             val varR = if (variationAmount > 0) random.nextInt(variationAmount * 2 + 1) - variationAmount else 0
             val varG = if (variationAmount > 0) random.nextInt(variationAmount * 2 + 1) - variationAmount else 0
             val dayColor = Color.rgb(
-                (Color.red(baseColor) + varR).coerceIn(0, 255),
-                (Color.green(baseColor) + varG).coerceIn(0, 255),
-                Color.blue(baseColor)
+                (Color.red(RenderConstants.TREE_BASE_COLOR) + varR).coerceIn(0, 255),
+                (Color.green(RenderConstants.TREE_BASE_COLOR) + varG).coerceIn(0, 255),
+                Color.blue(RenderConstants.TREE_BASE_COLOR)
             )
             
             trees.add(TreeData(xRatio, yRatio, scale, depthFactor, dayColor))
@@ -138,7 +139,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val points = hill.controlPoints
         if (points.isEmpty()) return hill.heightOffset
         
-        val normalizedX = (xRatio - WORLD_MIN_X) / (WORLD_MAX_X - WORLD_MIN_X)
+        val normalizedX = (xRatio - RenderConstants.WORLD_MIN_X) / RenderConstants.WORLD_WIDTH
         val indexFloat = normalizedX * (points.size - 1)
         val index = indexFloat.toInt().coerceIn(0, points.size - 2)
         val fraction = indexFloat - index
@@ -162,7 +163,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         if (width <= 0 || height <= 0) return
         
-        val scaleX = height * REFERENCE_ASPECT_RATIO
+        val scaleX = height * RenderConstants.REFERENCE_ASPECT_RATIO
         val isNight = state.isNight
         
         // Draw Hills
@@ -171,7 +172,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             canvas.save()
             canvas.translate(px, py)
             
-            hillPaint.color = if (isNight) applyNightTint(hill.dayColor) else hill.dayColor
+            hillPaint.color = if (isNight) RenderConstants.applyNightTint(hill.dayColor) else hill.dayColor
             drawHill(canvas, hill, scaleX)
             
             canvas.restore()
@@ -183,27 +184,18 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             canvas.save()
             canvas.translate(px, py)
             
-            treePaint.color = if (isNight) applyNightTint(tree.dayColor) else tree.dayColor
+            treePaint.color = if (isNight) RenderConstants.applyNightTint(tree.dayColor) else tree.dayColor
             drawTree(canvas, tree, scaleX, state)
             
             canvas.restore()
         }
     }
     
-    private fun applyNightTint(color: Int): Int {
-        // Add blue tint for night
-        return Color.rgb(
-            (Color.red(color) * 0.6f).toInt(),
-            (Color.green(color) * 0.7f).toInt(),
-            (Color.blue(color) + 20).coerceAtMost(255)
-        )
-    }
-    
     private fun drawHill(canvas: Canvas, hill: HillData, scaleX: Float) {
         hillPath.reset()
         
-        val startX = (WORLD_MIN_X - 0.5f) * scaleX + width / 2f
-        val endX = (WORLD_MAX_X - 0.5f) * scaleX + width / 2f
+        val startX = (RenderConstants.WORLD_MIN_X - 0.5f) * scaleX + width / 2f
+        val endX = (RenderConstants.WORLD_MAX_X - 0.5f) * scaleX + width / 2f
         val stepX = (endX - startX) / (hill.controlPoints.size - 1)
         
         hillPath.moveTo(startX, height)
@@ -229,10 +221,11 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val segmentHeight = totalHeight / treeSegments
         
         // Wind sway using simulation time for consistency
-        // Combine settings wind with state wind
+        // Combine settings wind with state wind using centralized constants
         val effectiveWind = (windStrengthSetting + state.windStrength) / 2f * 4f
         val timeSec = state.timeSeconds
-        val sway = sin(timeSec * 2f + tree.xRatio * 10f) * (totalHeight * 0.05f * effectiveWind)
+        val sway = sin(timeSec * RenderConstants.TREE_SWAY_FREQUENCY + tree.xRatio * 10f) * 
+            (totalHeight * RenderConstants.TREE_SWAY_AMPLITUDE * effectiveWind)
         
         for (seg in 0 until treeSegments) {
             val segY = y - seg * segmentHeight * 0.7f

@@ -46,25 +46,33 @@ data class SimulationState(
     /**
      * Get cloud count based on density setting.
      * Cloud counts are tuned so:
-     * - LIGHT: Always some visible clouds on screen, but sparse and lighter
-     * - MEDIUM: Comfortable amount of clouds
-     * - HEAVY: Dense cloud cover
-     * - OVERCAST: Sky mostly covered
+     * - LIGHT: Few clouds visible, mostly clear sky
+     * - MEDIUM: Partial cloud cover, blue sky visible
+     * - HEAVY: Significant cloud cover
+     * - OVERCAST: Sky fully covered with clouds
+     * 
+     * Based on CloudLayer: clouds use 5-40% vertical, avg size 0.15-0.20.
+     * For true overcast coverage, need significant overlap:
+     * - Screen width in world coords = 9 units
+     * - Avg cloud width = ~0.5-0.8 world units
+     * - For full horizontal coverage = ~15 clouds per row
+     * - Clouds at varying depths = 3-4 rows = 45-60 base
+     * - For overlap/fullness = 2-3x = 120-180 clouds for overcast
      */
     fun getCloudCount(): Int = when (cloudDensity) {
         CloudDensity.NONE -> 0
-        CloudDensity.LIGHT -> 15       // Few but always visible
-        CloudDensity.MEDIUM -> 35      // Moderate coverage
-        CloudDensity.HEAVY -> 60       // Dense clouds
-        CloudDensity.OVERCAST -> 100   // Full coverage
+        CloudDensity.LIGHT -> 15       // Few but visible
+        CloudDensity.MEDIUM -> 40      // Moderate coverage
+        CloudDensity.HEAVY -> 80       // Dense clouds
+        CloudDensity.OVERCAST -> 150   // Full sky coverage
         CloudDensity.AUTO -> when (weather) {
             WeatherType.CLEAR -> 8
-            WeatherType.PARTLY_CLOUDY -> 25
-            WeatherType.CLOUDY -> 45
-            WeatherType.OVERCAST -> 100
-            WeatherType.RAIN, WeatherType.THUNDERSTORM -> 70
-            WeatherType.SNOW -> 50
-            WeatherType.FOG -> 80
+            WeatherType.PARTLY_CLOUDY -> 30
+            WeatherType.CLOUDY -> 60
+            WeatherType.OVERCAST -> 150
+            WeatherType.RAIN, WeatherType.THUNDERSTORM -> 100
+            WeatherType.SNOW -> 70
+            WeatherType.FOG -> 120
         }
     }
     
