@@ -113,36 +113,42 @@ class MountainLayer(private val context: Context) : SceneLayer {
         
         val scaleX = height * RenderConstants.REFERENCE_ASPECT_RATIO
         
+        // Get ambient color for atmospheric blending (per ai.md)
+        val ambientColor = RenderConstants.getAmbientColor(
+            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk
+        )
+        
         for (mountain in mountains) {
             val (px, py) = parallaxCalculator.getOffsetForDepth(mountain.depthFactor)
             
             canvas.save()
             canvas.translate(px, py)
             
-            drawMountain(canvas, mountain, scaleX, state.isNight)
+            drawMountain(canvas, mountain, scaleX, state.isNight, ambientColor)
             
             canvas.restore()
         }
         
         // Draw atmospheric haze at the base of mountains (ai.md: fog overlay)
         // This blends the mountains into the terrain and adds depth
-        drawAtmosphericHaze(canvas, state.isNight)
+        drawAtmosphericHaze(canvas, state.isNight, ambientColor)
     }
     
     /**
      * Draw a soft atmospheric haze at the bottom portion of the screen.
      * This simulates fog/mist at the base of mountains as described in ai.md.
      */
-    private fun drawAtmosphericHaze(canvas: Canvas, isNight: Boolean) {
+    private fun drawAtmosphericHaze(canvas: Canvas, isNight: Boolean, ambientColor: Int) {
         val hazeStartY = height * 0.55f  // Start at 55% down
         val hazeEndY = height * 0.85f    // Fade to 85% down
         
-        // Haze color: subtle blue-gray that matches the atmosphere
-        val hazeColor = if (isNight) {
-            Color.argb(25, 40, 50, 80)  // Darker blue haze at night
-        } else {
-            Color.argb(20, 180, 190, 210)  // Light blue-gray during day
-        }
+        // Haze color blends with ambient for consistent atmosphere
+        val hazeColor = Color.argb(
+            25,
+            Color.red(ambientColor),
+            Color.green(ambientColor),
+            Color.blue(ambientColor)
+        )
         
         val hazeGradient = LinearGradient(
             0f, hazeStartY,
@@ -157,7 +163,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
         hazePaint.shader = null
     }
     
-    private fun drawMountain(canvas: Canvas, mountain: MountainData, scaleX: Float, isNight: Boolean) {
+    private fun drawMountain(canvas: Canvas, mountain: MountainData, scaleX: Float, isNight: Boolean, ambientColor: Int) {
         pathLeft.reset()
         pathRight.reset()
         
@@ -198,21 +204,16 @@ class MountainLayer(private val context: Context) : SceneLayer {
         pathRight.lineTo(peakCenterX, baseY)
         pathRight.close()
         
-        // Apply night tint if needed
-        val baseColor = if (isNight) {
-            RenderConstants.applyNightTint(mountain.dayColor)
-        } else {
-            mountain.dayColor
-        }
+        // Apply ambient tinting (per ai.md: global tint system)
+        // Mountains blend with ambient color based on their depth
+        val blendAmount = RenderConstants.applyAmbientTint(mountain.dayColor, ambientColor, mountain.depthFactor)
+        val baseColor = RenderConstants.blendWithAmbient(mountain.dayColor, ambientColor, blendAmount)
         
         // Create atmospheric gradient: lighter/bluer at base (fog effect)
         // Peaks are darker/more distinct, base fades into atmospheric haze
         val peakColor = baseColor
-        val baseAtmoColor = Color.rgb(
-            ((Color.red(baseColor) + 40).coerceAtMost(180)),
-            ((Color.green(baseColor) + 45).coerceAtMost(190)),
-            ((Color.blue(baseColor) + 60).coerceAtMost(210))
-        )
+        // Base blends even more with ambient (atmospheric perspective)
+        val baseAtmoColor = RenderConstants.blendWithAmbient(baseColor, ambientColor, blendAmount + 0.2f)
         
         // Vertical gradient shader (peak color at top, atmospheric at bottom)
         val gradient = LinearGradient(

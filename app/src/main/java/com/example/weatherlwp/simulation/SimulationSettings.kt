@@ -34,6 +34,8 @@ class SimulationSettings(context: Context) {
         private set
     
     // Cloud settings
+    var cloudsEnabled: Boolean = true
+        private set
     var cloudDensity: CloudDensity = CloudDensity.AUTO
         private set
     
@@ -64,25 +66,47 @@ class SimulationSettings(context: Context) {
         val windVal = prefs.getInt("pref_wind_strength", 50)
         windStrength = windVal / 100f
         
-        // Cloud density
+        // Cloud settings
+        cloudsEnabled = prefs.getBoolean("pref_clouds_enabled", true)
         val densityStr = prefs.getString("pref_cloud_density", "auto") ?: "auto"
-        cloudDensity = when (densityStr.lowercase()) {
-            "none" -> CloudDensity.NONE
-            "light" -> CloudDensity.LIGHT
-            "medium" -> CloudDensity.MEDIUM
-            "heavy" -> CloudDensity.HEAVY
-            "overcast" -> CloudDensity.OVERCAST
-            else -> CloudDensity.AUTO
+        cloudDensity = if (!cloudsEnabled) {
+            CloudDensity.NONE
+        } else {
+            when (densityStr.lowercase()) {
+                "none" -> CloudDensity.NONE
+                "light" -> CloudDensity.LIGHT
+                "medium" -> CloudDensity.MEDIUM
+                "heavy" -> CloudDensity.HEAVY
+                "overcast" -> CloudDensity.OVERCAST
+                else -> CloudDensity.AUTO
+            }
         }
         
-        // Debug
+        // Debug - also handle cloud and weather overrides from simulation mode
         debugEnabled = prefs.getBoolean("pref_debug_enabled", false)
-        debugTimeOverride = if (debugEnabled) {
-            prefs.getString("pref_debug_time", null)
-        } else null
-        debugWeatherOverride = if (debugEnabled) {
-            prefs.getString("pref_debug_weather", null)
-        } else null
+        if (debugEnabled) {
+            // Weather override - pref_weather_type is the actual key
+            debugWeatherOverride = prefs.getString("pref_weather_type", "auto")
+            if (debugWeatherOverride == "auto") debugWeatherOverride = null
+            
+            // Cloud override - pref_debug_cloud_override is the actual key
+            val debugCloudStr = prefs.getString("pref_debug_cloud_override", "auto") ?: "auto"
+            if (debugCloudStr != "auto") {
+                cloudDensity = when (debugCloudStr.lowercase()) {
+                    "none" -> CloudDensity.NONE
+                    "light" -> CloudDensity.LIGHT
+                    "medium" -> CloudDensity.MEDIUM
+                    "heavy" -> CloudDensity.HEAVY
+                    "overcast" -> CloudDensity.OVERCAST
+                    else -> cloudDensity
+                }
+            }
+            
+            debugTimeOverride = prefs.getString("pref_debug_time", null)
+        } else {
+            debugTimeOverride = null
+            debugWeatherOverride = null
+        }
     }
     
     /**

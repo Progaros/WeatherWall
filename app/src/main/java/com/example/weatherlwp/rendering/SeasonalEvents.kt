@@ -126,9 +126,14 @@ class SeasonalEvents(private val context: Context? = null) {
     }
 
     fun getCurrentSeason(): Season {
-        // Check for debug override
+        // Check if seasonal events are enabled
         try {
             if (prefs != null) {
+                val seasonalEnabled = prefs.getBoolean("pref_seasonal_enabled", true)
+                if (!seasonalEnabled) {
+                    return Season.NONE
+                }
+                
                 val debugEnabled = prefs.getBoolean("pref_debug_enabled", false)
                 if (debugEnabled) {
                     val debugSeason = prefs.getString("pref_debug_season", "auto") ?: "auto"

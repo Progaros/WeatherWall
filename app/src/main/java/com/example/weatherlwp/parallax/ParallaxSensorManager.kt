@@ -7,9 +7,31 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.util.Log
 
+/**
+ * Manages accelerometer input for parallax effect.
+ * 
+ * Uses adaptive calibration to work at any phone orientation:
+ * - Continuously tracks a moving average baseline
+ * - Parallax responds to tilts relative to this baseline
+ * - This means parallax works whether phone is flat, upright, or any angle
+ */
 class ParallaxSensorManager(context: Context) : SensorEventListener {
     companion object {
         private const val TAG = "ParallaxSensorManager"
+        
+        // Smoothing for raw sensor input
+        private const val SENSOR_ALPHA = 0.85f
+        
+        // Baseline adaptation rate - slower = more stable, faster = more responsive
+        // 0.01 means baseline adjusts slowly to where user holds the phone
+        private const val BASELINE_ADAPT_RATE = 0.01f
+        
+        // Minimum tilt angle (in g-force) before parallax responds
+        // This creates a small "dead zone" at center for stability
+        private const val DEAD_ZONE = 0.3f
+        
+        // Sensitivity - higher = more parallax from less tilt
+        private const val SENSITIVITY = 3.5f
     }
     
     interface Listener {
@@ -19,9 +41,14 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
+    // Smoothed raw sensor values
     private var ax = 0f
     private var ay = 0f
-    private val alpha = 0.85f  // Smoothing factor
+    
+    // Adaptive baseline - tracks where "center" is
+    private var baselineX = 0f
+    private var baselineY = 0f
+    private var baselineInitialized = false
 
     private var listener: Listener? = null
     private var isStarted = false
@@ -34,8 +61,8 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             return
         }
         if (!isStarted) {
-            // Use SENSOR_DELAY_UI (60ms) instead of SENSOR_DELAY_GAME (20ms)
-            // for better battery life - parallax doesn't need high-frequency updates
+            // Reset baseline on start
+            baselineInitialized = false
             sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_UI)
             isStarted = true
             Log.d(TAG, "Sensor started")
@@ -54,23 +81,34 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         if (event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
 
         // Low-pass filter for smooth movement
-        ax = alpha * ax + (1 - alpha) * event.values[0]
-        ay = alpha * ay + (1 - alpha) * event.values[1]
-
-        // Reference baseline depends on phone orientation:
-        // - Phone flat: ax~0, ay~0, az~9.8
-        // - Phone upright (portrait): ax~0, ay~9.8, az~0
-        // - Phone tilted 45°: ax~0, ay~6.9, az~6.9
-        // 
-        // For natural use, we want parallax centered when phone is held at typical angle (~60° from flat).
-        // At 60°: ay ≈ 8.5, at 45°: ay ≈ 6.9
-        // We use a reference baseline of ~5.5 m/s² for Y axis (comfortable viewing angle ~55°)
-        val yBaseline = 5.5f
+        ax = SENSOR_ALPHA * ax + (1 - SENSOR_ALPHA) * event.values[0]
+        ay = SENSOR_ALPHA * ay + (1 - SENSOR_ALPHA) * event.values[1]
         
-        // X-axis (values[0]) = left/right tilt - no baseline needed
-        // Y-axis (values[1]) = forward/back tilt - subtract baseline for upright usage
-        val tiltX = (ax / 5f).coerceIn(-1f, 1f)
-        val tiltY = ((ay - yBaseline) / 5f).coerceIn(-1f, 1f)
+        // Initialize baseline to current position on first reading
+        if (!baselineInitialized) {
+            baselineX = ax
+            baselineY = ay
+            baselineInitialized = true
+            Log.d(TAG, "Baseline initialized: x=$baselineX, y=$baselineY")
+        }
+        
+        // Slowly adapt baseline toward current position
+        // This allows parallax to work at any phone orientation
+        // The baseline drifts toward where the user holds the phone
+        baselineX += (ax - baselineX) * BASELINE_ADAPT_RATE
+        baselineY += (ay - baselineY) * BASELINE_ADAPT_RATE
+        
+        // Calculate tilt relative to adaptive baseline
+        var deltaX = ax - baselineX
+        var deltaY = ay - baselineY
+        
+        // Apply dead zone for stability at center
+        if (kotlin.math.abs(deltaX) < DEAD_ZONE) deltaX = 0f
+        if (kotlin.math.abs(deltaY) < DEAD_ZONE) deltaY = 0f
+        
+        // Apply sensitivity and normalize to -1..1 range
+        val tiltX = (deltaX * SENSITIVITY / 9.8f).coerceIn(-1f, 1f)
+        val tiltY = (deltaY * SENSITIVITY / 9.8f).coerceIn(-1f, 1f)
 
         // Send normalized values (-1 to 1) to the listener
         listener?.onOffsetChanged(tiltX, tiltY)

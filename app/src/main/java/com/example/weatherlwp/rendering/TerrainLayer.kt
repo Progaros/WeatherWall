@@ -164,27 +164,37 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         if (width <= 0 || height <= 0) return
         
         val scaleX = height * RenderConstants.REFERENCE_ASPECT_RATIO
-        val isNight = state.isNight
         
-        // Draw Hills
+        // Get ambient color for current time of day (per ai.md: global tint system)
+        val ambientColor = RenderConstants.getAmbientColor(
+            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk
+        )
+        
+        // Draw Hills with ambient tinting
         for (hill in hills) {
             val (px, py) = parallaxCalculator.getOffsetForDepth(hill.depthFactor)
             canvas.save()
             canvas.translate(px, py)
             
-            hillPaint.color = if (isNight) RenderConstants.applyNightTint(hill.dayColor) else hill.dayColor
+            // Blend with ambient color based on depth (distant hills blend more)
+            val blendAmount = RenderConstants.applyAmbientTint(hill.dayColor, ambientColor, hill.depthFactor)
+            hillPaint.color = RenderConstants.blendWithAmbient(hill.dayColor, ambientColor, blendAmount)
             drawHill(canvas, hill, scaleX)
             
             canvas.restore()
         }
         
-        // Draw Trees
+        // Draw Trees with ambient tinting
         for (tree in trees) {
             val (px, py) = parallaxCalculator.getOffsetForDepth(tree.depthFactor)
             canvas.save()
             canvas.translate(px, py)
             
-            treePaint.color = if (isNight) RenderConstants.applyNightTint(tree.dayColor) else tree.dayColor
+            // Trees in foreground get less tint, background trees get more
+            val normalizedDepth = ((tree.depthFactor - RenderConstants.PARALLAX_HILLS_MIN) / 
+                (RenderConstants.PARALLAX_HILLS_MAX - RenderConstants.PARALLAX_HILLS_MIN)).coerceIn(0f, 1f)
+            val blendAmount = RenderConstants.applyAmbientTint(tree.dayColor, ambientColor, normalizedDepth)
+            treePaint.color = RenderConstants.blendWithAmbient(tree.dayColor, ambientColor, blendAmount)
             drawTree(canvas, tree, scaleX, state)
             
             canvas.restore()

@@ -10,78 +10,91 @@ import org.junit.Test
  * Tilting phone left/right should move scene correctly
  * X-axis (values[0]) = left/right tilt
  * Y-axis (values[1]) = forward/back tilt
+ * 
+ * Updated: The new implementation uses adaptive baseline, so parallax
+ * works at any phone orientation by measuring relative tilt from baseline.
  */
 class ParallaxSensorManagerTest {
 
     companion object {
         const val GRAVITY = 9.81f
-        const val SENSITIVITY = 150f
+        const val SENSITIVITY = 3.5f  // Matches ParallaxSensorManager.SENSITIVITY
+        const val DEAD_ZONE = 0.3f    // Matches ParallaxSensorManager.DEAD_ZONE
     }
 
     // ============== Issue #6: Axis Mapping Tests ==============
     
     @Test
-    fun tiltX_should_use_accelerometer_X_axis() {
-        // When phone tilts left/right, values[0] changes
-        // This should map to horizontal parallax (tiltX)
-        val accelerometerX = 4.9f  // Phone tilted ~30 degrees
-        val accelerometerY = 0f
+    fun tiltX_should_respond_to_relative_X_change() {
+        // With adaptive baseline, tilt is measured relative to initial position
+        // Simulate: baseline at 0, then phone tilts right by 4.9
+        val baselineX = 0f
+        val currentX = 4.9f
         
-        val (tiltX, tiltY) = calculateTilt(accelerometerX, accelerometerY)
+        val tiltX = calculateRelativeTilt(currentX, baselineX)
         
-        // TiltX should be non-zero, tiltY should be near zero
-        assertTrue("TiltX should respond to X-axis", kotlin.math.abs(tiltX) > 0.3f)
-        assertTrue("TiltY should be near zero", kotlin.math.abs(tiltY) < 0.1f)
+        // TiltX should be positive (tilted right)
+        assertTrue("TiltX should be positive for right tilt", tiltX > 0.3f)
     }
     
     @Test
-    fun tiltY_should_use_accelerometer_Y_axis() {
-        // When phone tilts forward/back, values[1] changes
-        // This should map to vertical parallax (tiltY)
-        val accelerometerX = 0f
-        val accelerometerY = 4.9f  // Phone tilted forward ~30 degrees
+    fun tiltY_should_respond_to_relative_Y_change() {
+        // Simulate: baseline at 5.0 (phone held at angle), then tilts forward by 3
+        val baselineY = 5.0f
+        val currentY = 8.0f
         
-        val (tiltX, tiltY) = calculateTilt(accelerometerX, accelerometerY)
+        val tiltY = calculateRelativeTilt(currentY, baselineY)
         
-        // TiltY should be non-zero, tiltX should be near zero
-        assertTrue("TiltY should respond to Y-axis", kotlin.math.abs(tiltY) > 0.3f)
-        assertTrue("TiltX should be near zero", kotlin.math.abs(tiltX) < 0.1f)
+        // TiltY should be positive (tilted forward)
+        assertTrue("TiltY should be positive for forward tilt", tiltY > 0.3f)
     }
     
     @Test
     fun `tilt should be normalized to -1 to 1 range`() {
         // Even with max tilt, output should be clamped
-        val maxAcceleration = GRAVITY * 2  // More than gravity (impossible in practice)
+        val baseline = 0f
+        val extremeValue = GRAVITY * 2  // Way beyond normal tilt
         
-        val tiltX = (maxAcceleration / GRAVITY).coerceIn(-1f, 1f)
-        val tiltY = (-maxAcceleration / GRAVITY).coerceIn(-1f, 1f)
+        val tilt = calculateRelativeTilt(extremeValue, baseline)
         
-        assertTrue("TiltX should be <= 1", tiltX <= 1f)
-        assertTrue("TiltX should be >= -1", tiltX >= -1f)
-        assertTrue("TiltY should be <= 1", tiltY <= 1f)
-        assertTrue("TiltY should be >= -1", tiltY >= -1f)
+        assertTrue("Tilt should be <= 1", tilt <= 1f)
+        assertTrue("Tilt should be >= -1", tilt >= -1f)
     }
     
     @Test
-    fun `output should be scaled by sensitivity`() {
-        val normalizedTilt = 0.5f
-        val expectedOffset = normalizedTilt * SENSITIVITY
+    fun `no relative movement should produce zero offset`() {
+        // When current equals baseline (no tilt from resting position)
+        val baseline = 5.0f
+        val current = 5.0f
         
-        assertEquals("Offset should equal tilt * sensitivity", 75f, expectedOffset, 0.1f)
+        val tilt = calculateRelativeTilt(current, baseline)
+        
+        assertTrue("No relative movement should have ~0 tilt", kotlin.math.abs(tilt) < 0.1f)
     }
     
     @Test
-    fun `flat phone should produce near-zero offset`() {
-        // Phone lying flat: X=0, Y=0 (Z would be ~9.81, but we only use X and Y)
-        val accelerometerX = 0f
-        val accelerometerY = 0f
+    fun `dead zone should prevent small jitters`() {
+        // Small movement within dead zone should result in 0
+        val baseline = 0f
+        val smallMovement = 0.2f  // Less than DEAD_ZONE
         
-        val (tiltX, tiltY) = calculateTilt(accelerometerX, accelerometerY)
-        val offsetX = tiltX * SENSITIVITY
-        val offsetY = tiltY * SENSITIVITY
+        val delta = smallMovement - baseline
+        val withDeadZone = if (kotlin.math.abs(delta) < DEAD_ZONE) 0f else delta
         
-        assertTrue("Flat phone should have ~0 X offset", kotlin.math.abs(offsetX) < 1f)
-        assertTrue("Flat phone should have ~0 Y offset", kotlin.math.abs(offsetY) < 1f)
+        assertEquals("Small movement should be filtered", 0f, withDeadZone, 0.01f)
+    }
+    
+    @Test
+    fun `adaptive baseline allows any starting orientation`() {
+        // Phone held upright (ay ≈ 9.8): baseline adapts to this
+        // Then user tilts forward slightly (ay increases to 10.5 theoretically)
+        // This should still produce parallax, even at unusual angles
+        val baselineY = 9.8f  // Upright position
+        val tiltedY = 9.8f + 1.5f  // Tilted forward
+        
+        val tilt = calculateRelativeTilt(tiltedY, baselineY)
+        
+        assertTrue("Should respond to relative tilt from any baseline", tilt > 0.2f)
     }
 
     // ============== Smoothing Filter Tests ==============
@@ -107,10 +120,14 @@ class ParallaxSensorManagerTest {
             kotlin.math.abs(smoothedValue - newValue) < 0.5f)
     }
     
-    // Helper function matching ParallaxSensorManager logic
-    private fun calculateTilt(ax: Float, ay: Float): Pair<Float, Float> {
-        val tiltX = (ax / GRAVITY).coerceIn(-1f, 1f)
-        val tiltY = (ay / GRAVITY).coerceIn(-1f, 1f)
-        return Pair(tiltX, tiltY)
+    // Helper function matching new ParallaxSensorManager logic with adaptive baseline
+    private fun calculateRelativeTilt(current: Float, baseline: Float): Float {
+        var delta = current - baseline
+        
+        // Apply dead zone
+        if (kotlin.math.abs(delta) < DEAD_ZONE) delta = 0f
+        
+        // Apply sensitivity and normalize
+        return (delta * SENSITIVITY / GRAVITY).coerceIn(-1f, 1f)
     }
 }

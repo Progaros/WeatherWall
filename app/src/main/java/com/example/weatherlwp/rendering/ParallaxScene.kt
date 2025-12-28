@@ -58,6 +58,8 @@ class ParallaxScene(
     private var parallaxStrength = 1.0f
     private var parallaxMaxOffsetPx = 40f
     private var parallaxReturnRate = 0.02f
+    private var weatherEnabled = true
+    private var seasonalEnabled = true
     
     init {
         // Add layers in draw order (Background -> Foreground)
@@ -122,11 +124,15 @@ class ParallaxScene(
                 layer.draw(canvas, state, parallaxCalculator)
             }
             
-            // Draw Weather Overlay
-            weatherLayer.draw(canvas, state, parallaxCalculator)
+            // Draw Weather Overlay (only if enabled)
+            if (weatherEnabled) {
+                weatherLayer.draw(canvas, state, parallaxCalculator)
+            }
             
-            // Draw Seasonal Events (Christmas Star, Fireworks)
-            seasonalEvents.render(canvas, true)
+            // Draw Seasonal Events (Christmas Star, Fireworks) - only if enabled
+            if (seasonalEnabled) {
+                seasonalEvents.render(canvas, true)
+            }
             
         } catch (e: Exception) {
             Log.e(TAG, "Error rendering scene", e)
@@ -152,6 +158,10 @@ class ParallaxScene(
             // Return speed slider: map 1..100 -> 0.01f..0.15f (wider range for more noticeable effect)
             val returnSpeed = prefs.getInt("pref_parallax_return_speed", 50).coerceIn(1, 100)
             parallaxReturnRate = 0.01f + (returnSpeed / 100f) * 0.14f
+            
+            // Weather and seasonal toggles
+            weatherEnabled = prefs.getBoolean("pref_weather_enabled", true)
+            seasonalEnabled = prefs.getBoolean("pref_seasonal_enabled", true)
             
             // Reload simulation controller settings
             simulationController.reloadSettings()

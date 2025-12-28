@@ -45,9 +45,10 @@ class SkyLayer : SceneLayer {
     // Stars - generated once with fixed seed for consistency
     private val stars = ArrayList<FloatArray>()
     
-    // Current gradient colors
+    // Current 3-stop gradient colors (Top, Middle, Horizon)
     private var skyTop = Color.BLUE
-    private var skyBottom = Color.CYAN
+    private var skyMid = Color.CYAN
+    private var skyHorizon = Color.WHITE
 
     init {
         generateStars()
@@ -78,60 +79,70 @@ class SkyLayer : SceneLayer {
     private fun updateColorsForTime(state: SimulationState) {
         val hour = state.timeOfDayHours
         
-        val (newTop, newBottom) = when {
+        // 3-stop gradient: Top, Middle (40% down), Horizon
+        // Per ai.md: "Always use a 3-stop LinearGradient for the sky"
+        val (newTop, newMid, newHorizon) = when {
             hour < RenderConstants.TIME_NIGHT_END -> {
-                Pair(RenderConstants.SKY_NIGHT_TOP, RenderConstants.SKY_NIGHT_BOTTOM)
+                Triple(RenderConstants.SKY_NIGHT_TOP, RenderConstants.SKY_NIGHT_MID, RenderConstants.SKY_NIGHT_BOTTOM)
             }
             hour < RenderConstants.TIME_DAWN_START + 1f -> {
                 // Transition from night to dawn
                 val t = hour - RenderConstants.TIME_NIGHT_END
-                Pair(
+                Triple(
                     RenderConstants.lerpColor(RenderConstants.SKY_NIGHT_TOP, RenderConstants.SKY_DAWN_TOP, t),
+                    RenderConstants.lerpColor(RenderConstants.SKY_NIGHT_MID, RenderConstants.SKY_DAWN_MID, t),
                     RenderConstants.lerpColor(RenderConstants.SKY_NIGHT_BOTTOM, RenderConstants.SKY_DAWN_BOTTOM, t)
                 )
             }
             hour < RenderConstants.TIME_DAWN_END -> {
                 // Dawn to day
                 val t = (hour - 6f) / 1.5f
-                Pair(
+                Triple(
                     RenderConstants.lerpColor(RenderConstants.SKY_DAWN_TOP, RenderConstants.SKY_DAY_TOP, t),
+                    RenderConstants.lerpColor(RenderConstants.SKY_DAWN_MID, RenderConstants.SKY_DAY_MID, t),
                     RenderConstants.lerpColor(RenderConstants.SKY_DAWN_BOTTOM, RenderConstants.SKY_DAY_BOTTOM, t)
                 )
             }
             hour < RenderConstants.TIME_DAY_END -> {
-                Pair(RenderConstants.SKY_DAY_TOP, RenderConstants.SKY_DAY_BOTTOM)
+                Triple(RenderConstants.SKY_DAY_TOP, RenderConstants.SKY_DAY_MID, RenderConstants.SKY_DAY_BOTTOM)
             }
             hour < RenderConstants.TIME_DAY_END + 1.5f -> {
                 // Day to dusk
                 val t = (hour - RenderConstants.TIME_DAY_END) / 1.5f
-                Pair(
+                Triple(
                     RenderConstants.lerpColor(RenderConstants.SKY_DAY_TOP, RenderConstants.SKY_DUSK_TOP, t),
+                    RenderConstants.lerpColor(RenderConstants.SKY_DAY_MID, RenderConstants.SKY_DUSK_MID, t),
                     RenderConstants.lerpColor(RenderConstants.SKY_DAY_BOTTOM, RenderConstants.SKY_DUSK_BOTTOM, t)
                 )
             }
             hour < RenderConstants.TIME_DUSK_END -> {
                 // Dusk to night
                 val t = (hour - 18.5f) / 1.5f
-                Pair(
+                Triple(
                     RenderConstants.lerpColor(RenderConstants.SKY_DUSK_TOP, RenderConstants.SKY_NIGHT_TOP, t),
+                    RenderConstants.lerpColor(RenderConstants.SKY_DUSK_MID, RenderConstants.SKY_NIGHT_MID, t),
                     RenderConstants.lerpColor(RenderConstants.SKY_DUSK_BOTTOM, RenderConstants.SKY_NIGHT_BOTTOM, t)
                 )
             }
-            else -> Pair(RenderConstants.SKY_NIGHT_TOP, RenderConstants.SKY_NIGHT_BOTTOM)
+            else -> Triple(RenderConstants.SKY_NIGHT_TOP, RenderConstants.SKY_NIGHT_MID, RenderConstants.SKY_NIGHT_BOTTOM)
         }
         
-        if (newTop != skyTop || newBottom != skyBottom) {
+        if (newTop != skyTop || newMid != skyMid || newHorizon != skyHorizon) {
             skyTop = newTop
-            skyBottom = newBottom
+            skyMid = newMid
+            skyHorizon = newHorizon
             updateGradient()
         }
     }
 
     private fun updateGradient() {
         if (height > 0) {
+            // 3-stop gradient: Top (0%) -> Middle (40%) -> Horizon (100%)
+            // This creates the "horizon glow" effect described in ai.md
             skyPaint.shader = LinearGradient(
                 0f, 0f, 0f, height,
-                skyTop, skyBottom,
+                intArrayOf(skyTop, skyMid, skyHorizon),
+                floatArrayOf(0f, 0.4f, 1f),
                 Shader.TileMode.CLAMP
             )
         }

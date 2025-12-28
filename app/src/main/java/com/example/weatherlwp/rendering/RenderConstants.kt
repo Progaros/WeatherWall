@@ -44,19 +44,35 @@ object RenderConstants {
     const val PARALLAX_HILLS_MIN = 0.50f
     const val PARALLAX_HILLS_MAX = 1.0f
     
-    // ============== Sky Colors ==============
+    // ============== Sky Colors (3-stop gradients: Top, Middle, Horizon) ==============
+    // Per ai.md: "Always use a 3-stop LinearGradient for the sky"
+    // Horizon should be significantly lighter than top (atmosphere thickness)
     
-    val SKY_NIGHT_TOP: Int = Color.parseColor("#0B1026")
-    val SKY_NIGHT_BOTTOM: Int = Color.parseColor("#1A1A3A")
+    // Night: Deep space -> Dark blue -> Slightly lighter horizon
+    val SKY_NIGHT_TOP: Int = Color.parseColor("#0B0B1A")      // Deep space
+    val SKY_NIGHT_MID: Int = Color.parseColor("#141428")      // Dark blue
+    val SKY_NIGHT_BOTTOM: Int = Color.parseColor("#252540")   // Lighter horizon
     
-    val SKY_DAWN_TOP: Int = Color.parseColor("#FF8C42")
-    val SKY_DAWN_BOTTOM: Int = Color.parseColor("#FFD166")
+    // Dawn: Orange-purple transition with bright horizon
+    val SKY_DAWN_TOP: Int = Color.parseColor("#4A3060")       // Purple-ish
+    val SKY_DAWN_MID: Int = Color.parseColor("#FF8855")       // Orange
+    val SKY_DAWN_BOTTOM: Int = Color.parseColor("#FFCC88")    // Bright horizon
     
-    val SKY_DAY_TOP: Int = Color.parseColor("#1E90FF")
-    val SKY_DAY_BOTTOM: Int = Color.parseColor("#87CEEB")
+    // Day: Deep blue -> Blue -> Light horizon haze
+    val SKY_DAY_TOP: Int = Color.parseColor("#1565C0")        // Deep blue
+    val SKY_DAY_MID: Int = Color.parseColor("#42A5F5")        // Bright blue
+    val SKY_DAY_BOTTOM: Int = Color.parseColor("#B3E5FC")     // Light horizon
     
-    val SKY_DUSK_TOP: Int = Color.parseColor("#FF6B35")
-    val SKY_DUSK_BOTTOM: Int = Color.parseColor("#FFB347")
+    // Dusk: Purple -> Orange -> Bright glow at horizon
+    val SKY_DUSK_TOP: Int = Color.parseColor("#4A2060")       // Deep purple
+    val SKY_DUSK_MID: Int = Color.parseColor("#FF6B35")       // Orange
+    val SKY_DUSK_BOTTOM: Int = Color.parseColor("#FFAB76")    // Bright horizon glow
+    
+    // Ambient tint colors (for global tinting per ai.md)
+    val AMBIENT_NIGHT: Int = Color.parseColor("#2A2040")      // Purple-blue night tint
+    val AMBIENT_DAWN: Int = Color.parseColor("#FF9966")       // Warm orange dawn tint
+    val AMBIENT_DAY: Int = Color.parseColor("#88CCFF")        // Neutral blue-white
+    val AMBIENT_DUSK: Int = Color.parseColor("#FF7744")       // Orange-red dusk tint
     
     // ============== Time Thresholds (hours) ==============
     
@@ -154,5 +170,49 @@ object RenderConstants {
             (Color.green(color) * greenMult).toInt().coerceIn(0, 255),
             (Color.blue(color) + blueAdd).coerceIn(0, 255)
         )
+    }
+    
+    /**
+     * Apply ambient tint to a color based on time of day.
+     * Per ai.md: "Everything is tinted by the sky color" 
+     * Objects should take on the ambient light color, especially at night/dusk.
+     * 
+     * @param baseColor The object's base color
+     * @param ambientColor The ambient/sky color to blend with
+     * @param distance 0.0 = foreground (less tint), 1.0 = background (more tint)
+     * @return The tinted color
+     */
+    fun applyAmbientTint(baseColor: Int, ambientColor: Int, distance: Float): Float {
+        // More distant objects blend more with ambient (atmospheric perspective)
+        // Foreground: 20% ambient, Background: 60% ambient
+        return 0.2f + distance * 0.4f
+    }
+    
+    /**
+     * Blend a color with the ambient atmosphere color.
+     * Implements the "Global Tint" system from ai.md.
+     * 
+     * @param baseColor The object's base/local color
+     * @param ambientColor The current ambient light color (varies by time of day)
+     * @param blendAmount How much to blend (0.0 = pure base, 1.0 = pure ambient)
+     */
+    fun blendWithAmbient(baseColor: Int, ambientColor: Int, blendAmount: Float): Int {
+        val amount = blendAmount.coerceIn(0f, 1f)
+        val r = (Color.red(baseColor) * (1 - amount) + Color.red(ambientColor) * amount).toInt()
+        val g = (Color.green(baseColor) * (1 - amount) + Color.green(ambientColor) * amount).toInt()
+        val b = (Color.blue(baseColor) * (1 - amount) + Color.blue(ambientColor) * amount).toInt()
+        return Color.rgb(r.coerceIn(0, 255), g.coerceIn(0, 255), b.coerceIn(0, 255))
+    }
+    
+    /**
+     * Get the ambient color for a given time of day.
+     */
+    fun getAmbientColor(timeOfDayHours: Float, isNight: Boolean, isDawn: Boolean, isDusk: Boolean): Int {
+        return when {
+            isNight -> AMBIENT_NIGHT
+            isDawn -> AMBIENT_DAWN
+            isDusk -> AMBIENT_DUSK
+            else -> AMBIENT_DAY
+        }
     }
 }
