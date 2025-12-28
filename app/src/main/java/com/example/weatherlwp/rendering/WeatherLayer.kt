@@ -220,47 +220,68 @@ class WeatherLayer {
     }
     
     /**
-     * Render fog as layered semi-transparent bands.
-     * Denser at bottom, thinner at top. Intensity affects opacity.
+     * Render fog as a smooth gradient overlay.
+     * Dense at bottom, fading to transparent at top. Intensity affects opacity.
      */
     private fun renderFog(canvas: Canvas) {
-        // Base fog opacity depends on intensity (20-60%)
-        val baseAlpha = (50 + intensity * 100).toInt().coerceIn(30, 150)
+        // Base fog opacity depends on intensity (30-80%)
+        val baseAlpha = (75 + intensity * 180).toInt().coerceIn(60, 200)
         
-        // Draw several fog layers from bottom to top
-        val layers = 5
-        for (i in 0 until layers) {
-            val layerRatio = i.toFloat() / layers
-            
-            // Lower layers are denser (higher alpha)
-            val layerAlpha = (baseAlpha * (1f - layerRatio * 0.7f)).toInt()
-            
-            // Fog color: grayish-white
-            fogPaint.color = Color.argb(layerAlpha, 200, 210, 220)
-            
-            // Each layer covers the bottom portion of screen
-            // Lower layers extend higher
-            val layerTop = screenHeight * (0.3f + layerRatio * 0.5f)
-            val layerBottom = screenHeight.toFloat()
-            
-            canvas.drawRect(0f, layerTop, screenWidth.toFloat(), layerBottom, fogPaint)
-        }
+        // Create a smooth vertical gradient from bottom (dense) to top (clear)
+        // Use LinearGradient for smooth transition instead of bands
+        val fogColor = Color.rgb(200, 210, 220)
+        val gradientShader = android.graphics.LinearGradient(
+            0f, screenHeight * 0.2f,  // Start: 20% from top (clear)
+            0f, screenHeight.toFloat(),  // End: bottom (dense)
+            Color.argb(0, 200, 210, 220),  // Transparent at top
+            Color.argb(baseAlpha, 200, 210, 220),  // Dense at bottom
+            android.graphics.Shader.TileMode.CLAMP
+        )
         
-        // Add some wispy horizontal streaks
+        fogPaint.shader = gradientShader
+        canvas.drawRect(0f, 0f, screenWidth.toFloat(), screenHeight.toFloat(), fogPaint)
+        fogPaint.shader = null
+        
+        // Add subtle animated wisps for depth
         val time = System.currentTimeMillis()
-        for (i in 0 until 8) {
-            val yBase = screenHeight * (0.5f + i * 0.06f)
-            val xOffset = kotlin.math.sin((time * 0.0001 + i * 0.5).toDouble()).toFloat() * 50f
-            val streakAlpha = (baseAlpha * 0.4f).toInt()
+        val wispAlpha = (baseAlpha * 0.3f).toInt()
+        
+        for (i in 0 until 6) {
+            // Each wisp has its own phase and speed
+            val phase = i * 1.047f  // 60 degrees apart
+            val speed = 0.00008f + i * 0.00002f
+            val yBase = screenHeight * (0.4f + i * 0.08f)
             
-            fogPaint.color = Color.argb(streakAlpha, 220, 225, 230)
+            // Horizontal drift
+            val xOffset = kotlin.math.sin((time * speed + phase).toDouble()).toFloat() * screenWidth * 0.15f
+            
+            // Wisp height varies over time
+            val wispHeight = 30f + kotlin.math.sin((time * 0.0002 + i).toDouble()).toFloat() * 15f
+            
+            // Use a gradient for each wisp too
+            val wispGradient = android.graphics.LinearGradient(
+                xOffset - screenWidth * 0.2f, yBase,
+                xOffset + screenWidth * 1.2f, yBase,
+                intArrayOf(
+                    Color.argb(0, 220, 225, 230),
+                    Color.argb(wispAlpha, 220, 225, 230),
+                    Color.argb(wispAlpha, 220, 225, 230),
+                    Color.argb(0, 220, 225, 230)
+                ),
+                floatArrayOf(0f, 0.3f, 0.7f, 1f),
+                android.graphics.Shader.TileMode.CLAMP
+            )
+            
+            fogPaint.shader = wispGradient
             canvas.drawRect(
-                -100f + xOffset, 
-                yBase - 10f, 
-                screenWidth + 100f + xOffset, 
-                yBase + 20f, 
+                0f,
+                yBase - wispHeight / 2f,
+                screenWidth.toFloat(),
+                yBase + wispHeight / 2f,
                 fogPaint
             )
         }
+        
+        fogPaint.shader = null
     }
 }

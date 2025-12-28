@@ -251,16 +251,24 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 hillUpperEnd = (hillLowerStart + 0.10f).coerceAtMost(0.90f)
             }
             
-            // Wind speed - check debug override first, then Breezy Weather
+            // Wind speed - check main wind strength slider first, then Breezy Weather
+            val mainWindStrength = prefs.getInt("pref_wind_strength", 50)
             val debugEnabled = prefs.getBoolean("pref_debug_enabled", false)
             val useBreezyWeather = prefs.getBoolean("pref_use_breezy_weather", true)
-            windSpeed = if (debugEnabled) {
-                val debugWind = prefs.getInt("pref_debug_wind_speed", 0)
-                if (debugWind > 0) debugWind / 100f else if (useBreezyWeather) WeatherRepository.getNormalizedWindStrength(context) else 0f
-            } else if (useBreezyWeather) {
-                WeatherRepository.getNormalizedWindStrength(context)
-            } else {
-                0f
+            
+            windSpeed = when {
+                // Debug override takes priority
+                debugEnabled -> {
+                    val debugWind = prefs.getInt("pref_debug_wind_speed", 0)
+                    if (debugWind > 0) debugWind / 100f 
+                    else mainWindStrength / 100f
+                }
+                // Main wind slider
+                mainWindStrength > 0 -> mainWindStrength / 100f
+                // Fallback to Breezy Weather
+                useBreezyWeather -> WeatherRepository.getNormalizedWindStrength(context)
+                // No wind
+                else -> 0f
             }
             
             // Cloud settings - check debug override first
@@ -322,7 +330,7 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
         synchronized(terrainLock) {
             try {
                 mountains.clear()
-            if (mountainCount <= 0) return
+                if (mountainCount <= 0) return@synchronized
             
             // Use a time-based seed for variety per session. Shapes are precomputed so they remain
             // stable frame-to-frame (no crawling/flicker).
@@ -364,8 +372,8 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 ))
             }
             
-            // Sort by depth (far mountains first = drawn first = behind)
-            mountains.sortBy { it.depthFactor }
+                // Sort by depth (far mountains first = drawn first = behind)
+                mountains.sortBy { it.depthFactor }
             } catch (e: Exception) {
                 Log.e(TAG, "Error generating mountains", e)
             }
@@ -430,7 +438,7 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
         synchronized(terrainLock) {
             try {
                 hills.clear()
-                if (hillCount <= 0) return
+                if (hillCount <= 0) return@synchronized
                 
                 // Use fixed seed for consistent terrain that trees can reference
                 val random = Random(12345)
@@ -507,7 +515,7 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
         synchronized(terrainLock) {
             try {
                 trees.clear()
-                if (treeCount <= 0) return
+                if (treeCount <= 0) return@synchronized
                 
                 val random = Random(42)
 
@@ -556,7 +564,7 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
         synchronized(terrainLock) {
             try {
                 clouds.clear()
-                if (cloudCount <= 0) return
+                if (cloudCount <= 0) return@synchronized
 
                 val random = Random(System.currentTimeMillis())
                 
@@ -995,7 +1003,7 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             // Sky should appear far behind, moving opposite to foreground
             val overscan = 300f + kotlin.math.abs(ox) * 0.4f + kotlin.math.abs(oy) * 0.4f
             canvas.save()
-            canvas.translate(-ox * 0.15f, -oy * 0.08f)  // Opposite direction, subtle movement
+            canvas.translate(-ox * 0.15f, -oy * 0.15f)  // Opposite direction, subtle movement
             canvas.drawRect(-overscan, -overscan, w + overscan, h + overscan, skyPaint)
             canvas.restore()
 
@@ -1005,7 +1013,7 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 val starAlphaBase = if (theme == "night") 150 else 80
                 // Stars move with mountains (far background, noticeable parallax)
                 val starParallaxX = ox * 0.30f
-                val starParallaxY = oy * 0.15f
+                val starParallaxY = oy * 0.30f
                 for (star in stars) {
                     val twinkle = kotlin.math.sin((time * 0.001 + star[0] * 10).toDouble())
                     val alpha = (starAlphaBase + 50 * twinkle).toInt().coerceIn(30, 220)
@@ -1019,7 +1027,7 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             synchronized(terrainLock) {
                 if (cloudCount > 0) {
                     val cloudParallaxX = -ox * 0.08f // Move slightly with sky
-                    val cloudParallaxY = -oy * 0.04f
+                    val cloudParallaxY = -oy * 0.08f
                     
                     for (cloud in clouds) {
                         // Animate cloud position (drift right)
@@ -1062,7 +1070,7 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 // Mountains have noticeable parallax (0.25-0.45) - more than trees
                 val mountainParallax = 0.25f + normalizedDepth * 0.20f
                 canvas.save()
-                canvas.translate(ox * mountainParallax, oy * mountainParallax * 0.3f)
+                canvas.translate(ox * mountainParallax, oy * mountainParallax)
                 drawMountain(canvas, w, h, mountain, scaleX)
                 canvas.restore()
             }
@@ -1084,7 +1092,7 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 val normalizedHillParallax = ((hill.depthFactor - 0.3f) / 0.2f).coerceIn(0f, 1f)
                 val hillParallax = 0.05f + normalizedHillParallax * 0.07f
                 canvas.save()
-                canvas.translate(ox * hillParallax, oy * hillParallax * 0.3f)
+                canvas.translate(ox * hillParallax, oy * hillParallax)
                 drawHill(canvas, w, h, hill.controlPoints, hill.heightOffset, scaleX)
                 canvas.restore()
             }
@@ -1119,7 +1127,7 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 val normalizedTreeParallax = ((tree.depthFactor - 0.3f) / 0.2f).coerceIn(0f, 1f)
                 val treeParallax = 0.05f + normalizedTreeParallax * 0.07f
                 canvas.save()
-                canvas.translate(ox * treeParallax, oy * treeParallax * 0.3f)
+                canvas.translate(ox * treeParallax, oy * treeParallax)
                 drawTree(canvas, tree.xRatio, h * tree.yRatio, tree.scale * treeScale, treeSegments, w, scaleX, tree.depthFactor)
                 canvas.restore()
             }
