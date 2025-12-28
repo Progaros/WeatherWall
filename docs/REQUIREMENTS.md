@@ -15,41 +15,16 @@ This document summarizes all requirements discussed and fixes implemented during
 | P2 | Add "Max Parallax Distance" slider (5-200 px) | ✅ Implemented |
 | P3 | Add "Return Speed" slider (1-100) | ✅ Implemented |
 | P4 | Return speed should have noticeable effect | ✅ Fixed (range 0.01-0.15) |
-| P5 | Vertical movement should be noticeable | ✅ Fixed (normalized sensor input) |
+| P5 | Vertical movement should be noticeable | ✅ Fixed (normalized sensor by 5f not 9.81) |
 | P6 | If extreme movement, center again | ✅ Implemented (damping at >1.0) |
+| P7 | Grace period before centering | ✅ Implemented (200ms) |
 
-### Test Cases
-```kotlin
-// P1: Test default parallax is subtle
-@Test fun testDefaultParallaxStrength() {
-    val calculator = ParallaxCalculator()
-    calculator.strength = 0.8f  // 80% default
-    calculator.maxOffsetPx = 40f
-    calculator.updateFromSensor(1.0f, 0f)  // Full tilt
-    calculator.update()
-    assert(calculator.getOffsetX() <= 40f) // Should not exceed maxOffset
-}
-
-// P4: Test return speed affects centering
-@Test fun testReturnSpeedEffective() {
-    val calculator = ParallaxCalculator()
-    calculator.centerDriftRate = 0.15f  // Max speed
-    calculator.updateFromSensor(1.0f, 0f)
-    calculator.update()
-    Thread.sleep(600)  // Past 500ms grace period
-    calculator.update(16)
-    val afterDrift = calculator.getOffsetX()
-    assert(afterDrift < calculator.maxOffsetPx) // Should have drifted toward center
-}
-
-// P5: Test vertical movement
-@Test fun testVerticalParallax() {
-    val calculator = ParallaxCalculator()
-    calculator.updateFromSensor(0f, 1.0f)  // Full Y tilt
-    calculator.update()
-    assert(calculator.getOffsetY() > 0f) // Y should be affected
-}
-```
+### Implementation Details
+- **Sensor normalization**: Divide by 5f (typical tilt range) instead of 9.81 (gravity)
+- **Return speed formula**: `centerDriftRate = 0.01f + (slider/100f) * 0.14f` (range 0.01-0.15)
+- **Lerp factor includes centerDriftRate**: `lerpFactor = 0.5f + centerDriftRate * 5f`
+- **Grace period**: 200ms before drift applies (reduced from 500ms)
+- **Extreme damping**: Input >1.0 triggers 50% damping
 
 ---
 
@@ -226,14 +201,36 @@ This document summarizes all requirements discussed and fixes implemented during
 
 ---
 
-## 6. Preferences / UI
+## 6. Weather Effects
 
 ### Requirements
 | ID | Requirement | Status |
 |----|-------------|--------|
-| U1 | Remove duplicate cloud density settings? | ℹ️ Kept (one normal, one debug) |
-| U2 | Remove simulate time of day? | ℹ️ Kept (useful for debug) |
-| U3 | Default values should be reasonable, not at extremes | ✅ Adjusted |
+| W1 | Lightning should have dark scary storm clouds | ✅ Implemented |
+| W2 | Wind should affect trees | ✅ Fixed (windSpeed/25 multiplier) |
+| W3 | Wind should affect clouds | ✅ Implemented |
+| W4 | Rain/Snow should be visible | ✅ Working |
+
+### Implementation Details
+- **Storm Clouds**: 3 layers of animated dark puffs behind lightning bolt
+- **Wind on Trees**: Tree sway calculated as `windSpeed / 25f` (range 0-4x)
+- **Wind on Clouds**: Cloud speed multiplied by `1 + windStrength/50f`
+
+---
+
+## 7. Preferences / UI
+
+### Requirements
+| ID | Requirement | Status |
+|----|-------------|--------|
+| U1 | Remove duplicate debug wind speed setting | ✅ Removed |
+| U2 | Manual time slider should use minutes (0-1439) | ✅ Fixed |
+| U3 | Mountain roughness max should be 200 | ✅ Fixed |
+| U4 | Add easter egg to version tap | ✅ Implemented |
+
+### Easter Egg
+- Tap version text 5 times to show random fun message
+- Messages include jokes about pixels, weather, and the app
 
 ### Current Defaults
 | Setting | Default | Range |
@@ -241,26 +238,32 @@ This document summarizes all requirements discussed and fixes implemented during
 | Mountain Count | 3 | 0-10 |
 | Mountain Width | 115% | 50-1000% |
 | Mountain Height | 150% | 10-1000% |
-| Mountain Roughness | 80 | 0-100 |
+| Mountain Roughness | 80 | 0-200 |
 | Hill Layers | 10 | 0-50 |
 | Hill Start | 50% | 30-70% |
 | Hill End | 85% | 60-90% |
 | Tree Count | 100 | 0-200 |
 | Tree Size | 200 (1.0x) | 10-1000 |
+| Tree Segments | 3 | 1-5 |
 | Tree Color Variation | 100 | 0-100 |
 | Wind Strength | 50 | 0-100 |
 | Parallax Strength | 80 | 10-300 |
 | Max Parallax Offset | 40 | 5-200 |
 | Return Speed | 50 | 1-100 |
-| Manual Time | 12 | 0-23 (hours) |
+| Manual Time | 720 | 0-1439 (minutes) |
 
 ---
 
-## Build & Verification
+## 8. Build & Testing
 
 ### Build Command
 ```bash
 docker run --rm -v "$PWD":/workspace -w /workspace ghcr.io/cirruslabs/android-sdk:35 ./gradlew assembleDebug
+```
+
+### Test Command
+```bash
+docker run --rm -v "$PWD":/workspace -w /workspace ghcr.io/cirruslabs/android-sdk:35 ./gradlew testDebugUnitTest
 ```
 
 ### APK Location
@@ -268,18 +271,52 @@ docker run --rm -v "$PWD":/workspace -w /workspace ghcr.io/cirruslabs/android-sd
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-### Last Successful Build
-- **Date**: 2025-12-28 16:07:55 CET
-- **Status**: BUILD SUCCESSFUL
+### Test Results (Dec 28, 2025)
+- **Total Tests**: 81
+- **Passed**: 81
+- **Failed**: 0
+- **Status**: ✅ ALL PASSING
 
 ---
 
-## Files Modified
+## 9. Files Modified
 
-1. `ParallaxCalculator.kt` - Added configurable limits and drift rates
-2. `ParallaxSensorManager.kt` - Fixed normalized sensor output
-3. `ParallaxScene.kt` - Added debug time support, fixed manual time
-4. `TerrainLayer.kt` - Added hill position, color variation, debug wind support
-5. `CloudLayer.kt` - Fixed density values, added debug override
-6. `SeasonalEvents.kt` - Fixed star positioning and overlap
-7. `preferences.xml` - Fixed manual time slider (hours not minutes)
+### Core Rendering
+| File | Changes |
+|------|---------|
+| `ParallaxCalculator.kt` | Added configurable limits and drift rates, grace period 200ms |
+| `ParallaxSensorManager.kt` | Fixed normalized sensor output (divide by 5f not 9.81) |
+| `ParallaxScene.kt` | Added debug time support, fixed manual time to minutes |
+| `TerrainLayer.kt` | Added hill position, color variation, tree segments, wind effect |
+| `CloudLayer.kt` | Fixed density values (none=0, overcast=35), added wind multiplier |
+| `MountainLayer.kt` | Increased roughness range to 0-200 |
+| `SkyLayer.kt` | Improved dawn/dusk color transitions |
+| `WeatherLayer.kt` | Added storm clouds to lightning effect |
+| `SeasonalEvents.kt` | Fixed star positioning, exclusion zone for background stars |
+
+### UI/Settings
+| File | Changes |
+|------|---------|
+| `SettingsFragment.kt` | Added version tap easter egg |
+| `preferences.xml` | Fixed manual time (0-1439), roughness max 200, removed debug wind |
+
+### Tests
+| File | Purpose |
+|------|---------|
+| `ParallaxCalculatorTest.kt` | Tests parallax physics, strength, offset limits |
+| `ParallaxSceneTest.kt` | Tests terrain baseline, sunset timing, night colors |
+| `SettingsTest.kt` | Tests preference values, cloud density mapping |
+| `HillsTerrainTest.kt` | Tests hill generation, parallax factors |
+| `TreeRenderingTest.kt` | Tests tree generation, color variation |
+| `SeasonalEventsTest.kt` | Tests Christmas star, background stars |
+| `WeatherRepositoryTest.kt` | Tests weather data handling |
+
+---
+
+## 10. Known Issues / Future Work
+
+| Issue | Status | Notes |
+|-------|--------|-------|
+| Unused variables in MountainLayer | ⚠️ Warning | currentX, currentY in drawMountain |
+| Unused variable in ParallaxScene | ⚠️ Warning | `now` variable in one method |
+| Time-dependent tests | ℹ️ Limitation | Can't easily test center drift without clock injection |

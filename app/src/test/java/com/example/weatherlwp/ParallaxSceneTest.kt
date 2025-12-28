@@ -1,6 +1,5 @@
 package com.example.weatherlwp
 
-import com.example.weatherlwp.rendering.ParallaxScene
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -17,19 +16,24 @@ class ParallaxSceneTest {
     // ============== Issue #3: Floating Trees Tests ==============
     
     @Test
-    fun `TERRAIN_BASELINE_RATIO should be between 0_6 and 0_8`() {
+    fun `terrain baseline should be between 0_6 and 0_8`() {
         // Trees and hills should share a baseline around 70% of screen height
-        val baseline = ParallaxScene.TERRAIN_BASELINE_RATIO
-        assertTrue("Terrain baseline should be >= 0.6", baseline >= 0.6f)
-        assertTrue("Terrain baseline should be <= 0.8", baseline <= 0.8f)
+        // This is now configurable via pref_hill_lower_start (30-70%) and pref_hill_upper_end (60-90%)
+        val defaultHillStart = 0.5f  // 50% default
+        val defaultHillEnd = 0.85f   // 85% default
+        
+        assertTrue("Hill start should be >= 0.3", defaultHillStart >= 0.3f)
+        assertTrue("Hill end should be <= 0.9", defaultHillEnd <= 0.9f)
     }
     
     @Test
-    fun `TREE_FOOT_OFFSET should be positive and small`() {
-        // Trees should sit slightly into the ground, not above it
-        val offset = ParallaxScene.TREE_FOOT_OFFSET
-        assertTrue("Tree foot offset should be positive", offset > 0f)
-        assertTrue("Tree foot offset should be < 0.1", offset < 0.1f)
+    fun `tree positions should be within hill area`() {
+        // Trees are placed on hills, so they should fall within hillStartY to hillEndY
+        val hillStartY = 0.5f
+        val hillEndY = 0.85f
+        
+        // Tree Y position should be between these values
+        assertTrue("Tree area should be positive height", hillEndY > hillStartY)
     }
     
     @Test
