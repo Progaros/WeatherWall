@@ -24,12 +24,15 @@ class ParallaxCalculatorTest {
         calculator.strength = 0.8f  // 80% default
         calculator.maxOffsetPx = 40f
         
-        // Full tilt in X direction
-        calculator.updateFromSensor(1.0f, 0f)
-        calculator.update(16)
+        // Continuous velocity input to drive to edge
+        repeat(100) {
+            calculator.updateFromSensor(1.0f, 0f)
+            calculator.update(16)
+        }
         
-        assertTrue("X offset should not exceed maxOffset * strength", 
-            kotlin.math.abs(calculator.getOffsetX()) <= 40f * 0.8f + 1f) // +1 for float tolerance
+        // In velocity-based system, position is clamped to maxOffsetPx
+        assertTrue("X offset should not exceed maxOffsetPx", 
+            kotlin.math.abs(calculator.getOffsetX()) <= 40f + 1f) // +1 for float tolerance
     }
 
     // P2: Test max offset is respected

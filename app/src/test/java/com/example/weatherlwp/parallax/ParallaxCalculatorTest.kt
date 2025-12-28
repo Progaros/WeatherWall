@@ -10,22 +10,17 @@ class ParallaxCalculatorTest {
         val calculator = ParallaxCalculator()
         calculator.strength = 1.0f
         
-        // Simulate sensor input
-        calculator.updateFromSensor(0.5f, -0.5f)
-        
-        // Target should be set (0.5 * 150 = 75)
-        // We can't access private target directly, but update() should move current towards it
-        
-        // Run update loop
-        for (i in 0 until 10) {
+        // Simulate continuous sensor input (velocity-based system)
+        repeat(20) {
+            calculator.updateFromSensor(0.5f, -0.5f)
             calculator.update(16)
         }
         
         val (x, y) = calculator.getOffset()
         
-        // Should have moved from 0 towards 75, -75
-        assert(x > 0)
-        assert(y < 0)
+        // Should have moved from 0 towards positive X, negative Y
+        assert(x > 0) { "X should be positive: $x" }
+        assert(y < 0) { "Y should be negative: $y" }
     }
 
     @Test
@@ -33,30 +28,36 @@ class ParallaxCalculatorTest {
         val calculator = ParallaxCalculator()
         calculator.strength = 1.0f
         calculator.maxOffsetPx = 150f  // Set higher max for this test
-        calculator.updateFromSensor(1.0f, 0.0f)
         
-        // Move to target
-        for (i in 0 until 100) {
+        // Continuous velocity input to drive position positive
+        repeat(50) {
+            calculator.updateFromSensor(1.0f, 0.0f)
             calculator.update(16)
         }
         
         val xAfterMove = calculator.getOffsetX()
-        assert(xAfterMove > 50f) { "X should be positive after moving: $xAfterMove" }
+        assert(xAfterMove > 10f) { "X should be positive after moving: $xAfterMove" }
         
         // Wait for drift (simulate time passing without sensor input)
-        // We need to mock System.currentTimeMillis() or wait?
-        // The calculator uses System.currentTimeMillis().
-        // We can't easily test time-dependent logic without dependency injection of Clock.
-        // But we can verify the logic structure via code review.
+        // After IDLE_FRAMES_BEFORE_DRIFT (30 frames), position should start drifting to center
+        // Run 100 more frames without input to test drift
+        repeat(100) {
+            calculator.update(16)
+        }
+        
+        val xAfterDrift = calculator.getOffsetX()
+        assert(xAfterDrift < xAfterMove) { "X should have drifted toward center: $xAfterMove -> $xAfterDrift" }
     }
     
     @Test
     fun testDepthScaling() {
         val calculator = ParallaxCalculator()
-        calculator.updateFromSensor(1.0f, 1.0f)
         
-        // Force update to apply some movement
-        calculator.update(100)
+        // Apply velocity to move position
+        repeat(20) {
+            calculator.updateFromSensor(1.0f, 1.0f)
+            calculator.update(16)
+        }
         
         val (baseX, baseY) = calculator.getOffset()
         val (depthX, depthY) = calculator.getOffsetForDepth(0.5f)
