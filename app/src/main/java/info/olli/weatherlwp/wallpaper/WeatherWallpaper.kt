@@ -212,8 +212,15 @@ class WeatherWallpaper : WallpaperService() {
         }
 
         private fun stopRender() {
-            renderThread?.interrupt()
+            val thread = renderThread
             renderThread = null
+            thread?.interrupt()
+            // Wait for thread to actually stop to prevent race conditions
+            try {
+                thread?.join(500)  // Wait up to 500ms
+            } catch (e: InterruptedException) {
+                // Ignore
+            }
         }
 
         private fun drawFrame() {

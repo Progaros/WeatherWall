@@ -218,8 +218,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
             cloudCount = manualDensity
             generateClouds()
         }
-        
-        android.util.Log.d("CloudLayer", "Clouds enabled: $enabled, count: $cloudCount, stretch: $cloudStretch, opacity: $cloudOpacity")
+        // Debug logging removed for performance
     }
 
     override fun destroy() {

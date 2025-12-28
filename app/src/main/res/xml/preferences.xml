@@ -154,11 +154,11 @@
 
         <SeekBarPreference
             android:key="pref_parallax_strength"
-            android:title="Parallax Strength"
-            android:summary="Input sensitivity (tilt to movement)"
-            android:defaultValue="80"
-            android:max="300"
-            app:min="10"
+            android:title="Input Sensitivity"
+            android:summary="Tilt sensitivity (0=off, 50=5x, logarithmic)"
+            android:defaultValue="25"
+            android:max="50"
+            app:min="0"
             app:showSeekBarValue="true"
             app:updatesContinuously="true"
             android:dependency="pref_parallax_enabled" />
