@@ -79,19 +79,13 @@ class SimulationSettings(context: Context) {
         }
         
         // Cloud settings
+        // Note: pref_cloud_density is now an Int (0-50) handled directly by CloudLayer.
+        // We keep cloudDensity as AUTO here since CloudLayer reads the actual count.
         cloudsEnabled = prefs.getBoolean("pref_clouds_enabled", true)
-        val densityStr = prefs.getString("pref_cloud_density", "auto") ?: "auto"
         cloudDensity = if (!cloudsEnabled) {
             CloudDensity.NONE
         } else {
-            when (densityStr.lowercase()) {
-                "none" -> CloudDensity.NONE
-                "light" -> CloudDensity.LIGHT
-                "medium" -> CloudDensity.MEDIUM
-                "heavy" -> CloudDensity.HEAVY
-                "overcast" -> CloudDensity.OVERCAST
-                else -> CloudDensity.AUTO
-            }
+            CloudDensity.AUTO
         }
         
         // Debug - also handle cloud and weather overrides from simulation mode

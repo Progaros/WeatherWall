@@ -86,64 +86,35 @@ class SettingsTest {
         assertEquals("Full variation", 1f, fullVariation, 0.001f)
     }
 
-    // C1: Test cloud density "none" value
+    // C1: Test cloud density integer value (0 = no clouds)
     @Test
     fun testCloudDensityNone() {
-        `when`(mockPrefs.getString("pref_cloud_density", "auto")).thenReturn("none")
+        `when`(mockPrefs.getInt("pref_cloud_density", 15)).thenReturn(0)
         
-        val density = mockPrefs.getString("pref_cloud_density", "auto")
-        val cloudCount = when (density) {
-            "none" -> 0
-            "light" -> 15
-            "medium" -> 40
-            "heavy" -> 80
-            "overcast" -> 150
-            else -> 40
-        }
+        val density = mockPrefs.getInt("pref_cloud_density", 15)
         
-        assertEquals("None should have 0 clouds", 0, cloudCount)
+        assertEquals("Density 0 should have 0 clouds", 0, density)
     }
 
-    // C2: Test cloud density "overcast" value
+    // C2: Test cloud density integer value (50 = maximum)
     @Test
-    fun testCloudDensityOvercast() {
-        `when`(mockPrefs.getString("pref_cloud_density", "auto")).thenReturn("overcast")
+    fun testCloudDensityMaximum() {
+        `when`(mockPrefs.getInt("pref_cloud_density", 15)).thenReturn(50)
         
-        val density = mockPrefs.getString("pref_cloud_density", "auto")
-        val cloudCount = when (density) {
-            "none" -> 0
-            "light" -> 15
-            "medium" -> 40
-            "heavy" -> 80
-            "overcast" -> 150
-            else -> 40
-        }
+        val density = mockPrefs.getInt("pref_cloud_density", 15)
         
-        assertEquals("Overcast should have 150 clouds", 150, cloudCount)
+        assertEquals("Max density should have 50 clouds", 50, density)
     }
 
-    // C4: Test all cloud density values
+    // C4: Test cloud density range
     @Test
-    fun testAllCloudDensityValues() {
-        val expectedCounts = mapOf(
-            "none" to 0,
-            "light" to 15,
-            "medium" to 40,
-            "heavy" to 80,
-            "overcast" to 150,
-            "auto" to 40
-        )
+    fun testCloudDensityRange() {
+        val testCases = listOf(0, 10, 15, 25, 40, 50)
         
-        expectedCounts.forEach { (density, expected) ->
-            val cloudCount = when (density) {
-                "none" -> 0
-                "light" -> 15
-                "medium" -> 40
-                "heavy" -> 80
-                "overcast" -> 150
-                else -> 40
-            }
-            assertEquals("$density should have $expected clouds", expected, cloudCount)
+        testCases.forEach { expected ->
+            `when`(mockPrefs.getInt("pref_cloud_density", 15)).thenReturn(expected)
+            val density = mockPrefs.getInt("pref_cloud_density", 15)
+            assertEquals("Density $expected should return $expected", expected, density)
         }
     }
 
