@@ -1,7 +1,5 @@
 package info.olli.weatherlwp.parallax
 
-import android.util.Log
-
 /**
  * Calculates parallax offset values using a velocity-based system.
  * 
@@ -20,8 +18,6 @@ import android.util.Log
  */
 class ParallaxCalculator {
     companion object {
-        private const val TAG = "ParallaxCalculator"
-        
         /** How quickly velocity input is integrated into position */
         private const val VELOCITY_SCALE = 3f
         
@@ -94,11 +90,6 @@ class ParallaxCalculator {
             val dy = smoothedVelocityY * VELOCITY_SCALE * strength * maxOffsetPx * deltaScale
             positionX += dx
             positionY += dy
-            
-            // Log significant movement
-            if (kotlin.math.abs(dx) > 0.1f || kotlin.math.abs(dy) > 0.1f) {
-                Log.d(TAG, "Position update: dx=%.2f, dy=%.2f -> pos=(%.1f, %.1f)".format(dx, dy, positionX, positionY))
-            }
             
             // Clamp to bounds
             positionX = positionX.coerceIn(-maxOffsetPx, maxOffsetPx)
@@ -186,14 +177,5 @@ class ParallaxCalculator {
         pendingVelocityX = 0f
         pendingVelocityY = 0f
         idleFrameCount = 0
-    }
-    
-    /**
-     * Debug logging of current state.
-     */
-    fun logState() {
-        Log.d(TAG, "Parallax: position=(%.1f, %.1f), idle=$idleFrameCount".format(
-            positionX, positionY
-        ))
     }
 }

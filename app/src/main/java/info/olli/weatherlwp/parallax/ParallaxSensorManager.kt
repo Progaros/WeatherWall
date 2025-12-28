@@ -113,9 +113,6 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         prevY = currentY
 
         // Send velocity to listener
-        if (velocityX != 0f || velocityY != 0f) {
-            Log.d(TAG, "Velocity: (%.3f, %.3f)".format(velocityX, velocityY))
-        }
         listener?.onOffsetChanged(velocityX, velocityY)
     }
 

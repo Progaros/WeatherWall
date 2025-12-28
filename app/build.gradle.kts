@@ -11,15 +11,28 @@ android {
         applicationId = "info.olli.weatherlwp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 25
-        versionName = "0.7.4"
+        versionCode = 26
+        versionName = "0.7.5"
     }
 
     buildFeatures {
         buildConfig = true
     }
 
+    // Signing config for consistent APK signatures between CI and local builds
+    signingConfigs {
+        create("ciDebug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("ciDebug")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
