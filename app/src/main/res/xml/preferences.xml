@@ -184,6 +184,28 @@
             app:showSeekBarValue="true"
             app:updatesContinuously="true"
             android:dependency="pref_parallax_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_parallax_smoothing"
+            android:title="Smoothing"
+            android:summary="Movement smoothness (1=responsive, 100=floaty)"
+            android:defaultValue="30"
+            android:max="100"
+            app:min="1"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_parallax_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_parallax_depth"
+            android:title="Depth Separation"
+            android:summary="Foreground vs background movement difference"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_parallax_enabled" />
     </PreferenceCategory>
 
     <!-- Visual Effects -->
@@ -195,12 +217,34 @@
             android:defaultValue="true" />
 
         <SeekBarPreference
+            android:key="pref_cloud_density"
+            android:title="Cloud Density"
+            android:summary="Number of clouds (0-50)"
+            android:defaultValue="15"
+            android:max="50"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_clouds_enabled" />
+
+        <SeekBarPreference
             android:key="pref_cloud_stretch"
             android:title="Cloud Stretch"
-            android:summary="Horizontal stretch factor (100=normal, 300=wispy)"
-            android:defaultValue="200"
+            android:summary="Horizontal stretch (200-400=normal, 500=wispy)"
+            android:defaultValue="300"
             android:max="500"
             app:min="50"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_clouds_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_cloud_opacity"
+            android:title="Cloud Opacity"
+            android:summary="Transparency (10=very see-through, 100=solid)"
+            android:defaultValue="40"
+            android:max="100"
+            app:min="10"
             app:showSeekBarValue="true"
             app:updatesContinuously="true"
             android:dependency="pref_clouds_enabled" />

@@ -62,6 +62,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
     private val clouds = ArrayList<CloudData>()
     private var cloudCount = 10
     private var cloudStretch = 2.0f  // Horizontal stretch multiplier (1.0 = normal, 2.0 = wispy)
+    private var cloudOpacity = 0.4f  // Base opacity multiplier (0-1)
+    private var manualDensity = -1   // -1 = use SimulationState, 0+ = manual setting
     private var randomSeed = 42
     
     init {
@@ -78,10 +80,12 @@ class CloudLayer(private val context: Context) : SceneLayer {
             val size = 0.08f + random.nextFloat() * 0.25f
             // Base speed - smaller clouds move faster (further away)
             val speed = 0.05f + (1f - size / 0.33f) * 0.1f
-            // Lower alpha for lighter, more see-through clouds
-            // Small clouds (far/thin) are more transparent: 15-40
-            // Large clouds (near/thick) are slightly more opaque: 40-60
-            val alpha = (15 + size * 135).toInt().coerceIn(15, 60)
+            // Alpha based on size and opacity setting
+            // Small clouds (far/thin) are more transparent
+            // Large clouds (near/thick) are more opaque
+            // cloudOpacity scales the final alpha (0.1 = very see-through, 1.0 = solid)
+            val baseAlpha = (10 + size * 150).toInt()  // 10-60 range before opacity
+            val alpha = (baseAlpha * cloudOpacity).toInt().coerceIn(5, 100)
             // Horizontal elongation - base from setting, with random variation
             val elongation = cloudStretch * (0.8f + random.nextFloat() * 0.4f)
             
@@ -101,8 +105,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         if (width <= 0 || height <= 0) return
         
-        // Use cloud count from simulation state
-        val targetCount = state.getCloudCount()
+        // Use manual density if set, otherwise use simulation state
+        val targetCount = if (manualDensity >= 0) manualDensity else state.getCloudCount()
         if (targetCount != cloudCount) {
             cloudCount = targetCount
             generateClouds()
@@ -188,23 +192,34 @@ class CloudLayer(private val context: Context) : SceneLayer {
         randomSeed = newSeed
         
         // Cloud stretch setting: 50-500 -> 0.5-5.0
-        val stretchVal = prefs.getInt("pref_cloud_stretch", 200)
+        val stretchVal = prefs.getInt("pref_cloud_stretch", 300)
         val newStretch = stretchVal / 100f
         
-        // Regenerate clouds if stretch or seed changed
+        // Cloud opacity setting: 10-100 -> 0.1-1.0
+        val opacityVal = prefs.getInt("pref_cloud_opacity", 40)
+        val newOpacity = opacityVal / 100f
+        
+        // Manual cloud density: 0-50 (used directly as cloud count)
+        val densityVal = prefs.getInt("pref_cloud_density", 15)
+        val densityChanged = densityVal != manualDensity
+        manualDensity = densityVal
+        
+        // Detect changes that require regeneration
         val stretchChanged = kotlin.math.abs(newStretch - cloudStretch) > 0.01f
+        val opacityChanged = kotlin.math.abs(newOpacity - cloudOpacity) > 0.01f
         cloudStretch = newStretch
+        cloudOpacity = newOpacity
         
         if (!enabled) {
             cloudCount = 0
             clouds.clear()
-        } else if (stretchChanged || seedChanged) {
+        } else if (stretchChanged || seedChanged || opacityChanged || densityChanged) {
             // Regenerate clouds with new settings
+            cloudCount = manualDensity
             generateClouds()
         }
-        // Cloud count is now managed by SimulationState.getCloudCount()
         
-        android.util.Log.d("CloudLayer", "Clouds enabled: $enabled, stretch: $cloudStretch, seed: $randomSeed")
+        android.util.Log.d("CloudLayer", "Clouds enabled: $enabled, count: $cloudCount, stretch: $cloudStretch, opacity: $cloudOpacity")
     }
 
     override fun destroy() {

@@ -238,12 +238,33 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val totalHeight = height * 0.15f * tree.scale * treeSizeScale
         val segmentHeight = totalHeight / treeSegments
         
-        // Wind sway using simulation time for consistency
-        // state.windStrength ranges 0-1, multiply for visible effect
-        val effectiveWind = state.windStrength * 5f  // 0-5x multiplier for extreme sway at max wind
+        // Wind sway: smooth multi-harmonic motion
+        // state.windStrength ranges 0-1
+        val windStrength = state.windStrength.coerceIn(0f, 1f)
         val timeSec = state.timeSeconds
-        val sway = sin(timeSec * RenderConstants.TREE_SWAY_FREQUENCY + tree.xRatio * 10f) * 
-            (totalHeight * RenderConstants.TREE_SWAY_AMPLITUDE * effectiveWind)
+        
+        // Base sway frequency increases with wind strength (slow breeze -> fast gusts)
+        val baseFreq = RenderConstants.TREE_SWAY_FREQUENCY * (0.5f + windStrength)
+        
+        // Multiple harmonics for natural movement
+        // Each tree has unique phase offset based on position
+        val phase = tree.xRatio * 10f + tree.yRatio * 5f
+        
+        // Primary sway: main oscillation
+        val primarySway = sin(timeSec * baseFreq + phase)
+        
+        // Secondary sway: slower, larger gust effect
+        val gustSway = sin(timeSec * baseFreq * 0.3f + phase * 0.5f) * 0.4f
+        
+        // Tertiary: small high-frequency flutter
+        val flutter = sin(timeSec * baseFreq * 2.5f + phase * 2f) * 0.15f
+        
+        // Combined sway normalized to -1..1 range
+        val combinedSway = (primarySway + gustSway + flutter).coerceIn(-1.5f, 1.5f) / 1.5f
+        
+        // Amplitude scales smoothly with wind strength (squared for more natural feel)
+        val amplitude = totalHeight * RenderConstants.TREE_SWAY_AMPLITUDE * windStrength * windStrength * 3f
+        val sway = combinedSway * amplitude
         
         for (seg in 0 until treeSegments) {
             val segY = y - seg * segmentHeight * 0.7f

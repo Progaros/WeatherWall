@@ -106,9 +106,7 @@ class ParallaxScene(
             val state = simulationController.getState()
             
             // Update parallax physics (smoothing, center drift)
-            parallaxCalculator.strength = parallaxStrength
-            parallaxCalculator.maxOffsetPx = parallaxMaxOffsetPx
-            parallaxCalculator.centerDriftRate = parallaxReturnRate
+            // Note: parallax settings are applied in loadPrefs(), not here
             parallaxCalculator.update()
             
             // Update layers with state
@@ -158,6 +156,21 @@ class ParallaxScene(
             // Return speed slider: map 1..100 -> 0.01f..0.10f
             val returnSpeed = prefs.getInt("pref_parallax_return_speed", 50).coerceIn(1, 100)
             parallaxReturnRate = 0.01f + (returnSpeed / 100f) * 0.09f
+            
+            // Smoothing slider: map 1..100 -> 0.01f..0.9f (higher = more smooth)
+            val smoothingVal = prefs.getInt("pref_parallax_smoothing", 30).coerceIn(1, 100)
+            val smoothingFactor = 0.01f + (smoothingVal / 100f) * 0.89f
+            
+            // Depth separation slider: map 0..100 -> 0f..1f
+            val depthVal = prefs.getInt("pref_parallax_depth", 50).coerceIn(0, 100)
+            val depthSeparation = depthVal / 100f
+            
+            // Apply to parallax calculator
+            parallaxCalculator.strength = parallaxStrength
+            parallaxCalculator.maxOffsetPx = parallaxMaxOffsetPx
+            parallaxCalculator.centerDriftRate = parallaxReturnRate
+            parallaxCalculator.smoothing = smoothingFactor
+            parallaxCalculator.depthSeparation = depthSeparation
             
             // Weather and seasonal toggles
             weatherEnabled = prefs.getBoolean("pref_weather_enabled", true)

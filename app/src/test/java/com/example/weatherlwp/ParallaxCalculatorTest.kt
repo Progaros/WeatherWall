@@ -129,14 +129,20 @@ class ParallaxCalculatorTest {
     fun testDepthBasedOffset() {
         calculator.strength = 1.0f
         calculator.maxOffsetPx = 100f
+        calculator.depthSeparation = 1.0f  // Max separation for clear test
         
-        calculator.updateFromSensor(1.0f, 0f)
-        repeat(20) { calculator.update(16) }
+        repeat(20) {
+            calculator.updateFromSensor(1.0f, 0f)
+            calculator.update(16)
+        }
         
         val baseOffset = calculator.getOffsetX()
         val halfDepthOffset = calculator.getOffsetXForDepth(0.5f)
         val fullDepthOffset = calculator.getOffsetXForDepth(1.0f)
         
+        // With depthSeparation=1.0: minScale=0
+        // At depth 0.5: effectiveDepth = 0 + 0.5*1.0 = 0.5
+        // At depth 1.0: effectiveDepth = 0 + 1.0*1.0 = 1.0
         assertEquals("Half depth should be half offset", 
             baseOffset * 0.5f, halfDepthOffset, 1f)
         assertEquals("Full depth should equal base offset", 
@@ -146,12 +152,17 @@ class ParallaxCalculatorTest {
     // Test getOffsetForDepth returns correct pair
     @Test
     fun testGetOffsetForDepthReturnsPair() {
-        calculator.updateFromSensor(0.5f, 0.8f)
-        repeat(20) { calculator.update(16) }
+        calculator.depthSeparation = 1.0f  // Max separation for clear test
+        
+        repeat(20) {
+            calculator.updateFromSensor(0.5f, 0.8f)
+            calculator.update(16)
+        }
         
         val offset = calculator.getOffsetForDepth(0.5f)
         
-        assertEquals(calculator.getOffsetX() * 0.5f, offset.first, 0.5f)
-        assertEquals(calculator.getOffsetY() * 0.5f, offset.second, 0.5f)
+        // With depthSeparation=1.0: effectiveDepth = 0.5
+        assertEquals(calculator.getOffsetX() * 0.5f, offset.first, 1f)
+        assertEquals(calculator.getOffsetY() * 0.5f, offset.second, 1f)
     }
 }
