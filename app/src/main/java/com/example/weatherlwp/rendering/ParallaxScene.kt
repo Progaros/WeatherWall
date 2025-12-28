@@ -32,9 +32,52 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
     companion object {
         private const val TAG = "ParallaxScene"
         
-        // Unified terrain baseline - all ground elements share this reference
-        const val TERRAIN_BASELINE_RATIO = 0.70f  // 70% down the screen is the "ground line"
-        const val TREE_FOOT_OFFSET = 0.02f        // Trees sit slightly into the ground
+        // ========== TERRAIN GEOMETRY CONSTANTS ==========
+        
+        /** Ground line position as ratio of screen height (70% down) */
+        const val TERRAIN_BASELINE_RATIO = 0.70f
+        
+        /** Offset to sink tree bases slightly into ground */
+        const val TREE_FOOT_OFFSET = 0.02f
+        
+        /** Extended world bounds for wide aspect ratio support (e.g., 4:1 preview) */
+        private const val WORLD_MIN_X = -4.0f
+        private const val WORLD_MAX_X = 5.0f
+        
+        /** Reference aspect ratio (9:16) for consistent scaling */
+        private const val REFERENCE_ASPECT_RATIO = 0.5625f  // 9/16
+        
+        // ========== PARALLAX FACTORS ==========
+        
+        /** Sky moves opposite to create depth illusion */
+        private const val SKY_PARALLAX_FACTOR = -0.15f
+        
+        /** Stars move with distant mountains */
+        private const val STAR_PARALLAX_FACTOR = 0.30f
+        
+        /** Clouds drift slightly behind mountains */
+        private const val CLOUD_PARALLAX_FACTOR = 0.08f
+        
+        /** Mountains: far (0.25) to near (0.45) */
+        private const val MOUNTAIN_PARALLAX_BASE = 0.25f
+        private const val MOUNTAIN_PARALLAX_RANGE = 0.20f
+        
+        /** Hills and trees: foreground elements (0.05 to 0.12) */
+        private const val FOREGROUND_PARALLAX_BASE = 0.05f
+        private const val FOREGROUND_PARALLAX_RANGE = 0.07f
+        
+        // ========== TIME OF DAY CONSTANTS ==========
+        
+        /** Dawn/dusk transition duration in milliseconds (45 minutes) */
+        private const val TRANSITION_DURATION_MS = 45 * 60 * 1000L
+        
+        /** Time boundaries for day/night calculation */
+        private const val NIGHT_END_HOUR = 5f
+        private const val DAWN_END_HOUR = 7f
+        private const val DAY_END_HOUR = 17f
+        private const val DUSK_END_HOUR = 21f
+        
+        // ========== COLOR PALETTES ==========
         
         // Mountain colors by time of day (from ai.md reference)
         // Night: Deep indigo/purple
@@ -96,24 +139,29 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
     private val treePath = Path()
     private val cloudPath = Path()
 
-    private var ox = 0f
-    private var oy = 0f
-    @Volatile private var targetOx = 0f  // Raw sensor input (written from sensor thread)
-    @Volatile private var targetOy = 0f  // Raw sensor input (written from sensor thread)
-    private var centerDriftSpeed = 0.002f  // How fast offset drifts toward center (per frame)
+    // Parallax offset values (smoothed sensor input)
+    private var parallaxOffsetX = 0f
+    private var parallaxOffsetY = 0f
+    @Volatile private var targetParallaxX = 0f  // Raw sensor input (written from sensor thread)
+    @Volatile private var targetParallaxY = 0f  // Raw sensor input (written from sensor thread)
+    
+    /** Rate at which parallax drifts back to center (per frame) */
+    private var centerDriftSpeed = 0.002f
+    
+    // User-configurable settings
     private var parallaxStrength = 1.0f
     private var treeCount = 20
     private var treeScale = 1.0f
-    private var treeSegments = 3  // Global setting: 1-5 segments per tree
-    private var treeColorVariation = 0.3f  // 0-1: how much color varies between trees
+    private var treeSegments = 3  // 1-5 segments per tree
+    private var treeColorVariation = 0.3f  // 0-1: color variation between trees
     private var mountainCount = 3
-    private var lastMountainCount = 3         // Track for live updates
+    private var lastMountainCount = 3
     private var mountainWidthScale = 1.0f
-    private var lastMountainWidthScale = 1.0f  // Track for live updates
-    private var mountainHeightScale = 1.0f     // Height multiplier (0.1 - 10.0)
-    private var lastMountainHeightScale = 1.0f // Track for live updates
-    private var mountainRoughness = 0.5f       // 0-1: jaggedness of mountain silhouette
-    private var lastMountainRoughness = 0.5f   // Track for live updates
+    private var lastMountainWidthScale = 1.0f
+    private var mountainHeightScale = 1.0f  // Height multiplier (0.1 - 10.0)
+    private var lastMountainHeightScale = 1.0f
+    private var mountainRoughness = 0.5f  // 0-1: jaggedness of mountain silhouette
+    private var lastMountainRoughness = 0.5f
     
     // Wind sway for trees (from Breezy Weather)
     private var windSpeed = 0f  // 0-1 normalized wind strength
@@ -951,14 +999,14 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
     fun stop() = sensor.stop()
 
     override fun onOffsetChanged(x: Float, y: Float) {
-        // Store raw sensor offset - actual ox/oy will drift toward center
-        targetOx = x * parallaxStrength
-        targetOy = y * parallaxStrength
+        // Store raw sensor offset - smoothed values will drift toward center
+        targetParallaxX = x * parallaxStrength
+        targetParallaxY = y * parallaxStrength
         
         // Immediately follow sensor but with a slight bias toward center
         // This creates a "floating" effect where the scene slowly returns to center
-        ox = targetOx * 0.85f  // Reduce immediate effect slightly
-        oy = targetOy * 0.85f
+        parallaxOffsetX = targetParallaxX * 0.85f
+        parallaxOffsetY = targetParallaxY * 0.85f
     }
 
     fun render(canvas: Canvas) {
@@ -973,8 +1021,8 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             
             // Slowly drift offset toward center so movement is always visible
             // This prevents the parallax from getting "stuck" at an extreme angle
-            ox *= (1f - centerDriftSpeed)
-            oy *= (1f - centerDriftSpeed)
+            parallaxOffsetX *= (1f - centerDriftSpeed)
+            parallaxOffsetY *= (1f - centerDriftSpeed)
             
             // Update wind animation time
             windTime = System.currentTimeMillis()
@@ -985,8 +1033,7 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             // Calculate horizontal scale to maintain aspect ratio
             // Always base scaling on height to maintain consistent proportions
             // regardless of canvas width (preview strip vs actual wallpaper).
-            // 0.5625 = 9/16 ratio, so on a 9:16 phone, scaleX ≈ screen width
-            val scaleX = h * 0.5625f
+            val scaleX = h * REFERENCE_ASPECT_RATIO
 
             // Update day/night ratio using Breezy Weather sunrise/sunset when available
             updateDayNightRatio()
@@ -1012,21 +1059,20 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 Log.d(TAG, "Scene update: theme=$theme, time=$timeOfDay, dayNight=${prefs.getBoolean("pref_daynight_enabled", true)}, manualTime=${prefs.getInt("pref_manual_time", 12)}, size=${w.toInt()}x${h.toInt()}, mountains=${mountains.size}, trees=${trees.size}")
             }
 
-            // Layer 0: Sky gradient (moves OPPOSITE direction for depth illusion - ai.md spec)
-            // Sky should appear far behind, moving opposite to foreground
-            val overscan = 300f + kotlin.math.abs(ox) * 0.4f + kotlin.math.abs(oy) * 0.4f
+            // Layer 0: Sky gradient (moves OPPOSITE direction for depth illusion)
+            val overscan = 300f + kotlin.math.abs(parallaxOffsetX) * 0.4f + kotlin.math.abs(parallaxOffsetY) * 0.4f
             canvas.save()
-            canvas.translate(-ox * 0.15f, -oy * 0.15f)  // Opposite direction, subtle movement
+            canvas.translate(parallaxOffsetX * SKY_PARALLAX_FACTOR, parallaxOffsetY * SKY_PARALLAX_FACTOR)
             canvas.drawRect(-overscan, -overscan, w + overscan, h + overscan, skyPaint)
             canvas.restore()
 
-            // Stars (night/dusk only) - tiny white dots per ai.md with parallax similar to mountains
+            // Stars (night/dusk only) - tiny white dots with parallax similar to mountains
             if (theme == "night" || theme == "dusk") {
                 val time = System.currentTimeMillis()
                 val starAlphaBase = if (theme == "night") 150 else 80
-                // Stars move with mountains (far background, noticeable parallax)
-                val starParallaxX = ox * 0.30f
-                val starParallaxY = oy * 0.30f
+                // Stars move with distant mountains
+                val starParallaxX = parallaxOffsetX * STAR_PARALLAX_FACTOR
+                val starParallaxY = parallaxOffsetY * STAR_PARALLAX_FACTOR
                 for (star in stars) {
                     val twinkle = kotlin.math.sin((time * 0.001 + star[0] * 10).toDouble())
                     val alpha = (starAlphaBase + 50 * twinkle).toInt().coerceIn(30, 220)
@@ -1039,8 +1085,8 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             // Synchronized to prevent ConcurrentModificationException from preference changes
             synchronized(terrainLock) {
                 if (cloudCount > 0) {
-                    val cloudParallaxX = -ox * 0.08f // Move slightly with sky
-                    val cloudParallaxY = -oy * 0.08f
+                    val cloudParallaxX = parallaxOffsetX * CLOUD_PARALLAX_FACTOR
+                    val cloudParallaxY = parallaxOffsetY * CLOUD_PARALLAX_FACTOR
                     
                     for (cloud in clouds) {
                         // Animate cloud position (drift right)
@@ -1080,10 +1126,10 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 
                 mountainPaint.color = mountainColor
                 
-                // Mountains have noticeable parallax (0.25-0.45) - more than trees
-                val mountainParallax = 0.25f + normalizedDepth * 0.20f
+                // Mountains have noticeable parallax (0.25-0.45)
+                val mountainParallax = MOUNTAIN_PARALLAX_BASE + normalizedDepth * MOUNTAIN_PARALLAX_RANGE
                 canvas.save()
-                canvas.translate(ox * mountainParallax, oy * mountainParallax)
+                canvas.translate(parallaxOffsetX * mountainParallax, parallaxOffsetY * mountainParallax)
                 drawMountain(canvas, w, h, mountain, scaleX)
                 canvas.restore()
             }
@@ -1101,11 +1147,11 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 
                 hillPaint.color = hillColor
                 
-                // Hills barely move like trees (0.05-0.12) - foreground terrain
+                // Hills are foreground terrain (0.05-0.12)
                 val normalizedHillParallax = ((hill.depthFactor - 0.3f) / 0.2f).coerceIn(0f, 1f)
-                val hillParallax = 0.05f + normalizedHillParallax * 0.07f
+                val hillParallax = FOREGROUND_PARALLAX_BASE + normalizedHillParallax * FOREGROUND_PARALLAX_RANGE
                 canvas.save()
-                canvas.translate(ox * hillParallax, oy * hillParallax)
+                canvas.translate(parallaxOffsetX * hillParallax, parallaxOffsetY * hillParallax)
                 drawHill(canvas, w, h, hill.controlPoints, hill.heightOffset, scaleX)
                 canvas.restore()
             }
@@ -1135,12 +1181,11 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 val adjustedColor = applyNightMultiplier(brightnessAdjusted, dayNightRatio)
                 treePaint.color = adjustedColor
 
-                // Trees barely move (0.05-0.12) - they're in foreground, closest to viewer
-                // Normalized from depthFactor 0.3-0.5 to parallax 0.05-0.12
+                // Trees are foreground, closest to viewer (0.05-0.12)
                 val normalizedTreeParallax = ((tree.depthFactor - 0.3f) / 0.2f).coerceIn(0f, 1f)
-                val treeParallax = 0.05f + normalizedTreeParallax * 0.07f
+                val treeParallax = FOREGROUND_PARALLAX_BASE + normalizedTreeParallax * FOREGROUND_PARALLAX_RANGE
                 canvas.save()
-                canvas.translate(ox * treeParallax, oy * treeParallax)
+                canvas.translate(parallaxOffsetX * treeParallax, parallaxOffsetY * treeParallax)
                 drawTree(canvas, tree.xRatio, h * tree.yRatio, tree.scale * treeScale, treeSegments, w, scaleX, tree.depthFactor)
                 canvas.restore()
             }

@@ -227,14 +227,17 @@ class WeatherLayer {
         // Base fog opacity depends on intensity (30-80%)
         val baseAlpha = (75 + intensity * 180).toInt().coerceIn(60, 200)
         
+        // Fog color components for gradient
+        val fogR = 200
+        val fogG = 210
+        val fogB = 220
+        
         // Create a smooth vertical gradient from bottom (dense) to top (clear)
-        // Use LinearGradient for smooth transition instead of bands
-        val fogColor = Color.rgb(200, 210, 220)
         val gradientShader = android.graphics.LinearGradient(
             0f, screenHeight * 0.2f,  // Start: 20% from top (clear)
             0f, screenHeight.toFloat(),  // End: bottom (dense)
-            Color.argb(0, 200, 210, 220),  // Transparent at top
-            Color.argb(baseAlpha, 200, 210, 220),  // Dense at bottom
+            Color.argb(0, fogR, fogG, fogB),  // Transparent at top
+            Color.argb(baseAlpha, fogR, fogG, fogB),  // Dense at bottom
             android.graphics.Shader.TileMode.CLAMP
         )
         

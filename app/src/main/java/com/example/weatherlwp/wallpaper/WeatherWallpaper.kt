@@ -23,7 +23,7 @@ class WeatherWallpaper : WallpaperService() {
 
     inner class WeatherEngine : Engine() {
         private var renderThread: Thread? = null
-        private var visible: Boolean = false
+        @Volatile private var isVisible: Boolean = false
 
         private lateinit var scene: ParallaxScene
         private lateinit var seasonal: SeasonalEvents
@@ -63,7 +63,7 @@ class WeatherWallpaper : WallpaperService() {
             try {
                 // Some wallpaper preview flows create a surface without reliably calling
                 // onVisibilityChanged(true) first. Treat a created surface as visible.
-                visible = true
+                isVisible = true
                 loadPrefs()
                 scene.start()  // Start sensors
                 startRender()
@@ -76,7 +76,7 @@ class WeatherWallpaper : WallpaperService() {
 
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
             try {
-                visible = false
+                isVisible = false
                 stopRender()
                 scene.stop()
             } catch (e: Exception) {
@@ -86,7 +86,7 @@ class WeatherWallpaper : WallpaperService() {
         }
 
         override fun onVisibilityChanged(visible: Boolean) {
-            this.visible = visible
+            this.isVisible = visible
             try {
                 if (visible) {
                     loadPrefs()
@@ -187,7 +187,7 @@ class WeatherWallpaper : WallpaperService() {
                 try {
                     val frameTimeMs = (1000L / targetFps.toLong()).coerceAtLeast(16L)
                     while (!Thread.currentThread().isInterrupted) {
-                        if (!visible) {
+                        if (!isVisible) {
                             SystemClock.sleep(250)
                             continue
                         }
