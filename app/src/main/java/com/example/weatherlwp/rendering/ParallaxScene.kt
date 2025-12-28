@@ -98,8 +98,8 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
 
     private var ox = 0f
     private var oy = 0f
-    private var targetOx = 0f  // Raw sensor input
-    private var targetOy = 0f  // Raw sensor input
+    @Volatile private var targetOx = 0f  // Raw sensor input (written from sensor thread)
+    @Volatile private var targetOy = 0f  // Raw sensor input (written from sensor thread)
     private var centerDriftSpeed = 0.002f  // How fast offset drifts toward center (per frame)
     private var parallaxStrength = 1.0f
     private var treeCount = 20
@@ -336,13 +336,25 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
             // stable frame-to-frame (no crawling/flicker).
             val random = Random(System.currentTimeMillis() / 60000)
             
-            // Generate mountains with truly random positions across the screen
+            // Generate mountains with positions biased towards visible center
+            // Visible screen is roughly 0-1, but we allow some in extended range for parallax
             for (i in 0 until mountainCount) {
                 // Assign depth randomly, not based on order
                 val depth = random.nextFloat()
                 
-                // Random X position across the wider world
-                val peakX = WORLD_MIN_X + random.nextFloat() * (WORLD_MAX_X - WORLD_MIN_X)
+                // Bias mountain positions towards the visible center (0.0 to 1.0)
+                // 70% of mountains in center area (-0.5 to 1.5), 30% in extended area
+                val peakX = if (random.nextFloat() < 0.7f) {
+                    // Center area: visible screen plus small buffer
+                    -0.5f + random.nextFloat() * 2.0f  // -0.5 to 1.5
+                } else {
+                    // Extended area for parallax depth (avoid extreme edges)
+                    if (random.nextBoolean()) {
+                        -2.0f + random.nextFloat() * 1.5f  // -2.0 to -0.5 (left)
+                    } else {
+                        1.5f + random.nextFloat() * 1.5f   // 1.5 to 3.0 (right)
+                    }
+                }
                 
                 // Far mountains (low depth) are taller and more prominent
                 // Near mountains (high depth) are lower to create foreground hills
@@ -517,7 +529,8 @@ class ParallaxScene(private val context: Context) : ParallaxSensorManager.Listen
                 trees.clear()
                 if (treeCount <= 0) return@synchronized
                 
-                val random = Random(42)
+                // Use time-based seed for variety per session (stable within session)
+                val random = Random(System.currentTimeMillis() / 60000)
 
                 // Generate trees that sit on the terrain
                 // Trees are placed relative to the unified TERRAIN_BASELINE_RATIO
