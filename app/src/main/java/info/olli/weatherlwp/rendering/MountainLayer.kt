@@ -140,6 +140,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
      * Draw a soft atmospheric haze at the bottom portion of the screen.
      * This simulates fog/mist at the base of mountains as described in ai.md.
      */
+    @Suppress("UNUSED_PARAMETER")
     private fun drawAtmosphericHaze(canvas: Canvas, isNight: Boolean, ambientColor: Int) {
         val hazeStartY = height * 0.55f  // Start at 55% down
         val hazeEndY = height * 0.85f    // Fade to 85% down
@@ -165,6 +166,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
         hazePaint.shader = null
     }
     
+    @Suppress("UNUSED_PARAMETER")
     private fun drawMountain(canvas: Canvas, mountain: MountainData, scaleX: Float, isNight: Boolean, ambientColor: Int) {
         pathLeft.reset()
         pathRight.reset()

@@ -28,10 +28,9 @@ class SettingsTest {
 
     @Before
     fun setUp() {
-        // Default stub for SharedPreferences
+        // Default stub for SharedPreferences (only Int and Boolean are used)
         `when`(mockPrefs.getBoolean(anyString(), anyBoolean())).thenAnswer { it.arguments[1] }
         `when`(mockPrefs.getInt(anyString(), anyInt())).thenAnswer { it.arguments[1] }
-        `when`(mockPrefs.getString(anyString(), anyString())).thenAnswer { it.arguments[1] }
     }
 
     // D1: Test manual time is interpreted as hours (0-23)

@@ -82,9 +82,9 @@ class ParallaxScene(
         sensor.stop()
     }
 
-    override fun onOffsetChanged(x: Float, y: Float) {
+    override fun onOffsetChanged(velocityX: Float, velocityY: Float) {
         // Pass normalized sensor input to calculator
-        parallaxCalculator.updateFromSensor(x, y)
+        parallaxCalculator.updateFromSensor(velocityX, velocityY)
     }
 
     fun render(canvas: Canvas) {

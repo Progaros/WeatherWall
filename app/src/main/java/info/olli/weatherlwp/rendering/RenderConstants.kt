@@ -182,6 +182,7 @@ object RenderConstants {
      * @param distance 0.0 = foreground (less tint), 1.0 = background (more tint)
      * @return The tinted color
      */
+    @Suppress("UNUSED_PARAMETER")
     fun applyAmbientTint(baseColor: Int, ambientColor: Int, distance: Float): Float {
         // More distant objects blend more with ambient (atmospheric perspective)
         // Foreground: 5% ambient, Background: 45% ambient
@@ -208,6 +209,7 @@ object RenderConstants {
     /**
      * Get the ambient color for a given time of day.
      */
+    @Suppress("UNUSED_PARAMETER")
     fun getAmbientColor(timeOfDayHours: Float, isNight: Boolean, isDawn: Boolean, isDusk: Boolean): Int {
         return when {
             isNight -> AMBIENT_NIGHT
