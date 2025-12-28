@@ -10,55 +10,48 @@ import android.util.Log
 /**
  * Manages accelerometer input for parallax effect.
  * 
- * Uses adaptive calibration to work at any phone orientation:
- * - Continuously tracks a moving average baseline
- * - Parallax responds to tilts relative to this baseline
- * - This means parallax works whether phone is flat, upright, or any angle
+ * This implementation tracks VELOCITY (change in tilt) rather than absolute position.
  * 
- * Fast startup adaptation ensures consistent behavior between preview and wallpaper
+ * Key behavior:
+ * - Reports the change in tilt since last reading
+ * - Positive change = tilting in that direction
+ * - Zero change = holding steady (no parallax movement)
+ * - Works at any phone orientation (no baseline needed for velocity)
  */
 class ParallaxSensorManager(context: Context) : SensorEventListener {
     companion object {
         private const val TAG = "ParallaxSensorManager"
         
-        // Smoothing for raw sensor input
-        private const val SENSOR_ALPHA = 0.85f
+        // Smoothing for raw sensor input (higher = smoother but more lag)
+        private const val SENSOR_ALPHA = 0.7f
         
-        // Baseline adaptation rates
-        // Fast rate during startup (first few seconds) to quickly find neutral position
-        private const val BASELINE_ADAPT_RATE_FAST = 0.15f
-        // Slow rate after stabilization for smooth parallax
-        private const val BASELINE_ADAPT_RATE_SLOW = 0.01f
-        // How long to use fast adaptation (in sensor readings, ~60/sec)
-        private const val FAST_ADAPT_READINGS = 180 // ~3 seconds
+        // Sensitivity multiplier for velocity
+        private const val VELOCITY_SCALE = 15f
         
-        // Minimum tilt angle (in g-force) before parallax responds
-        // This creates a small "dead zone" at center for stability
-        private const val DEAD_ZONE = 0.3f
-        
-        // Sensitivity - higher = more parallax from less tilt
-        private const val SENSITIVITY = 3.5f
+        // Minimum movement threshold (dead zone for tiny jitters)
+        private const val MIN_VELOCITY = 0.02f
     }
     
     interface Listener {
-        fun onOffsetChanged(x: Float, y: Float)
+        /**
+         * Called with velocity (change) in X and Y.
+         * Values are normalized: -1 to 1 where magnitude indicates speed of tilt change.
+         */
+        fun onOffsetChanged(velocityX: Float, velocityY: Float)
     }
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
-    // Smoothed raw sensor values
-    private var ax = 0f
-    private var ay = 0f
+    // Current smoothed sensor values
+    private var currentX = 0f
+    private var currentY = 0f
     
-    // Adaptive baseline - tracks where "center" is
-    private var baselineX = 0f
-    private var baselineY = 0f
-    private var baselineInitialized = false
+    // Previous smoothed values (for computing velocity)
+    private var prevX = 0f
+    private var prevY = 0f
     
-    // Readings counter for fast startup adaptation
-    private var readingsCount = 0
-
+    private var initialized = false
     private var listener: Listener? = null
     private var isStarted = false
 
@@ -70,10 +63,8 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             return
         }
         if (!isStarted) {
-            // Reset baseline and readings counter on start
-            baselineInitialized = false
-            readingsCount = 0
-            sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_UI)
+            initialized = false
+            sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME)
             isStarted = true
             Log.d(TAG, "Sensor started")
         }
@@ -90,46 +81,39 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     override fun onSensorChanged(event: SensorEvent) {
         if (event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
 
-        // Low-pass filter for smooth movement
-        ax = SENSOR_ALPHA * ax + (1 - SENSOR_ALPHA) * event.values[0]
-        ay = SENSOR_ALPHA * ay + (1 - SENSOR_ALPHA) * event.values[1]
+        val rawX = event.values[0]
+        val rawY = event.values[1]
         
-        // Initialize baseline to current position on first reading
-        if (!baselineInitialized) {
-            baselineX = ax
-            baselineY = ay
-            baselineInitialized = true
-            Log.d(TAG, "Baseline initialized: x=$baselineX, y=$baselineY")
+        // Low-pass filter for smoothing
+        currentX = SENSOR_ALPHA * currentX + (1 - SENSOR_ALPHA) * rawX
+        currentY = SENSOR_ALPHA * currentY + (1 - SENSOR_ALPHA) * rawY
+        
+        if (!initialized) {
+            // First reading - just store, no velocity yet
+            prevX = currentX
+            prevY = currentY
+            initialized = true
+            return
         }
         
-        // Increment readings counter
-        readingsCount++
+        // Compute velocity (change since last frame)
+        var velocityX = (currentX - prevX) * VELOCITY_SCALE
+        var velocityY = (currentY - prevY) * VELOCITY_SCALE
         
-        // Adapt baseline toward current position
-        // Use fast adaptation during startup for quick convergence,
-        // then slow adaptation for stable parallax
-        val adaptRate = if (readingsCount < FAST_ADAPT_READINGS) {
-            BASELINE_ADAPT_RATE_FAST
-        } else {
-            BASELINE_ADAPT_RATE_SLOW
-        }
-        baselineX += (ax - baselineX) * adaptRate
-        baselineY += (ay - baselineY) * adaptRate
+        // Apply dead zone for tiny movements
+        if (kotlin.math.abs(velocityX) < MIN_VELOCITY) velocityX = 0f
+        if (kotlin.math.abs(velocityY) < MIN_VELOCITY) velocityY = 0f
         
-        // Calculate tilt relative to adaptive baseline
-        var deltaX = ax - baselineX
-        var deltaY = ay - baselineY
+        // Clamp to -1..1
+        velocityX = velocityX.coerceIn(-1f, 1f)
+        velocityY = velocityY.coerceIn(-1f, 1f)
         
-        // Apply dead zone for stability at center
-        if (kotlin.math.abs(deltaX) < DEAD_ZONE) deltaX = 0f
-        if (kotlin.math.abs(deltaY) < DEAD_ZONE) deltaY = 0f
-        
-        // Apply sensitivity and normalize to -1..1 range
-        val tiltX = (deltaX * SENSITIVITY / 9.8f).coerceIn(-1f, 1f)
-        val tiltY = (deltaY * SENSITIVITY / 9.8f).coerceIn(-1f, 1f)
+        // Store current as previous for next frame
+        prevX = currentX
+        prevY = currentY
 
-        // Send normalized values (-1 to 1) to the listener
-        listener?.onOffsetChanged(tiltX, tiltY)
+        // Send velocity to listener
+        listener?.onOffsetChanged(velocityX, velocityY)
     }
 
     override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) = Unit

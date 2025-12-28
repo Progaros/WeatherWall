@@ -149,15 +149,15 @@ class ParallaxScene(
     fun loadPrefs() {
         try {
             val parallaxEnabled = prefs.getBoolean("pref_parallax_enabled", true)
-            val rawStrength = (prefs.getInt("pref_parallax_strength", 80) / 100f).coerceIn(0f, 2f)
+            val rawStrength = (prefs.getInt("pref_parallax_strength", 80) / 100f).coerceIn(0f, 3f)
             parallaxStrength = if (parallaxEnabled) rawStrength else 0f
             
-            // Max offset slider: 5..200 px
-            parallaxMaxOffsetPx = (prefs.getInt("pref_parallax_max_offset", 40)).toFloat().coerceIn(5f, 200f)
+            // Max offset slider: 5..200 px (default 100 for velocity-based system)
+            parallaxMaxOffsetPx = (prefs.getInt("pref_parallax_max_offset", 100)).toFloat().coerceIn(5f, 200f)
             
-            // Return speed slider: map 1..100 -> 0.01f..0.15f (wider range for more noticeable effect)
+            // Return speed slider: map 1..100 -> 0.01f..0.10f
             val returnSpeed = prefs.getInt("pref_parallax_return_speed", 50).coerceIn(1, 100)
-            parallaxReturnRate = 0.01f + (returnSpeed / 100f) * 0.14f
+            parallaxReturnRate = 0.01f + (returnSpeed / 100f) * 0.09f
             
             // Weather and seasonal toggles
             weatherEnabled = prefs.getBoolean("pref_weather_enabled", true)

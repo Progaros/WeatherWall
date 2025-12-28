@@ -69,9 +69,14 @@ class SimulationSettings(context: Context) {
         // Weather - for now we always use real weather from Breezy
         useRealWeather = true
         
-        // Wind - read from settings (0-100 -> 0.0-1.0)
-        val windVal = prefs.getInt("pref_wind_strength", 50)
-        windStrength = windVal / 100f
+        // Wind - in debug mode, use manual setting; otherwise will use real weather data
+        if (debugEnabled) {
+            val windVal = prefs.getInt("pref_wind_strength", 50)
+            windStrength = windVal / 100f
+        } else {
+            // Will be overridden by real weather wind data in SimulationClock
+            windStrength = 0.5f  // Default medium
+        }
         
         // Cloud settings
         cloudsEnabled = prefs.getBoolean("pref_clouds_enabled", true)

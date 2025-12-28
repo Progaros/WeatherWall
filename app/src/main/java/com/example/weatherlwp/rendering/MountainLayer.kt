@@ -61,6 +61,8 @@ class MountainLayer(private val context: Context) : SceneLayer {
     private var mountainHeightScale = 1.0f
     private var mountainWidthScale = 1.0f
     private var mountainRoughness = 0.5f
+    private var ridgeRoughness = 0.5f
+    private var randomSeed = 42
     
     init {
         reloadSettings()
@@ -68,7 +70,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
     
     private fun generateMountains() {
         mountains.clear()
-        val random = Random(123) // Fixed seed for consistency
+        val random = Random(randomSeed.toLong())
         
         for (i in 0 until mountainCount) {
             // Depth: 0 is far, 1 is near
@@ -180,9 +182,34 @@ class MountainLayer(private val context: Context) : SceneLayer {
         // across different canvas sizes (preview vs full wallpaper)
         val noiseBase = height * 0.015f * mountainRoughness
         
-        // Left side
-        pathLeft.moveTo(peakCenterX, peakY)
+        // Ridge noise for center line (horizontal displacement)
+        val ridgeNoiseBase = height * 0.02f * ridgeRoughness
+        val ridgeSegments = (5 + ridgeRoughness * 10).toInt().coerceAtLeast(2)
         
+        // Generate ridge points (jagged center line from peak to base)
+        // Also includes random peak angle offset
+        val peakAngleOffset = if (ridgeRoughness > 0) {
+            (random.nextFloat() - 0.5f) * halfWidthPx * 0.3f * ridgeRoughness
+        } else 0f
+        
+        val ridgePoints = ArrayList<Pair<Float, Float>>()
+        ridgePoints.add(Pair(peakCenterX + peakAngleOffset, peakY))
+        
+        for (i in 1 until ridgeSegments) {
+            val progress = i.toFloat() / ridgeSegments
+            val ridgeY = peakY + (baseY - peakY) * progress
+            // Ridge wanders horizontally with decreasing amplitude toward base
+            val ridgeNoise = (random.nextFloat() - 0.5f) * ridgeNoiseBase * (1f - progress * 0.7f)
+            // Interpolate X position from peak offset back toward center
+            val ridgeX = peakCenterX + peakAngleOffset * (1f - progress) + ridgeNoise
+            ridgePoints.add(Pair(ridgeX, ridgeY))
+        }
+        ridgePoints.add(Pair(peakCenterX, baseY))  // End at center base
+        
+        // Left side - connect from ridge to left edge
+        pathLeft.moveTo(ridgePoints[0].first, ridgePoints[0].second)
+        
+        // Draw left slope segments
         for (i in 0 until segments) {
             val progress = (i + 1).toFloat() / segments
             val targetX = peakCenterX - halfWidthPx * progress
@@ -191,12 +218,17 @@ class MountainLayer(private val context: Context) : SceneLayer {
             pathLeft.lineTo(targetX, targetY + noise)
         }
         pathLeft.lineTo(peakCenterX - halfWidthPx, baseY)
-        pathLeft.lineTo(peakCenterX, baseY)
+        
+        // Close back along ridge (in reverse)
+        for (i in ridgePoints.size - 1 downTo 0) {
+            pathLeft.lineTo(ridgePoints[i].first, ridgePoints[i].second)
+        }
         pathLeft.close()
         
-        // Right side (shadow side)
-        pathRight.moveTo(peakCenterX, peakY)
+        // Right side (shadow side) - connect from ridge to right edge
+        pathRight.moveTo(ridgePoints[0].first, ridgePoints[0].second)
         
+        // Draw right slope segments
         for (i in 0 until segments) {
             val progress = (i + 1).toFloat() / segments
             val targetX = peakCenterX + halfWidthPx * progress
@@ -205,7 +237,11 @@ class MountainLayer(private val context: Context) : SceneLayer {
             pathRight.lineTo(targetX, targetY + noise)
         }
         pathRight.lineTo(peakCenterX + halfWidthPx, baseY)
-        pathRight.lineTo(peakCenterX, baseY)
+        
+        // Close back along ridge (in reverse)
+        for (i in ridgePoints.size - 1 downTo 0) {
+            pathRight.lineTo(ridgePoints[i].first, ridgePoints[i].second)
+        }
         pathRight.close()
         
         // Apply ambient tinting (per ai.md: global tint system)
@@ -258,6 +294,9 @@ class MountainLayer(private val context: Context) : SceneLayer {
     override fun reloadSettings() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         
+        // Random seed for consistent placement
+        randomSeed = prefs.getInt("pref_random_seed", 42)
+        
         mountainCount = prefs.getInt("pref_mountain_count", 4)
         
         // Height: 10-1000 -> 0.1 - 10.0
@@ -271,6 +310,10 @@ class MountainLayer(private val context: Context) : SceneLayer {
         // Roughness: 0-200 -> 0.0 - 2.0
         val roughVal = prefs.getInt("pref_mountain_roughness", 80)
         mountainRoughness = roughVal / 100f
+        
+        // Ridge roughness: 0-200 -> 0.0 - 2.0
+        val ridgeVal = prefs.getInt("pref_mountain_ridge_roughness", 50)
+        ridgeRoughness = ridgeVal / 100f
         
         generateMountains()
     }

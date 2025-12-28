@@ -62,7 +62,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private var hillEndY = 0.85f
     private var treeColorVariation = 1.0f
     private var treeSegments = 1
-    private var windStrengthSetting = 0.5f
+    private var randomSeed = 42
 
     init {
         reloadSettings()
@@ -75,7 +75,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     
     private fun generateHills() {
         hills.clear()
-        val random = Random(12345) // Fixed seed
+        val random = Random(randomSeed.toLong() + 1000)  // Offset from mountains
         
         for (i in 0 until hillCount) {
             val depth = i.toFloat() / hillCount.coerceAtLeast(1)
@@ -104,7 +104,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     
     private fun generateTrees() {
         trees.clear()
-        val random = Random(67890) // Fixed seed
+        val random = Random(randomSeed.toLong() + 2000)  // Offset from hills
         
         for (i in 0 until treeCount) {
             val xRatio = -0.2f + random.nextFloat() * 1.4f
@@ -193,7 +193,15 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             // Trees in foreground get less tint, background trees get more
             val normalizedDepth = ((tree.depthFactor - RenderConstants.PARALLAX_HILLS_MIN) / 
                 (RenderConstants.PARALLAX_HILLS_MAX - RenderConstants.PARALLAX_HILLS_MIN)).coerceIn(0f, 1f)
-            val blendAmount = RenderConstants.applyAmbientTint(tree.dayColor, ambientColor, normalizedDepth)
+            
+            // During day, minimize ambient tinting to preserve green color
+            // At night/dawn/dusk, apply stronger tinting for atmospheric effect
+            val timeMultiplier = if (!state.isNight && !state.isDawn && !state.isDusk) {
+                0.15f  // Minimal tinting during day
+            } else {
+                1.0f   // Full tinting at night/dawn/dusk
+            }
+            val blendAmount = RenderConstants.applyAmbientTint(tree.dayColor, ambientColor, normalizedDepth) * timeMultiplier
             treePaint.color = RenderConstants.blendWithAmbient(tree.dayColor, ambientColor, blendAmount)
             drawTree(canvas, tree, scaleX, state)
             
@@ -231,8 +239,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val segmentHeight = totalHeight / treeSegments
         
         // Wind sway using simulation time for consistency
-        // Combine settings wind with state wind using centralized constants
-        val effectiveWind = (windStrengthSetting + state.windStrength) / 2f * 4f
+        // state.windStrength ranges 0-1, multiply for visible effect
+        val effectiveWind = state.windStrength * 5f  // 0-5x multiplier for extreme sway at max wind
         val timeSec = state.timeSeconds
         val sway = sin(timeSec * RenderConstants.TREE_SWAY_FREQUENCY + tree.xRatio * 10f) * 
             (totalHeight * RenderConstants.TREE_SWAY_AMPLITUDE * effectiveWind)
@@ -259,6 +267,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     override fun reloadSettings() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         
+        // Random seed for consistent placement
+        randomSeed = prefs.getInt("pref_random_seed", 42)
+        
         hillCount = prefs.getInt("pref_hill_count", 10)
         treeCount = prefs.getInt("pref_tree_count", 100)
         hillStartY = prefs.getInt("pref_hill_lower_start", 50) / 100f
@@ -273,8 +284,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         treeColorVariation = prefs.getInt("pref_tree_color_variation", 100) / 100f
         treeSegments = prefs.getInt("pref_tree_segments", 1).coerceIn(1, 5)
         
-        val windVal = prefs.getInt("pref_wind_strength", 50)
-        windStrengthSetting = windVal / 100f
+        // Wind is now from SimulationState, not a separate setting
         
         android.util.Log.d("TerrainLayer", "Reloaded: hills=$hillCount, trees=$treeCount")
         generateTerrain()

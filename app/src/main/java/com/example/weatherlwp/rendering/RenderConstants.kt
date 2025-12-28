@@ -131,7 +131,7 @@ object RenderConstants {
     
     /** Tree sway animation parameters */
     const val TREE_SWAY_FREQUENCY = 2.0f
-    const val TREE_SWAY_AMPLITUDE = 0.05f
+    const val TREE_SWAY_AMPLITUDE = 0.12f  // Increased from 0.05f for more visible sway
     
     /** Star twinkle animation */
     const val STAR_TWINKLE_SPEED = 0.001f

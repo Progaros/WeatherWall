@@ -4,6 +4,16 @@
     <!-- Scene Settings -->
     <PreferenceCategory android:title="Scene">
         <SeekBarPreference
+            android:key="pref_random_seed"
+            android:title="Random Seed"
+            android:summary="Changes mountain/tree/cloud placement (1-999)"
+            android:defaultValue="42"
+            android:max="999"
+            app:min="1"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
             android:key="pref_mountain_count"
             android:title="Mountain Count"
             android:summary="Number of mountain peaks (0-10)"
@@ -38,6 +48,16 @@
             android:title="Mountain Roughness"
             android:summary="Jaggedness of silhouette (0-200%)"
             android:defaultValue="80"
+            android:max="200"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_mountain_ridge_roughness"
+            android:title="Ridge Roughness"
+            android:summary="Center ridge jaggedness (0-200%)"
+            android:defaultValue="50"
             android:max="200"
             app:min="0"
             app:showSeekBarValue="true"
@@ -122,16 +142,6 @@
             app:min="0"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
-
-        <SeekBarPreference
-            android:key="pref_wind_strength"
-            android:title="Wind Strength"
-            android:summary="Tree sway intensity (0=none, 100=max, or auto from weather)"
-            android:defaultValue="50"
-            android:max="100"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true" />
     </PreferenceCategory>
 
     <!-- 3D Parallax Settings -->
@@ -157,7 +167,7 @@
             android:key="pref_parallax_max_offset"
             android:title="Max Parallax Distance"
             android:summary="How far the scene can shift (px)"
-            android:defaultValue="40"
+            android:defaultValue="100"
             android:max="200"
             app:min="5"
             app:showSeekBarValue="true"
@@ -183,6 +193,17 @@
             android:title="Clouds"
             android:summary="Enable moving clouds in the sky"
             android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_cloud_stretch"
+            android:title="Cloud Stretch"
+            android:summary="Horizontal stretch factor (100=normal, 300=wispy)"
+            android:defaultValue="200"
+            android:max="500"
+            app:min="50"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_clouds_enabled" />
 
         <SwitchPreferenceCompat
             android:key="pref_daynight_enabled"
@@ -254,7 +275,7 @@
         <SwitchPreferenceCompat
             android:key="pref_debug_enabled"
             android:title="Enable Simulation Mode"
-            android:summary="Override weather, time, and season for testing"
+            android:summary="Override weather, time, wind, and season for testing"
             android:defaultValue="false" />
 
         <SeekBarPreference
@@ -263,6 +284,17 @@
             android:summary="Minutes since midnight (0-1439)"
             android:defaultValue="720"
             android:max="1439"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_debug_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_wind_strength"
+            android:title="Simulate Wind Strength"
+            android:summary="Tree sway and cloud speed (0=none, 100=max)"
+            android:defaultValue="50"
+            android:max="100"
             app:min="0"
             app:showSeekBarValue="true"
             app:updatesContinuously="true"

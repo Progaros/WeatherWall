@@ -61,6 +61,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
     
     private val clouds = ArrayList<CloudData>()
     private var cloudCount = 10
+    private var cloudStretch = 2.0f  // Horizontal stretch multiplier (1.0 = normal, 2.0 = wispy)
+    private var randomSeed = 42
     
     init {
         reloadSettings()
@@ -68,7 +70,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
     
     private fun generateClouds() {
         clouds.clear()
-        val random = Random(42) // Fixed seed for consistent cloud shapes
+        val random = Random(randomSeed.toLong() + 3000)  // Offset from terrain
         
         for (i in 0 until cloudCount) {
             val x = RenderConstants.WORLD_MIN_X + random.nextFloat() * RenderConstants.WORLD_WIDTH
@@ -80,8 +82,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
             // Small clouds (far/thin) are more transparent: 15-40
             // Large clouds (near/thick) are slightly more opaque: 40-60
             val alpha = (15 + size * 135).toInt().coerceIn(15, 60)
-            // Horizontal elongation for wispy appearance (1.5-3.0)
-            val elongation = 1.5f + random.nextFloat() * 1.5f
+            // Horizontal elongation - base from setting, with random variation
+            val elongation = cloudStretch * (0.8f + random.nextFloat() * 0.4f)
             
             clouds.add(CloudData(x, y, size, speed, alpha, random.nextLong(), elongation))
         }
@@ -180,14 +182,29 @@ class CloudLayer(private val context: Context) : SceneLayer {
     override fun reloadSettings() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val enabled = prefs.getBoolean("pref_clouds_enabled", true)
+        // Random seed for consistent placement
+        val newSeed = prefs.getInt("pref_random_seed", 42)
+        val seedChanged = newSeed != randomSeed
+        randomSeed = newSeed
+        
+        // Cloud stretch setting: 50-500 -> 0.5-5.0
+        val stretchVal = prefs.getInt("pref_cloud_stretch", 200)
+        val newStretch = stretchVal / 100f
+        
+        // Regenerate clouds if stretch or seed changed
+        val stretchChanged = kotlin.math.abs(newStretch - cloudStretch) > 0.01f
+        cloudStretch = newStretch
         
         if (!enabled) {
             cloudCount = 0
             clouds.clear()
+        } else if (stretchChanged || seedChanged) {
+            // Regenerate clouds with new settings
+            generateClouds()
         }
         // Cloud count is now managed by SimulationState.getCloudCount()
         
-        android.util.Log.d("CloudLayer", "Clouds enabled: $enabled, count managed by state")
+        android.util.Log.d("CloudLayer", "Clouds enabled: $enabled, stretch: $cloudStretch, seed: $randomSeed")
     }
 
     override fun destroy() {
