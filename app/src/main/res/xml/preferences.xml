@@ -7,7 +7,7 @@
             android:key="pref_mountain_count"
             android:title="Mountain Count"
             android:summary="Number of mountain peaks (0-10)"
-            android:defaultValue="3"
+            android:defaultValue="7"
             android:max="10"
             app:min="0"
             app:showSeekBarValue="true"
@@ -27,7 +27,7 @@
             android:key="pref_mountain_height"
             android:title="Mountain Height"
             android:summary="Height multiplier (10-1000%)"
-            android:defaultValue="150"
+            android:defaultValue="115"
             android:max="1000"
             app:min="10"
             app:showSeekBarValue="true"
@@ -77,7 +77,7 @@
             android:key="pref_tree_count"
             android:title="Tree Count"
             android:summary="Number of trees (0-200)"
-            android:defaultValue="70"
+            android:defaultValue="85"
             android:max="200"
             app:min="0"
             app:showSeekBarValue="true"
@@ -97,7 +97,7 @@
             android:key="pref_tree_width"
             android:title="Tree Width"
             android:summary="Width as % of height (100 = proportional)"
-            android:defaultValue="100"
+            android:defaultValue="50"
             android:max="200"
             app:min="20"
             app:showSeekBarValue="true"
@@ -117,7 +117,7 @@
             android:key="pref_tree_color_variation"
             android:title="Tree Color Variation"
             android:summary="Color diversity (0=uniform, 100=varied)"
-            android:defaultValue="80"
+            android:defaultValue="66"
             android:max="100"
             app:min="0"
             app:showSeekBarValue="true"
@@ -309,7 +309,7 @@
         <Preference
             android:key="pref_version"
             android:title="Version"
-            android:selectable="false" />
+            android:selectable="true" />
 
         <Preference
             android:key="pref_export_log"

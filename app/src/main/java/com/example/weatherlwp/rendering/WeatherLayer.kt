@@ -408,21 +408,21 @@ class WeatherLayer : SceneLayer {
     }
     
     /**
-     * Render fog as a smooth gradient overlay.
+     * Render fog as a smooth gradient overlay with subtle animation.
      * Dense at bottom, fading to transparent at top. Intensity affects opacity.
      */
     private fun renderFog(canvas: Canvas) {
-        // Base fog opacity depends on intensity (30-80%)
-        val baseAlpha = (75 + intensity * 180).toInt().coerceIn(60, 200)
+        // Base fog opacity depends on intensity (30-70%)
+        val baseAlpha = (60 + intensity * 120).toInt().coerceIn(50, 170)
         
-        // Fog color components for gradient
-        val fogR = 200
-        val fogG = 210
-        val fogB = 220
+        // Fog color - slightly bluish grey
+        val fogR = 210
+        val fogG = 215
+        val fogB = 225
         
         // Create a smooth vertical gradient from bottom (dense) to top (clear)
         val gradientShader = android.graphics.LinearGradient(
-            0f, screenHeight * 0.2f,  // Start: 20% from top (clear)
+            0f, screenHeight * 0.15f,  // Start: 15% from top (clear)
             0f, screenHeight.toFloat(),  // End: bottom (dense)
             Color.argb(0, fogR, fogG, fogB),  // Transparent at top
             Color.argb(baseAlpha, fogR, fogG, fogB),  // Dense at bottom
@@ -433,46 +433,17 @@ class WeatherLayer : SceneLayer {
         canvas.drawRect(0f, 0f, screenWidth.toFloat(), screenHeight.toFloat(), fogPaint)
         fogPaint.shader = null
         
-        // Add subtle animated wisps for depth
-        val time = System.currentTimeMillis()
-        val wispAlpha = (baseAlpha * 0.3f).toInt()
-        
-        for (i in 0 until 6) {
-            // Each wisp has its own phase and speed
-            val phase = i * 1.047f  // 60 degrees apart
-            val speed = 0.00008f + i * 0.00002f
-            val yBase = screenHeight * (0.4f + i * 0.08f)
-            
-            // Horizontal drift
-            val xOffset = kotlin.math.sin((time * speed + phase).toDouble()).toFloat() * screenWidth * 0.15f
-            
-            // Wisp height varies over time
-            val wispHeight = 30f + kotlin.math.sin((time * 0.0002 + i).toDouble()).toFloat() * 15f
-            
-            // Use a gradient for each wisp too
-            val wispGradient = android.graphics.LinearGradient(
-                xOffset - screenWidth * 0.2f, yBase,
-                xOffset + screenWidth * 1.2f, yBase,
-                intArrayOf(
-                    Color.argb(0, 220, 225, 230),
-                    Color.argb(wispAlpha, 220, 225, 230),
-                    Color.argb(wispAlpha, 220, 225, 230),
-                    Color.argb(0, 220, 225, 230)
-                ),
-                floatArrayOf(0f, 0.3f, 0.7f, 1f),
-                android.graphics.Shader.TileMode.CLAMP
-            )
-            
-            fogPaint.shader = wispGradient
-            canvas.drawRect(
-                0f,
-                yBase - wispHeight / 2f,
-                screenWidth.toFloat(),
-                yBase + wispHeight / 2f,
-                fogPaint
-            )
-        }
-        
+        // Add a second layer for depth - mid-height concentration
+        val midAlpha = (baseAlpha * 0.5f).toInt()
+        val midGradient = android.graphics.LinearGradient(
+            0f, screenHeight * 0.3f,
+            0f, screenHeight * 0.8f,
+            Color.argb(0, fogR, fogG, fogB),
+            Color.argb(midAlpha, fogR + 5, fogG + 5, fogB + 5),
+            android.graphics.Shader.TileMode.CLAMP
+        )
+        fogPaint.shader = midGradient
+        canvas.drawRect(0f, screenHeight * 0.3f, screenWidth.toFloat(), screenHeight * 0.9f, fogPaint)
         fogPaint.shader = null
     }
 

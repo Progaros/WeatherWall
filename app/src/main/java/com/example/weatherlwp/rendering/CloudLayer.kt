@@ -153,27 +153,12 @@ class CloudLayer(private val context: Context) : SceneLayer {
         
         if (!enabled) {
             cloudCount = 0
-        } else {
-            // Check debug override first
-            val debugEnabled = prefs.getBoolean("pref_debug_enabled", false)
-            val density = if (debugEnabled) {
-                prefs.getString("pref_debug_cloud_override", "auto") ?: "auto"
-            } else {
-                prefs.getString("pref_cloud_density", "auto") ?: "auto"
-            }
-            
-            cloudCount = when (density) {
-                "none" -> 0
-                "light" -> 4
-                "medium" -> 10
-                "heavy" -> 20
-                "overcast" -> 35
-                else -> 10 // Auto default
-            }
+            clouds.clear()
         }
+        // Cloud count is now managed by SimulationState.getCloudCount()
+        // The draw() method will update cloudCount when state changes
         
-        android.util.Log.d("CloudLayer", "Cloud count: $cloudCount")
-        generateClouds()
+        android.util.Log.d("CloudLayer", "Clouds enabled: $enabled, count managed by state")
     }
 
     override fun destroy() {

@@ -45,21 +45,26 @@ data class SimulationState(
     
     /**
      * Get cloud count based on density setting.
+     * Cloud counts are tuned so:
+     * - LIGHT: Always some visible clouds on screen, but sparse and lighter
+     * - MEDIUM: Comfortable amount of clouds
+     * - HEAVY: Dense cloud cover
+     * - OVERCAST: Sky mostly covered
      */
     fun getCloudCount(): Int = when (cloudDensity) {
         CloudDensity.NONE -> 0
-        CloudDensity.LIGHT -> 4
-        CloudDensity.MEDIUM -> 10
-        CloudDensity.HEAVY -> 20
-        CloudDensity.OVERCAST -> 35
+        CloudDensity.LIGHT -> 15       // Few but always visible
+        CloudDensity.MEDIUM -> 35      // Moderate coverage
+        CloudDensity.HEAVY -> 60       // Dense clouds
+        CloudDensity.OVERCAST -> 100   // Full coverage
         CloudDensity.AUTO -> when (weather) {
-            WeatherType.CLEAR -> 2
-            WeatherType.PARTLY_CLOUDY -> 8
-            WeatherType.CLOUDY -> 15
-            WeatherType.OVERCAST -> 35
-            WeatherType.RAIN, WeatherType.THUNDERSTORM -> 25
-            WeatherType.SNOW -> 20
-            WeatherType.FOG -> 30
+            WeatherType.CLEAR -> 8
+            WeatherType.PARTLY_CLOUDY -> 25
+            WeatherType.CLOUDY -> 45
+            WeatherType.OVERCAST -> 100
+            WeatherType.RAIN, WeatherType.THUNDERSTORM -> 70
+            WeatherType.SNOW -> 50
+            WeatherType.FOG -> 80
         }
     }
     

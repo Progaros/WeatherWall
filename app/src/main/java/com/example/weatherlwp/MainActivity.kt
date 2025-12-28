@@ -62,6 +62,7 @@ class MainActivity : AppCompatActivity() {
                     "rain" -> WeatherLayer.WeatherType.RAIN
                     "snow" -> WeatherLayer.WeatherType.SNOW
                     "lightning" -> WeatherLayer.WeatherType.LIGHTNING
+                    "fog" -> WeatherLayer.WeatherType.FOG
                     else -> WeatherLayer.WeatherType.NONE
                 }
             }
@@ -71,6 +72,7 @@ class MainActivity : AppCompatActivity() {
                     WeatherType.RAIN -> WeatherLayer.WeatherType.RAIN
                     WeatherType.SNOW -> WeatherLayer.WeatherType.SNOW
                     WeatherType.THUNDERSTORM -> WeatherLayer.WeatherType.LIGHTNING
+                    WeatherType.FOG -> WeatherLayer.WeatherType.FOG
                     else -> WeatherLayer.WeatherType.NONE
                 }
             }
@@ -79,6 +81,7 @@ class MainActivity : AppCompatActivity() {
                     "rain" -> WeatherLayer.WeatherType.RAIN
                     "snow" -> WeatherLayer.WeatherType.SNOW
                     "lightning" -> WeatherLayer.WeatherType.LIGHTNING
+                    "fog" -> WeatherLayer.WeatherType.FOG
                     else -> WeatherLayer.WeatherType.NONE
                 }
             }

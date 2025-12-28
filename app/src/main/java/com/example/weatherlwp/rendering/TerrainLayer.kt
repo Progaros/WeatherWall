@@ -239,12 +239,14 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             val segTop = segY - segmentHeight
             val widthMultiplier = 1.0f - (seg * 0.15f)
             val segWidth = segmentHeight * 0.5f * widthMultiplier * treeWidthScale
-            val segSway = sway * (1.0f + seg * 0.3f)
+            // Sway increases with height - base stays planted, tip sways more
+            val baseSway = sway * (seg * 0.3f)
+            val tipSway = sway * ((seg + 1) * 0.3f)
             
             treePath.reset()
-            treePath.moveTo(x + segSway, segTop)
-            treePath.lineTo(x - segWidth, segY)
-            treePath.lineTo(x + segWidth, segY)
+            treePath.moveTo(x + tipSway, segTop)
+            treePath.lineTo(x - segWidth + baseSway, segY)
+            treePath.lineTo(x + segWidth + baseSway, segY)
             treePath.close()
             
             canvas.drawPath(treePath, treePaint)

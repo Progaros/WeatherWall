@@ -252,8 +252,8 @@ class SettingsFragment : PreferenceFragmentCompat() {
     private fun handleVersionTap() {
         val now = System.currentTimeMillis()
         
-        // Reset counter if more than 500ms between taps
-        if (now - lastTapTime > 500) {
+        // Reset counter if more than 1 second between taps
+        if (now - lastTapTime > 1000) {
             versionTapCount = 0
         }
         lastTapTime = now
