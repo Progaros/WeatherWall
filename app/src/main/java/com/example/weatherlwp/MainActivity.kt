@@ -17,6 +17,9 @@ import com.example.weatherlwp.rendering.WeatherLayer
 import com.example.weatherlwp.weather.WeatherRepository
 import com.example.weatherlwp.weather.WeatherType
 import com.google.android.material.appbar.MaterialToolbar
+import com.example.weatherlwp.parallax.ParallaxSensorManager
+import android.os.Handler
+import android.os.Looper
 
 class MainActivity : AppCompatActivity() {
     companion object {
@@ -28,6 +31,10 @@ class MainActivity : AppCompatActivity() {
     private var previewScene: ParallaxScene? = null
     private var weatherLayer: WeatherLayer? = null
     private var seasonalEvents: SeasonalEvents? = null
+    
+    // Dependencies
+    private lateinit var sensorManager: ParallaxSensorManager
+    private val weatherRepo = WeatherRepository
     private var previewThread: Thread? = null
     @Volatile private var previewRunning = false
     @Volatile private var surfaceReady = false
@@ -37,7 +44,8 @@ class MainActivity : AppCompatActivity() {
     private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         Log.d(TAG, "Preference changed: $key")
         // Reload settings on any preference change
-        previewScene?.loadSettings()
+        previewScene?.loadPrefs()
+        seasonalEvents?.loadSettings()  // Reload seasonal settings (Christmas star, etc.)
         loadPreviewEffects()
     }
     
@@ -89,9 +97,12 @@ class MainActivity : AppCompatActivity() {
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
         setSupportActionBar(toolbar)
 
+        // Initialize dependencies
+        sensorManager = ParallaxSensorManager(this)
+
         // Setup live preview
         val previewSurface = findViewById<SurfaceView>(R.id.preview_surface)
-        previewScene = ParallaxScene(this)
+        previewScene = ParallaxScene(this, sensorManager, weatherRepo)
         weatherLayer = WeatherLayer()
         seasonalEvents = SeasonalEvents(this)
         
@@ -115,7 +126,7 @@ class MainActivity : AppCompatActivity() {
                 Log.d(TAG, "Preview surface changed: ${width}x${height}, format=$format")
                 surfaceHolder = holder
                 // Reload settings when surface changes to ensure proper rendering
-                previewScene?.loadSettings()
+                previewScene?.loadPrefs()
             }
             
             override fun surfaceDestroyed(holder: SurfaceHolder) {
@@ -280,7 +291,7 @@ class MainActivity : AppCompatActivity() {
     
     override fun onResume() {
         super.onResume()
-        previewScene?.loadSettings()
+        previewScene?.loadPrefs()
         loadPreviewEffects()
     }
     

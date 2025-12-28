@@ -7,7 +7,7 @@
             android:key="pref_mountain_count"
             android:title="Mountain Count"
             android:summary="Number of mountain peaks (0-10)"
-            android:defaultValue="4"
+            android:defaultValue="3"
             android:max="10"
             app:min="0"
             app:showSeekBarValue="true"
@@ -17,7 +17,7 @@
             android:key="pref_mountain_width"
             android:title="Mountain Width"
             android:summary="Width multiplier (50-1000%)"
-            android:defaultValue="500"
+            android:defaultValue="115"
             android:max="1000"
             app:min="50"
             app:showSeekBarValue="true"
@@ -27,7 +27,7 @@
             android:key="pref_mountain_height"
             android:title="Mountain Height"
             android:summary="Height multiplier (10-1000%)"
-            android:defaultValue="140"
+            android:defaultValue="150"
             android:max="1000"
             app:min="10"
             app:showSeekBarValue="true"
@@ -36,9 +36,9 @@
         <SeekBarPreference
             android:key="pref_mountain_roughness"
             android:title="Mountain Roughness"
-            android:summary="Jaggedness of silhouette (0-100%)"
-            android:defaultValue="25"
-            android:max="100"
+            android:summary="Jaggedness of silhouette (0-200%)"
+            android:defaultValue="80"
+            android:max="200"
             app:min="0"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
@@ -47,7 +47,7 @@
             android:key="pref_hill_count"
             android:title="Hill Layers"
             android:summary="Rolling terrain layers (0-50)"
-            android:defaultValue="25"
+            android:defaultValue="10"
             android:max="50"
             app:min="0"
             app:showSeekBarValue="true"
@@ -57,7 +57,7 @@
             android:key="pref_hill_lower_start"
             android:title="Hills Start Position"
             android:summary="Where far hills appear on screen (30-70%)"
-            android:defaultValue="50"
+            android:defaultValue="60"
             android:max="70"
             app:min="30"
             app:showSeekBarValue="true"
@@ -67,7 +67,7 @@
             android:key="pref_hill_upper_end"
             android:title="Hills End Position"
             android:summary="Where near hills appear on screen (60-90%)"
-            android:defaultValue="85"
+            android:defaultValue="90"
             android:max="90"
             app:min="60"
             app:showSeekBarValue="true"
@@ -77,7 +77,7 @@
             android:key="pref_tree_count"
             android:title="Tree Count"
             android:summary="Number of trees (0-200)"
-            android:defaultValue="100"
+            android:defaultValue="70"
             android:max="200"
             app:min="0"
             app:showSeekBarValue="true"
@@ -107,7 +107,7 @@
             android:key="pref_tree_color_variation"
             android:title="Tree Color Variation"
             android:summary="Color diversity (0=uniform, 100=varied)"
-            android:defaultValue="100"
+            android:defaultValue="80"
             android:max="100"
             app:min="0"
             app:showSeekBarValue="true"
@@ -135,10 +135,32 @@
         <SeekBarPreference
             android:key="pref_parallax_strength"
             android:title="Parallax Strength"
-            android:summary="How much the scene moves"
-            android:defaultValue="150"
+            android:summary="Input sensitivity (tilt to movement)"
+            android:defaultValue="80"
             android:max="300"
             app:min="10"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_parallax_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_parallax_max_offset"
+            android:title="Max Parallax Distance"
+            android:summary="How far the scene can shift (px)"
+            android:defaultValue="40"
+            android:max="200"
+            app:min="5"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_parallax_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_parallax_return_speed"
+            android:title="Return Speed"
+            android:summary="How quickly the scene recenters"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="1"
             app:showSeekBarValue="true"
             app:updatesContinuously="true"
             android:dependency="pref_parallax_enabled" />
@@ -170,7 +192,7 @@
         <SeekBarPreference
             android:key="pref_manual_time"
             android:title="Manual Time of Day"
-            android:summary="Used when Auto Day/Night is OFF (0:00-23:59)"
+            android:summary="Minutes since midnight when Auto is OFF (0-1439)"
             android:defaultValue="720"
             android:max="1439"
             app:min="0"
@@ -241,17 +263,8 @@
         <SwitchPreferenceCompat
             android:key="pref_debug_enabled"
             android:title="Enable Simulation Mode"
-            android:summary="Override time, weather, and season for testing"
+            android:summary="Override weather and season for testing"
             android:defaultValue="false" />
-
-        <ListPreference
-            android:key="pref_debug_time"
-            android:title="Simulate Time of Day"
-            android:summary="Force specific time (overrides auto day/night)"
-            android:entries="@array/time_options"
-            android:entryValues="@array/time_values"
-            android:defaultValue="auto"
-            android:dependency="pref_debug_enabled" />
 
         <ListPreference
             android:key="pref_weather_type"
@@ -278,17 +291,6 @@
             android:entries="@array/season_options"
             android:entryValues="@array/season_values"
             android:defaultValue="auto"
-            android:dependency="pref_debug_enabled" />
-
-        <SeekBarPreference
-            android:key="pref_debug_wind_speed"
-            android:title="Simulate Wind Speed"
-            android:summary="Tree sway intensity (0-100%)"
-            android:defaultValue="0"
-            android:max="100"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
             android:dependency="pref_debug_enabled" />
     </PreferenceCategory>
 

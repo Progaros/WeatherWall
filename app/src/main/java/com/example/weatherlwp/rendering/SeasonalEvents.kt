@@ -104,11 +104,25 @@ class SeasonalEvents(private val context: Context? = null) {
     private var starSizeMultiplier = 1.0f
     private var trailLengthMultiplier = 1.0f
     
-    private fun loadSettings() {
+    // Track last settings load time to avoid polling SharedPreferences every frame
+    private var lastSettingsLoad = 0L
+    private val SETTINGS_RELOAD_INTERVAL_MS = 1000L  // Reload settings every 1 second
+    
+    init {
+        // Load settings on initialization
+        loadSettings()
+    }
+    
+    /**
+     * Reload settings from SharedPreferences.
+     * Called periodically to pick up changes without requiring a preference listener.
+     */
+    fun loadSettings() {
         prefs?.let {
             starSizeMultiplier = (it.getInt("pref_christmas_star_size", 100) / 100f).coerceIn(0.5f, 2.0f)
             trailLengthMultiplier = (it.getInt("pref_christmas_star_trail", 100) / 100f).coerceIn(0f, 2.0f)
         }
+        lastSettingsLoad = System.currentTimeMillis()
     }
 
     fun getCurrentSeason(): Season {
@@ -145,8 +159,11 @@ class SeasonalEvents(private val context: Context? = null) {
         if (!enabled) return
 
         try {
-            // Settings are loaded on init and preference changes via listener
-            // Don't poll SharedPreferences every frame (performance optimization)
+            // Periodically reload settings to pick up preference changes
+            val now = System.currentTimeMillis()
+            if (now - lastSettingsLoad > SETTINGS_RELOAD_INTERVAL_MS) {
+                loadSettings()
+            }
             
             val season = getCurrentSeason()
             if (season == Season.NONE) return
@@ -169,20 +186,36 @@ class SeasonalEvents(private val context: Context? = null) {
     }
 
     private fun initParticles() {
+        // Use fixed seed for consistent star placement
+        val starRandom = Random(54321)
+        
         // Initialize background twinkling stars in upper portion of screen
+        // Avoid the christmas star area (upper right)
+        val christmasStarX = screenWidth * 0.82f
+        val christmasStarY = screenHeight * 0.12f
+        val exclusionRadius = screenWidth * 0.15f
+        
         for (s in stars) {
-            s.x = Random.nextFloat() * screenWidth
-            s.y = Random.nextFloat() * screenHeight * 0.4f
-            s.size = 2f + Random.nextFloat() * 4f  // Smaller background stars
-            s.twinkle = Random.nextFloat() * 360f
-            s.twinkleSpeed = 2f + Random.nextFloat() * 4f
+            // Keep regenerating until we get a position not too close to christmas star
+            var attempts = 0
+            do {
+                s.x = starRandom.nextFloat() * screenWidth
+                s.y = starRandom.nextFloat() * screenHeight * 0.4f
+                attempts++
+            } while (attempts < 5 && 
+                     kotlin.math.abs(s.x - christmasStarX) < exclusionRadius && 
+                     kotlin.math.abs(s.y - christmasStarY) < exclusionRadius)
+            
+            s.size = 1.5f + starRandom.nextFloat() * 2.5f  // Smaller background stars
+            s.twinkle = starRandom.nextFloat() * 360f
+            s.twinkleSpeed = 2f + starRandom.nextFloat() * 4f
         }
         
-        // Initialize the main Christmas star (Bethlehem star) - upper right area
+        // Initialize the main Christmas star (Bethlehem star) - fixed position in upper right
         christmasStar = ChristmasStar(
-            x = screenWidth * 0.75f + Random.nextFloat() * screenWidth * 0.15f,
-            y = screenHeight * 0.08f + Random.nextFloat() * screenHeight * 0.08f,
-            size = 25f + Random.nextFloat() * 15f,
+            x = christmasStarX,
+            y = christmasStarY,
+            size = 35f,
             twinkle = 0f,
             twinkleSpeed = 3f
         )

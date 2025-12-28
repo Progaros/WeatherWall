@@ -3,6 +3,7 @@ package com.example.weatherlwp.rendering
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import com.example.weatherlwp.parallax.ParallaxCalculator
 import kotlin.random.Random
 
 /**
@@ -10,7 +11,7 @@ import kotlin.random.Random
  * Uses particle pooling to avoid per-frame allocations.
  * Supports intensity control for rain/snow (0.0-1.0).
  */
-class WeatherLayer {
+class WeatherLayer : SceneLayer {
 
     enum class WeatherType {
         NONE, RAIN, SNOW, LIGHTNING, FOG
@@ -174,34 +175,87 @@ class WeatherLayer {
     }
 
     private fun renderLightning(canvas: Canvas) {
+        // Draw dark storm clouds first
+        drawStormClouds(canvas)
+        
         lightningTimer++
 
-        // Random lightning flash every 120-300 frames
-        if (lightningTimer > 120 + Random.nextInt(180)) {
+        // Random lightning flash every 90-240 frames (more frequent)
+        if (lightningTimer > 90 + Random.nextInt(150)) {
             lightningTimer = 0
             lightningFlash = true
-            lightningX = screenWidth * 0.2f + Random.nextFloat() * screenWidth * 0.6f
+            lightningX = screenWidth * 0.15f + Random.nextFloat() * screenWidth * 0.7f
             generateLightningBolt()
         }
 
         if (lightningFlash) {
-            // Screen flash
+            // Screen flash - brighter flash
+            flashPaint.color = Color.argb(100, 255, 255, 255)
             canvas.drawRect(0f, 0f, screenWidth.toFloat(), screenHeight.toFloat(), flashPaint)
+            flashPaint.color = Color.argb(60, 255, 255, 255)
 
-            // Draw lightning bolt
-            var prevX = lightningX
-            var prevY = 0f
-            for (i in lightningPoints.indices step 2) {
-                val nextX = lightningPoints[i]
-                val nextY = lightningPoints[i + 1]
-                canvas.drawLine(prevX, prevY, nextX, nextY, lightningPaint)
-                prevX = nextX
-                prevY = nextY
-            }
+            // Draw lightning bolt with glow effect
+            // Outer glow
+            lightningPaint.strokeWidth = 8f
+            lightningPaint.color = Color.argb(80, 180, 200, 255)
+            drawLightningBolt(canvas)
+            
+            // Inner bright bolt
+            lightningPaint.strokeWidth = 3f
+            lightningPaint.color = Color.WHITE
+            drawLightningBolt(canvas)
 
             // Flash duration
-            if (lightningTimer > 3) {
+            if (lightningTimer > 4) {
                 lightningFlash = false
+            }
+        }
+    }
+    
+    private fun drawLightningBolt(canvas: Canvas) {
+        var prevX = lightningX
+        var prevY = 0f
+        for (i in lightningPoints.indices step 2) {
+            val nextX = lightningPoints[i]
+            val nextY = lightningPoints[i + 1]
+            canvas.drawLine(prevX, prevY, nextX, nextY, lightningPaint)
+            prevX = nextX
+            prevY = nextY
+        }
+    }
+    
+    private fun drawStormClouds(canvas: Canvas) {
+        // Dark, ominous storm clouds at the top of screen
+        val stormCloudPaint = Paint().apply {
+            isAntiAlias = true
+            style = Paint.Style.FILL
+        }
+        
+        // Multiple layers of dark clouds
+        val cloudLayers = listOf(
+            Triple(0.08f, Color.argb(180, 30, 35, 45), 0.5f),   // Back layer - darkest
+            Triple(0.12f, Color.argb(160, 40, 45, 55), 0.6f),   // Middle layer
+            Triple(0.18f, Color.argb(140, 50, 55, 65), 0.7f)    // Front layer - lighter
+        )
+        
+        val time = System.currentTimeMillis()
+        
+        for ((baseY, color, sizeMultiplier) in cloudLayers) {
+            stormCloudPaint.color = color
+            
+            // Draw multiple cloud puffs
+            val numPuffs = 8
+            for (i in 0 until numPuffs) {
+                val xPos = (i.toFloat() / numPuffs) * screenWidth * 1.3f - screenWidth * 0.15f
+                val yPos = screenHeight * baseY
+                val cloudSize = screenWidth * 0.25f * sizeMultiplier
+                
+                // Slight animated movement
+                val drift = kotlin.math.sin((time / 3000.0 + i * 0.5).toDouble()).toFloat() * 10f
+                
+                canvas.drawCircle(xPos + drift, yPos, cloudSize, stormCloudPaint)
+                canvas.drawCircle(xPos + cloudSize * 0.6f + drift, yPos + cloudSize * 0.2f, cloudSize * 0.8f, stormCloudPaint)
+                canvas.drawCircle(xPos - cloudSize * 0.4f + drift, yPos + cloudSize * 0.3f, cloudSize * 0.7f, stormCloudPaint)
             }
         }
     }
@@ -286,5 +340,36 @@ class WeatherLayer {
         }
         
         fogPaint.shader = null
+    }
+
+    override fun resize(w: Float, h: Float) {
+        screenWidth = w.toInt()
+        screenHeight = h.toInt()
+        initialized = false
+    }
+
+    override fun update(deltaTimeMs: Long) {
+        // Animation handled in render for now
+    }
+
+    override fun draw(canvas: Canvas, parallaxCalculator: ParallaxCalculator) {
+        render(canvas, true)
+    }
+
+    override fun updateTheme(theme: String, isNight: Boolean) {
+        val type = when {
+            theme.contains("rain") -> WeatherType.RAIN
+            theme.contains("snow") -> WeatherType.SNOW
+            else -> WeatherType.NONE
+        }
+        setWeather(type)
+    }
+
+    override fun reloadSettings() {
+        // No-op
+    }
+
+    override fun destroy() {
+        // No-op
     }
 }

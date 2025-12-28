@@ -23,12 +23,33 @@ import androidx.preference.SwitchPreferenceCompat
 
 class SettingsFragment : PreferenceFragmentCompat() {
 
+    // Easter egg tap counter
+    private var versionTapCount = 0
+    private var lastTapTime = 0L
+    private val easterEggMessages = listOf(
+        "🌲 The trees are watching...",
+        "⛰️ Mountains whisper secrets",
+        "🌧️ Even virtual rain is wet",
+        "☁️ Cloud nine was full, try ten",
+        "⚡ Zeus says hi!",
+        "❄️ Brrr... cold code!",
+        "🌙 The night is dark and full of pixels",
+        "🎄 Ho ho ho!",
+        "🎆 Party mode activated!",
+        "🦆 Quack! Wrong easter egg..."
+    )
+
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         setPreferencesFromResource(R.xml.preferences, rootKey)
 
-        // Version preference
+        // Version preference with easter egg
         findPreference<Preference>("pref_version")?.apply {
             summary = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
+            
+            setOnPreferenceClickListener {
+                handleVersionTap()
+                true
+            }
         }
 
         // Manual time slider - only enabled when auto day/night is OFF
@@ -225,6 +246,27 @@ class SettingsFragment : PreferenceFragmentCompat() {
             startActivity(Intent.createChooser(shareIntent, "Share Log"))
         } catch (e: Exception) {
             Toast.makeText(context, "Failed to export log: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+    
+    private fun handleVersionTap() {
+        val now = System.currentTimeMillis()
+        
+        // Reset counter if more than 500ms between taps
+        if (now - lastTapTime > 500) {
+            versionTapCount = 0
+        }
+        lastTapTime = now
+        versionTapCount++
+        
+        when (versionTapCount) {
+            3 -> Toast.makeText(context, "Keep tapping... 👀", Toast.LENGTH_SHORT).show()
+            5 -> {
+                // Show random easter egg message
+                val message = easterEggMessages.random()
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                versionTapCount = 0
+            }
         }
     }
 }

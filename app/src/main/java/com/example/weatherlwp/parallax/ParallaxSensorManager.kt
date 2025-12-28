@@ -57,14 +57,14 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         ax = alpha * ax + (1 - alpha) * event.values[0]
         ay = alpha * ay + (1 - alpha) * event.values[1]
 
-        // Normalize to -1..1 range (assuming max tilt at ~9.81 m/s²)
+        // Normalize to -1..1 range (assuming max tilt at ~5 m/s² for typical phone use)
+        // Use smaller divisor for more sensitivity
         // X-axis (values[0]) = left/right tilt, Y-axis (values[1]) = forward/back tilt
-        val tiltX = (ax / 9.81f).coerceIn(-1f, 1f)
-        val tiltY = (ay / 9.81f).coerceIn(-1f, 1f)
+        val tiltX = (ax / 5f).coerceIn(-1f, 1f)
+        val tiltY = (ay / 5f).coerceIn(-1f, 1f)  // Y is typically smaller range when phone is upright
 
-        // Increased sensitivity for more noticeable parallax effect
-        val sensitivityPx = 150f
-        listener?.onOffsetChanged(tiltX * sensitivityPx, tiltY * sensitivityPx)
+        // Send normalized values (-1 to 1) to the listener
+        listener?.onOffsetChanged(tiltX, tiltY)
     }
 
     override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) = Unit

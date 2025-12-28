@@ -13,6 +13,7 @@ import com.example.weatherlwp.rendering.SeasonalEvents
 import com.example.weatherlwp.rendering.WeatherLayer
 import com.example.weatherlwp.weather.WeatherRepository
 import com.example.weatherlwp.weather.WeatherType
+import com.example.weatherlwp.parallax.ParallaxSensorManager
 
 class WeatherWallpaper : WallpaperService() {
     companion object {
@@ -27,6 +28,8 @@ class WeatherWallpaper : WallpaperService() {
 
         private lateinit var scene: ParallaxScene
         private lateinit var seasonal: SeasonalEvents
+        private val sensorManager = ParallaxSensorManager(this@WeatherWallpaper)
+        private val weatherRepo = WeatherRepository
         private val weather = WeatherLayer()
 
         // Preferences
@@ -36,18 +39,17 @@ class WeatherWallpaper : WallpaperService() {
         private var currentWeather = "none"
         private var useBreezyWeather = true
         
-        // Live weather update listener
+        // Preference change listener - responds to ALL setting changes
         private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == "weather_current_type" || key == "weather_wind_speed") {
-                loadPrefs()
-                Log.d(TAG, "Live weather update received: $key")
-            }
+            // Reload all preferences and update scene when any setting changes
+            Log.d(TAG, "Preference changed: $key")
+            loadPrefs()
         }
 
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             super.onCreate(surfaceHolder)
             try {
-                scene = ParallaxScene(this@WeatherWallpaper)
+                scene = ParallaxScene(this@WeatherWallpaper, sensorManager, weatherRepo)
                 seasonal = SeasonalEvents(this@WeatherWallpaper)
                 loadPrefs()
                 // Register for live weather updates from Breezy Weather
@@ -127,7 +129,10 @@ class WeatherWallpaper : WallpaperService() {
                 val debugEnabled = prefs.getBoolean("pref_debug_enabled", false)
                 
                 // Reload scene settings (handles parallax, clouds, day/night, terrain)
-                scene.loadSettings()
+                scene.loadPrefs()
+                
+                // Reload seasonal settings (Christmas star size/trail, etc.)
+                seasonal.loadSettings()
 
                 // Weather type - check debug override first, then auto/manual
                 currentWeather = prefs.getString("pref_weather_type", "auto") ?: "auto"
