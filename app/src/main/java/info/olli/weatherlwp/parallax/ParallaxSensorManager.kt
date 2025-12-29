@@ -8,7 +8,11 @@ import android.hardware.SensorManager
 import android.util.Log
 
 /**
- * Manages accelerometer input for parallax effect.
+ * Manages gravity sensor input for parallax effect.
+ * 
+ * Uses TYPE_GRAVITY sensor instead of TYPE_ACCELEROMETER to isolate tilt from
+ * linear motion (walking, hand jitter). The gravity sensor uses sensor fusion
+ * (gyro + accel + magnetometer) to provide a stable "down" vector.
  * 
  * This implementation tracks VELOCITY (change in tilt) rather than absolute position.
  * 
@@ -17,6 +21,7 @@ import android.util.Log
  * - Positive change = tilting in that direction
  * - Zero change = holding steady (no parallax movement)
  * - Works at any phone orientation (no baseline needed for velocity)
+ * - Immune to linear acceleration (walking, hand movement)
  */
 class ParallaxSensorManager(context: Context) : SensorEventListener {
     companion object {
@@ -41,7 +46,12 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     }
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    
+    // Use TYPE_GRAVITY for stable tilt detection immune to linear acceleration
+    // Falls back to TYPE_ACCELEROMETER if gravity sensor unavailable
+    private val gravitySensor = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY)
     private val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+    private val activeSensor = gravitySensor ?: accelerometer
 
     // Current smoothed sensor values
     private var currentX = 0f
@@ -58,15 +68,16 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     fun setListener(l: Listener) { listener = l }
 
     fun start() {
-        if (accelerometer == null) {
-            Log.w(TAG, "No accelerometer sensor available")
+        if (activeSensor == null) {
+            Log.w(TAG, "No gravity or accelerometer sensor available")
             return
         }
         if (!isStarted) {
             initialized = false
-            sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME)
+            val sensorName = if (gravitySensor != null) "gravity" else "accelerometer (fallback)"
+            sensorManager.registerListener(this, activeSensor, SensorManager.SENSOR_DELAY_GAME)
             isStarted = true
-            Log.d(TAG, "Sensor started")
+            Log.d(TAG, "Sensor started using $sensorName")
         }
     }
 
@@ -79,7 +90,8 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     }
 
     override fun onSensorChanged(event: SensorEvent) {
-        if (event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
+        // Accept both TYPE_GRAVITY and TYPE_ACCELEROMETER (fallback)
+        if (event.sensor.type != Sensor.TYPE_GRAVITY && event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
 
         val rawX = event.values[0]
         val rawY = event.values[1]

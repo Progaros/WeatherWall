@@ -214,7 +214,12 @@ class MainActivity : AppCompatActivity() {
                 
                 var canvas: android.graphics.Canvas? = null
                 try {
-                    canvas = holder.lockCanvas()
+                    // Use hardware-accelerated canvas for better GPU performance
+                    canvas = holder.lockHardwareCanvas()
+                    if (canvas == null) {
+                        // Fall back to software canvas if hardware canvas fails
+                        canvas = holder.lockCanvas()
+                    }
                     
                     if (canvas == null) {
                         consecutiveNullCanvasCount++

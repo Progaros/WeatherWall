@@ -37,9 +37,10 @@ class ParallaxCalculator {
     @Volatile private var smoothedVelocityX = 0f
     @Volatile private var smoothedVelocityY = 0f
     
-    // Accumulated velocity input this frame
-    @Volatile private var pendingVelocityX = 0f
-    @Volatile private var pendingVelocityY = 0f
+    // Accumulated velocity input this frame - protected by velocityLock
+    private var pendingVelocityX = 0f
+    private var pendingVelocityY = 0f
+    private val velocityLock = Any()  // Synchronization lock for pending velocity
     
     // Frame counter for idle detection
     @Volatile private var idleFrameCount = 0
@@ -53,13 +54,16 @@ class ParallaxCalculator {
     
     /**
      * Update from sensor input.
+     * Thread-safe: can be called from sensor callback thread.
      * @param velocityX Change in X tilt (-1 to 1, where magnitude = speed)
      * @param velocityY Change in Y tilt (-1 to 1, where magnitude = speed)
      */
     fun updateFromSensor(velocityX: Float, velocityY: Float) {
-        // Accumulate velocity (will be applied in update())
-        pendingVelocityX += velocityX
-        pendingVelocityY += velocityY
+        // Synchronize to prevent race with update() reading pending values
+        synchronized(velocityLock) {
+            pendingVelocityX += velocityX
+            pendingVelocityY += velocityY
+        }
         
         // Reset idle counter if there's any movement
         if (velocityX != 0f || velocityY != 0f) {
@@ -74,12 +78,22 @@ class ParallaxCalculator {
     fun update(deltaTimeMs: Long = 16L) {
         val deltaScale = deltaTimeMs / 16f  // Normalize to ~60fps
         
+        // Atomically read and clear pending velocity
+        val currentPendingX: Float
+        val currentPendingY: Float
+        synchronized(velocityLock) {
+            currentPendingX = pendingVelocityX
+            currentPendingY = pendingVelocityY
+            pendingVelocityX = 0f
+            pendingVelocityY = 0f
+        }
+        
         // Smoothing: lerp smoothed velocity toward pending velocity
         // Higher smoothing = more filtering = smoother but slower response
         // Fixed formula: smoothing is the filter strength (0 = instant, 0.95 = very smooth)
         val filterStrength = smoothing.coerceIn(0f, 0.95f)
-        smoothedVelocityX = smoothedVelocityX * filterStrength + pendingVelocityX * (1f - filterStrength)
-        smoothedVelocityY = smoothedVelocityY * filterStrength + pendingVelocityY * (1f - filterStrength)
+        smoothedVelocityX = smoothedVelocityX * filterStrength + currentPendingX * (1f - filterStrength)
+        smoothedVelocityY = smoothedVelocityY * filterStrength + currentPendingY * (1f - filterStrength)
         
         // Apply smoothed velocity to position
         val velocityMagnitude = kotlin.math.sqrt(
@@ -102,25 +116,17 @@ class ParallaxCalculator {
             // This allows instant reversal when tilting back from edge
             if (positionX == maxOffsetPx && smoothedVelocityX > 0f) {
                 smoothedVelocityX = 0f
-                pendingVelocityX = 0f
             }
             if (positionX == -maxOffsetPx && smoothedVelocityX < 0f) {
                 smoothedVelocityX = 0f
-                pendingVelocityX = 0f
             }
             if (positionY == maxOffsetPx && smoothedVelocityY > 0f) {
                 smoothedVelocityY = 0f
-                pendingVelocityY = 0f
             }
             if (positionY == -maxOffsetPx && smoothedVelocityY < 0f) {
                 smoothedVelocityY = 0f
-                pendingVelocityY = 0f
             }
         }
-        
-        // Clear pending velocity for next frame (but keep smoothed for decay)
-        pendingVelocityX = 0f
-        pendingVelocityY = 0f
         
         // Increment idle counter
         idleFrameCount++
@@ -196,8 +202,10 @@ class ParallaxCalculator {
         positionY = 0f
         smoothedVelocityX = 0f
         smoothedVelocityY = 0f
-        pendingVelocityX = 0f
-        pendingVelocityY = 0f
+        synchronized(velocityLock) {
+            pendingVelocityX = 0f
+            pendingVelocityY = 0f
+        }
         idleFrameCount = 0
     }
 }

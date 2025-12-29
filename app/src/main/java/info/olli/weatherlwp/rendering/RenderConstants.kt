@@ -136,6 +136,43 @@ object RenderConstants {
     /** Star twinkle animation */
     const val STAR_TWINKLE_SPEED = 0.001f
     
+    // ============== Terrain Generation Constants ==============
+    
+    /** Hill curve generation */
+    const val HILL_CURVE_POINTS_MIN = 80
+    const val HILL_CURVE_POINTS_RANGE = 40
+    const val HILL_BASE_HEIGHT = 0.3f
+    const val HILL_HEIGHT_RANGE = 0.2f
+    const val HILL_SMOOTHING_FACTOR = 0.15f  // Max change between adjacent points
+    
+    /** Tree generation */
+    const val TREE_SCALE_MIN = 0.7f
+    const val TREE_SCALE_RANGE = 0.3f
+    const val TREE_HEIGHT_FACTOR = 0.15f  // Tree height as fraction of screen
+    const val TREE_GROUND_OFFSET = 0.01f  // Slight offset above hill surface
+    
+    /** Mountain generation */
+    const val MOUNTAIN_HEIGHT_MIN = 0.3f
+    const val MOUNTAIN_HEIGHT_RANGE = 0.3f
+    const val MOUNTAIN_WIDTH_MIN = 0.8f
+    const val MOUNTAIN_WIDTH_RANGE = 0.6f
+    const val MOUNTAIN_PEAK_SPREAD = 1.4f  // How spread out peaks are horizontally
+    
+    /** Cloud generation */
+    const val CLOUD_Y_MIN = 0.05f
+    const val CLOUD_Y_RANGE = 0.35f
+    const val CLOUD_SIZE_MIN = 0.08f
+    const val CLOUD_SIZE_RANGE = 0.25f
+    const val CLOUD_SPEED_BASE = 0.05f
+    const val CLOUD_SPEED_RANGE = 0.1f
+    
+    // ============== Atmospheric Haze ==============
+    
+    /** Where haze starts and ends (fraction of screen height) */
+    const val HAZE_START_Y = 0.55f
+    const val HAZE_END_Y = 0.85f
+    const val HAZE_ALPHA = 25
+    
     // ============== Seasonal Event Constants ==============
     
     /** Christmas star position (fraction of screen) */

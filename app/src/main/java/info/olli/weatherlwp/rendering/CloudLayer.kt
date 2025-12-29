@@ -59,7 +59,10 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val elongation: Float  // Horizontal stretch factor for wispy shape
     )
     
-    private val clouds = ArrayList<CloudData>()
+    // Thread-safe cloud list using volatile reference + immutable list
+    // Settings thread creates new list, render thread reads current snapshot
+    @Volatile private var clouds: List<CloudData> = emptyList()
+    
     private var cloudCount = 10
     private var cloudStretch = 2.0f  // Horizontal stretch multiplier (1.0 = normal, 2.0 = wispy)
     private var cloudOpacity = 0.4f  // Base opacity multiplier (0-1)
@@ -71,15 +74,16 @@ class CloudLayer(private val context: Context) : SceneLayer {
     }
     
     private fun generateClouds() {
-        clouds.clear()
+        // Build new list (thread-safe: atomic swap at end)
+        val newClouds = ArrayList<CloudData>(cloudCount)
         val random = Random(randomSeed.toLong() + 3000)  // Offset from terrain
         
         for (i in 0 until cloudCount) {
             val x = RenderConstants.WORLD_MIN_X + random.nextFloat() * RenderConstants.WORLD_WIDTH
-            val y = 0.05f + random.nextFloat() * 0.35f
-            val size = 0.08f + random.nextFloat() * 0.25f
+            val y = RenderConstants.CLOUD_Y_MIN + random.nextFloat() * RenderConstants.CLOUD_Y_RANGE
+            val size = RenderConstants.CLOUD_SIZE_MIN + random.nextFloat() * RenderConstants.CLOUD_SIZE_RANGE
             // Base speed - smaller clouds move faster (further away)
-            val speed = 0.05f + (1f - size / 0.33f) * 0.1f
+            val speed = RenderConstants.CLOUD_SPEED_BASE + (1f - size / 0.33f) * RenderConstants.CLOUD_SPEED_RANGE
             // Alpha based on size and opacity setting
             // Small clouds (far/thin) are more transparent
             // Large clouds (near/thick) are more opaque
@@ -89,8 +93,11 @@ class CloudLayer(private val context: Context) : SceneLayer {
             // Horizontal elongation - base from setting, with random variation
             val elongation = cloudStretch * (0.8f + random.nextFloat() * 0.4f)
             
-            clouds.add(CloudData(x, y, size, speed, alpha, random.nextLong(), elongation))
+            newClouds.add(CloudData(x, y, size, speed, alpha, random.nextLong(), elongation))
         }
+        
+        // Atomic reference swap (volatile ensures visibility to render thread)
+        clouds = newClouds
     }
 
     override fun resize(w: Float, h: Float) {
@@ -112,8 +119,13 @@ class CloudLayer(private val context: Context) : SceneLayer {
             generateClouds()
         }
         
+        // Take local snapshot of clouds for thread-safe iteration
+        val currentClouds = clouds
+        if (currentClouds.isEmpty()) return
+        
         val scaleX = height * RenderConstants.REFERENCE_ASPECT_RATIO
-        val (px, py) = parallaxCalculator.getOffsetForDepth(RenderConstants.PARALLAX_CLOUDS)
+        val px = parallaxCalculator.getOffsetXForDepth(RenderConstants.PARALLAX_CLOUDS)
+        val py = parallaxCalculator.getOffsetYForDepth(RenderConstants.PARALLAX_CLOUDS)
         
         // Wind affects cloud speed
         val windSpeed = RenderConstants.WIND_CLOUD_SPEED_MIN + 
@@ -141,7 +153,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         canvas.save()
         canvas.translate(px, py)
         
-        for (cloud in clouds) {
+        for (cloud in currentClouds) {
             paint.alpha = cloud.alpha
             
             // Calculate cloud X position based on time
@@ -212,7 +224,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         
         if (!enabled) {
             cloudCount = 0
-            clouds.clear()
+            clouds = emptyList()  // Thread-safe: atomic reference swap
         } else if (stretchChanged || seedChanged || opacityChanged || densityChanged) {
             // Regenerate clouds with new settings
             cloudCount = manualDensity

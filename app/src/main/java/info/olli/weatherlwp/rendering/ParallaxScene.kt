@@ -3,7 +3,6 @@ package info.olli.weatherlwp.rendering
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Canvas
-import android.graphics.Color
 import android.util.Log
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.parallax.ParallaxCalculator
@@ -115,9 +114,7 @@ class ParallaxScene(
             }
             weatherLayer.update(state, 16)
             
-            // Draw layers
-            canvas.drawColor(Color.BLACK)
-            
+            // Draw layers (canvas already cleared by caller)
             for (layer in layers) {
                 try {
                     layer.draw(canvas, state, parallaxCalculator)

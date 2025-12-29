@@ -58,7 +58,9 @@ class MountainLayer(private val context: Context) : SceneLayer {
         val shapeSeed: Long
     )
     
-    private val mountains = ArrayList<MountainData>()
+    // Thread-safe mountain list using volatile reference + immutable list
+    // Settings thread creates new list, render thread reads current snapshot
+    @Volatile private var mountains: List<MountainData> = emptyList()
     
     // Settings
     private var mountainCount = 3
@@ -73,7 +75,8 @@ class MountainLayer(private val context: Context) : SceneLayer {
     }
     
     private fun generateMountains() {
-        mountains.clear()
+        // Build new list (thread-safe: atomic swap at end)
+        val newMountains = ArrayList<MountainData>(mountainCount)
         val random = Random(randomSeed.toLong())
         
         for (i in 0 until mountainCount) {
@@ -85,24 +88,27 @@ class MountainLayer(private val context: Context) : SceneLayer {
                 depth * (RenderConstants.PARALLAX_MOUNTAIN_MAX - RenderConstants.PARALLAX_MOUNTAIN_MIN)
             
             // Position: spread across width
-            val peakX = -0.2f + random.nextFloat() * 1.4f
+            val peakX = -0.2f + random.nextFloat() * RenderConstants.MOUNTAIN_PEAK_SPREAD
             
-            // Height: 0.3 to 0.6 of screen height
-            val h = (0.3f + random.nextFloat() * 0.3f) * mountainHeightScale
+            // Height: varies by scale setting
+            val h = (RenderConstants.MOUNTAIN_HEIGHT_MIN + random.nextFloat() * RenderConstants.MOUNTAIN_HEIGHT_RANGE) * mountainHeightScale
             
             // Width: Random variation
-            val w = (0.8f + random.nextFloat() * 0.6f) * mountainWidthScale
+            val w = (RenderConstants.MOUNTAIN_WIDTH_MIN + random.nextFloat() * RenderConstants.MOUNTAIN_WIDTH_RANGE) * mountainWidthScale
             
             // Color: Darker/bluer for far mountains (atmospheric perspective)
             val baseGray = RenderConstants.MOUNTAIN_GRAY_MIN + 
                 (depth * (RenderConstants.MOUNTAIN_GRAY_MAX - RenderConstants.MOUNTAIN_GRAY_MIN)).toInt()
             val dayColor = Color.rgb(baseGray, baseGray + 5, baseGray + 15)
             
-            mountains.add(MountainData(peakX, h, w, dayColor, depthFactor, random.nextLong()))
+            newMountains.add(MountainData(peakX, h, w, dayColor, depthFactor, random.nextLong()))
         }
         
         // Sort: Far mountains first (drawn behind)
-        mountains.sortBy { it.depthFactor }
+        newMountains.sortBy { it.depthFactor }
+        
+        // Atomic reference swap (volatile ensures visibility to render thread)
+        mountains = newMountains
     }
 
     override fun resize(w: Float, h: Float) {
@@ -117,6 +123,9 @@ class MountainLayer(private val context: Context) : SceneLayer {
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         if (width <= 0 || height <= 0) return
         
+        // Take local snapshot for thread-safe iteration
+        val currentMountains = mountains
+        
         val scaleX = height * RenderConstants.REFERENCE_ASPECT_RATIO
         
         // Get ambient color for atmospheric blending (per ai.md)
@@ -124,8 +133,9 @@ class MountainLayer(private val context: Context) : SceneLayer {
             state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk
         )
         
-        for (mountain in mountains) {
-            val (px, py) = parallaxCalculator.getOffsetForDepth(mountain.depthFactor)
+        for (mountain in currentMountains) {
+            val px = parallaxCalculator.getOffsetXForDepth(mountain.depthFactor)
+            val py = parallaxCalculator.getOffsetYForDepth(mountain.depthFactor)
             
             canvas.save()
             canvas.translate(px, py)
@@ -146,8 +156,8 @@ class MountainLayer(private val context: Context) : SceneLayer {
      */
     @Suppress("UNUSED_PARAMETER")
     private fun drawAtmosphericHaze(canvas: Canvas, isNight: Boolean, ambientColor: Int) {
-        val hazeStartY = height * 0.55f  // Start at 55% down
-        val hazeEndY = height * 0.85f    // Fade to 85% down
+        val hazeStartY = height * RenderConstants.HAZE_START_Y
+        val hazeEndY = height * RenderConstants.HAZE_END_Y
         
         // Only recreate gradient if ambient color or height changed (avoids per-frame allocation)
         if (ambientColor != cachedHazeAmbient || height != cachedHazeHeight) {
@@ -156,7 +166,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
             
             // Haze color blends with ambient for consistent atmosphere
             val hazeColor = Color.argb(
-                25,
+                RenderConstants.HAZE_ALPHA,
                 Color.red(ambientColor),
                 Color.green(ambientColor),
                 Color.blue(ambientColor)
@@ -313,8 +323,8 @@ class MountainLayer(private val context: Context) : SceneLayer {
         val heightVal = prefs.getInt("pref_mountain_height", 140)
         mountainHeightScale = heightVal / 100f
         
-        // Width: 50-1000 -> 0.5 - 10.0
-        val widthVal = prefs.getInt("pref_mountain_width", 500)
+        // Width: 50-1000 -> 0.5 - 10.0 (default 175 = 1.75x for good visual size)
+        val widthVal = prefs.getInt("pref_mountain_width", 175)
         mountainWidthScale = widthVal / 100f
         
         // Roughness: 0-200 -> 0.0 - 2.0

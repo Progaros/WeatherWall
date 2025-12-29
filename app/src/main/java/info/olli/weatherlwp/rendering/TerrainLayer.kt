@@ -34,7 +34,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private var width = 0f
     private var height = 0f
     
-    // Data structures
+    // Data structures (immutable after creation)
     private data class HillData(
         val controlPoints: List<Float>,
         val depthFactor: Float,
@@ -50,8 +50,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val dayColor: Int
     )
     
-    private val hills = ArrayList<HillData>()
-    private val trees = ArrayList<TreeData>()
+    // Thread-safe terrain data using volatile references + immutable lists
+    // Settings thread creates new lists, render thread reads current snapshots
+    @Volatile private var hills: List<HillData> = emptyList()
+    @Volatile private var trees: List<TreeData> = emptyList()
     
     // Settings
     private var treeCount = 100
@@ -74,7 +76,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     }
     
     private fun generateHills() {
-        hills.clear()
+        // Build new list (thread-safe: atomic swap at end)
+        val newHills = ArrayList<HillData>(hillCount)
         val random = Random(randomSeed.toLong() + 1000)  // Offset from mountains
         
         for (i in 0 until hillCount) {
@@ -84,14 +87,14 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 depth * (RenderConstants.PARALLAX_HILLS_MAX - RenderConstants.PARALLAX_HILLS_MIN)
             val heightOffset = hillStartY + depth * (hillEndY - hillStartY)
             
-            // More points for smoother curves (80-120 instead of 60-80)
-            val numPoints = 80 + random.nextInt(40)
+            // More points for smoother curves
+            val numPoints = RenderConstants.HILL_CURVE_POINTS_MIN + random.nextInt(RenderConstants.HILL_CURVE_POINTS_RANGE)
             val points = ArrayList<Float>()
             
             // Smooth curve generation with gradual changes
-            var lastValue = 0.3f + random.nextFloat() * 0.2f
+            var lastValue = RenderConstants.HILL_BASE_HEIGHT + random.nextFloat() * RenderConstants.HILL_HEIGHT_RANGE
             for (j in 0 until numPoints) {
-                val change = (random.nextFloat() - 0.5f) * 0.15f  // Smoother transitions
+                val change = (random.nextFloat() - 0.5f) * RenderConstants.HILL_SMOOTHING_FACTOR
                 val newValue = (lastValue + change).coerceIn(0.1f, 0.6f)
                 points.add(newValue)
                 lastValue = newValue
@@ -105,37 +108,42 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 (Color.blue(RenderConstants.HILL_BASE_COLOR) * brightness).toInt()
             )
             
-            hills.add(HillData(points, depthFactor, heightOffset, dayColor))
+            newHills.add(HillData(points, depthFactor, heightOffset, dayColor))
         }
-        hills.sortBy { it.depthFactor }
+        newHills.sortBy { it.depthFactor }
+        
+        // Atomic reference swap (volatile ensures visibility to render thread)
+        hills = newHills
     }
     
     private fun generateTrees() {
-        trees.clear()
-        val random = Random(randomSeed.toLong() + 2000)  // Offset from hills
+        // Take snapshot of hills for tree placement (thread-safe read)
+        val currentHills = hills
         
-        // Use only half the tree count for less dense forest
-        val effectiveTreeCount = treeCount / 2
+        // Build new list (thread-safe: atomic swap at end)
+        val effectiveTreeCount = treeCount / 2  // Less dense forest
+        val newTrees = ArrayList<TreeData>(effectiveTreeCount)
+        val random = Random(randomSeed.toLong() + 2000)  // Offset from hills
         
         for (i in 0 until effectiveTreeCount) {
             val xRatio = -0.2f + random.nextFloat() * 1.4f
             
             // Always place trees on hills
-            val hill = if (hills.isNotEmpty()) {
-                hills[random.nextInt(hills.size)]
+            val hill = if (currentHills.isNotEmpty()) {
+                currentHills[random.nextInt(currentHills.size)]
             } else {
                 HillData(listOf(0.4f), 0.85f, 0.70f, Color.rgb(30, 80, 40))
             }
             
             val groundY = getHillY(xRatio, hill)
             val depthFactor = hill.depthFactor
-            val yRatio = groundY + 0.01f  // Slightly closer to ground
+            val yRatio = groundY + RenderConstants.TREE_GROUND_OFFSET
             
             val normalizedDepth = ((depthFactor - RenderConstants.PARALLAX_HILLS_MIN) /
                 (RenderConstants.PARALLAX_HILLS_MAX - RenderConstants.PARALLAX_HILLS_MIN)).coerceIn(0f, 1f)
             
-            // Improved scale formula
-            val scale = 0.7f + normalizedDepth * 0.3f
+            // Tree scale: closer trees are larger
+            val scale = RenderConstants.TREE_SCALE_MIN + normalizedDepth * RenderConstants.TREE_SCALE_RANGE
             
             val variationAmount = (20 * treeColorVariation).toInt()
             val varR = if (variationAmount > 0) random.nextInt(variationAmount * 2 + 1) - variationAmount else 0
@@ -146,9 +154,12 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 Color.blue(RenderConstants.TREE_BASE_COLOR)
             )
             
-            trees.add(TreeData(xRatio, yRatio, scale, depthFactor, dayColor))
+            newTrees.add(TreeData(xRatio, yRatio, scale, depthFactor, dayColor))
         }
-        trees.sortBy { it.depthFactor }
+        newTrees.sortBy { it.depthFactor }
+        
+        // Atomic reference swap (volatile ensures visibility to render thread)
+        trees = newTrees
     }
     
     private fun getHillY(xRatio: Float, hill: HillData): Float {
@@ -179,6 +190,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         if (width <= 0 || height <= 0) return
         
+        // Take local snapshots for thread-safe iteration
+        val currentHills = hills
+        val currentTrees = trees
+        
         val scaleX = height * RenderConstants.REFERENCE_ASPECT_RATIO
         
         // Get ambient color for current time of day (per ai.md: global tint system)
@@ -187,8 +202,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         )
         
         // Draw Hills with ambient tinting
-        for (hill in hills) {
-            val (px, py) = parallaxCalculator.getOffsetForDepth(hill.depthFactor)
+        for (hill in currentHills) {
+            val px = parallaxCalculator.getOffsetXForDepth(hill.depthFactor)
+            val py = parallaxCalculator.getOffsetYForDepth(hill.depthFactor)
             canvas.save()
             canvas.translate(px, py)
             
@@ -201,8 +217,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         }
         
         // Draw Trees with ambient tinting
-        for (tree in trees) {
-            val (px, py) = parallaxCalculator.getOffsetForDepth(tree.depthFactor)
+        for (tree in currentTrees) {
+            val px = parallaxCalculator.getOffsetXForDepth(tree.depthFactor)
+            val py = parallaxCalculator.getOffsetYForDepth(tree.depthFactor)
             canvas.save()
             canvas.translate(px, py)
             
@@ -251,7 +268,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val x = (tree.xRatio - 0.5f) * scaleX + width / 2f
         val y = tree.yRatio * height
         
-        val totalHeight = height * 0.15f * tree.scale * treeSizeScale
+        val totalHeight = height * RenderConstants.TREE_HEIGHT_FACTOR * tree.scale * treeSizeScale
         val segmentHeight = totalHeight / treeSegments
         
         // Wind sway: smooth multi-harmonic motion

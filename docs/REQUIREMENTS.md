@@ -135,27 +135,26 @@ This document summarizes all requirements discussed and fixes implemented during
 ### Requirements
 | ID | Requirement | Status |
 |----|-------------|--------|
-| D1 | Manual time slider shows hours (0-23), not minutes | ✅ Fixed |
+| D1 | Manual time slider uses minutes (0-1439), default 720 (noon) | ✅ Fixed |
 | D2 | Debug "Simulate Time of Day" should work | ✅ Implemented |
 | D3 | Dawn = hour 6-7, Dusk = hour 19, Night = 0-5 or 20-23 | ✅ Fixed |
 
 ### Test Cases
 ```kotlin
-// D1: Test manual time is hours
-@Test fun testManualTimeIsHours() {
-    setPreference("pref_daynight_enabled", false)
-    setPreference("pref_manual_time", 14)  // 2 PM
-    val scene = ParallaxScene(mockContext, mockSensor, mockWeather)
-    scene.loadPrefs()
-    // Theme should be "day" (hour 14)
+// D1: Test manual time is minutes
+@Test fun testManualTimeIsMinutes() {
+    setPreference("pref_debug_enabled", true)
+    setPreference("pref_manual_time", 840)  // 14:00 (2 PM) = 14*60 = 840 minutes
+    val settings = SimulationSettings(mockContext)
+    // manualTimeMinutes should be 840
+    // Converted to hours: 840 / 60 = 14.0
 }
 
 // D2: Test debug time override
 @Test fun testDebugTimeOverride() {
     setPreference("pref_debug_enabled", true)
-    setPreference("pref_debug_time", "night")
-    val scene = ParallaxScene(mockContext, mockSensor, mockWeather)
-    scene.loadPrefs()
+    setPreference("pref_manual_time", 0)  // Midnight
+    val settings = SimulationSettings(mockContext)
     // Should use hour=0 regardless of real time
 }
 ```

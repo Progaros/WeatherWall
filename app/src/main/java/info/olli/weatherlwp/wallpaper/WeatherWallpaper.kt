@@ -257,7 +257,12 @@ class WeatherWallpaper : WallpaperService() {
             
             var canvas: Canvas? = null
             try {
-                canvas = holder.lockCanvas()
+                // Use hardware-accelerated canvas for better GPU performance
+                canvas = holder.lockHardwareCanvas()
+                if (canvas == null) {
+                    // Fall back to software canvas if hardware canvas fails
+                    canvas = holder.lockCanvas()
+                }
                 if (canvas == null) {
                     Log.w(TAG, "lockCanvas() returned null")
                     return
@@ -274,14 +279,9 @@ class WeatherWallpaper : WallpaperService() {
                 // Base black
                 canvas.drawColor(Color.BLACK)
 
-                // Parallax scene (sky, clouds, mountains, trees)
+                // Parallax scene (sky, clouds, mountains, trees, weather overlays, seasonal)
+                // Note: ParallaxScene handles weather and seasonal rendering internally
                 scene.render(canvas)
-
-                // Weather effects (rain, snow, lightning)
-                weather.render(canvas, weatherEnabled)
-                
-                // Seasonal effects (fireworks, etc)
-                seasonal.render(canvas, seasonalEnabled)
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error drawing frame", e)

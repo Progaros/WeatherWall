@@ -27,7 +27,7 @@
             android:key="pref_mountain_width"
             android:title="Mountain Width"
             android:summary="Width multiplier (50-1000%)"
-            android:defaultValue="115"
+            android:defaultValue="175"
             android:max="1000"
             app:min="50"
             app:showSeekBarValue="true"
