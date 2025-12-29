@@ -18,6 +18,9 @@ class SimulationController(private val context: Context) {
     private var screenWidth = 1080f
     private var screenHeight = 1920f
     
+    // For smooth time transitions
+    private var lastSmoothedTime = 0f
+    
     /**
      * Reload settings from preferences.
      */
@@ -55,14 +58,20 @@ class SimulationController(private val context: Context) {
             settings.windStrength
         }
         
+        // Smooth time transitions for eased color changes
+        val rawTime = clock.getTimeOfDayHours()
+        val smoothedTime = smoothTimeTransitions(rawTime)
+        
         return SimulationState(
-            timeOfDayHours = clock.getTimeOfDayHours(),
+            timeOfDayHours = rawTime,
             timeSeconds = clock.getTimeSeconds(),
             absoluteTimeMs = clock.getAbsoluteTimeMs(),
             isNight = clock.isNight(),
             isDawn = clock.isDawn(),
             isDusk = clock.isDusk(),
             dayProgress = clock.getDayProgress(),
+            smoothedTimeOfDayHours = smoothedTime,
+            smoothedProgress = smoothedTime / 24f,
             weather = effectiveWeather,
             cloudDensity = settings.cloudDensity,
             windStrength = effectiveWind.coerceIn(0f, 1f),
@@ -71,6 +80,23 @@ class SimulationController(private val context: Context) {
             screenHeight = screenHeight,
             isDebugMode = settings.debugEnabled
         )
+    }
+    
+    /**
+     * Smooth time transitions to prevent color jumps when using time slider.
+     */
+    private fun smoothTimeTransitions(rawTime: Float): Float {
+        val timeDelta = kotlin.math.abs(rawTime - lastSmoothedTime)
+        return if (timeDelta > 0.5f) {
+            // Large change: lerp gradually
+            val lerpFactor = 0.05f
+            lastSmoothedTime = lastSmoothedTime + (rawTime - lastSmoothedTime) * lerpFactor
+            lastSmoothedTime
+        } else {
+            // Small change: use raw time
+            lastSmoothedTime = rawTime
+            rawTime
+        }
     }
     
     /**

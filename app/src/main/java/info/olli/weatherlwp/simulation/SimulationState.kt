@@ -18,6 +18,10 @@ data class SimulationState(
     val isDusk: Boolean,
     val dayProgress: Float,             // 0-1
     
+    // Smoothed time for eased transitions
+    val smoothedTimeOfDayHours: Float = timeOfDayHours,
+    val smoothedProgress: Float = dayProgress,
+    
     // Weather
     val weather: WeatherType,
     val cloudDensity: CloudDensity,

@@ -119,17 +119,29 @@ class ParallaxScene(
             canvas.drawColor(Color.BLACK)
             
             for (layer in layers) {
-                layer.draw(canvas, state, parallaxCalculator)
+                try {
+                    layer.draw(canvas, state, parallaxCalculator)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error drawing layer ${layer.javaClass.simpleName}", e)
+                }
             }
             
             // Draw Weather Overlay (only if enabled)
             if (weatherEnabled) {
-                weatherLayer.draw(canvas, state, parallaxCalculator)
+                try {
+                    weatherLayer.draw(canvas, state, parallaxCalculator)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error drawing weather", e)
+                }
             }
             
             // Draw Seasonal Events (Christmas Star, Fireworks) - only if enabled
             if (seasonalEnabled) {
-                seasonalEvents.render(canvas, true)
+                try {
+                    seasonalEvents.render(canvas, true)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error drawing seasonal", e)
+                }
             }
             
         } catch (e: Exception) {
@@ -168,9 +180,10 @@ class ParallaxScene(
             val smoothingVal = prefs.getInt("pref_parallax_smoothing", 40).coerceIn(1, 100)
             val smoothingFactor = 0.1f + (smoothingVal / 100f) * 0.8f
             
-            // Depth separation slider: map 0..100 -> 0f..1f (default 25 = subtle 3D)
-            val depthVal = prefs.getInt("pref_parallax_depth", 25).coerceIn(0, 100)
-            val depthSeparation = depthVal / 100f
+            // Depth separation slider: map 0..100 -> 0f..1.2f (default 35 = more 3D effect)
+            // Multiplied by 1.2f for stronger depth separation
+            val depthVal = prefs.getInt("pref_parallax_depth", 35).coerceIn(0, 100)
+            val depthSeparation = (depthVal / 100f) * 1.2f
             
             // Apply to parallax calculator
             parallaxCalculator.strength = parallaxStrength

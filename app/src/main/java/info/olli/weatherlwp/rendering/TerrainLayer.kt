@@ -84,13 +84,21 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 depth * (RenderConstants.PARALLAX_HILLS_MAX - RenderConstants.PARALLAX_HILLS_MIN)
             val heightOffset = hillStartY + depth * (hillEndY - hillStartY)
             
-            val numPoints = 60 + random.nextInt(20)
+            // More points for smoother curves (80-120 instead of 60-80)
+            val numPoints = 80 + random.nextInt(40)
             val points = ArrayList<Float>()
+            
+            // Smooth curve generation with gradual changes
+            var lastValue = 0.3f + random.nextFloat() * 0.2f
             for (j in 0 until numPoints) {
-                points.add(0.3f + random.nextFloat() * 0.2f)
+                val change = (random.nextFloat() - 0.5f) * 0.15f  // Smoother transitions
+                val newValue = (lastValue + change).coerceIn(0.1f, 0.6f)
+                points.add(newValue)
+                lastValue = newValue
             }
             
-            val brightness = 0.6f + depth * 0.4f
+            // Improved brightness calculation
+            val brightness = 0.5f + depth * 0.5f
             val dayColor = Color.rgb(
                 (Color.red(RenderConstants.HILL_BASE_COLOR) * brightness).toInt(),
                 (Color.green(RenderConstants.HILL_BASE_COLOR) * brightness).toInt(),
@@ -106,20 +114,28 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         trees.clear()
         val random = Random(randomSeed.toLong() + 2000)  // Offset from hills
         
-        for (i in 0 until treeCount) {
+        // Use only half the tree count for less dense forest
+        val effectiveTreeCount = treeCount / 2
+        
+        for (i in 0 until effectiveTreeCount) {
             val xRatio = -0.2f + random.nextFloat() * 1.4f
-            val hill = if (hills.isNotEmpty()) hills[random.nextInt(hills.size)] else null
             
-            val (groundY, depthFactor) = if (hill != null) {
-                Pair(getHillY(xRatio, hill), hill.depthFactor)
+            // Always place trees on hills
+            val hill = if (hills.isNotEmpty()) {
+                hills[random.nextInt(hills.size)]
             } else {
-                Pair(0.8f, RenderConstants.PARALLAX_HILLS_MIN)
+                HillData(listOf(0.4f), 0.85f, 0.70f, Color.rgb(30, 80, 40))
             }
             
-            val yRatio = groundY + 0.02f
-            val normalizedDepth = ((depthFactor - RenderConstants.PARALLAX_HILLS_MIN) / 
+            val groundY = getHillY(xRatio, hill)
+            val depthFactor = hill.depthFactor
+            val yRatio = groundY + 0.01f  // Slightly closer to ground
+            
+            val normalizedDepth = ((depthFactor - RenderConstants.PARALLAX_HILLS_MIN) /
                 (RenderConstants.PARALLAX_HILLS_MAX - RenderConstants.PARALLAX_HILLS_MIN)).coerceIn(0f, 1f)
-            val scale = 0.5f + normalizedDepth * 0.5f
+            
+            // Improved scale formula
+            val scale = 0.7f + normalizedDepth * 0.3f
             
             val variationAmount = (20 * treeColorVariation).toInt()
             val varR = if (variationAmount > 0) random.nextInt(variationAmount * 2 + 1) - variationAmount else 0
@@ -291,10 +307,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // Random seed for consistent placement
         randomSeed = prefs.getInt("pref_random_seed", 42)
         
-        hillCount = prefs.getInt("pref_hill_count", 10)
+        hillCount = prefs.getInt("pref_hill_count", 3)  // 3 hills instead of 10
         treeCount = prefs.getInt("pref_tree_count", 100)
-        hillStartY = prefs.getInt("pref_hill_lower_start", 50) / 100f
-        hillEndY = prefs.getInt("pref_hill_upper_end", 85) / 100f
+        hillStartY = prefs.getInt("pref_hill_lower_start", 60) / 100f  // 60% instead of 50%
+        hillEndY = prefs.getInt("pref_hill_upper_end", 80) / 100f      // 80% instead of 85%
         
         val sizeVal = prefs.getInt("pref_tree_size", 200)
         treeSizeScale = sizeVal / 200f

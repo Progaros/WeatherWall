@@ -77,7 +77,8 @@ class SkyLayer : SceneLayer {
     }
     
     private fun updateColorsForTime(state: SimulationState) {
-        val hour = state.timeOfDayHours
+        // Use smoothed time for eased color transitions
+        val hour = state.smoothedTimeOfDayHours
         
         // 3-stop gradient: Top, Middle (40% down), Horizon
         // Per ai.md: "Always use a 3-stop LinearGradient for the sky"
@@ -86,42 +87,42 @@ class SkyLayer : SceneLayer {
                 Triple(RenderConstants.SKY_NIGHT_TOP, RenderConstants.SKY_NIGHT_MID, RenderConstants.SKY_NIGHT_BOTTOM)
             }
             hour < RenderConstants.TIME_DAWN_START + 1f -> {
-                // Transition from night to dawn
+                // Transition from night to dawn - use eased transitions
                 val t = hour - RenderConstants.TIME_NIGHT_END
                 Triple(
-                    RenderConstants.lerpColor(RenderConstants.SKY_NIGHT_TOP, RenderConstants.SKY_DAWN_TOP, t),
-                    RenderConstants.lerpColor(RenderConstants.SKY_NIGHT_MID, RenderConstants.SKY_DAWN_MID, t),
-                    RenderConstants.lerpColor(RenderConstants.SKY_NIGHT_BOTTOM, RenderConstants.SKY_DAWN_BOTTOM, t)
+                    RenderConstants.easeSkyColorTransition(RenderConstants.SKY_NIGHT_TOP, RenderConstants.SKY_DAWN_TOP, t),
+                    RenderConstants.easeSkyColorTransition(RenderConstants.SKY_NIGHT_MID, RenderConstants.SKY_DAWN_MID, t),
+                    RenderConstants.easeSkyColorTransition(RenderConstants.SKY_NIGHT_BOTTOM, RenderConstants.SKY_DAWN_BOTTOM, t)
                 )
             }
             hour < RenderConstants.TIME_DAWN_END -> {
-                // Dawn to day
+                // Dawn to day - use eased transitions
                 val t = (hour - 6f) / 1.5f
                 Triple(
-                    RenderConstants.lerpColor(RenderConstants.SKY_DAWN_TOP, RenderConstants.SKY_DAY_TOP, t),
-                    RenderConstants.lerpColor(RenderConstants.SKY_DAWN_MID, RenderConstants.SKY_DAY_MID, t),
-                    RenderConstants.lerpColor(RenderConstants.SKY_DAWN_BOTTOM, RenderConstants.SKY_DAY_BOTTOM, t)
+                    RenderConstants.easeSkyColorTransition(RenderConstants.SKY_DAWN_TOP, RenderConstants.SKY_DAY_TOP, t),
+                    RenderConstants.easeSkyColorTransition(RenderConstants.SKY_DAWN_MID, RenderConstants.SKY_DAY_MID, t),
+                    RenderConstants.easeSkyColorTransition(RenderConstants.SKY_DAWN_BOTTOM, RenderConstants.SKY_DAY_BOTTOM, t)
                 )
             }
             hour < RenderConstants.TIME_DAY_END -> {
                 Triple(RenderConstants.SKY_DAY_TOP, RenderConstants.SKY_DAY_MID, RenderConstants.SKY_DAY_BOTTOM)
             }
             hour < RenderConstants.TIME_DAY_END + 1.5f -> {
-                // Day to dusk
+                // Day to dusk - use eased transitions
                 val t = (hour - RenderConstants.TIME_DAY_END) / 1.5f
                 Triple(
-                    RenderConstants.lerpColor(RenderConstants.SKY_DAY_TOP, RenderConstants.SKY_DUSK_TOP, t),
-                    RenderConstants.lerpColor(RenderConstants.SKY_DAY_MID, RenderConstants.SKY_DUSK_MID, t),
-                    RenderConstants.lerpColor(RenderConstants.SKY_DAY_BOTTOM, RenderConstants.SKY_DUSK_BOTTOM, t)
+                    RenderConstants.easeSkyColorTransition(RenderConstants.SKY_DAY_TOP, RenderConstants.SKY_DUSK_TOP, t),
+                    RenderConstants.easeSkyColorTransition(RenderConstants.SKY_DAY_MID, RenderConstants.SKY_DUSK_MID, t),
+                    RenderConstants.easeSkyColorTransition(RenderConstants.SKY_DAY_BOTTOM, RenderConstants.SKY_DUSK_BOTTOM, t)
                 )
             }
             hour < RenderConstants.TIME_DUSK_END -> {
-                // Dusk to night
+                // Dusk to night - use eased transitions
                 val t = (hour - 18.5f) / 1.5f
                 Triple(
-                    RenderConstants.lerpColor(RenderConstants.SKY_DUSK_TOP, RenderConstants.SKY_NIGHT_TOP, t),
-                    RenderConstants.lerpColor(RenderConstants.SKY_DUSK_MID, RenderConstants.SKY_NIGHT_MID, t),
-                    RenderConstants.lerpColor(RenderConstants.SKY_DUSK_BOTTOM, RenderConstants.SKY_NIGHT_BOTTOM, t)
+                    RenderConstants.easeSkyColorTransition(RenderConstants.SKY_DUSK_TOP, RenderConstants.SKY_NIGHT_TOP, t),
+                    RenderConstants.easeSkyColorTransition(RenderConstants.SKY_DUSK_MID, RenderConstants.SKY_NIGHT_MID, t),
+                    RenderConstants.easeSkyColorTransition(RenderConstants.SKY_DUSK_BOTTOM, RenderConstants.SKY_NIGHT_BOTTOM, t)
                 )
             }
             else -> Triple(RenderConstants.SKY_NIGHT_TOP, RenderConstants.SKY_NIGHT_MID, RenderConstants.SKY_NIGHT_BOTTOM)

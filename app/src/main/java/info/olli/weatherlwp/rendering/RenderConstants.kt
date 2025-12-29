@@ -37,12 +37,12 @@ object RenderConstants {
     const val PARALLAX_CLOUDS = 0.08f
     
     /** Mountains parallax range */
-    const val PARALLAX_MOUNTAIN_MIN = 0.25f
-    const val PARALLAX_MOUNTAIN_MAX = 0.45f
+    const val PARALLAX_MOUNTAIN_MIN = 0.15f
+    const val PARALLAX_MOUNTAIN_MAX = 0.35f
     
     /** Hills/terrain parallax range */
-    const val PARALLAX_HILLS_MIN = 0.50f
-    const val PARALLAX_HILLS_MAX = 1.0f
+    const val PARALLAX_HILLS_MIN = 0.75f
+    const val PARALLAX_HILLS_MAX = 0.95f
     
     // ============== Sky Colors (3-stop gradients: Top, Middle, Horizon) ==============
     // Per ai.md: "Always use a 3-stop LinearGradient for the sky"
@@ -216,6 +216,38 @@ object RenderConstants {
             isDawn -> AMBIENT_DAWN
             isDusk -> AMBIENT_DUSK
             else -> AMBIENT_DAY
+        }
+    }
+    
+    /**
+     * Ease-in-out cubic function for smooth transitions.
+     */
+    fun easeInOutCubic(t: Float): Float {
+        val t2 = t * t
+        val t3 = t2 * t
+        return if (t < 0.5f) {
+            4f * t3
+        } else {
+            1f - (-2f * t + 2f).let { it * it * it } / 2f
+        }
+    }
+    
+    /**
+     * Smooth color transition with easing.
+     */
+    fun easeSkyColorTransition(fromColor: Int, toColor: Int, progress: Float): Int {
+        val eased = easeInOutCubic(progress.coerceIn(0f, 1f))
+        return lerpColor(fromColor, toColor, eased)
+    }
+    
+    /**
+     * Smooth 3-stop color interpolation with easing.
+     */
+    fun lerpColorSmooth(start: Int, mid: Int, end: Int, progress: Float): Int {
+        return if (progress < 0.5f) {
+            easeSkyColorTransition(start, mid, progress * 2f)
+        } else {
+            easeSkyColorTransition(mid, end, (progress - 0.5f) * 2f)
         }
     }
 }
