@@ -13,12 +13,13 @@ class HillsTerrainTest {
 
     // ============== Issue #11: Hills Layer Tests ==============
     
+    @Suppress("UNUSED_VARIABLE") // Documents the parallax layer boundaries
     @Test
     fun `hills should exist between mountains and trees`() {
         // Layer order: Sky -> Stars -> Mountains -> Hills -> Trees
         val mountainParallaxMax = 0.15f
         val hillParallaxMin = 0.3f
-        val hillParallaxMax = 0.5f
+        val hillParallaxMax = 0.5f // Documents range but assertion uses hillParallaxMin
         val treeParallaxMin = 0.3f
         
         assertTrue("Hills should be in front of mountains", hillParallaxMin > mountainParallaxMax)
@@ -56,12 +57,13 @@ class HillsTerrainTest {
 
     // ============== Hill Color Tests ==============
     
+    @Suppress("UNUSED_VARIABLE") // Documents the color palette for reference
     @Test
     fun `hill colors should be between mountain and tree colors`() {
         // Hills should be lighter/less saturated than trees
         // Day: Mountain gray-blue, Hill medium green, Tree dark green
         
-        val hillDayFar = 0xFF4A7D3F.toInt()
+        val hillDayFar = 0xFF4A7D3F.toInt() // Documents far hill color for palette reference
         val hillDayNear = 0xFF5D9B4E.toInt()
         val treeDayColor = 0xFF4A6B28.toInt()
         
@@ -125,13 +127,14 @@ class HillsTerrainTest {
         assertTrue("Right extension should be positive", rightExtension > 0f)
     }
     
+    @Suppress("UNUSED_VARIABLE") // Documents bezier control point placement
     @Test
     fun `hill bezier curves should create smooth rolling effect`() {
         // Cubic bezier with proper control points creates smooth curves
         // Control points should be at segment midpoints
         val segmentWidth = 100f
         val cx1 = segmentWidth * 0.5f  // First control point
-        val cx2 = segmentWidth * 0.5f  // Second control point offset from end
+        val cx2 = segmentWidth * 0.5f  // Second control point, documents symmetry
         
         assertEquals("Control points should be at midpoints", segmentWidth / 2, cx1, 0.1f)
     }

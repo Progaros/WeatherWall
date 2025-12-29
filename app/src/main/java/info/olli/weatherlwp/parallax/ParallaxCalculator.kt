@@ -29,19 +29,20 @@ class ParallaxCalculator {
     }
     
     // Current parallax offset position (pixels)
-    private var positionX = 0f
-    private var positionY = 0f
+    // @Volatile for thread safety: sensor thread writes, render thread reads
+    @Volatile private var positionX = 0f
+    @Volatile private var positionY = 0f
     
     // Smoothed velocity values (for smooth movement)
-    private var smoothedVelocityX = 0f
-    private var smoothedVelocityY = 0f
+    @Volatile private var smoothedVelocityX = 0f
+    @Volatile private var smoothedVelocityY = 0f
     
     // Accumulated velocity input this frame
-    private var pendingVelocityX = 0f
-    private var pendingVelocityY = 0f
+    @Volatile private var pendingVelocityX = 0f
+    @Volatile private var pendingVelocityY = 0f
     
     // Frame counter for idle detection
-    private var idleFrameCount = 0
+    @Volatile private var idleFrameCount = 0
     
     // User-configurable settings
     var strength = 1.0f                 // Sensitivity multiplier
@@ -90,8 +91,6 @@ class ParallaxCalculator {
             val dx = smoothedVelocityX * VELOCITY_SCALE * strength * maxOffsetPx * deltaScale
             val dy = smoothedVelocityY * VELOCITY_SCALE * strength * maxOffsetPx * deltaScale
             
-            val oldPosX = positionX
-            val oldPosY = positionY
             positionX += dx
             positionY += dy
             
