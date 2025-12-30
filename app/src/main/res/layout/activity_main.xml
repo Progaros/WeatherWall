@@ -17,11 +17,23 @@
     <SurfaceView
         android:id="@+id/preview_surface"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="0.5" />
+        android:layout_height="180dp" />
 
-    <FrameLayout
-        android:id="@+id/settings_container"
+    <!-- Tab Layout -->
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/tab_layout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/colorPrimary"
+        app:tabTextColor="@android:color/white"
+        app:tabSelectedTextColor="@android:color/white"
+        app:tabIndicatorColor="@android:color/white"
+        app:tabMode="fixed"
+        app:tabGravity="fill" />
+
+    <!-- ViewPager2 for tabbed settings -->
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/view_pager"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1" />

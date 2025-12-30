@@ -8,16 +8,23 @@ import android.util.Log
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.fragment.app.commit
+import androidx.fragment.app.Fragment
 import androidx.preference.PreferenceManager
-import info.olli.weatherlwp.prefs.SettingsFragment
+import androidx.viewpager2.adapter.FragmentStateAdapter
+import androidx.viewpager2.widget.ViewPager2
 import info.olli.weatherlwp.rendering.ParallaxScene
 import info.olli.weatherlwp.rendering.SeasonalEvents
 import info.olli.weatherlwp.rendering.WeatherLayer
 import info.olli.weatherlwp.weather.WeatherRepository
 import info.olli.weatherlwp.weather.WeatherType
 import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.tabs.TabLayout
+import com.google.android.material.tabs.TabLayoutMediator
 import info.olli.weatherlwp.parallax.ParallaxSensorManager
+import info.olli.weatherlwp.settings.SceneSettingsFragment
+import info.olli.weatherlwp.settings.EffectsSettingsFragment
+import info.olli.weatherlwp.settings.EventsSettingsFragment
+import info.olli.weatherlwp.settings.SystemSettingsFragment
 import android.os.Handler
 import android.os.Looper
 
@@ -167,9 +174,36 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
-        if (savedInstanceState == null) {
-            supportFragmentManager.commit {
-                replace(R.id.settings_container, SettingsFragment())
+        // Setup tabbed settings
+        val viewPager = findViewById<ViewPager2>(R.id.view_pager)
+        val tabLayout = findViewById<TabLayout>(R.id.tab_layout)
+        
+        viewPager.adapter = SettingsPagerAdapter(this)
+        
+        TabLayoutMediator(tabLayout, viewPager) { tab, position ->
+            tab.text = when (position) {
+                0 -> "Scene"
+                1 -> "Effects"
+                2 -> "Events"
+                3 -> "System"
+                else -> null
+            }
+        }.attach()
+    }
+    
+    /**
+     * Adapter for settings ViewPager2 with 4 tabs
+     */
+    private inner class SettingsPagerAdapter(activity: AppCompatActivity) : FragmentStateAdapter(activity) {
+        override fun getItemCount(): Int = 4
+        
+        override fun createFragment(position: Int): Fragment {
+            return when (position) {
+                0 -> SceneSettingsFragment()
+                1 -> EffectsSettingsFragment()
+                2 -> EventsSettingsFragment()
+                3 -> SystemSettingsFragment()
+                else -> throw IllegalStateException("Invalid position $position")
             }
         }
     }

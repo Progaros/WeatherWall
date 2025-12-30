@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <!-- Random Events -->
+    <PreferenceCategory android:title="Random Events">
+        <SwitchPreferenceCompat
+            android:key="pref_events_enabled"
+            android:title="Enable Events"
+            android:summary="Birds, planes, animals, and more"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_event_frequency"
+            android:title="Event Frequency"
+            android:summary="Spawn rate (0=rare, 50=normal, 100=frequent)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_events_enabled" />
+
+        <Preference
+            android:key="pref_spawn_event"
+            android:title="🎲 Spawn Random Event"
+            android:summary="Manually trigger a random enabled event"
+            android:dependency="pref_events_enabled" />
+    </PreferenceCategory>
+
+    <!-- Sky Events (using custom spawn preference) -->
+    <PreferenceCategory android:title="Sky Events">
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_airplane"
+            android:title="✈️ Airplanes"
+            android:summary="Planes with contrails"
+            android:defaultValue="true"
+            android:dependency="pref_events_enabled" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_birds"
+            android:title="🐦 Bird Flocks"
+            android:summary="V-formation flocks"
+            android:defaultValue="true"
+            android:dependency="pref_events_enabled" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_eagle"
+            android:title="🦅 Eagles"
+            android:summary="Soaring silhouettes"
+            android:defaultValue="true"
+            android:dependency="pref_events_enabled" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_owl"
+            android:title="🦉 Owls"
+            android:summary="Night-only silhouettes"
+            android:defaultValue="true"
+            android:dependency="pref_events_enabled" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_balloon"
+            android:title="🎈 Hot Air Balloons"
+            android:summary="Drifting in good weather"
+            android:defaultValue="true"
+            android:dependency="pref_events_enabled" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_shootingstar"
+            android:title="⭐ Shooting Stars"
+            android:summary="Clear night skies"
+            android:defaultValue="true"
+            android:dependency="pref_events_enabled" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_alien"
+            android:title="👽 UFOs"
+            android:summary="Very rare night sightings"
+            android:defaultValue="true"
+            android:dependency="pref_events_enabled" />
+    </PreferenceCategory>
+
+    <!-- Ground Events -->
+    <PreferenceCategory android:title="Ground Events">
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_butterfly"
+            android:title="🦋 Butterflies"
+            android:summary="Colorful fluttering"
+            android:defaultValue="true"
+            android:dependency="pref_events_enabled" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_rabbit"
+            android:title="🐰 Rabbits"
+            android:summary="Hopping across terrain"
+            android:defaultValue="true"
+            android:dependency="pref_events_enabled" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_fox"
+            android:title="🦊 Foxes"
+            android:summary="Walking through hills"
+            android:defaultValue="true"
+            android:dependency="pref_events_enabled" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_fireflies"
+            android:title="✨ Fireflies"
+            android:summary="Summer night glow"
+            android:defaultValue="true"
+            android:dependency="pref_events_enabled" />
+    </PreferenceCategory>
+
+    <!-- Seasonal -->
+    <PreferenceCategory android:title="Seasonal Events">
+        <SwitchPreferenceCompat
+            android:key="pref_seasonal_enabled"
+            android:title="Enable Seasonal"
+            android:summary="Christmas star, New Year fireworks (Dec 15 - Jan 7)"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_christmas_star_size"
+            android:title="Christmas Star Size"
+            android:summary="Bethlehem star size (50-200%)"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="50"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_seasonal_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_christmas_star_trail"
+            android:title="Star Trail Length"
+            android:summary="Trailing light effect (0-200%)"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_seasonal_enabled" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

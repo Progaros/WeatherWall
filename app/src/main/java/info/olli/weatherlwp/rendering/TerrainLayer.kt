@@ -434,6 +434,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         val totalHeight = height * RenderConstants.TREE_HEIGHT_FACTOR * tree.scale * treeSizeScale
         val segmentHeight = totalHeight / treeSegments
+        // Base width is calculated from total height, not segment height,
+        // so it stays consistent regardless of segment count
+        val baseTreeWidth = totalHeight * 0.25f * treeWidthScale
         
         // Wind system: base wind + gusts + multiplier
         val baseWindStrength = state.windStrength.coerceIn(0f, 1f)
@@ -472,8 +475,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             val segBaseY = groundY - seg * segmentHeight * 0.7f
             val segTipY = segBaseY - segmentHeight
             
-            val widthMultiplier = 1.0f - (seg * 0.15f)
-            val segWidth = segmentHeight * 0.5f * widthMultiplier * treeWidthScale
+            // Width decreases with each segment (tapers towards top)
+            // Uses baseTreeWidth so total width is independent of segment count
+            val widthMultiplier = 1.0f - (seg.toFloat() / treeSegments * 0.6f)
+            val segWidth = baseTreeWidth * widthMultiplier
             
             val baseHeightRatio = seg.toFloat() / treeSegments
             val tipHeightRatio = (seg + 1).toFloat() / treeSegments

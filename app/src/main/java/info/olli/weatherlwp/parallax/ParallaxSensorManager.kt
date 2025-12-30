@@ -141,7 +141,8 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         prevY = currentY
 
         // Send velocity to listener
-        listener?.onOffsetChanged(velocityX, velocityY)
+        // Negate both axes for natural parallax: tilt direction reveals opposite side
+        listener?.onOffsetChanged(-velocityX, -velocityY)
     }
 
     override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) = Unit

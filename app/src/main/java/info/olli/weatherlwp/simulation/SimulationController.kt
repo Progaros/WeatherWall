@@ -28,6 +28,8 @@ class SimulationController(private val context: Context) {
     private var gustIntensity = 0f
     private var gustDecay = 0f
     private var lastUpdateMs = 0L
+    private var targetGust = 0f      // Target gust intensity to ramp towards
+    private var smoothedGust = 0f    // Smoothed output for gradual transitions
     
     /**
      * Reload settings from preferences.
@@ -101,15 +103,17 @@ class SimulationController(private val context: Context) {
     }
     
     /**
-     * Calculate dynamic wind gusts.
+     * Calculate dynamic wind gusts with smooth ramp-up and decay.
      * - Low wind: gentle gusts every 4-6 seconds
      * - High wind: strong gusts every 1-2 seconds
+     * - Gusts ramp up gradually for natural feel
      */
     private fun calculateWindGust(baseWind: Float, deltaMs: Long): Float {
         val currentMs = System.currentTimeMillis()
+        val deltaSec = deltaMs / 1000f
         
-        // Decay existing gust
-        gustIntensity = (gustIntensity - gustDecay * deltaMs / 1000f).coerceAtLeast(0f)
+        // Decay target gust intensity (this is what we're ramping towards)
+        targetGust = (targetGust - gustDecay * deltaSec).coerceAtLeast(0f)
         
         // Check if it's time for a new gust
         if (currentMs >= nextGustTime) {
@@ -124,13 +128,27 @@ class SimulationController(private val context: Context) {
             // At high wind (0.8): strong gusts 0.7-1.0
             val minGust = 0.2f + baseWind * 0.5f
             val maxGust = 0.4f + baseWind * 0.6f
-            gustIntensity = minGust + Math.random().toFloat() * (maxGust - minGust)
+            targetGust = minGust + Math.random().toFloat() * (maxGust - minGust)
             
             // Decay rate: faster at higher wind (gusts are shorter but more frequent)
             gustDecay = 0.3f + baseWind * 0.5f  // 0.3-0.8 intensity per second
         }
         
-        return gustIntensity
+        // Smooth the gust output: ramp up quickly (0.3s) but decay follows target
+        // This prevents instant jumps when a new gust starts
+        val rampSpeed = 3.0f  // How fast to approach target (higher = faster ramp)
+        val diff = targetGust - smoothedGust
+        if (diff > 0) {
+            // Ramping up: approach target smoothly
+            smoothedGust += diff * rampSpeed * deltaSec
+            if (smoothedGust > targetGust) smoothedGust = targetGust
+        } else {
+            // Decaying: follow target directly (already smooth from targetGust decay)
+            smoothedGust = targetGust
+        }
+        
+        gustIntensity = smoothedGust
+        return smoothedGust
     }
     
     /**

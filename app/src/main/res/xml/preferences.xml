@@ -7,18 +7,18 @@
             android:key="pref_random_seed"
             android:title="Random Seed"
             android:summary="Changes mountain/tree/cloud placement (1-999)"
-            android:defaultValue="42"
+            android:defaultValue="208"
             android:max="999"
             app:min="1"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
 
         <SeekBarPreference
-            android:key="pref_mountain_count"
-            android:title="Mountain Count"
-            android:summary="Number of mountain peaks (0-10)"
-            android:defaultValue="7"
-            android:max="10"
+            android:key="pref_mountain_density"
+            android:title="Mountain Density"
+            android:summary="Mountain coverage (0=none, 100=dense)"
+            android:defaultValue="50"
+            android:max="100"
             app:min="0"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
@@ -26,9 +26,9 @@
         <SeekBarPreference
             android:key="pref_mountain_width"
             android:title="Mountain Width"
-            android:summary="Width multiplier (50-1000%)"
-            android:defaultValue="175"
-            android:max="1000"
+            android:summary="Width scale (50=narrow, 100=normal, 200=wide)"
+            android:defaultValue="100"
+            android:max="200"
             app:min="50"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
@@ -36,10 +36,10 @@
         <SeekBarPreference
             android:key="pref_mountain_height"
             android:title="Mountain Height"
-            android:summary="Height multiplier (10-1000%)"
-            android:defaultValue="115"
-            android:max="1000"
-            app:min="10"
+            android:summary="Height scale (50=short, 100=normal, 200=tall)"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="25"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
 
@@ -64,10 +64,20 @@
             app:updatesContinuously="true" />
 
         <SeekBarPreference
+            android:key="pref_mountain_bottom_offset"
+            android:title="Mountain Bottom Offset"
+            android:summary="Shift mountains up (0=at bottom, 50=halfway up screen)"
+            android:defaultValue="0"
+            android:max="50"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
             android:key="pref_hill_count"
             android:title="Hill Layers"
             android:summary="Rolling terrain layers (0-10)"
-            android:defaultValue="4"
+            android:defaultValue="5"
             android:max="10"
             app:min="0"
             app:showSeekBarValue="true"
@@ -96,7 +106,7 @@
         <SeekBarPreference
             android:key="pref_hill_roughness"
             android:title="Hill Roughness"
-            android:summary="Hill curve detail (0=smooth, 200=rough)"
+            android:summary="Hill curve detail (0=smooth, 100=normal, 200=rough)"
             android:defaultValue="100"
             android:max="200"
             app:min="0"
@@ -106,9 +116,9 @@
         <SeekBarPreference
             android:key="pref_hill_amplitude"
             android:title="Hill Amplitude"
-            android:summary="Hill height (0=flat, 100=normal, 1000=extreme)"
+            android:summary="Hill height (0=flat, 100=normal, 200=tall)"
             android:defaultValue="100"
-            android:max="1000"
+            android:max="200"
             app:min="0"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
@@ -116,17 +126,17 @@
         <SeekBarPreference
             android:key="pref_hill_frequency"
             android:title="Hill Frequency"
-            android:summary="Hills visible per layer (0=flat, 100=many, 1000=extreme)"
+            android:summary="Hills per layer (50=few, 100=normal, 200=many)"
             android:defaultValue="100"
-            android:max="1000"
-            app:min="0"
+            android:max="200"
+            app:min="25"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
 
         <SeekBarPreference
             android:key="pref_tree_density"
             android:title="Tree Density"
-            android:summary="Tree coverage on hilltops (0=none, 100=dense)"
+            android:summary="Tree coverage (0=none, 50=normal, 100=dense forest)"
             android:defaultValue="50"
             android:max="100"
             app:min="0"
@@ -146,7 +156,7 @@
         <SeekBarPreference
             android:key="pref_tree_sparsity"
             android:title="Tree Sparsity"
-            android:summary="Gap size between trees (0=dense, 100=sparse with gaps)"
+            android:summary="Gap size (0=uniform, 30=natural, 80=sparse)"
             android:defaultValue="30"
             android:max="100"
             app:min="0"
@@ -157,7 +167,7 @@
             android:key="pref_tree_size_randomness"
             android:title="Tree Size Randomness"
             android:summary="Variation in tree sizes (0=uniform, 100=varied)"
-            android:defaultValue="30"
+            android:defaultValue="66"
             android:max="100"
             app:min="0"
             app:showSeekBarValue="true"
@@ -166,10 +176,10 @@
         <SeekBarPreference
             android:key="pref_tree_size"
             android:title="Tree Height"
-            android:summary="Height multiplier (100 = 1x)"
-            android:defaultValue="200"
-            android:max="1000"
-            app:min="10"
+            android:summary="Tree size (50=small, 100=normal, 200=tall)"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="25"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
 
@@ -261,7 +271,7 @@
             android:key="pref_parallax_return_speed"
             android:title="Return Time"
             android:summary="Time to recenter: 1=instant, 50=1s, 100=5s (log scale)"
-            android:defaultValue="10"
+            android:defaultValue="30"
             android:max="100"
             app:min="1"
             app:showSeekBarValue="true"
@@ -272,7 +282,7 @@
             android:key="pref_parallax_smoothing"
             android:title="Smoothing"
             android:summary="Movement smoothness (1=responsive, 100=floaty)"
-            android:defaultValue="40"
+            android:defaultValue="30"
             android:max="100"
             app:min="1"
             app:showSeekBarValue="true"

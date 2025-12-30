@@ -67,11 +67,12 @@ class MountainLayer(private val context: Context) : SceneLayer {
     @Volatile private var mountains: List<MountainData> = emptyList()
     
     // Settings
-    private var mountainCount = 3
+    private var mountainDensity = 50       // 0-100 percentage of mountain coverage
     private var mountainHeightScale = 1.0f
     private var mountainWidthScale = 1.0f
     private var mountainRoughness = 0.5f
     private var ridgeRoughness = 0.5f
+    private var mountainBottomOffset = 0f  // Shift mountains up (0-1 of screen height)
     private var randomSeed = 42
     
     init {
@@ -79,6 +80,16 @@ class MountainLayer(private val context: Context) : SceneLayer {
     }
     
     private fun generateMountains() {
+        // Calculate mountain count from density and extended width
+        // More width = more mountains to maintain visual density
+        val widthRatio = if (extendedWidth > 0 && height > 0) {
+            extendedWidth / (height * RenderConstants.REFERENCE_ASPECT_RATIO)
+        } else {
+            4f  // Default for 4x extended width
+        }
+        val baseMountains = 8  // Base number at 100% density
+        val mountainCount = ((mountainDensity / 100f) * baseMountains * widthRatio).toInt().coerceIn(0, 50)
+        
         // Build new list (thread-safe: atomic swap at end)
         val newMountains = ArrayList<MountainData>(mountainCount)
         val random = Random(randomSeed.toLong())
@@ -198,8 +209,10 @@ class MountainLayer(private val context: Context) : SceneLayer {
         
         // Convert from 0-1 extended space to screen coordinates
         val peakCenterX = mountain.peakX * extendedWidth - extendedOffset
-        val peakY = height * (1f - mountain.height)
-        val baseY = height
+        // Apply bottom offset to shift mountains up
+        val offsetPx = mountainBottomOffset * height
+        val peakY = height * (1f - mountain.height) - offsetPx
+        val baseY = height - offsetPx
         // Scale width based on extended width for consistent look
         val halfWidthPx = extendedWidth * mountain.width * 0.15f
         
@@ -329,7 +342,8 @@ class MountainLayer(private val context: Context) : SceneLayer {
         // Random seed for consistent placement
         randomSeed = prefs.getInt("pref_random_seed", 42)
         
-        mountainCount = prefs.getInt("pref_mountain_count", 4)
+        // Mountain density: 0-100 percentage (scales with extended width)
+        mountainDensity = prefs.getInt("pref_mountain_density", 50)
         
         // Height: 10-1000 -> 0.1 - 10.0
         val heightVal = prefs.getInt("pref_mountain_height", 140)
@@ -346,6 +360,10 @@ class MountainLayer(private val context: Context) : SceneLayer {
         // Ridge roughness: 0-200 -> 0.0 - 2.0
         val ridgeVal = prefs.getInt("pref_mountain_ridge_roughness", 50)
         ridgeRoughness = ridgeVal / 100f
+        
+        // Bottom offset: 0-50 -> 0.0 - 0.5 (shift mountains up by % of screen height)
+        val bottomOffsetVal = prefs.getInt("pref_mountain_bottom_offset", 0)
+        mountainBottomOffset = bottomOffsetVal / 100f
         
         generateMountains()
     }
