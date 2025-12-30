@@ -115,7 +115,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         
         // Cloud count = weather-based count * user multiplier, capped for performance
         val baseCount = state.getCloudCount()
-        val targetCount = (baseCount * densityMultiplier).toInt().coerceIn(0, 60)  // Max 60 clouds for performance
+        val targetCount = (baseCount * densityMultiplier).toInt().coerceIn(0, 120)  // Max 120 clouds for overcast
         if (targetCount != cloudCount) {
             cloudCount = targetCount
             generateClouds()

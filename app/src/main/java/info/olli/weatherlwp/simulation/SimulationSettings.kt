@@ -32,6 +32,8 @@ class SimulationSettings(context: Context) {
         private set
     var useWeatherWind: Boolean = true
         private set
+    var windMultiplier: Float = 1.0f
+        private set
     
     // Cloud settings
     var cloudsEnabled: Boolean = true
@@ -77,6 +79,10 @@ class SimulationSettings(context: Context) {
             // Will be overridden by real weather wind data in SimulationClock
             windStrength = 0.5f  // Default medium
         }
+        
+        // Wind multiplier for increasing/decreasing wind effect (0-300% range)
+        val windMultVal = prefs.getInt("pref_wind_multiplier", 100)
+        windMultiplier = windMultVal / 100f
         
         // Cloud settings
         // Note: pref_cloud_density is now an Int (0-50) handled directly by CloudLayer.

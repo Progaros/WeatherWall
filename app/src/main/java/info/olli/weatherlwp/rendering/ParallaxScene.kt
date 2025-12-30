@@ -68,8 +68,8 @@ class ParallaxScene(
                                // Original code had clouds behind mountains (layer 0.5).
                                // Let's put them behind mountains for now.
         layers.add(mountainLayer)
-        layers.add(terrainLayer) // Hills and Trees
-        layers.add(randomEventLayer)  // Animals and events on top of terrain
+        layers.add(randomEventLayer)  // Ground animals and sky events (behind trees)
+        layers.add(terrainLayer) // Hills and Trees (foreground)
         
         sensor.setListener(this)
         loadPrefs()
@@ -105,6 +105,12 @@ class ParallaxScene(
             
             // Get current simulation state (single source of truth)
             val state = simulationController.getState()
+            
+            // Check for manual spawn trigger from settings
+            if (prefs.getBoolean("trigger_spawn_event", false)) {
+                prefs.edit().putBoolean("trigger_spawn_event", false).apply()
+                randomEventLayer.debugSpawnEvent()
+            }
             
             // Update parallax physics (smoothing, center drift)
             // Note: parallax settings are applied in loadPrefs(), not here

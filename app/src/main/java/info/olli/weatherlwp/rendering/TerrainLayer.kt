@@ -62,6 +62,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private var hillCount = 5
     private var treeSizeScale = 1.0f
     private var treeWidthScale = 1.0f
+    private var treeSizeRandomness = 0.3f  // 0-1, how much size varies between trees
+    private var treeSpread = 0.5f         // 0-1, how far down hills trees spread
     private var hillStartY = 0.50f
     private var hillEndY = 0.85f
     private var treeColorVariation = 1.0f
@@ -207,9 +209,11 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             val jitter = (random.nextFloat() - 0.5f) * spacing * 0.2f
             val xRatio = baseX + jitter
             
-            // Find the best hill for this x position (foreground preferred for visibility)
-            // Pick a random hill but weight towards foreground
-            val hillIndex = (random.nextFloat() * random.nextFloat() * currentHills.size).toInt()
+            // Tree spread: determines which hills trees can be placed on
+            // 0 = only foreground, 1 = all hills (spread down to background)
+            // Weight the random selection based on spread setting
+            val spreadWeight = 1f - treeSpread + random.nextFloat() * treeSpread
+            val hillIndex = (spreadWeight * spreadWeight * currentHills.size).toInt()
                 .coerceIn(0, currentHills.size - 1)
             val hill = currentHills[hillIndex]
             
@@ -225,7 +229,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             val normalizedDepth = ((depthFactor + 0.5f) / 0.55f).coerceIn(0f, 1f)
             
             // Tree scale: foreground trees (normalizedDepth near 1) are larger
-            val scale = RenderConstants.TREE_SCALE_MIN + normalizedDepth * RenderConstants.TREE_SCALE_RANGE
+            // Apply size randomness: random variation within treeSizeRandomness range
+            val baseScale = RenderConstants.TREE_SCALE_MIN + normalizedDepth * RenderConstants.TREE_SCALE_RANGE
+            val sizeVariation = 1f + (random.nextFloat() - 0.5f) * 2f * treeSizeRandomness
+            val scale = baseScale * sizeVariation.coerceIn(0.3f, 2.0f)
             
             val variationAmount = (20 * treeColorVariation).toInt()
             val varR = if (variationAmount > 0) random.nextInt(variationAmount * 2 + 1) - variationAmount else 0
@@ -397,69 +404,71 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val totalHeight = height * RenderConstants.TREE_HEIGHT_FACTOR * tree.scale * treeSizeScale
         val segmentHeight = totalHeight / treeSegments
         
-        // Wind sway: oscillating back and forth
-        // Add minimum wind for subtle ambient motion even at wind=0
-        // This creates a "living" feel to the trees
+        // Wind system: base wind + gusts + multiplier
         val baseWindStrength = state.windStrength.coerceIn(0f, 1f)
-        val ambientWind = 0.15f  // Minimum subtle movement
-        val effectiveWind = ambientWind + baseWindStrength * (1f - ambientWind)
+        val gustIntensity = state.windGust  // 0-1 current gust strength
+        val windMultiplier = state.windMultiplier  // User multiplier
+        
+        // Combine base wind with gust (gust adds on top)
+        val effectiveWind = (baseWindStrength + gustIntensity * 0.5f).coerceIn(0f, 1f) * windMultiplier
         val timeSec = state.timeSeconds
         
         // Base sway frequency: slower for calm, faster for windy
-        // Range: 0.8x to 2.5x base frequency
-        val baseFreq = RenderConstants.TREE_SWAY_FREQUENCY * (0.8f + effectiveWind * 1.7f)
+        val baseFreq = RenderConstants.TREE_SWAY_FREQUENCY * (0.6f + effectiveWind * 2.0f)
         
-        // Spatial coherence: trees close on X axis sway together (like wind gusts)
-        // Use low-frequency spatial variation so nearby trees have similar phases
-        // tree.xRatio * 2 means trees within 0.5 screen width sway similarly
+        // Spatial coherence: nearby trees sway together (wind gusts are spatial)
         val spatialPhase = tree.xRatio * 2f
         
         // Time-traveling wave: wind gusts move across the scene
-        // Wave moves from left to right at wind-dependent speed
-        val gustWaveSpeed = 0.3f + effectiveWind * 0.5f
+        val gustWaveSpeed = 0.2f + baseWindStrength * 0.4f
         val gustWave = sin(timeSec * gustWaveSpeed - spatialPhase * 3f) * 0.5f + 0.5f
         
-        // Maximum sway amplitude at tree top, modulated by gusts
-        // Even at low wind, allow subtle movement from ambient wind
-        val gustModulation = 0.5f + gustWave * 0.5f  // 0.5 to 1.0
-        val maxAmplitude = totalHeight * RenderConstants.TREE_SWAY_AMPLITUDE * effectiveWind * 2.5f * gustModulation
+        // Gust impact: when gustIntensity is high, trees lean strongly then recover
+        // Use a stronger one-sided push during gusts
+        val gustPush = gustIntensity * gustIntensity * 1.5f  // Quadratic for snappy response
+        
+        // Maximum sway amplitude at tree top
+        // Base ambient sway + gust push
+        val ambientSway = 0.08f  // Minimal ambient movement
+        val windSway = effectiveWind * 0.25f  // Wind-based sway
+        val maxAmplitude = totalHeight * (ambientSway + windSway + gustPush * 0.3f)
         
         // Draw tree segments from bottom to top
-        // Each segment is a triangle with base at bottom, tip pointing up
         for (seg in 0 until treeSegments) {
-            // Base of this segment (starts at ground for seg=0)
             val segBaseY = groundY - seg * segmentHeight * 0.7f
-            // Tip of this segment (top)
             val segTipY = segBaseY - segmentHeight
             
             val widthMultiplier = 1.0f - (seg * 0.15f)
             val segWidth = segmentHeight * 0.5f * widthMultiplier * treeWidthScale
             
-            // Height ratio for this segment (0 = ground, 1 = top)
             val baseHeightRatio = seg.toFloat() / treeSegments
             val tipHeightRatio = (seg + 1).toFloat() / treeSegments
             
-            // Wavy motion up the tree (slight phase delay at top)
-            val basePhase = spatialPhase + baseHeightRatio * 0.3f
-            val tipPhase = spatialPhase + tipHeightRatio * 0.3f
+            // Phase varies up the tree for wave-like bending
+            val basePhase = spatialPhase + baseHeightRatio * 0.4f
+            val tipPhase = spatialPhase + tipHeightRatio * 0.4f
             
-            // Primary oscillation + secondary harmonic for organic feel
-            // sin wave oscillates back and forth naturally
-            val baseWave = sin(timeSec * baseFreq + basePhase) * 0.7f + 
-                sin(timeSec * baseFreq * 0.4f + basePhase) * 0.3f
-            val tipWave = sin(timeSec * baseFreq + tipPhase) * 0.7f +
-                sin(timeSec * baseFreq * 0.4f + tipPhase) * 0.3f
+            // Multi-frequency oscillation for organic feel
+            // Primary wave + secondary harmonic + slow drift
+            val baseWave = sin(timeSec * baseFreq + basePhase) * 0.5f + 
+                sin(timeSec * baseFreq * 0.4f + basePhase) * 0.3f +
+                sin(timeSec * baseFreq * 2.5f + basePhase) * 0.2f
+            val tipWave = sin(timeSec * baseFreq + tipPhase) * 0.5f +
+                sin(timeSec * baseFreq * 0.4f + tipPhase) * 0.3f +
+                sin(timeSec * baseFreq * 2.5f + tipPhase) * 0.2f
             
-            // Sway increases with height (squared for natural bending curve)
-            // Base of tree (on ground) has zero sway
-            val baseSway = baseWave * maxAmplitude * baseHeightRatio * baseHeightRatio
-            val tipSway = tipWave * maxAmplitude * tipHeightRatio * tipHeightRatio
+            // Gust push is one-directional (trees lean in wind direction then spring back)
+            // During gust: lean right strongly. Recovery: oscillate back to center
+            val gustLean = gustPush * (1f + gustWave * 0.3f)
+            
+            // Sway increases with height squared (natural bending curve)
+            val baseSway = (baseWave * effectiveWind + gustLean) * maxAmplitude * baseHeightRatio * baseHeightRatio
+            val tipSway = (tipWave * effectiveWind + gustLean) * maxAmplitude * tipHeightRatio * tipHeightRatio
             
             treePath.reset()
-            // Triangle: tip at top (with sway), base corners at bottom (with less sway)
-            treePath.moveTo(x + tipSway, segTipY)  // Top tip
-            treePath.lineTo(x - segWidth + baseSway, segBaseY)  // Bottom left
-            treePath.lineTo(x + segWidth + baseSway, segBaseY)  // Bottom right
+            treePath.moveTo(x + tipSway, segTipY)
+            treePath.lineTo(x - segWidth + baseSway, segBaseY)
+            treePath.lineTo(x + segWidth + baseSway, segBaseY)
             treePath.close()
             
             canvas.drawPath(treePath, treePaint)
@@ -476,6 +485,12 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         // Tree density: 0-100 percentage
         treeDensity = prefs.getInt("pref_tree_density", 50)
+        
+        // Tree spread: how far down hills trees spread (0=foreground only, 100=all hills)
+        treeSpread = prefs.getInt("pref_tree_spread", 50) / 100f
+        
+        // Tree size randomness: variation in tree sizes (0=uniform, 100=very varied)
+        treeSizeRandomness = prefs.getInt("pref_tree_size_randomness", 30) / 100f
         
         hillStartY = prefs.getInt("pref_hill_lower_start", 60) / 100f  // 60% instead of 50%
         // Hills extend below screen (1.0 = bottom edge, >1.0 = below screen)

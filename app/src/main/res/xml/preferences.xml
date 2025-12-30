@@ -67,7 +67,7 @@
             android:key="pref_hill_count"
             android:title="Hill Layers"
             android:summary="Rolling terrain layers (0-10)"
-            android:defaultValue="2"
+            android:defaultValue="4"
             android:max="10"
             app:min="0"
             app:showSeekBarValue="true"
@@ -134,6 +134,26 @@
             app:updatesContinuously="true" />
 
         <SeekBarPreference
+            android:key="pref_tree_spread"
+            android:title="Tree Spread"
+            android:summary="How far trees spread across hills (0=foreground, 100=all)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_tree_size_randomness"
+            android:title="Tree Size Randomness"
+            android:summary="Variation in tree sizes (0=uniform, 100=varied)"
+            android:defaultValue="30"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
             android:key="pref_tree_size"
             android:title="Tree Height"
             android:summary="Height multiplier (100 = 1x)"
@@ -174,6 +194,19 @@
             app:updatesContinuously="true" />
     </PreferenceCategory>
 
+    <!-- Wind Effects -->
+    <PreferenceCategory android:title="Wind Effects">
+        <SeekBarPreference
+            android:key="pref_wind_multiplier"
+            android:title="Wind Effect Strength"
+            android:summary="Multiplier for tree sway (0=none, 100=normal, 300=extreme)"
+            android:defaultValue="100"
+            android:max="300"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
     <!-- 3D Parallax Settings -->
     <PreferenceCategory android:title="3D Parallax">
         <SwitchPreferenceCompat
@@ -186,7 +219,7 @@
             android:key="pref_parallax_strength"
             android:title="Input Sensitivity"
             android:summary="Tilt sensitivity (0=off, 25=2.5x default, 50=5x)"
-            android:defaultValue="25"
+            android:defaultValue="3"
             android:max="50"
             app:min="0"
             app:showSeekBarValue="true"
@@ -197,7 +230,7 @@
             android:key="pref_parallax_max_offset"
             android:title="Max Parallax Distance"
             android:summary="How far the scene can shift (px)"
-            android:defaultValue="80"
+            android:defaultValue="110"
             android:max="200"
             app:min="5"
             app:showSeekBarValue="true"
@@ -208,7 +241,7 @@
             android:key="pref_parallax_return_speed"
             android:title="Return Time"
             android:summary="Time to recenter: 1=instant, 50=1s, 100=5s (log scale)"
-            android:defaultValue="50"
+            android:defaultValue="10"
             android:max="100"
             app:min="1"
             app:showSeekBarValue="true"
@@ -230,7 +263,7 @@
             android:key="pref_parallax_depth"
             android:title="Depth Separation"
             android:summary="Foreground vs background movement (0=flat, 100=max 3D)"
-            android:defaultValue="25"
+            android:defaultValue="33"
             android:max="100"
             app:min="0"
             app:showSeekBarValue="true"
@@ -261,7 +294,7 @@
             android:key="pref_cloud_stretch"
             android:title="Cloud Stretch"
             android:summary="Horizontal stretch (200-400=normal, 500=wispy)"
-            android:defaultValue="300"
+            android:defaultValue="400"
             android:max="500"
             app:min="50"
             app:showSeekBarValue="true"
@@ -272,7 +305,7 @@
             android:key="pref_cloud_opacity"
             android:title="Cloud Opacity"
             android:summary="Transparency (10=very see-through, 100=solid)"
-            android:defaultValue="40"
+            android:defaultValue="80"
             android:max="100"
             app:min="10"
             app:showSeekBarValue="true"
@@ -325,13 +358,6 @@
             android:dependency="pref_events_enabled" />
 
         <SwitchPreferenceCompat
-            android:key="pref_event_deer"
-            android:title="Deer"
-            android:summary="Deer grazing on the hills"
-            android:defaultValue="true"
-            android:dependency="pref_events_enabled" />
-
-        <SwitchPreferenceCompat
             android:key="pref_event_rabbit"
             android:title="Rabbits"
             android:summary="Rabbits hopping around"
@@ -343,6 +369,47 @@
             android:title="Foxes"
             android:summary="Foxes walking across terrain"
             android:defaultValue="true"
+            android:dependency="pref_events_enabled" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_event_shootingstar"
+            android:title="Shooting Stars"
+            android:summary="Shooting stars on clear nights"
+            android:defaultValue="true"
+            android:dependency="pref_events_enabled" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_event_fireflies"
+            android:title="Fireflies"
+            android:summary="Flickering fireflies on summer nights"
+            android:defaultValue="true"
+            android:dependency="pref_events_enabled" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_event_owl"
+            android:title="Owls"
+            android:summary="Owl silhouettes at night"
+            android:defaultValue="true"
+            android:dependency="pref_events_enabled" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_event_balloon"
+            android:title="Hot Air Balloons"
+            android:summary="Balloons drifting in good weather"
+            android:defaultValue="true"
+            android:dependency="pref_events_enabled" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_event_alien"
+            android:title="UFOs"
+            android:summary="Rare alien sightings at night (very rare)"
+            android:defaultValue="true"
+            android:dependency="pref_events_enabled" />
+
+        <Preference
+            android:key="pref_spawn_event"
+            android:title="Spawn Random Event"
+            android:summary="Manually trigger a random event now"
             android:dependency="pref_events_enabled" />
 
         <SwitchPreferenceCompat

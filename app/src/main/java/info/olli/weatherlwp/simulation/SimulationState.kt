@@ -27,8 +27,10 @@ data class SimulationState(
     val cloudDensity: CloudDensity,
     
     // Wind
-    val windStrength: Float,            // 0-1 normalized
+    val windStrength: Float,            // 0-1 normalized base wind
     val windDirection: Float,           // Degrees (0 = right, 90 = up)
+    val windGust: Float = 0f,           // 0-1 current gust intensity (peaks during gusts)
+    val windMultiplier: Float = 1f,     // User setting multiplier for wind effect
     
     // Screen
     val screenWidth: Float,
@@ -65,19 +67,19 @@ data class SimulationState(
      */
     fun getCloudCount(): Int = when (cloudDensity) {
         CloudDensity.NONE -> 0
-        CloudDensity.LIGHT -> 10       // Few but visible
-        CloudDensity.MEDIUM -> 25      // Moderate coverage
-        CloudDensity.HEAVY -> 50       // Dense clouds
-        CloudDensity.OVERCAST -> 80    // Full sky coverage (reduced for performance)
+        CloudDensity.LIGHT -> 15       // Few but visible
+        CloudDensity.MEDIUM -> 35      // Moderate coverage
+        CloudDensity.HEAVY -> 70       // Dense clouds
+        CloudDensity.OVERCAST -> 120   // Full sky coverage
         CloudDensity.AUTO -> when (weather) {
-            WeatherType.CLEAR -> 5
-            WeatherType.PARTLY_CLOUDY -> 20
-            WeatherType.CLOUDY -> 40
-            WeatherType.OVERCAST -> 80
-            WeatherType.RAIN, WeatherType.THUNDERSTORM -> 60
-            WeatherType.SNOW -> 45
-            WeatherType.HAIL -> 55       // Similar to rain but slightly less
-            WeatherType.FOG -> 70
+            WeatherType.CLEAR -> 8
+            WeatherType.PARTLY_CLOUDY -> 30
+            WeatherType.CLOUDY -> 60
+            WeatherType.OVERCAST -> 120
+            WeatherType.RAIN, WeatherType.THUNDERSTORM -> 90
+            WeatherType.SNOW -> 70
+            WeatherType.HAIL -> 85       // Similar to rain but slightly less
+            WeatherType.FOG -> 100
         }
     }
     
@@ -97,6 +99,8 @@ data class SimulationState(
             cloudDensity = CloudDensity.AUTO,
             windStrength = 0.5f,
             windDirection = 0f,
+            windGust = 0f,
+            windMultiplier = 1f,
             screenWidth = 1080f,
             screenHeight = 1920f,
             isDebugMode = false

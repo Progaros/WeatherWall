@@ -88,6 +88,12 @@ class SettingsFragment : PreferenceFragmentCompat() {
             exportDebugLog()
             true
         }
+
+        // Spawn random event button
+        findPreference<Preference>("pref_spawn_event")?.setOnPreferenceClickListener {
+            spawnRandomEvent()
+            true
+        }
     }
 
     private fun openWallpaperPreview() {
@@ -259,5 +265,12 @@ class SettingsFragment : PreferenceFragmentCompat() {
                 versionTapCount = 0
             }
         }
+    }
+    
+    private fun spawnRandomEvent() {
+        // Set a flag that the wallpaper will read and clear
+        val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
+        prefs.edit().putBoolean("trigger_spawn_event", true).apply()
+        Toast.makeText(context, "🎬 Spawning random event...", Toast.LENGTH_SHORT).show()
     }
 }
