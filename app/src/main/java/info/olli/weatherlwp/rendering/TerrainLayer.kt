@@ -213,7 +213,28 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val points = hill.controlPoints
         if (points.isEmpty()) return hill.heightOffset
         
-        val normalizedX = (xRatio - RenderConstants.WORLD_MIN_X) / RenderConstants.WORLD_WIDTH
+        // Tree xRatio is in screen space: -0.3 to 1.3 (centered at 0.5)
+        // Hill drawing uses world coordinates: WORLD_MIN_X - 1.0 to WORLD_MAX_X + 0.5
+        // We need to map tree screen space to the same normalized range as hill drawing
+        
+        // Hill drawing spans from (WORLD_MIN_X - 1.0) to (WORLD_MAX_X + 0.5) = -5.0 to 5.5
+        // That's a total width of 10.5 world units
+        val hillWorldStart = RenderConstants.WORLD_MIN_X - 1.0f  // -5.0
+        val hillWorldEnd = RenderConstants.WORLD_MAX_X + 0.5f    // 5.5
+        val hillWorldWidth = hillWorldEnd - hillWorldStart        // 10.5
+        
+        // Tree drawing uses: x = (xRatio - 0.5) * scaleX + width/2
+        // This maps xRatio to screen coordinates
+        // scaleX = height * REFERENCE_ASPECT_RATIO, so normalized:
+        // At xRatio = 0.5 -> world X = 0
+        // At xRatio = 0.0 -> world X = -0.5
+        // At xRatio = 1.0 -> world X = 0.5
+        // So tree xRatio maps to world X as: worldX = xRatio - 0.5
+        val worldX = xRatio - 0.5f
+        
+        // Now normalize worldX relative to hill world range
+        val normalizedX = (worldX - hillWorldStart) / hillWorldWidth
+        
         val indexFloat = normalizedX * (points.size - 1)
         val index = indexFloat.toInt().coerceIn(0, points.size - 2)
         val fraction = indexFloat - index
