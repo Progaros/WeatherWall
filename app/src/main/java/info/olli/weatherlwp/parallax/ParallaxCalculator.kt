@@ -101,9 +101,17 @@ class ParallaxCalculator {
         )
         
         if (velocityMagnitude > 0.001f) {
-            // Move position based on smoothed velocity
-            val dx = smoothedVelocityX * VELOCITY_SCALE * strength * maxOffsetPx * deltaScale
-            val dy = smoothedVelocityY * VELOCITY_SCALE * strength * maxOffsetPx * deltaScale
+            // Edge damping: reduce velocity as we approach the edges
+            // This prevents jerky behavior at the boundaries
+            val edgeDistX = 1f - (kotlin.math.abs(positionX) / maxOffsetPx).coerceIn(0f, 1f)
+            val edgeDistY = 1f - (kotlin.math.abs(positionY) / maxOffsetPx).coerceIn(0f, 1f)
+            // Use quadratic falloff for smoother edge approach
+            val edgeDampX = edgeDistX * edgeDistX * 0.7f + 0.3f  // 30% minimum at edge
+            val edgeDampY = edgeDistY * edgeDistY * 0.7f + 0.3f
+            
+            // Move position based on smoothed velocity with edge damping
+            val dx = smoothedVelocityX * VELOCITY_SCALE * strength * maxOffsetPx * deltaScale * edgeDampX
+            val dy = smoothedVelocityY * VELOCITY_SCALE * strength * maxOffsetPx * deltaScale * edgeDampY
             
             positionX += dx
             positionY += dy
@@ -131,9 +139,15 @@ class ParallaxCalculator {
         // Increment idle counter
         idleFrameCount++
         
-        // Drift back to center when idle
-        if (idleFrameCount > IDLE_FRAMES_BEFORE_DRIFT) {
-            val driftAmount = centerDriftRate * deltaScale
+        // Drift back to center when idle - ALWAYS apply some recentering force
+        // Even with minimal sensor input, gradually recenter to handle miscalibration
+        val isIdle = idleFrameCount > IDLE_FRAMES_BEFORE_DRIFT
+        val isLowInput = velocityMagnitude < 0.01f  // Nearly stationary input
+        
+        if (isIdle || isLowInput) {
+            // Use stronger drift when truly idle
+            val effectiveDriftRate = if (isIdle) centerDriftRate else centerDriftRate * 0.3f
+            val driftAmount = effectiveDriftRate * deltaScale
             positionX *= (1f - driftAmount)
             positionY *= (1f - driftAmount)
             

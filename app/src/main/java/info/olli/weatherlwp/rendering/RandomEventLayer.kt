@@ -116,6 +116,31 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         }
     }
     
+    /**
+     * Debug method to spawn a random event immediately.
+     * Called from settings or debug menu.
+     */
+    fun debugSpawnEvent() {
+        val currentEvents = events.toMutableList()
+        
+        // Pick a random event type
+        val eventTypes = listOf<() -> RandomEvent>(
+            { AirplaneEvent(random) },
+            { BirdFlockEvent(random) },
+            { EagleEvent(random) },
+            { ButterflyEvent(random) },
+            { DeerEvent(random) },
+            { RabbitEvent(random) },
+            { FoxEvent(random) }
+        )
+        
+        val event = eventTypes[random.nextInt(eventTypes.size)]()
+        currentEvents.add(event)
+        events = currentEvents.toList()
+        
+        android.util.Log.d("RandomEventLayer", "Debug spawned: ${event.javaClass.simpleName}")
+    }
+    
     override fun reloadSettings() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         eventsEnabled = prefs.getBoolean("pref_events_enabled", true)
@@ -173,10 +198,24 @@ class AirplaneEvent(random: Random) : RandomEvent {
         val currentX = -0.1f * width + 1.3f * width * progress
         val currentY = y * height
         
-        // Contrail
-        strokePaint.color = Color.argb(60, 255, 255, 255)
-        strokePaint.strokeWidth = 2f
-        canvas.drawLine(0f.coerceAtLeast(-width * 0.1f), currentY, currentX - size * 2, currentY, strokePaint)
+        // Contrail with gradient fade (fades out behind plane)
+        val contrailStartX = (currentX - width * 0.4f).coerceAtLeast(0f)  // Start of visible contrail
+        val contrailEndX = currentX - size * 3  // End just behind plane
+        if (contrailEndX > contrailStartX) {
+            val contrailPaint = Paint().apply {
+                isAntiAlias = true
+                strokeWidth = 3f
+                style = Paint.Style.STROKE
+                shader = android.graphics.LinearGradient(
+                    contrailStartX, currentY,
+                    contrailEndX, currentY,
+                    Color.argb(0, 255, 255, 255),  // Transparent at start (fades out)
+                    Color.argb(80, 255, 255, 255), // Opaque near plane
+                    android.graphics.Shader.TileMode.CLAMP
+                )
+            }
+            canvas.drawLine(contrailStartX, currentY, contrailEndX, currentY, contrailPaint)
+        }
         
         // Plane silhouette
         paint.color = RenderConstants.blendWithAmbient(Color.DKGRAY, ambientColor, 0.3f)
@@ -383,8 +422,8 @@ class DeerEvent(random: Random) : RandomEvent {
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int) {
-        val px = parallaxCalculator.getOffsetXForDepth(-0.3f)  // Foreground
-        val py = parallaxCalculator.getOffsetYForDepth(-0.3f)
+        val px = parallaxCalculator.getOffsetXForDepth(0.85f)  // Match foreground hill depth
+        val py = parallaxCalculator.getOffsetYForDepth(0.85f)
         canvas.save()
         canvas.translate(px, py)
         
@@ -455,8 +494,8 @@ class RabbitEvent(random: Random) : RandomEvent {
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int) {
-        val px = parallaxCalculator.getOffsetXForDepth(-0.2f)
-        val py = parallaxCalculator.getOffsetYForDepth(-0.2f)
+        val px = parallaxCalculator.getOffsetXForDepth(0.88f)  // Slightly more foreground
+        val py = parallaxCalculator.getOffsetYForDepth(0.88f)
         canvas.save()
         canvas.translate(px, py)
         
@@ -505,8 +544,8 @@ class FoxEvent(random: Random) : RandomEvent {
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int) {
-        val px = parallaxCalculator.getOffsetXForDepth(-0.25f)
-        val py = parallaxCalculator.getOffsetYForDepth(-0.25f)
+        val px = parallaxCalculator.getOffsetXForDepth(0.87f)  // Similar to deer depth
+        val py = parallaxCalculator.getOffsetYForDepth(0.87f)
         canvas.save()
         canvas.translate(px, py)
         

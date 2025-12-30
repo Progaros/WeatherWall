@@ -159,12 +159,11 @@ class ParallaxScene(
         try {
             val parallaxEnabled = prefs.getBoolean("pref_parallax_enabled", true)
             
-            // Input sensitivity: slider 0-50 maps to 0-5 with smoother curve
-            // Default 25 = 2.5x, centered feel
-            // Using sqrt for smoother low-end: sqrt(slider/10) * sqrt(5) ≈ slider/10 * 0.7
-            // Actually simpler: linear slider/10 gives 0->0, 25->2.5, 50->5
+            // Input sensitivity: slider 0-50 maps to 0-2 (more subtle range)
+            // User feedback: best feel around value 1-2
+            // Default 25 = 1.0x (centered, natural feel)
             val sensitivityVal = prefs.getInt("pref_parallax_strength", 25).coerceIn(0, 50)
-            val rawStrength = (sensitivityVal / 10f).coerceIn(0f, 5f)
+            val rawStrength = (sensitivityVal / 25f).coerceIn(0f, 2f)  // 0->0, 25->1, 50->2
             parallaxStrength = if (parallaxEnabled) rawStrength else 0f
             
             // Max offset slider: 5..200 px (default 80)
@@ -221,5 +220,12 @@ class ParallaxScene(
             layer.destroy()
         }
         weatherLayer.destroy()
+    }
+    
+    /**
+     * Debug method to spawn a random event immediately.
+     */
+    fun debugSpawnEvent() {
+        randomEventLayer.debugSpawnEvent()
     }
 }

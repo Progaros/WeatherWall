@@ -76,6 +76,7 @@ data class SimulationState(
             WeatherType.OVERCAST -> 80
             WeatherType.RAIN, WeatherType.THUNDERSTORM -> 60
             WeatherType.SNOW -> 45
+            WeatherType.HAIL -> 55       // Similar to rain but slightly less
             WeatherType.FOG -> 70
         }
     }

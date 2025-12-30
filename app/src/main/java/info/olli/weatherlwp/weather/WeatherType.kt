@@ -7,6 +7,7 @@ enum class WeatherType {
     OVERCAST,
     RAIN,
     SNOW,
+    HAIL,
     THUNDERSTORM,
     FOG
 }

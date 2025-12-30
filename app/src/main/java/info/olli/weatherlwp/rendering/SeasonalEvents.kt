@@ -243,16 +243,9 @@ class SeasonalEvents(private val context: Context? = null) {
     }
 
     private fun renderChristmasStars(canvas: Canvas) {
-        // Render background twinkling stars
-        for (s in stars) {
-            s.twinkle += s.twinkleSpeed
-            val alpha = (120 + 80 * kotlin.math.sin(Math.toRadians(s.twinkle.toDouble()))).toInt()
-                .coerceIn(80, 200)
-
-            starPaint.alpha = alpha
-            starPaint.color = Color.WHITE
-            canvas.drawCircle(s.x, s.y, s.size, starPaint)
-        }
+        // Note: Background twinkling stars are now handled by SkyLayer
+        // SeasonalEvents only renders the main Christmas star with trail
+        // This prevents duplicate star rendering at night during Christmas
         
         // Render the main Christmas star (Bethlehem star) with trail
         val star = christmasStar ?: return

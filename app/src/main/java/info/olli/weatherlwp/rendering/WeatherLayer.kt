@@ -31,12 +31,12 @@ class WeatherLayer : SceneLayer {
      * @deprecated Use EffectType instead. This typealias is kept for backwards compatibility.
      */
     enum class WeatherType {
-        NONE, RAIN, SNOW, LIGHTNING, FOG
+        NONE, RAIN, SNOW, HAIL, LIGHTNING, FOG
     }
     
     // Internal effect type
     enum class EffectType {
-        NONE, RAIN, SNOW, LIGHTNING, FOG
+        NONE, RAIN, SNOW, HAIL, LIGHTNING, FOG
     }
 
     private data class Particle(
@@ -51,6 +51,7 @@ class WeatherLayer : SceneLayer {
     // Max pool sizes - actual active count depends on intensity
     private val rainParticles = Array(300) { Particle() }
     private val snowParticles = Array(200) { Particle() }
+    private val hailParticles = Array(150) { Particle() }  // Hail is larger, needs fewer
     
     // Intensity (0.0-1.0): controls how many particles are active
     private var intensity = 0.5f  // Default medium intensity
@@ -64,6 +65,11 @@ class WeatherLayer : SceneLayer {
 
     private val snowPaint = Paint().apply {
         color = Color.WHITE
+        isAntiAlias = true
+    }
+    
+    private val hailPaint = Paint().apply {
+        color = Color.argb(220, 200, 220, 255)  // Icy blue-white
         isAntiAlias = true
     }
 
@@ -111,6 +117,7 @@ class WeatherLayer : SceneLayer {
         val effect = when (type) {
             WeatherType.RAIN -> EffectType.RAIN
             WeatherType.SNOW -> EffectType.SNOW
+            WeatherType.HAIL -> EffectType.HAIL
             WeatherType.LIGHTNING -> EffectType.LIGHTNING
             WeatherType.FOG -> EffectType.FOG
             WeatherType.NONE -> EffectType.NONE
@@ -125,6 +132,7 @@ class WeatherLayer : SceneLayer {
         return when (weather) {
             AppWeatherType.RAIN -> EffectType.RAIN
             AppWeatherType.SNOW -> EffectType.SNOW
+            AppWeatherType.HAIL -> EffectType.HAIL
             AppWeatherType.THUNDERSTORM -> EffectType.LIGHTNING
             AppWeatherType.FOG -> EffectType.FOG
             else -> EffectType.NONE
@@ -160,6 +168,7 @@ class WeatherLayer : SceneLayer {
         when (currentEffect) {
             EffectType.RAIN -> renderRainLegacy(canvas, defaultWindStrength)
             EffectType.SNOW -> renderSnowLegacy(canvas, defaultWindStrength)
+            EffectType.HAIL -> renderHailLegacy(canvas, defaultWindStrength)
             EffectType.LIGHTNING -> renderLightningLegacy(canvas, defaultTimeSeconds)
             EffectType.FOG -> renderFog(canvas)
             EffectType.NONE -> {}
@@ -199,6 +208,28 @@ class WeatherLayer : SceneLayer {
             p.y += p.speed * speedMult
             p.x += kotlin.math.sin((p.y * 0.02f).toDouble()).toFloat() * 0.8f + windDrift * 0.5f
             if (p.y > screenHeight) resetSnowParticle(p)
+        }
+    }
+    
+    private fun renderHailLegacy(canvas: Canvas, windStrength: Float) {
+        // Dim the world during hail
+        val dimAlpha = (25 + intensity * 50).toInt()
+        rainDimPaint.color = Color.argb(dimAlpha, 90, 95, 110)
+        canvas.drawRect(0f, 0f, screenWidth.toFloat(), screenHeight.toFloat(), rainDimPaint)
+        
+        val activeCount = (hailParticles.size * (0.25f + intensity * 0.75f)).toInt()
+        val windDrift = windStrength * 1.5f
+        
+        for (i in 0 until activeCount) {
+            val p = hailParticles[i]
+            hailPaint.alpha = p.alpha
+            val ovalWidth = p.size * 0.8f
+            val ovalHeight = p.size * 1.1f
+            canvas.drawOval(p.x - ovalWidth, p.y - ovalHeight, p.x + ovalWidth, p.y + ovalHeight, hailPaint)
+            val speedMult = 0.8f + intensity * 0.4f
+            p.y += p.speed * speedMult
+            p.x += kotlin.math.sin((p.y * 0.05f).toDouble()).toFloat() * 0.5f + windDrift * 0.3f
+            if (p.y > screenHeight) resetHailParticle(p)
         }
     }
     
@@ -242,6 +273,7 @@ class WeatherLayer : SceneLayer {
         when (currentEffect) {
             EffectType.RAIN -> renderRain(canvas, state)
             EffectType.SNOW -> renderSnow(canvas, state)
+            EffectType.HAIL -> renderHail(canvas, state)
             EffectType.LIGHTNING -> renderLightning(canvas, state)
             EffectType.FOG -> renderFog(canvas)
             EffectType.NONE -> {}
@@ -260,6 +292,12 @@ class WeatherLayer : SceneLayer {
             resetSnowParticle(p)
             p.y = Random.nextFloat() * screenHeight
         }
+        
+        // Initialize hail particles
+        for (p in hailParticles) {
+            resetHailParticle(p)
+            p.y = Random.nextFloat() * screenHeight
+        }
     }
 
     private fun resetRainParticle(p: Particle) {
@@ -276,6 +314,14 @@ class WeatherLayer : SceneLayer {
         p.speed = 1.5f + Random.nextFloat() * 2f
         p.size = 3f + Random.nextFloat() * 5f
         p.alpha = 180 + Random.nextInt(75)
+    }
+    
+    private fun resetHailParticle(p: Particle) {
+        p.x = Random.nextFloat() * screenWidth
+        p.y = -15f
+        p.speed = 18f + Random.nextFloat() * 12f  // Fast falling
+        p.size = 5f + Random.nextFloat() * 8f     // Larger than rain/snow
+        p.alpha = 200 + Random.nextInt(55)
     }
 
     private fun renderRain(canvas: Canvas, state: SimulationState) {
@@ -326,6 +372,52 @@ class WeatherLayer : SceneLayer {
 
             if (p.y > screenHeight) {
                 resetSnowParticle(p)
+            }
+        }
+    }
+    
+    /**
+     * Render hail as icy spheres falling faster than rain/snow.
+     * Hail has a slight bounce/irregular motion and is larger.
+     */
+    private fun renderHail(canvas: Canvas, state: SimulationState) {
+        // Dim the world during hail (similar to rain but slightly darker)
+        val dimAlpha = (25 + intensity * 50).toInt()
+        rainDimPaint.color = Color.argb(dimAlpha, 90, 95, 110)
+        canvas.drawRect(0f, 0f, screenWidth.toFloat(), screenHeight.toFloat(), rainDimPaint)
+        
+        // Active particle count based on intensity (25% to 100% of pool)
+        val activeCount = (hailParticles.size * (0.25f + intensity * 0.75f)).toInt()
+        
+        // Wind affects horizontal drift (less than rain because hail is heavier)
+        val windDrift = state.windStrength * 1.5f
+        
+        for (i in 0 until activeCount) {
+            val p = hailParticles[i]
+            hailPaint.alpha = p.alpha
+            
+            // Draw hail as irregular oval (ice pellet)
+            val ovalWidth = p.size * 0.8f
+            val ovalHeight = p.size * 1.1f
+            canvas.drawOval(
+                p.x - ovalWidth, p.y - ovalHeight,
+                p.x + ovalWidth, p.y + ovalHeight,
+                hailPaint
+            )
+            
+            // Draw highlight for 3D effect
+            hailPaint.alpha = (p.alpha * 0.5f).toInt()
+            canvas.drawCircle(p.x - p.size * 0.3f, p.y - p.size * 0.4f, p.size * 0.3f, hailPaint)
+            hailPaint.alpha = p.alpha
+
+            // Fast falling with slight wobble
+            val speedMult = 0.8f + intensity * 0.4f
+            p.y += p.speed * speedMult
+            // Slight horizontal wobble (less than snow)
+            p.x += kotlin.math.sin((p.y * 0.05f).toDouble()).toFloat() * 0.5f + windDrift * 0.3f
+
+            if (p.y > screenHeight) {
+                resetHailParticle(p)
             }
         }
     }
@@ -442,11 +534,12 @@ class WeatherLayer : SceneLayer {
         val fogB = RenderConstants.FOG_B
         
         // Create a smooth vertical gradient from bottom (dense) to top (clear)
+        // End at 85% height to avoid visible strip at bottom edge
         val gradientShader = android.graphics.LinearGradient(
-            0f, screenHeight * 0.15f,  // Start: 15% from top (clear)
-            0f, screenHeight.toFloat(),  // End: bottom (dense)
+            0f, screenHeight * 0.20f,  // Start: 20% from top (clear)
+            0f, screenHeight * 0.85f,  // End: 85% height (before bottom edge)
             Color.argb(0, fogR, fogG, fogB),  // Transparent at top
-            Color.argb(baseAlpha, fogR, fogG, fogB),  // Dense at bottom
+            Color.argb(baseAlpha, fogR, fogG, fogB),  // Dense at 85%
             android.graphics.Shader.TileMode.CLAMP
         )
         

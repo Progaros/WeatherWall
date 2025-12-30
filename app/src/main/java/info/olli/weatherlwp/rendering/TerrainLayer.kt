@@ -311,12 +311,16 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val segmentHeight = totalHeight / treeSegments
         
         // Wind sway: oscillating back and forth
-        // state.windStrength ranges 0-1
-        val windStrength = state.windStrength.coerceIn(0f, 1f)
+        // Add minimum wind for subtle ambient motion even at wind=0
+        // This creates a "living" feel to the trees
+        val baseWindStrength = state.windStrength.coerceIn(0f, 1f)
+        val ambientWind = 0.15f  // Minimum subtle movement
+        val effectiveWind = ambientWind + baseWindStrength * (1f - ambientWind)
         val timeSec = state.timeSeconds
         
-        // Base sway frequency increases with wind strength
-        val baseFreq = RenderConstants.TREE_SWAY_FREQUENCY * (0.5f + windStrength)
+        // Base sway frequency: slower for calm, faster for windy
+        // Range: 0.8x to 2.5x base frequency
+        val baseFreq = RenderConstants.TREE_SWAY_FREQUENCY * (0.8f + effectiveWind * 1.7f)
         
         // Spatial coherence: trees close on X axis sway together (like wind gusts)
         // Use low-frequency spatial variation so nearby trees have similar phases
@@ -325,12 +329,13 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         // Time-traveling wave: wind gusts move across the scene
         // Wave moves from left to right at wind-dependent speed
-        val gustWaveSpeed = 0.3f + windStrength * 0.5f
+        val gustWaveSpeed = 0.3f + effectiveWind * 0.5f
         val gustWave = sin(timeSec * gustWaveSpeed - spatialPhase * 3f) * 0.5f + 0.5f
         
         // Maximum sway amplitude at tree top, modulated by gusts
+        // Even at low wind, allow subtle movement from ambient wind
         val gustModulation = 0.5f + gustWave * 0.5f  // 0.5 to 1.0
-        val maxAmplitude = totalHeight * RenderConstants.TREE_SWAY_AMPLITUDE * windStrength * 2.5f * gustModulation
+        val maxAmplitude = totalHeight * RenderConstants.TREE_SWAY_AMPLITUDE * effectiveWind * 2.5f * gustModulation
         
         for (seg in 0 until treeSegments) {
             val segY = y - seg * segmentHeight * 0.7f
