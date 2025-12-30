@@ -255,17 +255,22 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 // Pick a random peak for this tree
                 val peakX = peaks[random.nextInt(peaks.size)]
                 
-                // treeSpread controls how far from peak trees can be placed
-                // 0 = exactly on peak, 1 = can spread far down the slope
-                val maxSpread = 0.15f * treeSpread  // Max offset from peak
-                val spreadOffset = (random.nextFloat() - 0.5f) * 2f * maxSpread
-                val xRatio = (peakX + spreadOffset).coerceIn(-0.3f, 1.3f)
+                // Small horizontal scatter near peak (just for natural variation)
+                val horizontalScatter = (random.nextFloat() - 0.5f) * 0.08f
+                val xRatio = (peakX + horizontalScatter).coerceIn(-0.3f, 1.3f)
                 
-                // Get the EXACT hill surface Y at this x position
-                val groundY = getHillY(xRatio, hill)
+                // Get the hill surface Y at peak position (this is the TOP of the hill)
+                val peakY = getHillY(peakX, hill)
+                
+                // treeSpread controls how far DOWN the slope trees can spread
+                // 0 = exactly on peak (top), 1 = can spread down the hill slope
+                // Spread pushes trees DOWN (higher Y value = lower on screen)
+                val maxVerticalSpread = 0.06f * treeSpread  // Max Y offset downward
+                val verticalOffset = random.nextFloat() * maxVerticalSpread  // Always positive = downward
+                val groundY = peakY + verticalOffset
                 val depthFactor = hill.depthFactor
                 
-                // Tree base sits ON the hill surface
+                // Tree base sits on the hill surface (with spread offset)
                 val yRatio = groundY
                 
                 // With new parallax: depthFactor goes from -0.5 (background) to +0.05 (foreground)
@@ -453,14 +458,15 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val baseWindStrength = state.windStrength.coerceIn(0f, 1f)
         val gustIntensity = state.windGust  // 0-1 current gust strength
         val windMultiplier = state.windMultiplier  // User multiplier
-        val swaySpeed = state.treeSwaySpeed        // User sway speed multiplier
+        val swaySpeed = state.treeSwaySpeed        // User sway speed multiplier (0-2)
         
         // Combine base wind with gust (gust adds on top)
         val effectiveWind = (baseWindStrength + gustIntensity * 0.5f).coerceIn(0f, 1f) * windMultiplier
         val timeSec = state.timeSeconds
         
-        // Base sway frequency: slower for calm, faster for windy, multiplied by user speed
-        val baseFreq = RenderConstants.TREE_SWAY_FREQUENCY * (0.6f + effectiveWind * 1.0f) * swaySpeed
+        // Base sway frequency: affected by sway speed setting
+        // swaySpeed=0 freezes trees, swaySpeed=1 is normal, swaySpeed=2 is fast
+        val baseFreq = RenderConstants.TREE_SWAY_FREQUENCY * swaySpeed
         
         // Spatial coherence: nearby trees sway together (wind gusts are spatial)
         val spatialPhase = tree.xRatio * 2f
@@ -474,9 +480,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val gustPush = gustIntensity * gustIntensity * 1.5f  // Quadratic for snappy response
         
         // Maximum sway amplitude at tree top
-        // Base ambient sway + gust push
-        val ambientSway = 0.08f  // Minimal ambient movement
-        val windSway = effectiveWind * 0.25f  // Wind-based sway
+        // ALWAYS have ambient sway (affected by swaySpeed), plus wind effects
+        // When swaySpeed=0, amplitude is 0 (frozen). When swaySpeed=1, normal ambient sway.
+        val ambientSway = 0.12f * swaySpeed  // Visible ambient movement controlled by speed
+        val windSway = effectiveWind * 0.25f  // Additional wind-based sway
         val maxAmplitude = totalHeight * (ambientSway + windSway + gustPush * 0.3f)
         
         // Draw tree segments from bottom to top
@@ -508,8 +515,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             val gustLean = gustPush * (1f + gustWave * 0.3f)
             
             // Sway increases with height squared (natural bending curve)
-            val baseSway = (baseWave * effectiveWind + gustLean) * maxAmplitude * baseHeightRatio * baseHeightRatio
-            val tipSway = (tipWave * effectiveWind + gustLean) * maxAmplitude * tipHeightRatio * tipHeightRatio
+            // Include ambient sway even without wind (baseWave still oscillates)
+            val ambientFactor = if (swaySpeed > 0) 1f else 0f  // Allow sway even without wind
+            val baseSway = (baseWave * (effectiveWind + ambientFactor * 0.3f) + gustLean) * maxAmplitude * baseHeightRatio * baseHeightRatio
+            val tipSway = (tipWave * (effectiveWind + ambientFactor * 0.3f) + gustLean) * maxAmplitude * tipHeightRatio * tipHeightRatio
             
             treePath.reset()
             treePath.moveTo(x + tipSway, segTipY)

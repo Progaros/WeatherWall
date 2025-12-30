@@ -95,28 +95,26 @@ class SettingsFragment : PreferenceFragmentCompat() {
             true
         }
         
-        // Set up event toggle listeners to spawn specific events when toggled ON
-        setupEventToggleListener("pref_event_airplane", "airplane", "✈️ Airplane spawned!")
-        setupEventToggleListener("pref_event_birds", "birds", "🐦 Bird flock spawned!")
-        setupEventToggleListener("pref_event_eagle", "eagle", "🦅 Eagle spawned!")
-        setupEventToggleListener("pref_event_butterfly", "butterfly", "🦋 Butterfly spawned!")
-        setupEventToggleListener("pref_event_rabbit", "rabbit", "🐰 Rabbit spawned!")
-        setupEventToggleListener("pref_event_fox", "fox", "🦊 Fox spawned!")
-        setupEventToggleListener("pref_event_shootingstar", "shootingstar", "⭐ Shooting star spawned!")
-        setupEventToggleListener("pref_event_fireflies", "fireflies", "✨ Fireflies spawned!")
-        setupEventToggleListener("pref_event_owl", "owl", "🦉 Owl spawned!")
-        setupEventToggleListener("pref_event_balloon", "balloon", "🎈 Hot air balloon spawned!")
-        setupEventToggleListener("pref_event_alien", "alien", "👽 UFO spawned!")
+        // Set up individual spawn buttons for each event type
+        setupSpawnButton("pref_spawn_airplane", "airplane", "✈️ Airplane spawned!")
+        setupSpawnButton("pref_spawn_birds", "birds", "🐦 Bird flock spawned!")
+        setupSpawnButton("pref_spawn_eagle", "eagle", "🦅 Eagle spawned!")
+        setupSpawnButton("pref_spawn_butterfly", "butterfly", "🦋 Butterfly spawned!")
+        setupSpawnButton("pref_spawn_rabbit", "rabbit", "🐰 Rabbit spawned!")
+        setupSpawnButton("pref_spawn_fox", "fox", "🦊 Fox spawned!")
+        setupSpawnButton("pref_spawn_shootingstar", "shootingstar", "⭐ Shooting star spawned!")
+        setupSpawnButton("pref_spawn_fireflies", "fireflies", "✨ Fireflies spawned!")
+        setupSpawnButton("pref_spawn_owl", "owl", "🦉 Owl spawned!")
+        setupSpawnButton("pref_spawn_balloon", "balloon", "🎈 Hot air balloon spawned!")
+        setupSpawnButton("pref_spawn_alien", "alien", "👽 UFO spawned!")
     }
     
-    private fun setupEventToggleListener(prefKey: String, eventType: String, message: String) {
-        findPreference<SwitchPreferenceCompat>(prefKey)?.setOnPreferenceChangeListener { _, newValue ->
-            if (newValue == true) {
-                // When toggled ON, spawn that specific event
-                val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
-                prefs.edit().putString("trigger_spawn_specific_event", eventType).apply()
-                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-            }
+    private fun setupSpawnButton(prefKey: String, eventType: String, message: String) {
+        findPreference<Preference>(prefKey)?.setOnPreferenceClickListener {
+            // Trigger spawn of specific event
+            val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
+            prefs.edit().putString("trigger_spawn_specific_event", eventType).apply()
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
             true
         }
     }

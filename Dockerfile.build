@@ -2,14 +2,20 @@
 # Pre-caches Gradle and Android SDK dependencies for faster CI builds
 #
 # Build: docker build -t weatherwall-builder -f Dockerfile.build .
-# Use:   docker run --rm -v "$PWD":/workspace -w /workspace weatherwall-builder ./gradlew test assembleDebug
+# Use:   docker run --rm -v "$PWD":/workspace weatherwall-builder ./gradlew test assembleDebug
 
 FROM ghcr.io/cirruslabs/android-sdk:35
 
 LABEL maintainer="WeatherWall Project"
 LABEL description="Cached build environment for WeatherWall Android app"
 
-# Set working directory
+# Create non-root user matching typical host user (UID/GID 1000)
+RUN groupadd -g 1000 builder 2>/dev/null || true && \
+    useradd -m -u 1000 -g 1000 -s /bin/bash builder 2>/dev/null || true && \
+    mkdir -p /home/builder && \
+    chown -R 1000:1000 /home/builder
+
+# Set working directory for prebuild
 WORKDIR /prebuild
 
 # Copy only the files needed to download dependencies
@@ -18,22 +24,25 @@ COPY gradle/ gradle/
 COPY gradlew ./
 COPY app/build.gradle.kts app/
 
-# Make gradlew executable
-RUN chmod +x gradlew
+# Make gradlew executable and set ownership
+RUN chmod +x gradlew && chown -R 1000:1000 /prebuild
 
-# Pre-download Gradle distribution and all dependencies
-# This caches everything in the Docker layer
+# Pre-download Gradle distribution and all dependencies as root (for caching)
 RUN ./gradlew dependencies --no-daemon || true
 RUN ./gradlew :app:dependencies --no-daemon || true
-
-# Pre-download build tools by running a dry-run build
-# (will fail due to missing source, but downloads all plugins)
 RUN ./gradlew tasks --no-daemon || true
 
-# Clean up prebuild directory (actual project will be mounted)
+# Set up workspace directory
 WORKDIR /workspace
 RUN rm -rf /prebuild
 
-# Set entrypoint to bash for flexibility
+# Copy cached gradle to builder home for non-root access
+RUN cp -r /root/.gradle /home/builder/.gradle 2>/dev/null || true && \
+    chown -R 1000:1000 /home/builder/.gradle 2>/dev/null || true
+
+# Switch to non-root user for actual builds
+USER 1000:1000
+
+# Set entrypoint for flexibility
 ENTRYPOINT ["/bin/bash", "-c"]
 CMD ["./gradlew test assembleDebug --no-daemon"]
