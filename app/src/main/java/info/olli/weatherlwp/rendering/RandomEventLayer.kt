@@ -22,7 +22,8 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     // Thread-safe event list using volatile + immutable list pattern
     @Volatile private var events: List<RandomEvent> = emptyList()
     
-    private val random = Random(System.currentTimeMillis())
+    // Use a fixed base seed - actual randomness comes from absoluteTimeMs
+    private val baseSeed = 4000L
     private val paint = Paint().apply {
         isAntiAlias = true
         style = Paint.Style.FILL
@@ -77,18 +78,22 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         }
         
         // Spawn new events (throttled to avoid too many)
+        // Use absoluteTimeMs for deterministic spawning across preview/wallpaper
+        val spawnBucket = state.absoluteTimeMs / 100  // Check every 100ms bucket
+        val spawnRandom = Random(baseSeed + spawnBucket)
+        
         lastSpawnCheck += deltaTimeMs
         if (lastSpawnCheck > 100) {
             lastSpawnCheck = 0
-            if (random.nextFloat() < spawnChance * 6 && currentEvents.size < 5) {
-                spawnRandomEvent(state, currentEvents)
+            if (spawnRandom.nextFloat() < spawnChance * 6 && currentEvents.size < 5) {
+                spawnRandomEvent(state, currentEvents, spawnRandom)
             }
         }
         
         events = currentEvents.toList()
     }
     
-    private fun spawnRandomEvent(state: SimulationState, currentEvents: MutableList<RandomEvent>) {
+    private fun spawnRandomEvent(state: SimulationState, currentEvents: MutableList<RandomEvent>, random: Random) {
         val availableEvents = mutableListOf<() -> RandomEvent?>()
         
         // Day events
@@ -141,6 +146,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
      */
     fun debugSpawnEvent() {
         val currentEvents = events.toMutableList()
+        val random = Random(System.currentTimeMillis())
         
         val eventTypes = listOf<() -> RandomEvent>(
             { AirplaneEvent(random) },
