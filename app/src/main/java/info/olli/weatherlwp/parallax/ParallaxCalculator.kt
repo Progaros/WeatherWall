@@ -42,6 +42,13 @@ class ParallaxCalculator {
     private var pendingVelocityY = 0f
     private val velocityLock = Any()  // Synchronization lock for pending velocity
     
+    // Previous raw sensor values for low-pass filtering (per ai.md recommendation)
+    private var lastRawVelocityX = 0f
+    private var lastRawVelocityY = 0f
+    
+    /** Low-pass filter alpha for raw sensor input (0.7 = 70% new, 30% previous) */
+    private val sensorFilterAlpha = 0.7f
+    
     // Frame counter for idle detection
     @Volatile private var idleFrameCount = 0
     
@@ -55,18 +62,25 @@ class ParallaxCalculator {
     /**
      * Update from sensor input.
      * Thread-safe: can be called from sensor callback thread.
+     * Per ai.md: Apply low-pass filter to raw sensor data to reduce jitter.
      * @param velocityX Change in X tilt (-1 to 1, where magnitude = speed)
      * @param velocityY Change in Y tilt (-1 to 1, where magnitude = speed)
      */
     fun updateFromSensor(velocityX: Float, velocityY: Float) {
+        // Low-pass filter on raw sensor input (per ai.md recommendation)
+        val filteredX = velocityX * sensorFilterAlpha + lastRawVelocityX * (1f - sensorFilterAlpha)
+        val filteredY = velocityY * sensorFilterAlpha + lastRawVelocityY * (1f - sensorFilterAlpha)
+        lastRawVelocityX = filteredX
+        lastRawVelocityY = filteredY
+        
         // Synchronize to prevent race with update() reading pending values
         synchronized(velocityLock) {
-            pendingVelocityX += velocityX
-            pendingVelocityY += velocityY
+            pendingVelocityX += filteredX
+            pendingVelocityY += filteredY
         }
         
         // Reset idle counter if there's any movement
-        if (velocityX != 0f || velocityY != 0f) {
+        if (filteredX != 0f || filteredY != 0f) {
             idleFrameCount = 0
         }
     }
@@ -216,6 +230,8 @@ class ParallaxCalculator {
         positionY = 0f
         smoothedVelocityX = 0f
         smoothedVelocityY = 0f
+        lastRawVelocityX = 0f
+        lastRawVelocityY = 0f
         synchronized(velocityLock) {
             pendingVelocityX = 0f
             pendingVelocityY = 0f

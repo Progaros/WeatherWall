@@ -534,12 +534,12 @@ class WeatherLayer : SceneLayer {
         val fogB = RenderConstants.FOG_B
         
         // Create a smooth vertical gradient from bottom (dense) to top (clear)
-        // End at 85% height to avoid visible strip at bottom edge
+        // Extend gradient BELOW screen to avoid visible sharp edge at bottom
         val gradientShader = android.graphics.LinearGradient(
             0f, screenHeight * 0.20f,  // Start: 20% from top (clear)
-            0f, screenHeight * 0.85f,  // End: 85% height (before bottom edge)
+            0f, screenHeight * 1.2f,   // End: 120% height (below screen edge)
             Color.argb(0, fogR, fogG, fogB),  // Transparent at top
-            Color.argb(baseAlpha, fogR, fogG, fogB),  // Dense at 85%
+            Color.argb(baseAlpha, fogR, fogG, fogB),  // Dense below screen
             android.graphics.Shader.TileMode.CLAMP
         )
         
@@ -548,16 +548,17 @@ class WeatherLayer : SceneLayer {
         fogPaint.shader = null
         
         // Add a second layer for depth - mid-height concentration
+        // Also extend below screen
         val midAlpha = (baseAlpha * 0.5f).toInt()
         val midGradient = android.graphics.LinearGradient(
             0f, screenHeight * 0.3f,
-            0f, screenHeight * 0.8f,
+            0f, screenHeight * 1.1f,  // End below screen
             Color.argb(0, fogR, fogG, fogB),
             Color.argb(midAlpha, fogR + 5, fogG + 5, fogB + 5),
             android.graphics.Shader.TileMode.CLAMP
         )
         fogPaint.shader = midGradient
-        canvas.drawRect(0f, screenHeight * 0.3f, screenWidth.toFloat(), screenHeight * 0.9f, fogPaint)
+        canvas.drawRect(0f, screenHeight * 0.3f, screenWidth.toFloat(), screenHeight.toFloat(), fogPaint)
         fogPaint.shader = null
     }
 

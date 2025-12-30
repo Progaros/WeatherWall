@@ -56,7 +56,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     @Volatile private var trees: List<TreeData> = emptyList()
     
     // Settings
-    private var treeCount = 100
+    private var treeDensity = 50        // 0-100 percentage of tree coverage
     private var hillCount = 5
     private var treeSizeScale = 1.0f
     private var treeWidthScale = 1.0f
@@ -66,8 +66,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private var treeSegments = 1
     private var randomSeed = 42
     private var hillRoughness = 1.0f  // Controls sine wave detail/roughness
-    private var hillAmplitude = 1.0f  // Controls hill vertical height
-    private var hillFrequency = 2.0f  // Controls how many hills visible per layer
+    private var hillAmplitude = 1.0f  // Controls hill vertical height (0-10 range)
+    private var hillFrequency = 2.0f  // Controls how many hills visible per layer (0-10 range)
 
     init {
         reloadSettings()
@@ -143,33 +143,46 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private fun generateTrees() {
         // Take snapshot of hills for tree placement (thread-safe read)
         val currentHills = hills
+        if (currentHills.isEmpty() || treeDensity <= 0) {
+            trees = emptyList()
+            return
+        }
+        
+        // Calculate tree count from density (0-100 -> 0-150 trees)
+        val maxTrees = 150
+        val treeCount = (treeDensity * maxTrees / 100f).toInt()
+        if (treeCount <= 0) {
+            trees = emptyList()
+            return
+        }
         
         // Build new list (thread-safe: atomic swap at end)
-        val effectiveTreeCount = treeCount / 2  // Less dense forest
-        val newTrees = ArrayList<TreeData>(effectiveTreeCount)
+        val newTrees = ArrayList<TreeData>(treeCount)
         val random = Random(randomSeed.toLong() + 2000)  // Offset from hills
         
-        // Spread trees more evenly across the screen width
-        // Use stratified sampling: divide screen into columns and place trees randomly within each
-        val columnsCount = (effectiveTreeCount / 3).coerceAtLeast(1)  // ~3 trees per column
-        val columnWidth = 1.6f / columnsCount  // Total width range: -0.3 to 1.3
+        // Evenly space trees across the screen width using grid placement
+        // Calculate spacing based on density
+        val screenWidth = 1.6f  // -0.3 to 1.3 range
+        val spacing = screenWidth / (treeCount + 1)  // +1 to avoid edges
         
-        for (i in 0 until effectiveTreeCount) {
-            // Stratified x placement: assign to column, then randomize within
-            val column = i % columnsCount
-            val columnStart = -0.3f + column * columnWidth
-            val xRatio = columnStart + random.nextFloat() * columnWidth
+        for (i in 0 until treeCount) {
+            // Evenly spaced x position with small random jitter (±10% of spacing)
+            val baseX = -0.3f + (i + 1) * spacing
+            val jitter = (random.nextFloat() - 0.5f) * spacing * 0.2f
+            val xRatio = baseX + jitter
             
-            // Always place trees on hills
-            val hill = if (currentHills.isNotEmpty()) {
-                currentHills[random.nextInt(currentHills.size)]
-            } else {
-                HillData(listOf(0.4f), 0.05f, 0.70f, Color.rgb(30, 80, 40))  // Default: foreground
-            }
+            // Find the best hill for this x position (foreground preferred for visibility)
+            // Pick a random hill but weight towards foreground
+            val hillIndex = (random.nextFloat() * random.nextFloat() * currentHills.size).toInt()
+                .coerceIn(0, currentHills.size - 1)
+            val hill = currentHills[hillIndex]
             
+            // Get the EXACT hill surface Y at this x position
             val groundY = getHillY(xRatio, hill)
             val depthFactor = hill.depthFactor
-            val yRatio = groundY + RenderConstants.TREE_GROUND_OFFSET
+            
+            // Tree base sits ON the hill surface (no offset - tree trunk base is at ground level)
+            val yRatio = groundY
             
             // With new parallax: depthFactor goes from -0.5 (background) to +0.05 (foreground)
             // Normalize to 0-1 range for scale: 0 = background (small), 1 = foreground (large)
@@ -305,7 +318,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     
     private fun drawTree(canvas: Canvas, tree: TreeData, scaleX: Float, state: SimulationState) {
         val x = (tree.xRatio - 0.5f) * scaleX + width / 2f
-        val y = tree.yRatio * height
+        // yRatio is the ground level where tree BASE sits
+        val groundY = tree.yRatio * height
         
         val totalHeight = height * RenderConstants.TREE_HEIGHT_FACTOR * tree.scale * treeSizeScale
         val segmentHeight = totalHeight / treeSegments
@@ -337,9 +351,14 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val gustModulation = 0.5f + gustWave * 0.5f  // 0.5 to 1.0
         val maxAmplitude = totalHeight * RenderConstants.TREE_SWAY_AMPLITUDE * effectiveWind * 2.5f * gustModulation
         
+        // Draw tree segments from bottom to top
+        // Each segment is a triangle with base at bottom, tip pointing up
         for (seg in 0 until treeSegments) {
-            val segY = y - seg * segmentHeight * 0.7f
-            val segTop = segY - segmentHeight
+            // Base of this segment (starts at ground for seg=0)
+            val segBaseY = groundY - seg * segmentHeight * 0.7f
+            // Tip of this segment (top)
+            val segTipY = segBaseY - segmentHeight
+            
             val widthMultiplier = 1.0f - (seg * 0.15f)
             val segWidth = segmentHeight * 0.5f * widthMultiplier * treeWidthScale
             
@@ -359,13 +378,15 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 sin(timeSec * baseFreq * 0.4f + tipPhase) * 0.3f
             
             // Sway increases with height (squared for natural bending curve)
+            // Base of tree (on ground) has zero sway
             val baseSway = baseWave * maxAmplitude * baseHeightRatio * baseHeightRatio
             val tipSway = tipWave * maxAmplitude * tipHeightRatio * tipHeightRatio
             
             treePath.reset()
-            treePath.moveTo(x + tipSway, segTop)
-            treePath.lineTo(x - segWidth + baseSway, segY)
-            treePath.lineTo(x + segWidth + baseSway, segY)
+            // Triangle: tip at top (with sway), base corners at bottom (with less sway)
+            treePath.moveTo(x + tipSway, segTipY)  // Top tip
+            treePath.lineTo(x - segWidth + baseSway, segBaseY)  // Bottom left
+            treePath.lineTo(x + segWidth + baseSway, segBaseY)  // Bottom right
             treePath.close()
             
             canvas.drawPath(treePath, treePaint)
@@ -379,7 +400,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         randomSeed = prefs.getInt("pref_random_seed", 42)
         
         hillCount = prefs.getInt("pref_hill_count", 2)  // 2 hill layers
-        treeCount = prefs.getInt("pref_tree_count", 100)
+        
+        // Tree density: 0-100 percentage
+        treeDensity = prefs.getInt("pref_tree_density", 50)
+        
         hillStartY = prefs.getInt("pref_hill_lower_start", 60) / 100f  // 60% instead of 50%
         // Hills extend below screen (1.0 = bottom edge, >1.0 = below screen)
         // This allows parallax movement to reveal more terrain
@@ -389,13 +413,13 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val roughVal = prefs.getInt("pref_hill_roughness", 100)
         hillRoughness = roughVal / 100f
         
-        // Hill amplitude: controls hill vertical height (10-200 -> 0.1-2.0)
+        // Hill amplitude: controls hill vertical height (0-1000 -> 0.0-10.0)
         val ampVal = prefs.getInt("pref_hill_amplitude", 100)
         hillAmplitude = ampVal / 100f
         
-        // Hill frequency: controls how many hills visible per layer (10-50 -> 1.0-5.0, default 2.0)
-        val freqVal = prefs.getInt("pref_hill_frequency", 20)
-        hillFrequency = freqVal / 10f
+        // Hill frequency: controls how many hills visible per layer (0-1000 -> 0.0-10.0)
+        val freqVal = prefs.getInt("pref_hill_frequency", 100)
+        hillFrequency = freqVal / 100f
         
         val sizeVal = prefs.getInt("pref_tree_size", 200)
         treeSizeScale = sizeVal / 200f
@@ -408,7 +432,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         // Wind is now from SimulationState, not a separate setting
         
-        android.util.Log.d("TerrainLayer", "Reloaded: hills=$hillCount, trees=$treeCount, freq=$hillFrequency, amp=$hillAmplitude")
+        android.util.Log.d("TerrainLayer", "Reloaded: hills=$hillCount, density=$treeDensity%, freq=$hillFrequency, amp=$hillAmplitude")
         generateTerrain()
     }
 

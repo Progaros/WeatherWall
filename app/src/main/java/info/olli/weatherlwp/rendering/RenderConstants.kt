@@ -186,13 +186,37 @@ object RenderConstants {
     // ============== Utility Functions ==============
     
     /**
-     * Linearly interpolate between two colors.
+     * Linearly interpolate between two colors in RGB space.
+     * For sky transitions, prefer lerpColorHSV for smoother results.
      */
     fun lerpColor(start: Int, end: Int, ratio: Float): Int {
         val r = ((Color.red(start) + ratio * (Color.red(end) - Color.red(start))).toInt()).coerceIn(0, 255)
         val g = ((Color.green(start) + ratio * (Color.green(end) - Color.green(start))).toInt()).coerceIn(0, 255)
         val b = ((Color.blue(start) + ratio * (Color.blue(end) - Color.blue(start))).toInt()).coerceIn(0, 255)
         return Color.rgb(r, g, b)
+    }
+    
+    /**
+     * Interpolate between two colors in HSV space for smoother sky transitions.
+     * Per ai.md: "Always interpolate sky colours in HSV (or Oklab)"
+     * HSV avoids the "gray murky transition" problem that RGB has.
+     */
+    fun lerpColorHSV(start: Int, end: Int, ratio: Float): Int {
+        val startHsv = FloatArray(3)
+        val endHsv = FloatArray(3)
+        Color.colorToHSV(start, startHsv)
+        Color.colorToHSV(end, endHsv)
+        
+        // Handle hue wrapping (e.g., 350° to 10° should go through 0°, not 180°)
+        var hueDiff = endHsv[0] - startHsv[0]
+        if (hueDiff > 180f) hueDiff -= 360f
+        if (hueDiff < -180f) hueDiff += 360f
+        
+        val h = (startHsv[0] + hueDiff * ratio + 360f) % 360f
+        val s = startHsv[1] + (endHsv[1] - startHsv[1]) * ratio
+        val v = startHsv[2] + (endHsv[2] - startHsv[2]) * ratio
+        
+        return Color.HSVToColor(floatArrayOf(h, s, v))
     }
     
     /**
@@ -270,15 +294,16 @@ object RenderConstants {
     }
     
     /**
-     * Smooth color transition with easing.
+     * Smooth color transition with easing using HSV interpolation.
+     * Per ai.md: Use HSV for sky transitions to avoid murky grays.
      */
     fun easeSkyColorTransition(fromColor: Int, toColor: Int, progress: Float): Int {
         val eased = easeInOutCubic(progress.coerceIn(0f, 1f))
-        return lerpColor(fromColor, toColor, eased)
+        return lerpColorHSV(fromColor, toColor, eased)
     }
     
     /**
-     * Smooth 3-stop color interpolation with easing.
+     * Smooth 3-stop color interpolation with easing using HSV.
      */
     fun lerpColorSmooth(start: Int, mid: Int, end: Int, progress: Float): Int {
         return if (progress < 0.5f) {

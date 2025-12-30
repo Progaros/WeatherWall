@@ -106,29 +106,29 @@
         <SeekBarPreference
             android:key="pref_hill_amplitude"
             android:title="Hill Amplitude"
-            android:summary="Hill height (10=low, 100=normal, 200=tall)"
+            android:summary="Hill height (0=flat, 100=normal, 1000=extreme)"
             android:defaultValue="100"
-            android:max="200"
-            app:min="10"
+            android:max="1000"
+            app:min="0"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
 
         <SeekBarPreference
             android:key="pref_hill_frequency"
             android:title="Hill Frequency"
-            android:summary="Hills visible per layer (10=1, 20=2, 50=5)"
-            android:defaultValue="20"
-            android:max="50"
-            app:min="10"
+            android:summary="Hills visible per layer (0=flat, 100=many, 1000=extreme)"
+            android:defaultValue="100"
+            android:max="1000"
+            app:min="0"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
 
         <SeekBarPreference
-            android:key="pref_tree_count"
-            android:title="Tree Count"
-            android:summary="Number of trees (0-200)"
-            android:defaultValue="85"
-            android:max="200"
+            android:key="pref_tree_density"
+            android:title="Tree Density"
+            android:summary="Tree coverage on hilltops (0=none, 100=dense)"
+            android:defaultValue="50"
+            android:max="100"
             app:min="0"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />

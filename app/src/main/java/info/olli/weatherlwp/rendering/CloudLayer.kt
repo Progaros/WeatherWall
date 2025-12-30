@@ -38,7 +38,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         style = Paint.Style.FILL
         isAntiAlias = true
         alpha = 80  // Lower alpha for atmospheric softness
-        maskFilter = BlurMaskFilter(40f, BlurMaskFilter.Blur.NORMAL)  // Larger blur for wispier effect
+        maskFilter = BlurMaskFilter(25f, BlurMaskFilter.Blur.NORMAL)  // Reduced blur for better performance
     }
     
     private val path = Path()
@@ -115,7 +115,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         
         // Cloud count = weather-based count * user multiplier, capped for performance
         val baseCount = state.getCloudCount()
-        val targetCount = (baseCount * densityMultiplier).toInt().coerceIn(0, 100)  // Max 100 clouds
+        val targetCount = (baseCount * densityMultiplier).toInt().coerceIn(0, 60)  // Max 60 clouds for performance
         if (targetCount != cloudCount) {
             cloudCount = targetCount
             generateClouds()
