@@ -113,9 +113,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         if (width <= 0 || height <= 0 || !cloudsEnabled) return
         
-        // Cloud count = weather-based count * user multiplier
+        // Cloud count = weather-based count * user multiplier, capped for performance
         val baseCount = state.getCloudCount()
-        val targetCount = (baseCount * densityMultiplier).toInt().coerceAtLeast(0)
+        val targetCount = (baseCount * densityMultiplier).toInt().coerceIn(0, 100)  // Max 100 clouds
         if (targetCount != cloudCount) {
             cloudCount = targetCount
             generateClouds()
@@ -178,7 +178,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
     
     private fun drawCloud(canvas: Canvas, cx: Float, cy: Float, size: Float, seed: Long, elongation: Float) {
         val random = Random(seed)
-        val puffs = 4 + random.nextInt(4)  // More puffs for wispier appearance
+        // Fewer puffs for better performance (was 4-8, now 3-5)
+        val puffs = 3 + random.nextInt(3)
         
         for (i in 0 until puffs) {
             // Elongated horizontal spread for wispy look

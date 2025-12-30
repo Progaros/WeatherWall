@@ -280,6 +280,72 @@
             android:dependency="pref_clouds_enabled" />
 
         <SwitchPreferenceCompat
+            android:key="pref_events_enabled"
+            android:title="Random Events"
+            android:summary="Birds, planes, deer, and other animals"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_event_frequency"
+            android:title="Event Frequency"
+            android:summary="How often events spawn (0=rare, 100=frequent)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_events_enabled" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_event_airplane"
+            android:title="Airplanes"
+            android:summary="Planes flying across the sky with contrails"
+            android:defaultValue="true"
+            android:dependency="pref_events_enabled" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_event_birds"
+            android:title="Bird Flocks"
+            android:summary="Flocks of birds flying across"
+            android:defaultValue="true"
+            android:dependency="pref_events_enabled" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_event_eagle"
+            android:title="Eagles"
+            android:summary="Soaring eagles in the sky"
+            android:defaultValue="true"
+            android:dependency="pref_events_enabled" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_event_butterfly"
+            android:title="Butterflies"
+            android:summary="Colorful butterflies fluttering"
+            android:defaultValue="true"
+            android:dependency="pref_events_enabled" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_event_deer"
+            android:title="Deer"
+            android:summary="Deer grazing on the hills"
+            android:defaultValue="true"
+            android:dependency="pref_events_enabled" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_event_rabbit"
+            android:title="Rabbits"
+            android:summary="Rabbits hopping around"
+            android:defaultValue="true"
+            android:dependency="pref_events_enabled" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_event_fox"
+            android:title="Foxes"
+            android:summary="Foxes walking across terrain"
+            android:defaultValue="true"
+            android:dependency="pref_events_enabled" />
+
+        <SwitchPreferenceCompat
             android:key="pref_daynight_enabled"
             android:title="Auto Day/Night Cycle"
             android:summary="Change sky colors based on real time"

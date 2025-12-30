@@ -310,7 +310,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val totalHeight = height * RenderConstants.TREE_HEIGHT_FACTOR * tree.scale * treeSizeScale
         val segmentHeight = totalHeight / treeSegments
         
-        // Wind sway: wavy motion along the tree
+        // Wind sway: oscillating back and forth
         // state.windStrength ranges 0-1
         val windStrength = state.windStrength.coerceIn(0f, 1f)
         val timeSec = state.timeSeconds
@@ -318,11 +318,19 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // Base sway frequency increases with wind strength
         val baseFreq = RenderConstants.TREE_SWAY_FREQUENCY * (0.5f + windStrength)
         
-        // Each tree has unique phase offset based on position
-        val phase = tree.xRatio * 10f + tree.yRatio * 5f
+        // Spatial coherence: trees close on X axis sway together (like wind gusts)
+        // Use low-frequency spatial variation so nearby trees have similar phases
+        // tree.xRatio * 2 means trees within 0.5 screen width sway similarly
+        val spatialPhase = tree.xRatio * 2f
         
-        // Maximum sway amplitude at tree top
-        val maxAmplitude = totalHeight * RenderConstants.TREE_SWAY_AMPLITUDE * windStrength * 2f
+        // Time-traveling wave: wind gusts move across the scene
+        // Wave moves from left to right at wind-dependent speed
+        val gustWaveSpeed = 0.3f + windStrength * 0.5f
+        val gustWave = sin(timeSec * gustWaveSpeed - spatialPhase * 3f) * 0.5f + 0.5f
+        
+        // Maximum sway amplitude at tree top, modulated by gusts
+        val gustModulation = 0.5f + gustWave * 0.5f  // 0.5 to 1.0
+        val maxAmplitude = totalHeight * RenderConstants.TREE_SWAY_AMPLITUDE * windStrength * 2.5f * gustModulation
         
         for (seg in 0 until treeSegments) {
             val segY = y - seg * segmentHeight * 0.7f
@@ -334,16 +342,16 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             val baseHeightRatio = seg.toFloat() / treeSegments
             val tipHeightRatio = (seg + 1).toFloat() / treeSegments
             
-            // Wavy motion: wave propagates up the tree
-            // Higher segments have phase delay for wave-like motion
-            val basePhase = phase + baseHeightRatio * 0.5f
-            val tipPhase = phase + tipHeightRatio * 0.5f
+            // Wavy motion up the tree (slight phase delay at top)
+            val basePhase = spatialPhase + baseHeightRatio * 0.3f
+            val tipPhase = spatialPhase + tipHeightRatio * 0.3f
             
-            // Primary wave + gust harmonics
-            val baseWave = sin(timeSec * baseFreq + basePhase) + 
-                sin(timeSec * baseFreq * 0.4f + basePhase * 0.7f) * 0.3f
-            val tipWave = sin(timeSec * baseFreq + tipPhase) +
-                sin(timeSec * baseFreq * 0.4f + tipPhase * 0.7f) * 0.3f
+            // Primary oscillation + secondary harmonic for organic feel
+            // sin wave oscillates back and forth naturally
+            val baseWave = sin(timeSec * baseFreq + basePhase) * 0.7f + 
+                sin(timeSec * baseFreq * 0.4f + basePhase) * 0.3f
+            val tipWave = sin(timeSec * baseFreq + tipPhase) * 0.7f +
+                sin(timeSec * baseFreq * 0.4f + tipPhase) * 0.3f
             
             // Sway increases with height (squared for natural bending curve)
             val baseSway = baseWave * maxAmplitude * baseHeightRatio * baseHeightRatio

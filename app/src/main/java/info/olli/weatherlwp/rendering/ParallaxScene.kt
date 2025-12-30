@@ -44,6 +44,7 @@ class ParallaxScene(
     private val mountainLayer = MountainLayer(context)
     private val cloudLayer = CloudLayer(context)
     private val terrainLayer = TerrainLayer(context)
+    private val randomEventLayer = RandomEventLayer(context)
     
     // Overlays
     private val weatherLayer = WeatherLayer()
@@ -68,6 +69,7 @@ class ParallaxScene(
                                // Let's put them behind mountains for now.
         layers.add(mountainLayer)
         layers.add(terrainLayer) // Hills and Trees
+        layers.add(randomEventLayer)  // Animals and events on top of terrain
         
         sensor.setListener(this)
         loadPrefs()
