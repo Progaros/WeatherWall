@@ -3,8 +3,10 @@ package info.olli.weatherlwp.rendering
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.Shader
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationState
@@ -73,6 +75,34 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         reloadSettings()
     }
 
+    // Pseudo-random hash function for value noise
+    private fun hash(n: Int): Float {
+        var x = n
+        x = (x shr 13) xor x
+        x = (x * (x * x * 15731 + 789221) + 1376312589)
+        return (x and 0x7fffffff) / 2147483647.0f
+    }
+
+    // 1D value noise with smoothstep interpolation
+    private fun noise(x: Float, seed: Int): Float {
+        val i = x.toInt()
+        val f = x - i
+        val h1 = hash(i + seed)
+        val h2 = hash(i + 1 + seed)
+        // Smoothstep interpolation for smooth curves
+        val t = f * f * (3 - 2 * f)
+        return h1 + t * (h2 - h1)
+    }
+
+    // Darken a color for gradient shading
+    private fun darkenColor(color: Int, factor: Float = 0.65f): Int {
+        return Color.rgb(
+            (Color.red(color) * factor).toInt().coerceIn(0, 255),
+            (Color.green(color) * factor).toInt().coerceIn(0, 255),
+            (Color.blue(color) * factor).toInt().coerceIn(0, 255)
+        )
+    }
+
     private fun generateTerrain() {
         generateHills()
         generateTrees()
@@ -98,28 +128,34 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             val numPoints = RenderConstants.HILL_CURVE_POINTS_MIN + random.nextInt(RenderConstants.HILL_CURVE_POINTS_RANGE)
             val points = ArrayList<Float>()
             
-            // Sine-based smooth curve generation
-            // Frequency controls how many hills are visible on screen per layer
-            // Add small random variation to make each layer slightly different
-            val baseFreq = hillFrequency * (0.8f + random.nextFloat() * 0.4f)  // ±20% variation
-            val secondaryFreq = baseFreq * 2.5f  // Higher frequency detail
-            val phaseOffset = random.nextFloat() * 2f * kotlin.math.PI.toFloat()
-            
-            // Amplitude controls vertical height of hills
-            val amplitude = RenderConstants.HILL_HEIGHT_RANGE * hillAmplitude * (0.8f + random.nextFloat() * 0.4f)
-            val secondaryAmp = amplitude * 0.3f * hillRoughness  // Roughness controls detail
+            // Use Fractal Brownian Motion (fBm) for natural terrain
+            // This overlays multiple noise octaves: large hills + smaller bumps + fine details
+            val noiseSeed = i * 1337 + randomSeed
             
             for (j in 0 until numPoints) {
-                val t = j.toFloat() / (numPoints - 1)  // 0 to 1 across hill
-                val angle = t * 2f * kotlin.math.PI.toFloat() * baseFreq + phaseOffset
-                val secondaryAngle = t * 2f * kotlin.math.PI.toFloat() * secondaryFreq + phaseOffset * 0.7f
+                // x position along the hill, scaled by frequency
+                val x = j.toFloat() / (numPoints - 1) * hillFrequency * 5.0f
                 
-                // Primary sine wave + secondary detail
-                val sineValue = kotlin.math.sin(angle) * amplitude + 
-                    kotlin.math.sin(secondaryAngle) * secondaryAmp
+                // Fractal Brownian Motion: 3-4 octaves
+                // Octave 1: Large rolling hills (base shape)
+                var noiseVal = noise(x, noiseSeed) * 1.0f
+                // Octave 2: Smaller bumps (double frequency, half amplitude)
+                noiseVal += noise(x * 2f, noiseSeed + 100) * 0.5f * hillRoughness
+                // Octave 3: Fine details (4x frequency, quarter amplitude)
+                noiseVal += noise(x * 4f, noiseSeed + 200) * 0.25f * hillRoughness
+                // Octave 4: Micro details (8x frequency, 1/8 amplitude)
+                noiseVal += noise(x * 8f, noiseSeed + 300) * 0.125f * hillRoughness
                 
-                // Normalize to 0.1-0.6 range (hill height values)
-                val normalizedValue = (RenderConstants.HILL_BASE_HEIGHT + sineValue * 0.5f).coerceIn(0.1f, 0.6f)
+                // Normalize by sum of amplitudes: 1 + 0.5 + 0.25 + 0.125 = 1.875
+                val maxAmp = 1.0f + 0.5f * hillRoughness + 0.25f * hillRoughness + 0.125f * hillRoughness
+                noiseVal /= maxAmp
+                
+                // Map to hill height range
+                // noiseVal is 0.0-1.0, center it and apply amplitude
+                val normalizedValue = (RenderConstants.HILL_BASE_HEIGHT + 
+                    (noiseVal - 0.5f) * RenderConstants.HILL_HEIGHT_RANGE * hillAmplitude)
+                    .coerceIn(0.1f, 0.6f)
+                
                 points.add(normalizedValue)
             }
             
@@ -278,8 +314,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             
             // Blend with ambient color based on depth (distant hills blend more)
             val blendAmount = RenderConstants.applyAmbientTint(hill.dayColor, ambientColor, hill.depthFactor)
-            hillPaint.color = RenderConstants.blendWithAmbient(hill.dayColor, ambientColor, blendAmount)
-            drawHill(canvas, hill, scaleX)
+            val hillColor = RenderConstants.blendWithAmbient(hill.dayColor, ambientColor, blendAmount)
+            drawHill(canvas, hill, scaleX, hillColor)
             
             canvas.restore()
         }
@@ -310,7 +346,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         }
     }
     
-    private fun drawHill(canvas: Canvas, hill: HillData, scaleX: Float) {
+    private fun drawHill(canvas: Canvas, hill: HillData, scaleX: Float, hillColor: Int) {
         hillPath.reset()
         
         // Extend hills beyond screen for parallax movement
@@ -322,19 +358,35 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val stepX = (endX - startX) / (hill.controlPoints.size - 1)
         val bottomY = height + parallaxMargin  // Extend below screen
         
+        // Find the highest point in the hill for gradient
+        var minY = bottomY
         hillPath.moveTo(startX, bottomY)
         
         for (i in hill.controlPoints.indices) {
             val x = startX + i * stepX
             val yRatio = hill.heightOffset + 0.12f * (1f - hill.controlPoints[i])
             val y = yRatio * height
+            if (y < minY) minY = y
             hillPath.lineTo(x, y)
         }
         
         hillPath.lineTo(endX, bottomY)
         hillPath.close()
         
+        // Apply linear gradient from top (light) to bottom (dark) for natural shading
+        val gradient = LinearGradient(
+            0f, minY,           // Start: top of hill (lighter)
+            0f, bottomY,        // End: bottom (darker)
+            hillColor,          // Top color (original)
+            darkenColor(hillColor, 0.7f),  // Bottom color (darkened)
+            Shader.TileMode.CLAMP
+        )
+        hillPaint.shader = gradient
+        
         canvas.drawPath(hillPath, hillPaint)
+        
+        // Clear shader after drawing
+        hillPaint.shader = null
     }
     
     private fun drawTree(canvas: Canvas, tree: TreeData, scaleX: Float, state: SimulationState) {
