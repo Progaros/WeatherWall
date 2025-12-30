@@ -271,15 +271,17 @@ class MountainLayer(private val context: Context) : SceneLayer {
         
         // Create atmospheric gradient: lighter/bluer at base (fog effect)
         // Peaks are darker/more distinct, base fades into atmospheric haze
+        // Bottom 25% fades to transparent so parallax doesn't reveal hard edges
         val peakColor = baseColor
         // Base blends even more with ambient (atmospheric perspective)
         val baseAtmoColor = RenderConstants.blendWithAmbient(baseColor, ambientColor, blendAmount + 0.2f)
         
-        // Vertical gradient shader (peak color at top, atmospheric at bottom)
+        // Three-point vertical gradient: peak color -> atmospheric color -> transparent
         val gradient = LinearGradient(
             peakCenterX, peakY,
             peakCenterX, baseY,
-            peakColor, baseAtmoColor,
+            intArrayOf(peakColor, baseAtmoColor, Color.TRANSPARENT),
+            floatArrayOf(0f, 0.75f, 1f),  // Peak at 0%, atmospheric at 75%, transparent at 100%
             Shader.TileMode.CLAMP
         )
         
@@ -287,7 +289,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
         paint.shader = gradient
         canvas.drawPath(pathLeft, paint)
         
-        // Shadow side: slightly darker gradient
+        // Shadow side: slightly darker gradient with same transparency fade
         val shadowPeakColor = Color.rgb(
             (Color.red(peakColor) * 0.8f).toInt(),
             (Color.green(peakColor) * 0.8f).toInt(),
@@ -301,7 +303,8 @@ class MountainLayer(private val context: Context) : SceneLayer {
         val shadowGradient = LinearGradient(
             peakCenterX, peakY,
             peakCenterX, baseY,
-            shadowPeakColor, shadowBaseColor,
+            intArrayOf(shadowPeakColor, shadowBaseColor, Color.TRANSPARENT),
+            floatArrayOf(0f, 0.75f, 1f),
             Shader.TileMode.CLAMP
         )
         paint.shader = shadowGradient

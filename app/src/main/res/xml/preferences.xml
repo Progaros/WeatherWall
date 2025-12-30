@@ -86,10 +86,20 @@
         <SeekBarPreference
             android:key="pref_hill_upper_end"
             android:title="Hills End Position"
-            android:summary="Where near hills appear on screen (60-90%)"
-            android:defaultValue="90"
-            android:max="90"
+            android:summary="Where near hills appear on screen (60-100%)"
+            android:defaultValue="95"
+            android:max="100"
             app:min="60"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_hill_roughness"
+            android:title="Hill Roughness"
+            android:summary="Hill curve detail (0=smooth, 200=rough)"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="0"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
 
