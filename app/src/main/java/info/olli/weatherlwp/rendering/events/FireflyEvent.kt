@@ -10,13 +10,15 @@ import kotlin.random.Random
 
 /**
  * Fireflies - Summer night, multiple flickering points
+ * Spawn in the foreground hill area (lower portion of screen)
  */
 class FireflyEvent(random: Random) : RandomEvent {
     private var lifetime = 0L
     private val maxLifetime = 12000L + random.nextLong(8000)
     private val flies = List(8 + random.nextInt(12)) { Firefly(random) }
-    private val baseX = 0.2f + random.nextFloat() * 0.6f
-    private val baseY = 0.55f + random.nextFloat() * 0.2f
+    // Position in foreground hill area (lower 40% of screen, above bottom margin)
+    private val baseX = 0.15f + random.nextFloat() * 0.7f
+    private val baseY = 0.65f + random.nextFloat() * 0.25f  // 0.65 to 0.90 - on hills
     
     private class Firefly(random: Random) {
         val offsetX = (random.nextFloat() - 0.5f) * 0.15f
@@ -41,8 +43,9 @@ class FireflyEvent(random: Random) : RandomEvent {
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int) {
-        val px = parallaxCalculator.getOffsetXForDepth(-0.05f)
-        val py = parallaxCalculator.getOffsetYForDepth(-0.05f)
+        // Use foreground depth for parallax (matches hill foreground)
+        val px = parallaxCalculator.getOffsetXForDepth(0.02f)
+        val py = parallaxCalculator.getOffsetYForDepth(0.02f)
         canvas.save()
         canvas.translate(px, py)
         

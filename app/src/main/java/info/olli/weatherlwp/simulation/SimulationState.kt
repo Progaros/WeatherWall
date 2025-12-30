@@ -31,6 +31,7 @@ data class SimulationState(
     val windDirection: Float,           // Degrees (0 = right, 90 = up)
     val windGust: Float = 0f,           // 0-1 current gust intensity (peaks during gusts)
     val windMultiplier: Float = 1f,     // User setting multiplier for wind effect
+    val treeSwaySpeed: Float = 1f,      // User setting multiplier for tree sway speed
     
     // Screen
     val screenWidth: Float,
@@ -101,6 +102,7 @@ data class SimulationState(
             windDirection = 0f,
             windGust = 0f,
             windMultiplier = 1f,
+            treeSwaySpeed = 1f,
             screenWidth = 1080f,
             screenHeight = 1920f,
             isDebugMode = false

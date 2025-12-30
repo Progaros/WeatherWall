@@ -112,6 +112,13 @@ class ParallaxScene(
                 randomEventLayer.debugSpawnEvent()
             }
             
+            // Check for specific event spawn trigger from individual toggles
+            val specificEvent = prefs.getString("trigger_spawn_specific_event", null)
+            if (specificEvent != null) {
+                prefs.edit().remove("trigger_spawn_specific_event").apply()
+                randomEventLayer.spawnSpecificEvent(specificEvent)
+            }
+            
             // Update parallax physics (smoothing, center drift)
             // Note: parallax settings are applied in loadPrefs(), not here
             parallaxCalculator.update()

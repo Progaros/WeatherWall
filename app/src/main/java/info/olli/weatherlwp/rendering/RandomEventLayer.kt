@@ -169,6 +169,36 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         android.util.Log.d("RandomEventLayer", "Debug spawned: ${event.javaClass.simpleName}")
     }
     
+    /**
+     * Spawn a specific event type by name.
+     * Used when toggling individual event switches in settings.
+     */
+    fun spawnSpecificEvent(eventType: String) {
+        val currentEvents = events.toMutableList()
+        val random = Random(System.currentTimeMillis())
+        
+        val event: RandomEvent? = when (eventType) {
+            "airplane" -> AirplaneEvent(random)
+            "birds" -> BirdFlockEvent(random)
+            "eagle" -> EagleEvent(random)
+            "butterfly" -> ButterflyEvent(random)
+            "rabbit" -> RabbitEvent(random)
+            "fox" -> FoxEvent(random)
+            "shootingstar" -> ShootingStarEvent(random)
+            "fireflies" -> FireflyEvent(random)
+            "owl" -> OwlEvent(random)
+            "balloon" -> HotAirBalloonEvent(random)
+            "alien" -> AlienEvent(random)
+            else -> null
+        }
+        
+        event?.let {
+            currentEvents.add(it)
+            events = currentEvents.toList()
+            android.util.Log.d("RandomEventLayer", "Spawned specific event: $eventType")
+        }
+    }
+    
     override fun reloadSettings() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         eventsEnabled = prefs.getBoolean("pref_events_enabled", true)

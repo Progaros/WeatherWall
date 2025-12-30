@@ -94,6 +94,31 @@ class SettingsFragment : PreferenceFragmentCompat() {
             spawnRandomEvent()
             true
         }
+        
+        // Set up event toggle listeners to spawn specific events when toggled ON
+        setupEventToggleListener("pref_event_airplane", "airplane", "✈️ Airplane spawned!")
+        setupEventToggleListener("pref_event_birds", "birds", "🐦 Bird flock spawned!")
+        setupEventToggleListener("pref_event_eagle", "eagle", "🦅 Eagle spawned!")
+        setupEventToggleListener("pref_event_butterfly", "butterfly", "🦋 Butterfly spawned!")
+        setupEventToggleListener("pref_event_rabbit", "rabbit", "🐰 Rabbit spawned!")
+        setupEventToggleListener("pref_event_fox", "fox", "🦊 Fox spawned!")
+        setupEventToggleListener("pref_event_shootingstar", "shootingstar", "⭐ Shooting star spawned!")
+        setupEventToggleListener("pref_event_fireflies", "fireflies", "✨ Fireflies spawned!")
+        setupEventToggleListener("pref_event_owl", "owl", "🦉 Owl spawned!")
+        setupEventToggleListener("pref_event_balloon", "balloon", "🎈 Hot air balloon spawned!")
+        setupEventToggleListener("pref_event_alien", "alien", "👽 UFO spawned!")
+    }
+    
+    private fun setupEventToggleListener(prefKey: String, eventType: String, message: String) {
+        findPreference<SwitchPreferenceCompat>(prefKey)?.setOnPreferenceChangeListener { _, newValue ->
+            if (newValue == true) {
+                // When toggled ON, spawn that specific event
+                val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
+                prefs.edit().putString("trigger_spawn_specific_event", eventType).apply()
+                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            }
+            true
+        }
     }
 
     private fun openWallpaperPreview() {

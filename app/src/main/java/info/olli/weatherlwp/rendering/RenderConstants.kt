@@ -130,7 +130,7 @@ object RenderConstants {
     const val WIND_CLOUD_SPEED_MAX = 8.0f   // Increased for more dramatic high wind
     
     /** Tree sway animation parameters */
-    const val TREE_SWAY_FREQUENCY = 2.0f
+    const val TREE_SWAY_FREQUENCY = 0.6f   // Base frequency (slower, more natural)
     const val TREE_SWAY_AMPLITUDE = 0.25f  // Increased for more visible sway at high wind
     
     /** Star twinkle animation */

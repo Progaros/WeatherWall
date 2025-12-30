@@ -136,7 +136,7 @@
         <SeekBarPreference
             android:key="pref_tree_spread"
             android:title="Tree Spread"
-            android:summary="How far trees spread across hills (0=foreground, 100=all)"
+            android:summary="How far trees spread from hilltops (0=peaks only, 100=down slopes)"
             android:defaultValue="50"
             android:max="100"
             app:min="0"
@@ -199,9 +199,19 @@
         <SeekBarPreference
             android:key="pref_wind_multiplier"
             android:title="Wind Effect Strength"
-            android:summary="Multiplier for tree sway (0=none, 100=normal, 300=extreme)"
+            android:summary="Multiplier for tree sway amplitude (0=none, 100=normal, 300=extreme)"
             android:defaultValue="100"
             android:max="300"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_tree_sway_speed"
+            android:title="Tree Sway Speed"
+            android:summary="How fast trees sway (0=frozen, 50=slow, 100=normal, 200=fast)"
+            android:defaultValue="100"
+            android:max="200"
             app:min="0"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
@@ -272,7 +282,8 @@
     </PreferenceCategory>
 
     <!-- Visual Effects -->
-    <PreferenceCategory android:title="Visual Effects">
+    <!-- Cloud Settings -->
+    <PreferenceCategory android:title="Cloud Settings">
         <SwitchPreferenceCompat
             android:key="pref_clouds_enabled"
             android:title="Clouds"
@@ -311,7 +322,10 @@
             app:showSeekBarValue="true"
             app:updatesContinuously="true"
             android:dependency="pref_clouds_enabled" />
+    </PreferenceCategory>
 
+    <!-- Random Events -->
+    <PreferenceCategory android:title="Random Events">
         <SwitchPreferenceCompat
             android:key="pref_events_enabled"
             android:title="Random Events"

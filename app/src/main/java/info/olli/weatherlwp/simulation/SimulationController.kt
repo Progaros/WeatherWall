@@ -93,6 +93,7 @@ class SimulationController(private val context: Context) {
             windDirection = 0f,  // Default: wind blows right
             windGust = windGust,
             windMultiplier = settings.windMultiplier,
+            treeSwaySpeed = settings.treeSwaySpeed,
             screenWidth = screenWidth,
             screenHeight = screenHeight,
             isDebugMode = settings.debugEnabled
