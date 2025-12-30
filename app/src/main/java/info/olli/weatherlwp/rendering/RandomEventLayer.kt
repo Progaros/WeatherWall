@@ -38,6 +38,11 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     
     private var width = 0f
     private var height = 0f
+    
+    // Extended canvas dimensions for parallax content
+    private var extendedWidth = 0f
+    private var extendedOffset = 0f
+    
     private var eventsEnabled = true
     private var spawnChance = 0.001f
     private var lastSpawnCheck = 0L
@@ -62,6 +67,9 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     override fun resize(w: Float, h: Float) {
         width = w
         height = h
+        // Calculate extended width for parallax content
+        extendedWidth = RenderConstants.getExtendedWidth(w, h)
+        extendedOffset = RenderConstants.getExtendedOffset(w, extendedWidth)
     }
     
     override fun update(state: SimulationState, deltaTimeMs: Long) {
@@ -167,8 +175,9 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         
         for (event in currentEvents) {
             if (event.layer == targetLayer) {
-                event.draw(canvas, paint, strokePaint, parallaxCalculator, width, height, 
-                    state.timeSeconds, ambientColor)
+                // Pass extendedWidth so events can span the full parallax area
+                event.draw(canvas, paint, strokePaint, parallaxCalculator, extendedWidth, height, 
+                    state.timeSeconds, ambientColor, extendedOffset)
             }
         }
     }

@@ -49,13 +49,13 @@ class AlienEvent(random: Random) : RandomEvent {
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
-                      timeSeconds: Float, ambientColor: Int) {
+                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
         val px = parallaxCalculator.getOffsetXForDepth(0.15f)
         val py = parallaxCalculator.getOffsetYForDepth(0.15f)
         canvas.save()
         canvas.translate(px, py)
         
-        val currentX = x * width
+        val currentX = x * width - extendedOffset
         // Add slight wobble to position
         val wobbleX = sin(wobblePhase) * size * 0.3f
         val wobbleY = sin(hoverPhase) * size * 0.5f

@@ -31,13 +31,13 @@ class RabbitEvent(random: Random) : RandomEvent {
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
-                      timeSeconds: Float, ambientColor: Int) {
+                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
         val px = parallaxCalculator.getOffsetXForDepth(-0.12f)
         val py = parallaxCalculator.getOffsetYForDepth(-0.12f)
         canvas.save()
         canvas.translate(px, py)
         
-        val cx = x * width
+        val cx = x * width - extendedOffset
         val unit = minOf(width, height)
         val hopHeight = (sin(hopPhase).coerceAtLeast(0f)) * unit * 0.02f * size
         val cy = groundY * height - hopHeight

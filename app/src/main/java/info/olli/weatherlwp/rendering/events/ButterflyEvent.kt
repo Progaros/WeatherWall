@@ -56,13 +56,13 @@ class ButterflyEvent(random: Random) : RandomEvent {
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
-                      timeSeconds: Float, ambientColor: Int) {
+                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
         val px = parallaxCalculator.getOffsetXForDepth(0.7f)
         val py = parallaxCalculator.getOffsetYForDepth(0.7f)
         canvas.save()
         canvas.translate(px, py)
         
-        val currentX = x * width
+        val currentX = x * width - extendedOffset
         val currentY = y * height
         
         val flutter = sin(timeSeconds * 16f + flutterPhase) * 

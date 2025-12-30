@@ -32,15 +32,15 @@ class ShootingStarEvent(random: Random) : RandomEvent {
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
-                      timeSeconds: Float, ambientColor: Int) {
+                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
         val px = parallaxCalculator.getOffsetXForDepth(0.05f)
         val py = parallaxCalculator.getOffsetYForDepth(0.05f)
         canvas.save()
         canvas.translate(px, py)
         
-        val headX = (startX + cos(angle) * progress * 0.5f) * width
+        val headX = (startX + cos(angle) * progress * 0.5f) * width - extendedOffset
         val headY = (startY + sin(angle) * progress * 0.5f) * height
-        val tailX = (startX + cos(angle) * (progress - length) * 0.5f) * width
+        val tailX = (startX + cos(angle) * (progress - length) * 0.5f) * width - extendedOffset
         val tailY = (startY + sin(angle) * (progress - length) * 0.5f) * height
         
         trailPaint.shader = android.graphics.LinearGradient(

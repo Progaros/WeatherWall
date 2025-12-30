@@ -60,7 +60,7 @@ class BirdFlockEvent(random: Random) : RandomEvent {
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
-                      timeSeconds: Float, ambientColor: Int) {
+                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
         val px = parallaxCalculator.getOffsetXForDepth(0.4f)
         val py = parallaxCalculator.getOffsetYForDepth(0.4f)
         canvas.save()
@@ -70,7 +70,7 @@ class BirdFlockEvent(random: Random) : RandomEvent {
         strokePaint.style = Paint.Style.STROKE
         
         for (bird in birds) {
-            val birdX = (x + bird.offsetX) * width
+            val birdX = (x + bird.offsetX) * width - extendedOffset
             val birdY = (y + bird.offsetY) * height
             
             val wingY = if (flapping) {

@@ -29,13 +29,13 @@ class FoxEvent(random: Random) : RandomEvent {
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
-                      timeSeconds: Float, ambientColor: Int) {
+                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
         val px = parallaxCalculator.getOffsetXForDepth(-0.10f)
         val py = parallaxCalculator.getOffsetYForDepth(-0.10f)
         canvas.save()
         canvas.translate(px, py)
         
-        val cx = x * width
+        val cx = x * width - extendedOffset
         val cy = groundY * height
         val unit = minOf(width, height)
         val s = size * unit * 0.020f

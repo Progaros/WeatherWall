@@ -42,13 +42,13 @@ class HotAirBalloonEvent(random: Random) : RandomEvent {
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
-                      timeSeconds: Float, ambientColor: Int) {
+                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
         val px = parallaxCalculator.getOffsetXForDepth(0.6f)
         val py = parallaxCalculator.getOffsetYForDepth(0.6f)
         canvas.save()
         canvas.translate(px, py)
         
-        val currentX = progress * 1.2f * width
+        val currentX = progress * 1.2f * width - extendedOffset
         val bobOffset = sin(timeSeconds * 0.4f + bobPhase) * size * 0.15f
         val currentY = y * height + bobOffset
         

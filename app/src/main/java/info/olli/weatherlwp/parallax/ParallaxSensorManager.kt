@@ -35,6 +35,9 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         
         // Minimum movement threshold (stricter dead zone for tiny jitters)
         private const val MIN_VELOCITY = 0.01f
+        
+        // Minimum time between sensor event processing (ms) - throttle to ~30Hz max
+        private const val MIN_EVENT_INTERVAL_MS = 33L
     }
     
     interface Listener {
@@ -61,6 +64,9 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     private var prevX = 0f
     private var prevY = 0f
     
+    // Throttling: track last processed event time
+    private var lastEventTimeMs = 0L
+    
     private var initialized = false
     private var listener: Listener? = null
     private var isStarted = false
@@ -74,8 +80,11 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         }
         if (!isStarted) {
             initialized = false
+            lastEventTimeMs = 0L
             val sensorName = if (gravitySensor != null) "gravity" else "accelerometer (fallback)"
-            sensorManager.registerListener(this, activeSensor, SensorManager.SENSOR_DELAY_GAME)
+            // Use SENSOR_DELAY_UI (~60Hz) instead of SENSOR_DELAY_GAME (~50Hz) 
+            // for better battery efficiency with similar responsiveness
+            sensorManager.registerListener(this, activeSensor, SensorManager.SENSOR_DELAY_UI)
             isStarted = true
             Log.d(TAG, "Sensor started using $sensorName")
         }
@@ -88,10 +97,17 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             Log.d(TAG, "Sensor stopped")
         }
     }
+    
+    fun isRunning(): Boolean = isStarted
 
     override fun onSensorChanged(event: SensorEvent) {
         // Accept both TYPE_GRAVITY and TYPE_ACCELEROMETER (fallback)
         if (event.sensor.type != Sensor.TYPE_GRAVITY && event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
+
+        // Throttle: skip if events are coming too fast
+        val now = System.currentTimeMillis()
+        if (now - lastEventTimeMs < MIN_EVENT_INTERVAL_MS) return
+        lastEventTimeMs = now
 
         val rawX = event.values[0]
         val rawY = event.values[1]

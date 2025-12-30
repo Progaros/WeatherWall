@@ -30,13 +30,13 @@ class EagleEvent(random: Random) : RandomEvent {
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
-                      timeSeconds: Float, ambientColor: Int) {
+                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
         val px = parallaxCalculator.getOffsetXForDepth(0.3f)
         val py = parallaxCalculator.getOffsetYForDepth(0.3f)
         canvas.save()
         canvas.translate(px, py)
         
-        val currentX = -0.1f * width + 1.4f * width * progress
+        val currentX = -0.1f * width + 1.4f * width * progress - extendedOffset
         val soarOffset = sin(timeSeconds * 0.8f + soarPhase) * 0.02f
         val currentY = (baseY + soarOffset) * height
         

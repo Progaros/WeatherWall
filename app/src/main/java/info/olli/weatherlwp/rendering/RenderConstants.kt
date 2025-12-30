@@ -18,7 +18,43 @@ object RenderConstants {
     /** Reference aspect ratio for world-space calculations (9:16 portrait) */
     const val REFERENCE_ASPECT_RATIO = 0.5625f
     
-    /** World coordinate bounds for scene elements */
+    /** 
+     * Extended canvas width multiplier.
+     * Content is generated for a virtual canvas that is wider than the visible screen.
+     * This allows parallax to reveal content beyond the visible edges.
+     * 
+     * Extended width = max(screen width, screen height * EXTENDED_WIDTH_MULTIPLIER)
+     * In portrait: 4x height gives lots of horizontal content for parallax
+     * In landscape: Uses actual width since it's already wide
+     */
+    const val EXTENDED_WIDTH_MULTIPLIER = 4.0f
+    
+    /**
+     * Calculate the extended canvas width.
+     * Content (mountains, hills, trees, events) should be generated for this width.
+     * 
+     * @param screenWidth The actual visible screen width
+     * @param screenHeight The actual visible screen height
+     * @return The extended width for content generation
+     */
+    fun getExtendedWidth(screenWidth: Float, screenHeight: Float): Float {
+        // Extended width = height * multiplier, but at least actual screen width
+        return maxOf(screenWidth, screenHeight * EXTENDED_WIDTH_MULTIPLIER)
+    }
+    
+    /**
+     * Get the horizontal offset to center the extended canvas.
+     * Content at X=0 in extended space should appear at screen center.
+     * 
+     * @param screenWidth The actual visible screen width
+     * @param extendedWidth The extended canvas width
+     * @return The offset to subtract from extended X to get screen X
+     */
+    fun getExtendedOffset(screenWidth: Float, extendedWidth: Float): Float {
+        return (extendedWidth - screenWidth) / 2f
+    }
+    
+    /** World coordinate bounds for scene elements (deprecated - use extended width system) */
     const val WORLD_MIN_X = -4.0f
     const val WORLD_MAX_X = 5.0f
     const val WORLD_WIDTH = WORLD_MAX_X - WORLD_MIN_X

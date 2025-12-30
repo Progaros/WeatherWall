@@ -45,12 +45,16 @@ class CloudLayer(private val context: Context) : SceneLayer {
     private var width = 0f
     private var height = 0f
     
+    // Extended canvas dimensions for parallax content
+    private var extendedWidth = 0f
+    private var extendedOffset = 0f
+    
     /**
      * Cloud data with initial position.
      * Actual position is computed from initial + time * speed
      */
     private data class CloudData(
-        val initialX: Float,   // Starting X position
+        val initialX: Float,   // 0-1 across extended width
         val y: Float,          // Y position (doesn't change)
         val size: Float,
         val speed: Float,
@@ -80,15 +84,13 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val random = Random(randomSeed.toLong() + 3000)  // Offset from terrain
         
         for (i in 0 until cloudCount) {
-            val x = RenderConstants.WORLD_MIN_X + random.nextFloat() * RenderConstants.WORLD_WIDTH
+            // x is 0-1 across extended width
+            val x = random.nextFloat()
             val y = RenderConstants.CLOUD_Y_MIN + random.nextFloat() * RenderConstants.CLOUD_Y_RANGE
             val size = RenderConstants.CLOUD_SIZE_MIN + random.nextFloat() * RenderConstants.CLOUD_SIZE_RANGE
             // Base speed - smaller clouds move faster (further away)
             val speed = RenderConstants.CLOUD_SPEED_BASE + (1f - size / 0.33f) * RenderConstants.CLOUD_SPEED_RANGE
             // Alpha based on size and opacity setting
-            // Small clouds (far/thin) are more transparent
-            // Large clouds (near/thick) are more opaque
-            // cloudOpacity scales the final alpha (0.1 = very see-through, 1.0 = solid)
             val baseAlpha = (10 + size * 150).toInt()  // 10-60 range before opacity
             val alpha = (baseAlpha * cloudOpacity).toInt().coerceIn(5, 100)
             // Horizontal elongation - base from setting, with random variation
@@ -104,6 +106,11 @@ class CloudLayer(private val context: Context) : SceneLayer {
     override fun resize(w: Float, h: Float) {
         width = w
         height = h
+        // Calculate extended width for parallax content
+        extendedWidth = RenderConstants.getExtendedWidth(w, h)
+        extendedOffset = RenderConstants.getExtendedOffset(w, extendedWidth)
+        // Regenerate clouds for new dimensions
+        generateClouds()
     }
 
     override fun update(state: SimulationState, deltaTimeMs: Long) {
@@ -125,7 +132,6 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val currentClouds = clouds
         if (currentClouds.isEmpty()) return
         
-        val scaleX = height * RenderConstants.REFERENCE_ASPECT_RATIO
         val px = parallaxCalculator.getOffsetXForDepth(RenderConstants.PARALLAX_CLOUDS)
         val py = parallaxCalculator.getOffsetYForDepth(RenderConstants.PARALLAX_CLOUDS)
         
@@ -159,14 +165,16 @@ class CloudLayer(private val context: Context) : SceneLayer {
             paint.alpha = cloud.alpha
             
             // Calculate cloud X position based on time
+            // Cloud wraps around extended width
             val timeOffset = state.timeSeconds * cloud.speed * windSpeed
-            var cloudX = cloud.initialX + timeOffset
+            var cloudX = cloud.initialX + timeOffset / extendedWidth * 0.1f  // Slow wrap
             
             // Wrap around when cloud moves past the right edge
-            cloudX = RenderConstants.WORLD_MIN_X + 
-                ((cloudX - RenderConstants.WORLD_MIN_X) % RenderConstants.WORLD_WIDTH + RenderConstants.WORLD_WIDTH) % RenderConstants.WORLD_WIDTH
+            cloudX = cloudX % 1f
+            if (cloudX < 0) cloudX += 1f
             
-            val cx = (cloudX - 0.5f) * scaleX + width / 2f
+            // Convert 0-1 to screen coordinates
+            val cx = cloudX * extendedWidth - extendedOffset
             val cy = cloud.y * height
             val cSize = cloud.size * height * 0.5f
             

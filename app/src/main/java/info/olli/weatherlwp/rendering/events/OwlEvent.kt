@@ -46,13 +46,13 @@ class OwlEvent(random: Random) : RandomEvent {
     override fun draw(
         canvas: Canvas, paint: Paint, strokePaint: Paint,
         parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
-        timeSeconds: Float, ambientColor: Int
+        timeSeconds: Float, ambientColor: Int, extendedOffset: Float
     ) {
         val px = parallaxCalculator.getOffsetXForDepth(0.25f)
         val py = parallaxCalculator.getOffsetYForDepth(0.25f)
 
         val eased = smoothstep01((progress + 0.15f) / 1.15f) // nicer entry/exit pacing
-        val currentX = (-0.2f + eased * 1.4f) * width
+        val currentX = (-0.2f + eased * 1.4f) * width - extendedOffset
         val baseY = y * height
         val bob = sin(localTime * 0.7f + bobPhase) * size * 0.06f
         val currentY = baseY + bob

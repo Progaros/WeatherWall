@@ -36,6 +36,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private var width = 0f
     private var height = 0f
     
+    // Extended canvas dimensions for parallax content
+    private var extendedWidth = 0f
+    private var extendedOffset = 0f  // Offset to center extended content
+    
     // Data structures (immutable after creation)
     private data class HillData(
         val controlPoints: List<Float>,
@@ -45,7 +49,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     )
     
     private data class TreeData(
-        val xRatio: Float,
+        val xRatio: Float,    // 0-1 across extended width
         val yRatio: Float,
         val scale: Float,
         val depthFactor: Float,
@@ -188,14 +192,16 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private fun generateTrees() {
         // Take snapshot of hills for tree placement (thread-safe read)
         val currentHills = hills
-        if (currentHills.isEmpty() || treeDensity <= 0) {
+        if (currentHills.isEmpty() || treeDensity <= 0 || extendedWidth <= 0) {
             trees = emptyList()
             return
         }
         
-        // Calculate tree count from density (0-100 -> 0-250 trees for full coverage)
-        val maxTrees = 250
-        val treeCount = (treeDensity * maxTrees / 100f).toInt()
+        // Calculate tree count based on density and extended width
+        // More width = more trees to maintain density
+        val widthRatio = extendedWidth / (height * RenderConstants.REFERENCE_ASPECT_RATIO).coerceAtLeast(1f)
+        val baseTrees = 100  // Base number for standard density
+        val treeCount = ((treeDensity / 100f) * baseTrees * widthRatio).toInt().coerceIn(0, 500)
         if (treeCount <= 0) {
             trees = emptyList()
             return
@@ -233,41 +239,27 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 peakPositions.add(0.75f)
             }
             
-            // Place trees along the hill line
+            // Place trees along the extended width
             for (t in 0 until hillTreeCount) {
                 // Apply sparsity: randomly skip some tree positions to create gaps
                 if (random.nextFloat() < treeSparsity) {
                     continue  // Skip this tree (creates a gap)
                 }
                 
-                // Distribute trees along the visible X range
-                // At treeSpread=0: cluster near peaks only
-                // At treeSpread=1: spread across entire hill
+                // xRatio is 0-1 across the extended width
                 val xRatio: Float
                 if (treeSpread < 0.1f) {
                     // Very low spread: only on peaks with tiny scatter
                     val peakX = peakPositions[random.nextInt(peakPositions.size)]
-                    val hillWorldStart = RenderConstants.WORLD_MIN_X - 1.0f
-                    val hillWorldEnd = RenderConstants.WORLD_MAX_X + 0.5f
-                    val hillWorldWidth = hillWorldEnd - hillWorldStart
-                    val worldX = hillWorldStart + peakX * hillWorldWidth
-                    xRatio = (worldX + 0.5f + (random.nextFloat() - 0.5f) * 0.05f).coerceIn(-0.3f, 1.3f)
+                    xRatio = (peakX + (random.nextFloat() - 0.5f) * 0.05f).coerceIn(0f, 1f)
                 } else {
-                    // Normal spread: distribute along visible range
-                    // Base position: evenly spaced with random jitter
+                    // Normal spread: distribute along entire extended width
                     val baseSpacing = 1.0f / hillTreeCount
                     val baseX = t * baseSpacing + random.nextFloat() * baseSpacing
                     
                     // At low spread, bias toward peaks; at high spread, allow full range
                     val nearestPeak = peakPositions.minByOrNull { kotlin.math.abs(it - baseX) } ?: 0.5f
-                    val blendedX = nearestPeak + (baseX - nearestPeak) * treeSpread
-                    
-                    // Convert to screen space
-                    val hillWorldStart = RenderConstants.WORLD_MIN_X - 1.0f
-                    val hillWorldEnd = RenderConstants.WORLD_MAX_X + 0.5f
-                    val hillWorldWidth = hillWorldEnd - hillWorldStart
-                    val worldX = hillWorldStart + blendedX * hillWorldWidth
-                    xRatio = (worldX + 0.5f).coerceIn(-0.3f, 1.3f)
+                    xRatio = (nearestPeak + (baseX - nearestPeak) * treeSpread).coerceIn(0f, 1f)
                 }
                 
                 // Get the hill surface Y at this X position
@@ -307,29 +299,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val points = hill.controlPoints
         if (points.isEmpty()) return hill.heightOffset
         
-        // Tree xRatio is in screen space: -0.3 to 1.3 (centered at 0.5)
-        // Hill drawing uses world coordinates: WORLD_MIN_X - 1.0 to WORLD_MAX_X + 0.5
-        // We need to map tree screen space to the same normalized range as hill drawing
-        
-        // Hill drawing spans from (WORLD_MIN_X - 1.0) to (WORLD_MAX_X + 0.5) = -5.0 to 5.5
-        // That's a total width of 10.5 world units
-        val hillWorldStart = RenderConstants.WORLD_MIN_X - 1.0f  // -5.0
-        val hillWorldEnd = RenderConstants.WORLD_MAX_X + 0.5f    // 5.5
-        val hillWorldWidth = hillWorldEnd - hillWorldStart        // 10.5
-        
-        // Tree drawing uses: x = (xRatio - 0.5) * scaleX + width/2
-        // This maps xRatio to screen coordinates
-        // scaleX = height * REFERENCE_ASPECT_RATIO, so normalized:
-        // At xRatio = 0.5 -> world X = 0
-        // At xRatio = 0.0 -> world X = -0.5
-        // At xRatio = 1.0 -> world X = 0.5
-        // So tree xRatio maps to world X as: worldX = xRatio - 0.5
-        val worldX = xRatio - 0.5f
-        
-        // Now normalize worldX relative to hill world range
-        val normalizedX = (worldX - hillWorldStart) / hillWorldWidth
-        
-        val indexFloat = normalizedX * (points.size - 1)
+        // xRatio is 0-1 across the extended width (matches hill control points)
+        // Simply interpolate along the points array
+        val indexFloat = xRatio * (points.size - 1)
         val index = indexFloat.toInt().coerceIn(0, points.size - 2)
         val fraction = indexFloat - index
         
@@ -343,6 +315,11 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     override fun resize(w: Float, h: Float) {
         width = w
         height = h
+        // Calculate extended width for parallax content
+        extendedWidth = RenderConstants.getExtendedWidth(w, h)
+        extendedOffset = RenderConstants.getExtendedOffset(w, extendedWidth)
+        // Regenerate terrain for new dimensions
+        generateTerrain()
     }
 
     override fun update(state: SimulationState, deltaTimeMs: Long) {
@@ -355,8 +332,6 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // Take local snapshots for thread-safe iteration
         val currentHills = hills
         val currentTrees = trees
-        
-        val scaleX = height * RenderConstants.REFERENCE_ASPECT_RATIO
         
         // Get ambient color for current time of day (global tint system)
         val ambientColor = RenderConstants.getAmbientColor(
@@ -373,7 +348,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             // Blend with ambient color based on depth (distant hills blend more)
             val blendAmount = RenderConstants.applyAmbientTint(hill.dayColor, ambientColor, hill.depthFactor)
             val hillColor = RenderConstants.blendWithAmbient(hill.dayColor, ambientColor, blendAmount)
-            drawHill(canvas, hill, scaleX, hillColor)
+            drawHill(canvas, hill, hillColor)
             
             canvas.restore()
         }
@@ -398,21 +373,22 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             }
             val blendAmount = RenderConstants.applyAmbientTint(tree.dayColor, ambientColor, normalizedDepth) * timeMultiplier
             treePaint.color = RenderConstants.blendWithAmbient(tree.dayColor, ambientColor, blendAmount)
-            drawTree(canvas, tree, scaleX, state)
+            drawTree(canvas, tree, state)
             
             canvas.restore()
         }
     }
     
-    private fun drawHill(canvas: Canvas, hill: HillData, scaleX: Float, hillColor: Int) {
+    private fun drawHill(canvas: Canvas, hill: HillData, hillColor: Int) {
         hillPath.reset()
         
-        // Extend hills beyond screen for parallax movement
-        // Extra margin on all sides to prevent visible edges during parallax
-        val parallaxMargin = height * 0.3f  // 30% extra for parallax movement
+        // Use extended width for hill drawing
+        // Hills span the full extended canvas width, centered on screen
+        val parallaxMargin = height * 0.3f  // Extra for parallax movement at bottom
         
-        val startX = (RenderConstants.WORLD_MIN_X - 1.0f) * scaleX + width / 2f  // Extra left margin
-        val endX = (RenderConstants.WORLD_MAX_X + 0.5f) * scaleX + width / 2f    // Extra right margin
+        // Map hill points across the extended width, centered on screen
+        val startX = -extendedOffset - width * 0.1f  // Start before visible area
+        val endX = width + extendedOffset + width * 0.1f  // End after visible area
         val stepX = (endX - startX) / (hill.controlPoints.size - 1)
         val bottomY = height + parallaxMargin  // Extend below screen
         
@@ -447,8 +423,12 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         hillPaint.shader = null
     }
     
-    private fun drawTree(canvas: Canvas, tree: TreeData, scaleX: Float, state: SimulationState) {
-        val x = (tree.xRatio - 0.5f) * scaleX + width / 2f
+    private fun drawTree(canvas: Canvas, tree: TreeData, state: SimulationState) {
+        // xRatio is 0-1 across extended width, convert to screen coordinates
+        // xRatio=0 is left edge of extended canvas, xRatio=1 is right edge
+        // Screen center corresponds to xRatio=0.5 when extendedWidth == width
+        val x = tree.xRatio * extendedWidth - extendedOffset
+        
         // yRatio is the ground level where tree BASE sits
         val groundY = tree.yRatio * height
         

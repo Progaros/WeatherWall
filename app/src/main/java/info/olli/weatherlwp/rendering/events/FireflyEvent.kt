@@ -42,7 +42,7 @@ class FireflyEvent(random: Random) : RandomEvent {
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
-                      timeSeconds: Float, ambientColor: Int) {
+                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
         // Use foreground depth for parallax (matches hill foreground)
         val px = parallaxCalculator.getOffsetXForDepth(0.02f)
         val py = parallaxCalculator.getOffsetYForDepth(0.02f)
@@ -50,7 +50,7 @@ class FireflyEvent(random: Random) : RandomEvent {
         canvas.translate(px, py)
         
         for (fly in flies) {
-            val x = (baseX + fly.currentOffsetX) * width
+            val x = (baseX + fly.currentOffsetX) * width - extendedOffset
             val y = (baseY + fly.currentOffsetY) * height
             
             val flicker = sin(timeSeconds * fly.speed * 3f + fly.phase)

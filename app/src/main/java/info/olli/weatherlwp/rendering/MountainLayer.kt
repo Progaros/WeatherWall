@@ -45,12 +45,16 @@ class MountainLayer(private val context: Context) : SceneLayer {
     private var width = 0f
     private var height = 0f
     
+    // Extended canvas dimensions for parallax content
+    private var extendedWidth = 0f
+    private var extendedOffset = 0f
+    
     // Cached haze gradient to avoid per-frame allocation
     private var cachedHazeAmbient = 0
     private var cachedHazeHeight = 0f
     
     private data class MountainData(
-        val peakX: Float,      // 0.0 to 1.0 (relative to screen width)
+        val peakX: Float,      // 0.0 to 1.0 (relative to extended width)
         val height: Float,     // 0.0 to 1.0 (relative to screen height)
         val width: Float,      // Width multiplier
         val dayColor: Int,     // Color during day
@@ -87,8 +91,8 @@ class MountainLayer(private val context: Context) : SceneLayer {
             val depthFactor = RenderConstants.PARALLAX_MOUNTAIN_MIN + 
                 depth * (RenderConstants.PARALLAX_MOUNTAIN_MAX - RenderConstants.PARALLAX_MOUNTAIN_MIN)
             
-            // Position: spread across width
-            val peakX = -0.2f + random.nextFloat() * RenderConstants.MOUNTAIN_PEAK_SPREAD
+            // Position: spread across extended width (0-1 range)
+            val peakX = random.nextFloat()
             
             // Height: varies by scale setting
             val h = (RenderConstants.MOUNTAIN_HEIGHT_MIN + random.nextFloat() * RenderConstants.MOUNTAIN_HEIGHT_RANGE) * mountainHeightScale
@@ -114,6 +118,11 @@ class MountainLayer(private val context: Context) : SceneLayer {
     override fun resize(w: Float, h: Float) {
         width = w
         height = h
+        // Calculate extended width for parallax content
+        extendedWidth = RenderConstants.getExtendedWidth(w, h)
+        extendedOffset = RenderConstants.getExtendedOffset(w, extendedWidth)
+        // Regenerate mountains for new dimensions
+        generateMountains()
     }
 
     override fun update(state: SimulationState, deltaTimeMs: Long) {
@@ -125,8 +134,6 @@ class MountainLayer(private val context: Context) : SceneLayer {
         
         // Take local snapshot for thread-safe iteration
         val currentMountains = mountains
-        
-        val scaleX = height * RenderConstants.REFERENCE_ASPECT_RATIO
         
         // Get ambient color for atmospheric blending
         val ambientColor = RenderConstants.getAmbientColor(
@@ -140,7 +147,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
             canvas.save()
             canvas.translate(px, py)
             
-            drawMountain(canvas, mountain, scaleX, state.isNight, ambientColor)
+            drawMountain(canvas, mountain, state.isNight, ambientColor)
             
             canvas.restore()
         }
@@ -185,14 +192,16 @@ class MountainLayer(private val context: Context) : SceneLayer {
     }
     
     @Suppress("UNUSED_PARAMETER")
-    private fun drawMountain(canvas: Canvas, mountain: MountainData, scaleX: Float, isNight: Boolean, ambientColor: Int) {
+    private fun drawMountain(canvas: Canvas, mountain: MountainData, isNight: Boolean, ambientColor: Int) {
         pathLeft.reset()
         pathRight.reset()
         
-        val peakCenterX = (mountain.peakX - 0.5f) * scaleX + width / 2f
+        // Convert from 0-1 extended space to screen coordinates
+        val peakCenterX = mountain.peakX * extendedWidth - extendedOffset
         val peakY = height * (1f - mountain.height)
         val baseY = height
-        val halfWidthPx = scaleX * mountain.width * 0.5f
+        // Scale width based on extended width for consistent look
+        val halfWidthPx = extendedWidth * mountain.width * 0.15f
         
         // Generate jagged shape
         val random = Random(mountain.shapeSeed)

@@ -33,13 +33,13 @@ class AirplaneEvent(random: Random) : RandomEvent {
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
-                      timeSeconds: Float, ambientColor: Int) {
+                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
         val px = parallaxCalculator.getOffsetXForDepth(0.1f)
         val py = parallaxCalculator.getOffsetYForDepth(0.1f)
         canvas.save()
         canvas.translate(px, py)
         
-        val currentX = -0.1f * width + 1.3f * width * progress
+        val currentX = -0.1f * width + 1.3f * width * progress - extendedOffset
         val currentY = y * height
         
         // Contrail with gradient fade

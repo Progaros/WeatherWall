@@ -29,7 +29,14 @@ interface RandomEvent {
         get() = EventLayer.GROUND
     
     fun update(deltaTimeMs: Long, state: SimulationState, width: Float, height: Float): Boolean
+    
+    /**
+     * Draw the event.
+     * @param width Extended canvas width (for parallax content spanning beyond screen)
+     * @param height Screen height
+     * @param extendedOffset Offset to center content (subtract from X to convert extended coords to screen coords)
+     */
     fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint, 
              parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
-             timeSeconds: Float, ambientColor: Int)
+             timeSeconds: Float, ambientColor: Int, extendedOffset: Float = 0f)
 }

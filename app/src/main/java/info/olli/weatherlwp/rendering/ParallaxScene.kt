@@ -197,6 +197,19 @@ class ParallaxScene(
         try {
             val parallaxEnabled = prefs.getBoolean("pref_parallax_enabled", true)
             
+            // Start/stop sensor based on parallax enabled state
+            // This saves significant battery/CPU when parallax is disabled
+            if (parallaxEnabled) {
+                if (!sensor.isRunning()) {
+                    sensor.start()
+                }
+            } else {
+                if (sensor.isRunning()) {
+                    sensor.stop()
+                    parallaxCalculator.reset()  // Reset to center when disabled
+                }
+            }
+            
             // Input sensitivity: slider 0-50 maps to 0-2 (more subtle range)
             // User feedback: best feel around value 1-2
             // Default 25 = 1.0x (centered, natural feel)
