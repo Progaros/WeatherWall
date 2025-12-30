@@ -126,12 +126,12 @@ object RenderConstants {
     // ============== Animation Speeds ==============
     
     /** Wind effect on cloud speed multiplier */
-    const val WIND_CLOUD_SPEED_MIN = 0.5f
-    const val WIND_CLOUD_SPEED_MAX = 2.5f
+    const val WIND_CLOUD_SPEED_MIN = 0.2f
+    const val WIND_CLOUD_SPEED_MAX = 8.0f   // Increased for more dramatic high wind
     
     /** Tree sway animation parameters */
     const val TREE_SWAY_FREQUENCY = 2.0f
-    const val TREE_SWAY_AMPLITUDE = 0.12f  // Increased from 0.05f for more visible sway
+    const val TREE_SWAY_AMPLITUDE = 0.25f  // Increased for more visible sway at high wind
     
     /** Star twinkle animation */
     const val STAR_TWINKLE_SPEED = 0.001f
@@ -163,8 +163,8 @@ object RenderConstants {
     const val CLOUD_Y_RANGE = 0.35f
     const val CLOUD_SIZE_MIN = 0.08f
     const val CLOUD_SIZE_RANGE = 0.25f
-    const val CLOUD_SPEED_BASE = 0.05f
-    const val CLOUD_SPEED_RANGE = 0.1f
+    const val CLOUD_SPEED_BASE = 0.15f   // Increased for visible movement
+    const val CLOUD_SPEED_RANGE = 0.25f  // More speed variation
     
     // ============== Atmospheric Haze ==============
     

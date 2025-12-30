@@ -66,9 +66,9 @@
         <SeekBarPreference
             android:key="pref_hill_count"
             android:title="Hill Layers"
-            android:summary="Rolling terrain layers (0-50)"
-            android:defaultValue="10"
-            android:max="50"
+            android:summary="Rolling terrain layers (0-10)"
+            android:defaultValue="2"
+            android:max="10"
             app:min="0"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
@@ -100,6 +100,26 @@
             android:defaultValue="100"
             android:max="200"
             app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_hill_amplitude"
+            android:title="Hill Amplitude"
+            android:summary="Hill height (10=low, 100=normal, 200=tall)"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="10"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_hill_frequency"
+            android:title="Hill Frequency"
+            android:summary="Hills visible per layer (10=1, 20=2, 50=5)"
+            android:defaultValue="20"
+            android:max="50"
+            app:min="10"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
 
@@ -186,8 +206,8 @@
 
         <SeekBarPreference
             android:key="pref_parallax_return_speed"
-            android:title="Return Speed"
-            android:summary="How quickly the scene recenters"
+            android:title="Return Time"
+            android:summary="Time to recenter: 1=instant, 50=1s, 100=5s (log scale)"
             android:defaultValue="50"
             android:max="100"
             app:min="1"
@@ -229,9 +249,9 @@
         <SeekBarPreference
             android:key="pref_cloud_density"
             android:title="Cloud Density"
-            android:summary="Number of clouds (0-50)"
-            android:defaultValue="15"
-            android:max="50"
+            android:summary="Multiplier on weather clouds (0=none, 100=normal, 200=double)"
+            android:defaultValue="100"
+            android:max="200"
             app:min="0"
             app:showSeekBarValue="true"
             app:updatesContinuously="true"

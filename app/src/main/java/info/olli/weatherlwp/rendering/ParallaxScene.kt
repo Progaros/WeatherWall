@@ -168,9 +168,15 @@ class ParallaxScene(
             // Max offset slider: 5..200 px (default 80)
             parallaxMaxOffsetPx = (prefs.getInt("pref_parallax_max_offset", 80)).toFloat().coerceIn(5f, 200f)
             
-            // Return speed slider: map 1..100 -> 0.005f..0.05f (faster return = lower center drift)
-            val returnSpeed = prefs.getInt("pref_parallax_return_speed", 50).coerceIn(1, 100)
-            parallaxReturnRate = 0.005f + (returnSpeed / 100f) * 0.045f
+            // Return speed slider: 1..100 represents 0-5 seconds return time (log scale)
+            // Slider value 1 = ~0 seconds (instant), 100 = ~5 seconds
+            // At 60fps, we calculate drift rate to reach ~95% reduction in target time
+            // Formula: driftRate = 1 - 0.05^(1/frames) where frames = seconds * 60
+            val returnSpeedVal = prefs.getInt("pref_parallax_return_speed", 50).coerceIn(1, 100)
+            // Log scale: 1->0.1s, 50->1s, 100->5s (exponential mapping)
+            val returnSeconds = 0.1 * Math.pow(50.0, returnSpeedVal.toDouble() / 100.0)  // 0.1 to 5.0 seconds
+            val returnFrames = (returnSeconds * 60.0).coerceAtLeast(1.0)
+            parallaxReturnRate = (1.0 - Math.pow(0.05, 1.0 / returnFrames)).toFloat()
             
             // Smoothing slider: map 1..100 -> 0.1f..0.9f (filter strength)
             // Higher = more filtering = smoother but slower response

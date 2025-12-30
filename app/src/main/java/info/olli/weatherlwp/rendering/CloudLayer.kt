@@ -66,7 +66,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
     private var cloudCount = 10
     private var cloudStretch = 2.0f  // Horizontal stretch multiplier (1.0 = normal, 2.0 = wispy)
     private var cloudOpacity = 0.4f  // Base opacity multiplier (0-1)
-    private var manualDensity = -1   // -1 = use SimulationState, 0+ = manual setting
+    private var densityMultiplier = 1.0f  // Multiplier on weather-based cloud count (0-2)
+    private var cloudsEnabled = true
     private var randomSeed = 42
     
     init {
@@ -110,10 +111,11 @@ class CloudLayer(private val context: Context) : SceneLayer {
     }
 
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
-        if (width <= 0 || height <= 0) return
+        if (width <= 0 || height <= 0 || !cloudsEnabled) return
         
-        // Use manual density if set, otherwise use simulation state
-        val targetCount = if (manualDensity >= 0) manualDensity else state.getCloudCount()
+        // Cloud count = weather-based count * user multiplier
+        val baseCount = state.getCloudCount()
+        val targetCount = (baseCount * densityMultiplier).toInt().coerceAtLeast(0)
         if (targetCount != cloudCount) {
             cloudCount = targetCount
             generateClouds()
@@ -197,7 +199,12 @@ class CloudLayer(private val context: Context) : SceneLayer {
 
     override fun reloadSettings() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        val enabled = prefs.getBoolean("pref_clouds_enabled", true)
+        
+        // Cloud enable/disable switch
+        val newEnabled = prefs.getBoolean("pref_clouds_enabled", true)
+        val enabledChanged = newEnabled != cloudsEnabled
+        cloudsEnabled = newEnabled
+        
         // Random seed for consistent placement
         val newSeed = prefs.getInt("pref_random_seed", 42)
         val seedChanged = newSeed != randomSeed
@@ -211,10 +218,12 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val opacityVal = prefs.getInt("pref_cloud_opacity", 40)
         val newOpacity = opacityVal / 100f
         
-        // Manual cloud density: 0-50 (used directly as cloud count)
-        val densityVal = prefs.getInt("pref_cloud_density", 15)
-        val densityChanged = densityVal != manualDensity
-        manualDensity = densityVal
+        // Density multiplier: 0-200 -> 0.0-2.0 (multiplies weather-based count)
+        // 0 = no clouds, 100 = normal weather-based, 200 = double
+        val densityVal = prefs.getInt("pref_cloud_density", 100)
+        val newMultiplier = densityVal / 100f
+        val multiplierChanged = kotlin.math.abs(newMultiplier - densityMultiplier) > 0.01f
+        densityMultiplier = newMultiplier
         
         // Detect changes that require regeneration
         val stretchChanged = kotlin.math.abs(newStretch - cloudStretch) > 0.01f
@@ -222,15 +231,13 @@ class CloudLayer(private val context: Context) : SceneLayer {
         cloudStretch = newStretch
         cloudOpacity = newOpacity
         
-        if (!enabled) {
+        if (!cloudsEnabled) {
             cloudCount = 0
             clouds = emptyList()  // Thread-safe: atomic reference swap
-        } else if (stretchChanged || seedChanged || opacityChanged || densityChanged) {
-            // Regenerate clouds with new settings
-            cloudCount = manualDensity
+        } else if (enabledChanged || stretchChanged || seedChanged || opacityChanged || multiplierChanged) {
+            // Regenerate clouds with new settings - count will be recalculated in draw()
             generateClouds()
         }
-        // Debug logging removed for performance
     }
 
     override fun destroy() {
