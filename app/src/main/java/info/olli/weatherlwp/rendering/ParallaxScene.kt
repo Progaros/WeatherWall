@@ -129,10 +129,35 @@ class ParallaxScene(
             }
             weatherLayer.update(state, 16)
             
-            // Draw layers (canvas already cleared by caller)
+            // Draw layers in proper order with events at correct depths:
+            // 1. Sky (gradient)
+            // 2. Clouds 
+            // 3. FAR SKY events (shooting stars, balloons, UFOs) - behind mountains
+            // 4. Mountains
+            // 5. MID SKY events (birds, planes, eagles) - in front of mountains
+            // 6. Terrain (hills + trees)
+            // 7. GROUND events (foxes, rabbits, etc.) - in front of terrain
             for (layer in layers) {
                 try {
+                    // Skip randomEventLayer in normal iteration - we draw it specially
+                    if (layer === randomEventLayer) continue
+                    
+                    // Before drawing mountainLayer, draw far sky events
+                    if (layer === mountainLayer) {
+                        randomEventLayer.drawFarSkyEvents(canvas, state, parallaxCalculator)
+                    }
+                    
                     layer.draw(canvas, state, parallaxCalculator)
+                    
+                    // After drawing mountainLayer, draw mid sky events (birds, planes, eagles)
+                    if (layer === mountainLayer) {
+                        randomEventLayer.drawMidSkyEvents(canvas, state, parallaxCalculator)
+                    }
+                    
+                    // After drawing terrainLayer, draw ground events (foxes, rabbits, etc.)
+                    if (layer === terrainLayer) {
+                        randomEventLayer.drawGroundEvents(canvas, state, parallaxCalculator)
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error drawing layer ${layer.javaClass.simpleName}", e)
                 }

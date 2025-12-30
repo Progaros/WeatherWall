@@ -14,6 +14,8 @@ import kotlin.random.Random
  * Hot Air Balloon - Day only, slow drift in far background
  */
 class HotAirBalloonEvent(random: Random) : RandomEvent {
+    override val layer = EventLayer.MID_SKY  // In front of mountains
+    
     private var progress = -0.1f
     private val y = 0.12f + random.nextFloat() * 0.15f
     private val speed = 0.00003f + random.nextFloat() * 0.00002f

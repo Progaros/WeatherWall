@@ -14,6 +14,8 @@ import kotlin.random.Random
  * Eagle with majestic soaring silhouette
  */
 class EagleEvent(random: Random) : RandomEvent {
+    override val layer = EventLayer.MID_SKY  // In front of mountains, between clouds and terrain
+    
     private var progress = -0.1f
     private val baseY = 0.2f + random.nextFloat() * 0.15f
     private val speed = 0.0001f + random.nextFloat() * 0.00008f

@@ -63,7 +63,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private var treeSizeScale = 1.0f
     private var treeWidthScale = 1.0f
     private var treeSizeRandomness = 0.3f  // 0-1, how much size varies between trees
-    private var treeSpread = 0.5f         // 0-1, how far down hills trees spread
+    private var treeSpread = 0.8f         // 0-1, how far along hills trees spread (0=peaks, 1=full)
+    private var treeSparsity = 0.3f       // 0-1, gap probability between trees (0=dense, 1=sparse)
     private var hillStartY = 0.50f
     private var hillEndY = 0.85f
     private var treeColorVariation = 1.0f
@@ -192,8 +193,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             return
         }
         
-        // Calculate tree count from density (0-100 -> 0-150 trees)
-        val maxTrees = 150
+        // Calculate tree count from density (0-100 -> 0-250 trees for full coverage)
+        val maxTrees = 250
         val treeCount = (treeDensity * maxTrees / 100f).toInt()
         if (treeCount <= 0) {
             trees = emptyList()
@@ -204,73 +205,73 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val newTrees = ArrayList<TreeData>(treeCount)
         val random = Random(randomSeed.toLong() + 2000)  // Offset from hills
         
-        // Find peak positions (local maxima) for each hill
-        // Peaks are where height values are higher than neighbors
-        val hillPeaks = currentHills.map { hill ->
-            val points = hill.controlPoints
-            val peaks = mutableListOf<Float>()
-            if (points.size >= 3) {
-                for (j in 1 until points.size - 1) {
-                    // Check if this point is higher (lower Y value) than neighbors
-                    if (points[j] > points[j - 1] && points[j] > points[j + 1]) {
-                        // Convert point index to x position ratio
-                        // Hills span from WORLD_MIN_X - 1.0 to WORLD_MAX_X + 0.5
-                        val hillWorldStart = RenderConstants.WORLD_MIN_X - 1.0f
-                        val hillWorldEnd = RenderConstants.WORLD_MAX_X + 0.5f
-                        val hillWorldWidth = hillWorldEnd - hillWorldStart
-                        
-                        val normalizedX = j.toFloat() / (points.size - 1)
-                        val worldX = hillWorldStart + normalizedX * hillWorldWidth
-                        // Convert world X to screen xRatio (worldX = xRatio - 0.5)
-                        val xRatio = worldX + 0.5f
-                        
-                        // Only include peaks in visible range
-                        if (xRatio in 0f..1f) {
-                            peaks.add(xRatio)
-                        }
-                    }
-                }
-            }
-            // Fallback: if no peaks found, use center positions
-            if (peaks.isEmpty()) {
-                peaks.add(0.25f)
-                peaks.add(0.5f)
-                peaks.add(0.75f)
-            }
-            peaks
-        }
-        
-        // Distribute trees across all hills proportionally
-        val treesPerHill = (treeCount.toFloat() / currentHills.size).toInt().coerceAtLeast(1)
+        // Calculate number of trees per hill (more on foreground hills)
+        val treesPerHill = (treeCount.toFloat() / currentHills.size).toInt().coerceAtLeast(3)
         
         for (hillIndex in currentHills.indices) {
             val hill = currentHills[hillIndex]
-            val peaks = hillPeaks[hillIndex]
+            val depthFactor = hill.depthFactor
             
-            // Trees per this hill (distribute extras to foreground hills)
-            val extraTrees = if (hillIndex >= currentHills.size - 2) 2 else 0  // More trees on foreground
+            // More trees on foreground hills
+            val extraTrees = if (hillIndex >= currentHills.size - 2) 5 else 0
             val hillTreeCount = (treesPerHill + extraTrees).coerceAtMost(treeCount - newTrees.size)
             
+            // Find peak positions for reference (to determine "upper" parts of hill)
+            val points = hill.controlPoints
+            val peakPositions = mutableListOf<Float>()
+            if (points.size >= 3) {
+                for (j in 1 until points.size - 1) {
+                    if (points[j] > points[j - 1] && points[j] > points[j + 1]) {
+                        val normalizedX = j.toFloat() / (points.size - 1)
+                        peakPositions.add(normalizedX)
+                    }
+                }
+            }
+            if (peakPositions.isEmpty()) {
+                peakPositions.add(0.25f)
+                peakPositions.add(0.5f)
+                peakPositions.add(0.75f)
+            }
+            
+            // Place trees along the hill line
             for (t in 0 until hillTreeCount) {
-                // Pick a random peak for this tree
-                val peakX = peaks[random.nextInt(peaks.size)]
+                // Apply sparsity: randomly skip some tree positions to create gaps
+                if (random.nextFloat() < treeSparsity) {
+                    continue  // Skip this tree (creates a gap)
+                }
                 
-                // Small horizontal scatter near peak (just for natural variation)
-                val horizontalScatter = (random.nextFloat() - 0.5f) * 0.08f
-                val xRatio = (peakX + horizontalScatter).coerceIn(-0.3f, 1.3f)
+                // Distribute trees along the visible X range
+                // At treeSpread=0: cluster near peaks only
+                // At treeSpread=1: spread across entire hill
+                val xRatio: Float
+                if (treeSpread < 0.1f) {
+                    // Very low spread: only on peaks with tiny scatter
+                    val peakX = peakPositions[random.nextInt(peakPositions.size)]
+                    val hillWorldStart = RenderConstants.WORLD_MIN_X - 1.0f
+                    val hillWorldEnd = RenderConstants.WORLD_MAX_X + 0.5f
+                    val hillWorldWidth = hillWorldEnd - hillWorldStart
+                    val worldX = hillWorldStart + peakX * hillWorldWidth
+                    xRatio = (worldX + 0.5f + (random.nextFloat() - 0.5f) * 0.05f).coerceIn(-0.3f, 1.3f)
+                } else {
+                    // Normal spread: distribute along visible range
+                    // Base position: evenly spaced with random jitter
+                    val baseSpacing = 1.0f / hillTreeCount
+                    val baseX = t * baseSpacing + random.nextFloat() * baseSpacing
+                    
+                    // At low spread, bias toward peaks; at high spread, allow full range
+                    val nearestPeak = peakPositions.minByOrNull { kotlin.math.abs(it - baseX) } ?: 0.5f
+                    val blendedX = nearestPeak + (baseX - nearestPeak) * treeSpread
+                    
+                    // Convert to screen space
+                    val hillWorldStart = RenderConstants.WORLD_MIN_X - 1.0f
+                    val hillWorldEnd = RenderConstants.WORLD_MAX_X + 0.5f
+                    val hillWorldWidth = hillWorldEnd - hillWorldStart
+                    val worldX = hillWorldStart + blendedX * hillWorldWidth
+                    xRatio = (worldX + 0.5f).coerceIn(-0.3f, 1.3f)
+                }
                 
-                // Get the hill surface Y at peak position (this is the TOP of the hill)
-                val peakY = getHillY(peakX, hill)
-                
-                // treeSpread controls how far DOWN the slope trees can spread
-                // 0 = exactly on peak (top), 1 = can spread down the hill slope
-                // Spread pushes trees DOWN (higher Y value = lower on screen)
-                val maxVerticalSpread = 0.06f * treeSpread  // Max Y offset downward
-                val verticalOffset = random.nextFloat() * maxVerticalSpread  // Always positive = downward
-                val groundY = peakY + verticalOffset
-                val depthFactor = hill.depthFactor
-                
-                // Tree base sits on the hill surface (with spread offset)
+                // Get the hill surface Y at this X position
+                val groundY = getHillY(xRatio, hill)
                 val yRatio = groundY
                 
                 // With new parallax: depthFactor goes from -0.5 (background) to +0.05 (foreground)
@@ -482,8 +483,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // Maximum sway amplitude at tree top
         // ALWAYS have ambient sway (affected by swaySpeed), plus wind effects
         // When swaySpeed=0, amplitude is 0 (frozen). When swaySpeed=1, normal ambient sway.
-        val ambientSway = 0.12f * swaySpeed  // Visible ambient movement controlled by speed
-        val windSway = effectiveWind * 0.25f  // Additional wind-based sway
+        val ambientSway = 0.15f * swaySpeed  // Visible ambient movement controlled by speed
+        val windSway = effectiveWind * 0.3f * swaySpeed  // Wind sway also affected by speed
         val maxAmplitude = totalHeight * (ambientSway + windSway + gustPush * 0.3f)
         
         // Draw tree segments from bottom to top
@@ -516,9 +517,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             
             // Sway increases with height squared (natural bending curve)
             // Include ambient sway even without wind (baseWave still oscillates)
-            val ambientFactor = if (swaySpeed > 0) 1f else 0f  // Allow sway even without wind
-            val baseSway = (baseWave * (effectiveWind + ambientFactor * 0.3f) + gustLean) * maxAmplitude * baseHeightRatio * baseHeightRatio
-            val tipSway = (tipWave * (effectiveWind + ambientFactor * 0.3f) + gustLean) * maxAmplitude * tipHeightRatio * tipHeightRatio
+            // swaySpeed directly affects the ambient movement factor
+            val ambientFactor = swaySpeed * 0.4f  // Scale ambient movement by sway speed
+            val baseSway = (baseWave * (effectiveWind + ambientFactor) + gustLean) * maxAmplitude * baseHeightRatio * baseHeightRatio
+            val tipSway = (tipWave * (effectiveWind + ambientFactor) + gustLean) * maxAmplitude * tipHeightRatio * tipHeightRatio
             
             treePath.reset()
             treePath.moveTo(x + tipSway, segTipY)
@@ -541,8 +543,11 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // Tree density: 0-100 percentage
         treeDensity = prefs.getInt("pref_tree_density", 50)
         
-        // Tree spread: how far down hills trees spread (0=foreground only, 100=all hills)
-        treeSpread = prefs.getInt("pref_tree_spread", 50) / 100f
+        // Tree spread: how far along hills trees spread (0=peaks only, 100=full hillside)
+        treeSpread = prefs.getInt("pref_tree_spread", 80) / 100f
+        
+        // Tree sparsity: gap probability between trees (0=dense, 100=sparse)
+        treeSparsity = prefs.getInt("pref_tree_sparsity", 30) / 100f
         
         // Tree size randomness: variation in tree sizes (0=uniform, 100=very varied)
         treeSizeRandomness = prefs.getInt("pref_tree_size_randomness", 30) / 100f

@@ -13,6 +13,8 @@ import kotlin.random.Random
  * Airplane with improved fuselage and fading contrail
  */
 class AirplaneEvent(random: Random) : RandomEvent {
+    override val layer = EventLayer.MID_SKY  // In front of mountains, between clouds and terrain
+    
     private var progress = -0.1f
     private val y = 0.08f + random.nextFloat() * 0.15f
     private val speed = 0.00015f + random.nextFloat() * 0.0001f

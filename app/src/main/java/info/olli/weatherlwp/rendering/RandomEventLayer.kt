@@ -126,6 +126,36 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     }
     
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
+        // Default draw method draws ground events only (in front of terrain)
+        drawEventsByLayer(canvas, state, parallaxCalculator, EventLayer.GROUND)
+    }
+    
+    /**
+     * Draw far sky events (shooting stars, balloons, UFOs).
+     * Call this BEFORE drawing mountains.
+     */
+    fun drawFarSkyEvents(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
+        drawEventsByLayer(canvas, state, parallaxCalculator, EventLayer.FAR_SKY)
+    }
+    
+    /**
+     * Draw mid sky events (birds, airplanes, eagles).
+     * Call this AFTER drawing mountains, BEFORE drawing terrain/hills.
+     */
+    fun drawMidSkyEvents(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
+        drawEventsByLayer(canvas, state, parallaxCalculator, EventLayer.MID_SKY)
+    }
+    
+    /**
+     * Draw ground events (foxes, rabbits, butterflies, fireflies, owls).
+     * Call this AFTER drawing terrain/hills.
+     */
+    fun drawGroundEvents(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
+        drawEventsByLayer(canvas, state, parallaxCalculator, EventLayer.GROUND)
+    }
+    
+    private fun drawEventsByLayer(canvas: Canvas, state: SimulationState, 
+                                   parallaxCalculator: ParallaxCalculator, targetLayer: EventLayer) {
         if (width <= 0 || height <= 0 || !eventsEnabled) return
         
         val currentEvents = events
@@ -136,8 +166,10 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         )
         
         for (event in currentEvents) {
-            event.draw(canvas, paint, strokePaint, parallaxCalculator, width, height, 
-                state.timeSeconds, ambientColor)
+            if (event.layer == targetLayer) {
+                event.draw(canvas, paint, strokePaint, parallaxCalculator, width, height, 
+                    state.timeSeconds, ambientColor)
+            }
         }
     }
     

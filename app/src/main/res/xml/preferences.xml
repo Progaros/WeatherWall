@@ -136,8 +136,18 @@
         <SeekBarPreference
             android:key="pref_tree_spread"
             android:title="Tree Spread"
-            android:summary="How far trees spread from hilltops (0=peaks only, 100=down slopes)"
-            android:defaultValue="50"
+            android:summary="How far along hills trees are placed (0=peaks only, 100=full hillside)"
+            android:defaultValue="80"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_tree_sparsity"
+            android:title="Tree Sparsity"
+            android:summary="Gap size between trees (0=dense, 100=sparse with gaps)"
+            android:defaultValue="30"
             android:max="100"
             app:min="0"
             app:showSeekBarValue="true"
@@ -349,11 +359,6 @@
             android:summary="Planes flying across the sky with contrails"
             android:defaultValue="true"
             android:dependency="pref_events_enabled" />
-        <Preference
-            android:key="pref_spawn_airplane"
-            android:title="↳ Spawn Airplane"
-            android:summary="Spawn an airplane now"
-            android:dependency="pref_event_airplane" />
 
         <SwitchPreferenceCompat
             android:key="pref_event_birds"
@@ -361,11 +366,6 @@
             android:summary="Flocks of birds flying across"
             android:defaultValue="true"
             android:dependency="pref_events_enabled" />
-        <Preference
-            android:key="pref_spawn_birds"
-            android:title="↳ Spawn Birds"
-            android:summary="Spawn a bird flock now"
-            android:dependency="pref_event_birds" />
 
         <SwitchPreferenceCompat
             android:key="pref_event_eagle"
@@ -373,11 +373,6 @@
             android:summary="Soaring eagles in the sky"
             android:defaultValue="true"
             android:dependency="pref_events_enabled" />
-        <Preference
-            android:key="pref_spawn_eagle"
-            android:title="↳ Spawn Eagle"
-            android:summary="Spawn an eagle now"
-            android:dependency="pref_event_eagle" />
 
         <SwitchPreferenceCompat
             android:key="pref_event_butterfly"
@@ -385,11 +380,6 @@
             android:summary="Colorful butterflies fluttering"
             android:defaultValue="true"
             android:dependency="pref_events_enabled" />
-        <Preference
-            android:key="pref_spawn_butterfly"
-            android:title="↳ Spawn Butterfly"
-            android:summary="Spawn butterflies now"
-            android:dependency="pref_event_butterfly" />
 
         <SwitchPreferenceCompat
             android:key="pref_event_rabbit"
@@ -397,11 +387,6 @@
             android:summary="Rabbits hopping around"
             android:defaultValue="true"
             android:dependency="pref_events_enabled" />
-        <Preference
-            android:key="pref_spawn_rabbit"
-            android:title="↳ Spawn Rabbit"
-            android:summary="Spawn a rabbit now"
-            android:dependency="pref_event_rabbit" />
 
         <SwitchPreferenceCompat
             android:key="pref_event_fox"
@@ -409,11 +394,6 @@
             android:summary="Foxes walking across terrain"
             android:defaultValue="true"
             android:dependency="pref_events_enabled" />
-        <Preference
-            android:key="pref_spawn_fox"
-            android:title="↳ Spawn Fox"
-            android:summary="Spawn a fox now"
-            android:dependency="pref_event_fox" />
 
         <SwitchPreferenceCompat
             android:key="pref_event_shootingstar"
@@ -421,11 +401,6 @@
             android:summary="Shooting stars on clear nights"
             android:defaultValue="true"
             android:dependency="pref_events_enabled" />
-        <Preference
-            android:key="pref_spawn_shootingstar"
-            android:title="↳ Spawn Shooting Star"
-            android:summary="Spawn a shooting star now"
-            android:dependency="pref_event_shootingstar" />
 
         <SwitchPreferenceCompat
             android:key="pref_event_fireflies"
@@ -433,11 +408,6 @@
             android:summary="Flickering fireflies on summer nights"
             android:defaultValue="true"
             android:dependency="pref_events_enabled" />
-        <Preference
-            android:key="pref_spawn_fireflies"
-            android:title="↳ Spawn Fireflies"
-            android:summary="Spawn fireflies now"
-            android:dependency="pref_event_fireflies" />
 
         <SwitchPreferenceCompat
             android:key="pref_event_owl"
@@ -445,11 +415,6 @@
             android:summary="Owl silhouettes at night"
             android:defaultValue="true"
             android:dependency="pref_events_enabled" />
-        <Preference
-            android:key="pref_spawn_owl"
-            android:title="↳ Spawn Owl"
-            android:summary="Spawn an owl now"
-            android:dependency="pref_event_owl" />
 
         <SwitchPreferenceCompat
             android:key="pref_event_balloon"
@@ -457,11 +422,6 @@
             android:summary="Balloons drifting in good weather"
             android:defaultValue="true"
             android:dependency="pref_events_enabled" />
-        <Preference
-            android:key="pref_spawn_balloon"
-            android:title="↳ Spawn Balloon"
-            android:summary="Spawn a hot air balloon now"
-            android:dependency="pref_event_balloon" />
 
         <SwitchPreferenceCompat
             android:key="pref_event_alien"
@@ -469,16 +429,11 @@
             android:summary="Rare alien sightings at night (very rare)"
             android:defaultValue="true"
             android:dependency="pref_events_enabled" />
-        <Preference
-            android:key="pref_spawn_alien"
-            android:title="↳ Spawn UFO"
-            android:summary="Spawn a UFO now"
-            android:dependency="pref_event_alien" />
 
         <Preference
             android:key="pref_spawn_event"
             android:title="🎲 Spawn Random Event"
-            android:summary="Manually trigger a random event now"
+            android:summary="Manually trigger a random enabled event"
             android:dependency="pref_events_enabled" />
 
         <SwitchPreferenceCompat

@@ -14,6 +14,8 @@ import kotlin.random.Random
  * Bird Flock with V-shape strokes, glide/flap behavior
  */
 class BirdFlockEvent(random: Random) : RandomEvent {
+    override val layer = EventLayer.MID_SKY  // In front of mountains, between clouds and terrain
+    
     private val birds = List(3 + random.nextInt(5)) { Bird(random) }
     private var x = -0.15f
     private var y = 0.15f + random.nextFloat() * 0.25f

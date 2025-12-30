@@ -15,6 +15,8 @@ import kotlin.random.Random
  * Classic saucer shape with pulsing lights and erratic movement
  */
 class AlienEvent(random: Random) : RandomEvent {
+    override val layer = EventLayer.MID_SKY  // In front of mountains
+    
     private var x = if (random.nextBoolean()) -0.1f else 1.1f
     private val direction = if (x < 0.5f) 1f else -1f
     private var y = 0.1f + random.nextFloat() * 0.15f

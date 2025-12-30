@@ -13,6 +13,7 @@ import kotlin.random.Random
  * Shooting Star - Night only, fast diagonal streak with gradient tail
  */
 class ShootingStarEvent(random: Random) : RandomEvent {
+    override val layer = EventLayer.FAR_SKY  // Draw behind mountains
     private var progress = 0f
     private val startX = 0.2f + random.nextFloat() * 0.6f
     private val startY = 0.05f + random.nextFloat() * 0.15f
