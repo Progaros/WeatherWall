@@ -53,7 +53,7 @@ class ParallaxSceneTest {
     
     @Test
     fun `mountain parallax should be very subtle`() {
-        // Per ai.md: Mountains should have parallax factor 0.05-0.15 (almost static)
+        // Mountains should have parallax factor 0.05-0.15 (almost static)
         val mountainParallaxMin = 0.05f
         val mountainParallaxMax = 0.15f
         

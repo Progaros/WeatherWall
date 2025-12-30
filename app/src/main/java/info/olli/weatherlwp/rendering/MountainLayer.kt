@@ -24,7 +24,7 @@ import kotlin.random.Random
  * - Parallax depth range
  * - Mountain color values
  * 
- * Design notes (from ai.md):
+ * Design notes:
  * - Mountains should have gradient shading (atmospheric perspective)
  * - Lighter/bluer at base simulates fog/mist
  * - Add atmospheric haze overlay at bottom of mountains
@@ -128,7 +128,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
         
         val scaleX = height * RenderConstants.REFERENCE_ASPECT_RATIO
         
-        // Get ambient color for atmospheric blending (per ai.md)
+        // Get ambient color for atmospheric blending
         val ambientColor = RenderConstants.getAmbientColor(
             state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk
         )
@@ -145,14 +145,14 @@ class MountainLayer(private val context: Context) : SceneLayer {
             canvas.restore()
         }
         
-        // Draw atmospheric haze at the base of mountains (ai.md: fog overlay)
+        // Draw atmospheric haze at the base of mountains (fog overlay)
         // This blends the mountains into the terrain and adds depth
         drawAtmosphericHaze(canvas, state.isNight, ambientColor)
     }
     
     /**
      * Draw a soft atmospheric haze at the bottom portion of the screen.
-     * This simulates fog/mist at the base of mountains as described in ai.md.
+     * This simulates fog/mist at the base of mountains.
      */
     @Suppress("UNUSED_PARAMETER")
     private fun drawAtmosphericHaze(canvas: Canvas, isNight: Boolean, ambientColor: Int) {
@@ -264,7 +264,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
         }
         pathRight.close()
         
-        // Apply ambient tinting (per ai.md: global tint system)
+        // Apply ambient tinting (global tint system)
         // Mountains blend with ambient color based on their depth
         val blendAmount = RenderConstants.applyAmbientTint(mountain.dayColor, ambientColor, mountain.depthFactor)
         val baseColor = RenderConstants.blendWithAmbient(mountain.dayColor, ambientColor, blendAmount)

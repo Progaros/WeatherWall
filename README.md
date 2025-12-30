@@ -1,7 +1,7 @@
 # WeatherWall
 
-[![Build Status](https://ci.olli.info/api/badges/4/status.svg)](https://ci.olli.info/repos/4)
-[![Download APK](https://img.shields.io/badge/Download-APK-green?style=for-the-badge&logo=android)](https://github.com/Oliver/WeatherWall/releases/latest)
+[![Build Status](https://ci.olli.info/api/badges/4/status.svg)](https://ci.olli.info/repos/4)  
+[Download APK](https://git.olli.info/Oliver/WeatherWall/releases/latest)
 
 **Open-source, privacy-respecting, battery-friendly Android Live Wallpaper** with low-poly vector layers, weather effects, seasonal events, and optional 3D parallax.
 
@@ -12,14 +12,26 @@
 ## ✨ Features
 
 ### 🎨 Visual Effects
-- **Low-poly parallax scene** with layered mountains and pine trees
+- **Low-poly parallax scene** with layered mountains, hills, and pine trees
 - **Dynamic day/night cycle** with smooth sky gradients (dawn, day, dusk, night)
 - **Weather effects**: Rain, Snow, Lightning with particle systems
 - **Fog overlay** for atmospheric depth
 - **Seasonal events**: Christmas stars (Dec 15-26), New Year fireworks (Dec 27 - Jan 7)
 
+### 🦅 Random Events
+Animated wildlife and sky events appear randomly throughout the day:
+- **Day**: Airplanes with contrails, bird flocks, eagles, butterflies, hot air balloons
+- **Night**: Shooting stars, fireflies, owls, UFOs (very rare!)
+- **Any time**: Rabbits hopping, foxes walking
+
+### 🌲 Terrain System
+- Layered hills with Perlin noise-based procedural generation
+- Pine trees distributed along hillsides with configurable density and spread
+- Realistic wind-based tree sway with ambient movement
+- Sparsity control for natural treeline gaps
+
 ### 🔋 Battery-First Design
-- Adaptive FPS (20-30 FPS configurable)
+- Adaptive FPS (10-60 FPS configurable)
 - Sensors only active when wallpaper is visible
 - Zero per-frame allocations (pre-allocated paints, paths, particle pools)
 - Efficient low-poly rendering without complex shaders
@@ -31,9 +43,10 @@
 - All processing done locally on device
 
 ### ⚙️ Customization
-- Parallax strength adjustment
-- Tree count and size controls
-- Toggle individual effects (fog, weather, day/night, seasonal)
+- Parallax strength, smoothing, and depth separation
+- Tree density, spread, sparsity, and sway speed
+- Individual event toggles (enable/disable specific animals)
+- Mountain and hill count, height, roughness
 
 ## 📱 Screenshots
 
@@ -113,20 +126,47 @@ open app/build/reports/tests/testDebugUnitTest/index.html
 ```
 app/src/main/java/info/olli/weatherlwp/
 ├── MainActivity.kt              # Settings activity
-├── easter/
-│   └── MultiTapDetector.kt      # Easter egg gesture detection
 ├── parallax/
-│   └── ParallaxSensorManager.kt # Accelerometer-based parallax
+│   ├── ParallaxCalculator.kt    # Parallax offset calculations
+│   └── ParallaxSensorManager.kt # Accelerometer-based parallax input
 ├── prefs/
-│   └── SettingsFragment.kt      # Preferences UI
+│   └── SettingsFragment.kt      # Preferences UI with event spawning
 ├── rendering/
-│   ├── DayNightCycle.kt         # Time-based sky gradients
-│   ├── FogLayer.kt              # Fog overlay effect
-│   ├── ParallaxScene.kt         # Main scene renderer
+│   ├── CloudLayer.kt            # Animated cloud shapes
+│   ├── MountainLayer.kt         # Background mountain silhouettes
+│   ├── ParallaxScene.kt         # Main scene renderer and layer orchestration
+│   ├── RandomEventLayer.kt      # Wildlife and sky event management
+│   ├── RenderConstants.kt       # Shared rendering constants
 │   ├── SeasonalEvents.kt        # Christmas/New Year effects
-│   └── WeatherLayer.kt          # Rain/Snow/Lightning particles
-└── wallpaper/
-    └── WeatherWallpaper.kt      # WallpaperService implementation
+│   ├── SkyLayer.kt              # Gradient sky and sun/moon
+│   ├── TerrainLayer.kt          # Hills and trees with wind animation
+│   ├── WeatherLayer.kt          # Rain/Snow/Lightning particles
+│   └── events/                  # Individual event implementations
+│       ├── AirplaneEvent.kt
+│       ├── AlienEvent.kt
+│       ├── BirdFlockEvent.kt
+│       ├── ButterflyEvent.kt
+│       ├── EagleEvent.kt
+│       ├── FireflyEvent.kt
+│       ├── FoxEvent.kt
+│       ├── HotAirBalloonEvent.kt
+│       ├── OwlEvent.kt
+│       ├── RabbitEvent.kt
+│       ├── RandomEvent.kt       # Event interface and EventLayer enum
+│       └── ShootingStarEvent.kt
+├── simulation/
+│   ├── SimulationClock.kt       # Time-based day/night calculations
+│   ├── SimulationController.kt  # Main simulation state manager
+│   ├── SimulationSettings.kt    # Preference reader
+│   └── SimulationState.kt       # Immutable state snapshot per frame
+├── wallpaper/
+│   └── WeatherWallpaper.kt      # WallpaperService implementation
+└── weather/
+    ├── BreezyWeatherProvider.kt # Breezy Weather integration
+    ├── BreezyWeatherReceiver.kt # Broadcast receiver for weather updates
+    ├── WeatherProvider.kt       # Weather data interface
+    ├── WeatherRepository.kt     # Weather data storage
+    └── WeatherType.kt           # Weather type enumeration
 ```
 
 ## 🔧 Requirements

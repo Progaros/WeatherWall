@@ -27,7 +27,7 @@ import kotlin.random.Random
  * - Parallax depth
  * - Reference aspect ratio
  * 
- * Design notes (from ai.md):
+ * Design notes:
  * - Clouds should be soft, wispy, and semi-transparent
  * - Use low alpha (30-50%) with blur effects
  * - Apply time-of-day tinting (orange at sunset, purple at night)

@@ -24,7 +24,7 @@ import kotlin.random.Random
  * - Parallax factors
  * - Time thresholds
  * 
- * Design notes (from ai.md):
+ * Design notes:
  * - Night scenes should have darker corners (vignette effect)
  * - Creates focus and atmosphere
  */
@@ -81,7 +81,7 @@ class SkyLayer : SceneLayer {
         val hour = state.smoothedTimeOfDayHours
         
         // 3-stop gradient: Top, Middle (40% down), Horizon
-        // Per ai.md: "Always use a 3-stop LinearGradient for the sky"
+        // Always use a 3-stop LinearGradient for the sky
         val (newTop, newMid, newHorizon) = when {
             hour < RenderConstants.TIME_NIGHT_END -> {
                 Triple(RenderConstants.SKY_NIGHT_TOP, RenderConstants.SKY_NIGHT_MID, RenderConstants.SKY_NIGHT_BOTTOM)
@@ -139,7 +139,7 @@ class SkyLayer : SceneLayer {
     private fun updateGradient() {
         if (height > 0) {
             // 3-stop gradient: Top (0%) -> Middle (40%) -> Horizon (100%)
-            // This creates the "horizon glow" effect described in ai.md
+            // This creates the "horizon glow" effect
             skyPaint.shader = LinearGradient(
                 0f, 0f, 0f, height,
                 intArrayOf(skyTop, skyMid, skyHorizon),

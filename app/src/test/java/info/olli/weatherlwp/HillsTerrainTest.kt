@@ -7,7 +7,7 @@ import org.junit.Test
  * Unit tests for Hills/Terrain - Tests for Issue #11
  * 
  * Issue #11: Hills/Terrain Layer Missing
- * ai.md requires hills between mountains and trees
+ * Hills should be placed between mountains and trees.
  */
 class HillsTerrainTest {
 

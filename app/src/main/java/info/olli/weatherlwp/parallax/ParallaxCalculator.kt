@@ -42,7 +42,7 @@ class ParallaxCalculator {
     private var pendingVelocityY = 0f
     private val velocityLock = Any()  // Synchronization lock for pending velocity
     
-    // Previous raw sensor values for low-pass filtering (per ai.md recommendation)
+    // Previous raw sensor values for low-pass filtering
     private var lastRawVelocityX = 0f
     private var lastRawVelocityY = 0f
     
@@ -62,12 +62,12 @@ class ParallaxCalculator {
     /**
      * Update from sensor input.
      * Thread-safe: can be called from sensor callback thread.
-     * Per ai.md: Apply low-pass filter to raw sensor data to reduce jitter.
+     * Applies low-pass filter to raw sensor data to reduce jitter.
      * @param velocityX Change in X tilt (-1 to 1, where magnitude = speed)
      * @param velocityY Change in Y tilt (-1 to 1, where magnitude = speed)
      */
     fun updateFromSensor(velocityX: Float, velocityY: Float) {
-        // Low-pass filter on raw sensor input (per ai.md recommendation)
+        // Low-pass filter on raw sensor input
         val filteredX = velocityX * sensorFilterAlpha + lastRawVelocityX * (1f - sensorFilterAlpha)
         val filteredY = velocityY * sensorFilterAlpha + lastRawVelocityY * (1f - sensorFilterAlpha)
         lastRawVelocityX = filteredX

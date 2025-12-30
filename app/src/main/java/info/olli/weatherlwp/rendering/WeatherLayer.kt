@@ -19,7 +19,7 @@ import kotlin.random.Random
  * Uses particle pooling to avoid per-frame allocations.
  * Supports intensity control for rain/snow (0.0-1.0).
  * 
- * Design notes (from ai.md):
+ * Design notes:
  * - Rain should include a semi-transparent grey dimming overlay
  * - Fog uses smooth gradients, not solid colors
  * - Weather effects should "sell the feeling" of the weather
@@ -325,7 +325,7 @@ class WeatherLayer : SceneLayer {
     }
 
     private fun renderRain(canvas: Canvas, state: SimulationState) {
-        // Dim the world during rain (atmospheric effect from ai.md)
+        // Dim the world during rain (atmospheric effect)
         // Intensity affects dimming: light rain = subtle, heavy = more dim
         val dimAlpha = (20 + intensity * 40).toInt()
         rainDimPaint.color = Color.argb(dimAlpha, 100, 105, 115)

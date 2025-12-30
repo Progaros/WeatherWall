@@ -45,7 +45,7 @@ object RenderConstants {
     const val PARALLAX_HILLS_MAX = 0.95f
     
     // ============== Sky Colors (3-stop gradients: Top, Middle, Horizon) ==============
-    // Per ai.md: "Always use a 3-stop LinearGradient for the sky"
+    // Always use a 3-stop LinearGradient for the sky.
     // Horizon should be significantly lighter than top (atmosphere thickness)
     
     // Night: Deep space -> Dark blue -> Slightly lighter horizon
@@ -68,7 +68,7 @@ object RenderConstants {
     val SKY_DUSK_MID: Int = Color.parseColor("#FF6B35")       // Orange
     val SKY_DUSK_BOTTOM: Int = Color.parseColor("#FFAB76")    // Bright horizon glow
     
-    // Ambient tint colors (for global tinting per ai.md)
+    // Ambient tint colors for global tinting
     val AMBIENT_NIGHT: Int = Color.parseColor("#2A2040")      // Purple-blue night tint
     val AMBIENT_DAWN: Int = Color.parseColor("#FF9966")       // Warm orange dawn tint
     val AMBIENT_DAY: Int = Color.parseColor("#E8F0F8")        // Very light neutral (nearly white with hint of sky)
@@ -198,7 +198,6 @@ object RenderConstants {
     
     /**
      * Interpolate between two colors in HSV space for smoother sky transitions.
-     * Per ai.md: "Always interpolate sky colours in HSV (or Oklab)"
      * HSV avoids the "gray murky transition" problem that RGB has.
      */
     fun lerpColorHSV(start: Int, end: Int, ratio: Float): Int {
@@ -235,7 +234,6 @@ object RenderConstants {
     
     /**
      * Apply ambient tint to a color based on time of day.
-     * Per ai.md: "Everything is tinted by the sky color" 
      * Objects should take on the ambient light color, especially at night/dusk.
      * 
      * @param baseColor The object's base color
@@ -253,7 +251,7 @@ object RenderConstants {
     
     /**
      * Blend a color with the ambient atmosphere color.
-     * Implements the "Global Tint" system from ai.md.
+     * Implements the global tint system for atmospheric perspective.
      * 
      * @param baseColor The object's base/local color
      * @param ambientColor The current ambient light color (varies by time of day)
@@ -295,7 +293,7 @@ object RenderConstants {
     
     /**
      * Smooth color transition with easing using HSV interpolation.
-     * Per ai.md: Use HSV for sky transitions to avoid murky grays.
+     * Uses HSV for sky transitions to avoid murky grays.
      */
     fun easeSkyColorTransition(fromColor: Int, toColor: Int, progress: Float): Int {
         val eased = easeInOutCubic(progress.coerceIn(0f, 1f))

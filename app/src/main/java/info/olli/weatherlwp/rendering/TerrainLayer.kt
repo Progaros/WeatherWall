@@ -358,7 +358,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         val scaleX = height * RenderConstants.REFERENCE_ASPECT_RATIO
         
-        // Get ambient color for current time of day (per ai.md: global tint system)
+        // Get ambient color for current time of day (global tint system)
         val ambientColor = RenderConstants.getAmbientColor(
             state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk
         )

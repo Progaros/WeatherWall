@@ -11,8 +11,8 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Owl silhouette - Night only, side-profile view with glide-burst animation
- * Implements ai.md suggestions: asymmetric body, flap bursts, wing rotation
+ * Owl silhouette - Night only, side-profile view with glide-burst animation.
+ * Features asymmetric body, flap bursts, and wing rotation.
  */
 class OwlEvent(random: Random) : RandomEvent {
     private var progress = -0.15f
