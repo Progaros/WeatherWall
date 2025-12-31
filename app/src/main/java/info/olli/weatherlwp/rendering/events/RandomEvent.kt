@@ -18,7 +18,11 @@ enum class EventLayer {
 }
 
 /**
- * Base interface for random events
+ * Base interface for random events.
+ * 
+ * Events are synchronized across preview and wallpaper by using absolute time
+ * rather than accumulated delta time. The spawnTimeMs is set when the event
+ * is created, and progress is derived from (currentTime - spawnTime).
  */
 interface RandomEvent {
     /**
@@ -28,8 +32,41 @@ interface RandomEvent {
     val layer: EventLayer
         get() = EventLayer.GROUND
     
-    fun update(deltaTimeMs: Long, state: SimulationState, width: Float, height: Float): Boolean
+    /**
+     * The absolute time (epoch ms) when this event was spawned.
+     * Used to compute deterministic progress across multiple scene instances.
+     */
+    val spawnTimeMs: Long
     
+    /**
+     * Duration of this event in milliseconds.
+     * Used to determine when the event should be removed.
+     */
+    val durationMs: Long
+    
+    /**
+     * Check if the event is still active based on absolute time.
+     * Default implementation uses spawnTimeMs and durationMs.
+     */
+    fun isActive(absoluteTimeMs: Long): Boolean {
+        return absoluteTimeMs - spawnTimeMs < durationMs
+    }
+    
+    /**
+     * Get the progress (0.0 to 1.0+) of this event based on absolute time.
+     */
+    fun getProgress(absoluteTimeMs: Long): Float {
+        return (absoluteTimeMs - spawnTimeMs) / durationMs.toFloat()
+    }
+
+    /**
+     * Update is now optional - events can be stateless.
+     * Default implementation just checks if still active.
+     */
+    fun update(deltaTimeMs: Long, state: SimulationState, width: Float, height: Float): Boolean {
+        return isActive(state.absoluteTimeMs)
+    }
+
     /**
      * Draw the event.
      * @param width Extended canvas width (for parallax content spanning beyond screen)

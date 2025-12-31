@@ -103,28 +103,29 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     
     private fun spawnRandomEvent(state: SimulationState, currentEvents: MutableList<RandomEvent>, random: Random) {
         val availableEvents = mutableListOf<() -> RandomEvent?>()
+        val spawnTime = state.absoluteTimeMs
         
         // Day events
-        if (airplaneEnabled && !state.isNight) availableEvents.add { AirplaneEvent(random) }
-        if (birdsEnabled && !state.isNight) availableEvents.add { BirdFlockEvent(random) }
-        if (eagleEnabled && !state.isNight) availableEvents.add { EagleEvent(random) }
-        if (butterflyEnabled && !state.isNight) availableEvents.add { ButterflyEvent(random) }
+        if (airplaneEnabled && !state.isNight) availableEvents.add { AirplaneEvent(random, spawnTime) }
+        if (birdsEnabled && !state.isNight) availableEvents.add { BirdFlockEvent(random, spawnTime) }
+        if (eagleEnabled && !state.isNight) availableEvents.add { EagleEvent(random, spawnTime) }
+        if (butterflyEnabled && !state.isNight) availableEvents.add { ButterflyEvent(random, spawnTime) }
         val isRaining = state.weather == WeatherType.RAIN || state.weather == WeatherType.THUNDERSTORM || state.weather == WeatherType.SNOW
-        if (balloonEnabled && !state.isNight && !isRaining) availableEvents.add { HotAirBalloonEvent(random) }
+        if (balloonEnabled && !state.isNight && !isRaining) availableEvents.add { HotAirBalloonEvent(random, spawnTime) }
         
         // Any time
-        if (rabbitEnabled) availableEvents.add { RabbitEvent(random) }
-        if (foxEnabled) availableEvents.add { FoxEvent(random) }
+        if (rabbitEnabled) availableEvents.add { RabbitEvent(random, spawnTime) }
+        if (foxEnabled) availableEvents.add { FoxEvent(random, spawnTime) }
         
         // Night events
         val isClearEnough = state.cloudDensity == CloudDensity.LIGHT || state.cloudDensity == CloudDensity.MEDIUM
-        if (shootingStarEnabled && state.isNight && isClearEnough) availableEvents.add { ShootingStarEvent(random) }
-        if (firefliesEnabled && state.isNight && !isRaining) availableEvents.add { FireflyEvent(random) }
-        if (owlEnabled && state.isNight) availableEvents.add { OwlEvent(random) }
+        if (shootingStarEnabled && state.isNight && isClearEnough) availableEvents.add { ShootingStarEvent(random, spawnTime) }
+        if (firefliesEnabled && state.isNight && !isRaining) availableEvents.add { FireflyEvent(random, spawnTime) }
+        if (owlEnabled && state.isNight) availableEvents.add { OwlEvent(random, spawnTime) }
         
         // Rare alien event - night only, very low chance
         if (alienEnabled && state.isNight && random.nextFloat() < 0.05f) {
-            availableEvents.add { AlienEvent(random) }
+            availableEvents.add { AlienEvent(random, spawnTime) }
         }
         
         if (availableEvents.isEmpty()) return

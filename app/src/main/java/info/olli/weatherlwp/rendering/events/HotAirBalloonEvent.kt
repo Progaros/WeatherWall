@@ -11,14 +11,16 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Hot Air Balloon - Day only, slow drift in far background
+ * Hot Air Balloon - Day only, slow drift in far background.
+ * Uses absolute time for deterministic position across preview/wallpaper.
  */
-class HotAirBalloonEvent(random: Random) : RandomEvent {
+class HotAirBalloonEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
     override val layer = EventLayer.MID_SKY  // In front of mountains
     
-    private var progress = -0.1f
     private val y = 0.12f + random.nextFloat() * 0.15f
     private val speed = 0.00003f + random.nextFloat() * 0.00002f
+    override val durationMs: Long = (1.3f / speed).toLong()
+    
     private val size = 8f + random.nextFloat() * 4f
     private val path = Path()
     private val color = when (random.nextInt(5)) {
@@ -35,14 +37,12 @@ class HotAirBalloonEvent(random: Random) : RandomEvent {
     }
     private val bobPhase = random.nextFloat() * 6.28f
     
-    override fun update(deltaTimeMs: Long, state: SimulationState, width: Float, height: Float): Boolean {
-        progress += speed * deltaTimeMs
-        return progress < 1.2f
-    }
-    
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
+        val elapsedMs = System.currentTimeMillis() - spawnTimeMs
+        val progress = -0.1f + speed * elapsedMs
+        
         val px = parallaxCalculator.getOffsetXForDepth(0.6f)
         val py = parallaxCalculator.getOffsetYForDepth(0.6f)
         canvas.save()

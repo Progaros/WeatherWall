@@ -11,20 +11,23 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Rare UFO/Alien event - Night only, very rare
- * Classic saucer shape with pulsing lights and erratic movement
+ * Rare UFO/Alien event - Night only, very rare.
+ * Classic saucer shape with pulsing lights and erratic movement.
+ * Uses absolute time for deterministic position across preview/wallpaper.
  */
-class AlienEvent(random: Random) : RandomEvent {
+class AlienEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
     override val layer = EventLayer.MID_SKY  // In front of mountains
     
-    private var x = if (random.nextBoolean()) -0.1f else 1.1f
-    private val direction = if (x < 0.5f) 1f else -1f
-    private var y = 0.1f + random.nextFloat() * 0.15f
+    private val startX = if (random.nextBoolean()) -0.1f else 1.1f
+    private val direction = if (startX < 0.5f) 1f else -1f
+    private val startY = 0.1f + random.nextFloat() * 0.15f
     private val speed = 0.0004f + random.nextFloat() * 0.0003f
+    override val durationMs: Long = (1.25f / speed).toLong()
+    
     private val size = 12f + random.nextFloat() * 6f
     private val path = Path()
-    private var wobblePhase = random.nextFloat() * 6.28f
-    private var hoverPhase = random.nextFloat() * 6.28f
+    private val initialWobblePhase = random.nextFloat() * 6.28f
+    private val initialHoverPhase = random.nextFloat() * 6.28f
     private val lightColors = listOf(
         Color.rgb(255, 100, 100),
         Color.rgb(100, 255, 100),
@@ -32,24 +35,20 @@ class AlienEvent(random: Random) : RandomEvent {
         Color.rgb(255, 255, 100),
         Color.rgb(255, 100, 255)
     )
-    private var lightPhase = 0f
-    
-    override fun update(deltaTimeMs: Long, state: SimulationState, width: Float, height: Float): Boolean {
-        x += direction * speed * deltaTimeMs
-        wobblePhase += deltaTimeMs * 0.005f
-        hoverPhase += deltaTimeMs * 0.003f
-        lightPhase += deltaTimeMs * 0.02f
-        
-        // Erratic vertical movement
-        y += sin(hoverPhase * 2f) * 0.00002f * deltaTimeMs
-        y = y.coerceIn(0.05f, 0.3f)
-        
-        return x > -0.15f && x < 1.15f
-    }
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
+        val elapsedMs = System.currentTimeMillis() - spawnTimeMs
+        val x = startX + direction * speed * elapsedMs
+        val wobblePhase = initialWobblePhase + elapsedMs * 0.005f
+        val hoverPhase = initialHoverPhase + elapsedMs * 0.003f
+        val lightPhase = elapsedMs * 0.02f
+        
+        // Y position with erratic vertical movement based on elapsed time
+        val verticalOffset = sin(hoverPhase * 2f) * 0.002f * (elapsedMs / 100f)
+        val y = (startY + verticalOffset).coerceIn(0.05f, 0.3f)
+        
         val px = parallaxCalculator.getOffsetXForDepth(0.15f)
         val py = parallaxCalculator.getOffsetYForDepth(0.15f)
         canvas.save()

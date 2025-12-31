@@ -10,29 +10,30 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Shooting Star - Night only, fast diagonal streak with gradient tail
+ * Shooting Star - Night only, fast diagonal streak with gradient tail.
+ * Uses absolute time for deterministic position across preview/wallpaper.
  */
-class ShootingStarEvent(random: Random) : RandomEvent {
+class ShootingStarEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
     override val layer = EventLayer.FAR_SKY  // Draw behind mountains
-    private var progress = 0f
+    
     private val startX = 0.2f + random.nextFloat() * 0.6f
     private val startY = 0.05f + random.nextFloat() * 0.15f
     private val angle = 0.3f + random.nextFloat() * 0.4f
     private val speed = 0.002f + random.nextFloat() * 0.001f
     private val length = 0.08f + random.nextFloat() * 0.06f
+    override val durationMs: Long = ((1.0f + length) / speed).toLong()
+    
     private val trailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
     }
     
-    override fun update(deltaTimeMs: Long, state: SimulationState, width: Float, height: Float): Boolean {
-        progress += speed * deltaTimeMs
-        return progress < 1.0f + length
-    }
-    
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
+        val elapsedMs = System.currentTimeMillis() - spawnTimeMs
+        val progress = speed * elapsedMs
+        
         val px = parallaxCalculator.getOffsetXForDepth(0.05f)
         val py = parallaxCalculator.getOffsetYForDepth(0.05f)
         canvas.save()

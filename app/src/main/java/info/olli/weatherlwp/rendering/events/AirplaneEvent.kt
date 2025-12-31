@@ -10,14 +10,18 @@ import info.olli.weatherlwp.simulation.SimulationState
 import kotlin.random.Random
 
 /**
- * Airplane with improved fuselage and fading contrail
+ * Airplane with improved fuselage and fading contrail.
+ * Uses absolute time for deterministic position across preview/wallpaper.
  */
-class AirplaneEvent(random: Random) : RandomEvent {
+class AirplaneEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
     override val layer = EventLayer.MID_SKY  // In front of mountains, between clouds and terrain
     
-    private var progress = -0.1f
-    private val y = 0.08f + random.nextFloat() * 0.15f
+    // Duration based on speed - event lasts until it crosses the screen
+    // At speed 0.0002 per ms, it takes 1.3/0.0002 = 6500ms to cross
     private val speed = 0.00015f + random.nextFloat() * 0.0001f
+    override val durationMs: Long = (1.3f / speed).toLong()
+    
+    private val y = 0.08f + random.nextFloat() * 0.15f
     private val path = Path()
     private val size = 10f + random.nextFloat() * 4f
     private val contrailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -26,14 +30,13 @@ class AirplaneEvent(random: Random) : RandomEvent {
         strokeWidth = 3f
     }
     
-    override fun update(deltaTimeMs: Long, state: SimulationState, width: Float, height: Float): Boolean {
-        progress += speed * deltaTimeMs
-        return progress < 1.2f
-    }
-    
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
+        // Calculate progress from absolute time
+        val elapsedMs = System.currentTimeMillis() - spawnTimeMs
+        val progress = (elapsedMs * speed).coerceIn(-0.1f, 1.3f)
+        
         val px = parallaxCalculator.getOffsetXForDepth(0.1f)
         val py = parallaxCalculator.getOffsetYForDepth(0.1f)
         canvas.save()

@@ -9,12 +9,12 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Fireflies - Summer night, multiple flickering points
- * Spawn in the foreground hill area (lower portion of screen)
+ * Fireflies - Summer night, multiple flickering points.
+ * Spawn in the foreground hill area (lower portion of screen).
+ * Uses absolute time for deterministic position across preview/wallpaper.
  */
-class FireflyEvent(random: Random) : RandomEvent {
-    private var lifetime = 0L
-    private val maxLifetime = 12000L + random.nextLong(8000)
+class FireflyEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
+    override val durationMs = 12000L + random.nextLong(8000)
     private val flies = List(8 + random.nextInt(12)) { Firefly(random) }
     // Position in foreground hill area (lower 40% of screen, above bottom margin)
     private val baseX = 0.15f + random.nextFloat() * 0.7f
@@ -27,22 +27,13 @@ class FireflyEvent(random: Random) : RandomEvent {
         val speed = 0.5f + random.nextFloat() * 1.5f
         val driftX = (random.nextFloat() - 0.5f) * 0.0001f
         val driftY = (random.nextFloat() - 0.5f) * 0.00008f
-        var currentOffsetX = offsetX
-        var currentOffsetY = offsetY
-    }
-    
-    override fun update(deltaTimeMs: Long, state: SimulationState, width: Float, height: Float): Boolean {
-        lifetime += deltaTimeMs
-        for (fly in flies) {
-            fly.currentOffsetX += fly.driftX * deltaTimeMs
-            fly.currentOffsetY += fly.driftY * deltaTimeMs
-        }
-        return lifetime < maxLifetime
     }
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
+        val elapsedMs = System.currentTimeMillis() - spawnTimeMs
+        
         // Use foreground depth for parallax (matches hill foreground)
         val px = parallaxCalculator.getOffsetXForDepth(0.02f)
         val py = parallaxCalculator.getOffsetYForDepth(0.02f)
@@ -50,8 +41,12 @@ class FireflyEvent(random: Random) : RandomEvent {
         canvas.translate(px, py)
         
         for (fly in flies) {
-            val x = (baseX + fly.currentOffsetX) * width - extendedOffset
-            val y = (baseY + fly.currentOffsetY) * height
+            // Calculate drift from elapsed time
+            val currentOffsetX = fly.offsetX + fly.driftX * elapsedMs
+            val currentOffsetY = fly.offsetY + fly.driftY * elapsedMs
+            
+            val x = (baseX + currentOffsetX) * width - extendedOffset
+            val y = (baseY + currentOffsetY) * height
             
             val flicker = sin(timeSeconds * fly.speed * 3f + fly.phase)
             if (flicker > 0.2f) {

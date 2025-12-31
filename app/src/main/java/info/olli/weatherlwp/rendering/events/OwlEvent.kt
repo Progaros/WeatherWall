@@ -13,13 +13,13 @@ import kotlin.random.Random
 /**
  * Owl silhouette - Night only, side-profile view with glide-burst animation.
  * Features asymmetric body, flap bursts, and wing rotation.
+ * Uses absolute time for deterministic position across preview/wallpaper.
  */
-class OwlEvent(random: Random) : RandomEvent {
-    private var progress = -0.15f
-    private var localTime = 0f
-
+class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
     private val y = 0.18f + random.nextFloat() * 0.12f
     private val speed = 0.00008f + random.nextFloat() * 0.00004f
+    override val durationMs: Long = (1.35f / speed).toLong()
+    
     private val size = 14f + random.nextFloat() * 6f
 
     // Animation tuning (random per owl)
@@ -32,12 +32,6 @@ class OwlEvent(random: Random) : RandomEvent {
 
     private val path = Path()
 
-    override fun update(deltaTimeMs: Long, state: SimulationState, width: Float, height: Float): Boolean {
-        localTime += deltaTimeMs * 0.001f
-        progress += speed * deltaTimeMs
-        return progress < 1.2f
-    }
-
     private fun smoothstep01(x: Float): Float {
         val t = x.coerceIn(0f, 1f)
         return t * t * (3f - 2f * t)
@@ -48,6 +42,10 @@ class OwlEvent(random: Random) : RandomEvent {
         parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
         timeSeconds: Float, ambientColor: Int, extendedOffset: Float
     ) {
+        val elapsedMs = System.currentTimeMillis() - spawnTimeMs
+        val localTime = elapsedMs * 0.001f
+        val progress = -0.15f + speed * elapsedMs
+        
         val px = parallaxCalculator.getOffsetXForDepth(0.25f)
         val py = parallaxCalculator.getOffsetYForDepth(0.25f)
 

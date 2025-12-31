@@ -115,10 +115,10 @@
 
         <SeekBarPreference
             android:key="pref_hill_amplitude"
-            android:title="Hill Amplitude"
-            android:summary="Hill height (0=flat, 100=normal, 200=tall)"
+            android:title="Hill Height"
+            android:summary="Vertical scale (0=flat, 100=normal, 1000=extreme)"
             android:defaultValue="100"
-            android:max="200"
+            android:max="1000"
             app:min="0"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />

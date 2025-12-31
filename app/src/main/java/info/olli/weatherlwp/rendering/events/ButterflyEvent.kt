@@ -12,15 +12,14 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Butterfly with distinct wing shapes and natural erratic flight pattern
+ * Butterfly with distinct wing shapes and natural erratic flight pattern.
+ * Uses absolute time for deterministic position across preview/wallpaper.
  */
-class ButterflyEvent(random: Random) : RandomEvent {
-    private var x = random.nextFloat()
-    private var y = 0.55f + random.nextFloat() * 0.15f
-    private val startX = x
-    private val startY = y
-    private var lifetime = 0L
-    private val maxLifetime = 8000L + random.nextLong(5000)
+class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
+    private val startX = random.nextFloat()
+    private val startY = 0.55f + random.nextFloat() * 0.15f
+    override val durationMs = 8000L + random.nextLong(5000)
+    
     private val path = Path()
     private val size = 4f + random.nextFloat() * 2f
     private val flutterPhase = random.nextFloat() * 6.28f
@@ -38,25 +37,22 @@ class ButterflyEvent(random: Random) : RandomEvent {
     private val wobbleAmpY = 0.02f + random.nextFloat() * 0.03f
     private val direction = if (random.nextBoolean()) 1f else -1f
     
-    override fun update(deltaTimeMs: Long, state: SimulationState, width: Float, height: Float): Boolean {
-        lifetime += deltaTimeMs
-        val t = lifetime / 1000f
+    override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
+                      parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
+                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
+        val elapsedMs = System.currentTimeMillis() - spawnTimeMs
+        val t = elapsedMs / 1000f
         
-        x = startX + direction * t * driftSpeedX * 0.1f + 
+        // Calculate position from elapsed time
+        val x = startX + direction * t * driftSpeedX * 0.1f + 
             sin(t * wobbleFreqX + flutterPhase) * wobbleAmpX +
             sin(t * wobbleFreqX * 2.3f) * wobbleAmpX * 0.4f
         
-        y = startY + 
+        val y = startY + 
             sin(t * wobbleFreqY + flutterPhase * 0.7f) * wobbleAmpY +
             sin(t * wobbleFreqY * 1.7f) * wobbleAmpY * 0.5f +
             cos(t * wobbleFreqY * 0.5f) * wobbleAmpY * 0.3f
         
-        return lifetime < maxLifetime && x > -0.1f && x < 1.1f
-    }
-    
-    override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
-                      parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
-                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
         val px = parallaxCalculator.getOffsetXForDepth(0.7f)
         val py = parallaxCalculator.getOffsetYForDepth(0.7f)
         canvas.save()

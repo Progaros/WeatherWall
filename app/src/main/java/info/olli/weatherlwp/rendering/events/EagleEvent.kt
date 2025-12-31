@@ -11,26 +11,26 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Eagle with majestic soaring silhouette
+ * Eagle with majestic soaring silhouette.
+ * Uses absolute time for deterministic position across preview/wallpaper.
  */
-class EagleEvent(random: Random) : RandomEvent {
+class EagleEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
     override val layer = EventLayer.MID_SKY  // In front of mountains, between clouds and terrain
     
-    private var progress = -0.1f
     private val baseY = 0.2f + random.nextFloat() * 0.15f
     private val speed = 0.0001f + random.nextFloat() * 0.00008f
+    override val durationMs: Long = (1.4f / speed).toLong()
+    
     private val path = Path()
     private val size = 18f + random.nextFloat() * 8f
     private val soarPhase = random.nextFloat() * 6.28f
     
-    override fun update(deltaTimeMs: Long, state: SimulationState, width: Float, height: Float): Boolean {
-        progress += speed * deltaTimeMs
-        return progress < 1.3f
-    }
-    
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
+        val elapsedMs = System.currentTimeMillis() - spawnTimeMs
+        val progress = -0.1f + speed * elapsedMs
+        
         val px = parallaxCalculator.getOffsetXForDepth(0.3f)
         val py = parallaxCalculator.getOffsetYForDepth(0.3f)
         canvas.save()

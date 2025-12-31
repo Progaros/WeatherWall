@@ -338,7 +338,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk
         )
         
-        // Draw Hills with ambient tinting
+        // Draw Hills AND their Trees together, sorted by depth
+        // This ensures trees on background hills are drawn before foreground hills
         for (hill in currentHills) {
             val px = parallaxCalculator.getOffsetXForDepth(hill.depthFactor)
             val py = parallaxCalculator.getOffsetYForDepth(hill.depthFactor)
@@ -351,31 +352,31 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             drawHill(canvas, hill, hillColor)
             
             canvas.restore()
-        }
-        
-        // Draw Trees with ambient tinting
-        for (tree in currentTrees) {
-            val px = parallaxCalculator.getOffsetXForDepth(tree.depthFactor)
-            val py = parallaxCalculator.getOffsetYForDepth(tree.depthFactor)
-            canvas.save()
-            canvas.translate(px, py)
             
-            // Trees in foreground get less tint, background trees get more
-            val normalizedDepth = ((tree.depthFactor - RenderConstants.PARALLAX_HILLS_MIN) / 
-                (RenderConstants.PARALLAX_HILLS_MAX - RenderConstants.PARALLAX_HILLS_MIN)).coerceIn(0f, 1f)
-            
-            // During day, minimize ambient tinting to preserve green color
-            // At night/dawn/dusk, apply stronger tinting for atmospheric effect
-            val timeMultiplier = if (!state.isNight && !state.isDawn && !state.isDusk) {
-                0.15f  // Minimal tinting during day
-            } else {
-                1.0f   // Full tinting at night/dawn/dusk
+            // Draw trees belonging to this hill (same depthFactor) AFTER the hill
+            val hillTrees = currentTrees.filter { it.depthFactor == hill.depthFactor }
+            for (tree in hillTrees) {
+                val treePx = parallaxCalculator.getOffsetXForDepth(tree.depthFactor)
+                val treePy = parallaxCalculator.getOffsetYForDepth(tree.depthFactor)
+                canvas.save()
+                canvas.translate(treePx, treePy)
+                
+                // Trees in foreground get less tint, background trees get more
+                val normalizedDepth = ((tree.depthFactor - RenderConstants.PARALLAX_HILLS_MIN) / 
+                    (RenderConstants.PARALLAX_HILLS_MAX - RenderConstants.PARALLAX_HILLS_MIN)).coerceIn(0f, 1f)
+                
+                // During day, minimize ambient tinting to preserve green color
+                val timeMultiplier = if (!state.isNight && !state.isDawn && !state.isDusk) {
+                    0.15f  // Minimal tinting during day
+                } else {
+                    1.0f   // Full tinting at night/dawn/dusk
+                }
+                val treeBlendAmount = RenderConstants.applyAmbientTint(tree.dayColor, ambientColor, normalizedDepth) * timeMultiplier
+                treePaint.color = RenderConstants.blendWithAmbient(tree.dayColor, ambientColor, treeBlendAmount)
+                drawTree(canvas, tree, state)
+                
+                canvas.restore()
             }
-            val blendAmount = RenderConstants.applyAmbientTint(tree.dayColor, ambientColor, normalizedDepth) * timeMultiplier
-            treePaint.color = RenderConstants.blendWithAmbient(tree.dayColor, ambientColor, blendAmount)
-            drawTree(canvas, tree, state)
-            
-            canvas.restore()
         }
     }
     
@@ -554,9 +555,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val roughVal = prefs.getInt("pref_hill_roughness", 100)
         hillRoughness = roughVal / 100f
         
-        // Hill amplitude: controls hill vertical height (0-1000 -> 0.0-10.0)
+        // Hill amplitude: controls hill vertical height (0-1000)
+        // 0 = flat, 100 = normal (1.0), 1000 = extreme (10.0)
         val ampVal = prefs.getInt("pref_hill_amplitude", 100)
-        hillAmplitude = ampVal / 100f
+        hillAmplitude = ampVal / 100f  // 0 -> 0.0, 100 -> 1.0, 1000 -> 10.0
         
         // Hill frequency: controls how many hills visible per layer (0-1000 -> 0.0-10.0)
         val freqVal = prefs.getInt("pref_hill_frequency", 100)

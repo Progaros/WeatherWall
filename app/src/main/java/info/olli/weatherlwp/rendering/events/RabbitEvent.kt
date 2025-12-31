@@ -10,28 +10,33 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Rabbit with bunny silhouette using local coordinate system
+ * Rabbit with bunny silhouette using local coordinate system.
+ * Uses absolute time for deterministic position across preview/wallpaper.
  */
-class RabbitEvent(random: Random) : RandomEvent {
-    private var x = if (random.nextBoolean()) -0.05f else 1.05f
-    private val direction = if (x < 0.5f) 1f else -1f
+class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
+    private val startX = if (random.nextBoolean()) -0.05f else 1.05f
+    private val direction = if (startX < 0.5f) 1f else -1f
     private val groundY = 0.85f + random.nextFloat() * 0.05f
-    private var hopPhase = 0f
-    private var hopTimer = 0L
     private val size = 0.5f + random.nextFloat() * 0.2f
     
-    override fun update(deltaTimeMs: Long, state: SimulationState, width: Float, height: Float): Boolean {
-        hopTimer += deltaTimeMs
-        hopPhase = (hopTimer * 0.01f) % (2f * 3.14159f)
-        if (sin(hopPhase) > 0.5f) {
-            x += direction * 0.0002f * deltaTimeMs
-        }
-        return x > -0.1f && x < 1.1f
-    }
+    // Rabbit crosses 1.15 screen widths at hop speed
+    // When hopping (sin > 0.5), speed is 0.0002/ms
+    // Approximately 50% of time spent hopping, so average speed ~0.0001/ms
+    override val durationMs: Long = (1.15f / 0.0001f).toLong()
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
+        val elapsedMs = System.currentTimeMillis() - spawnTimeMs
+        
+        val hopPhase = (elapsedMs * 0.01f) % (2f * 3.14159f)
+        
+        // Calculate X position - only moves when hopping (sin > 0.5)
+        // Use cumulative calculation based on elapsed time
+        val hopCycles = elapsedMs / (2f * 3.14159f / 0.01f)
+        val avgSpeed = 0.0001f  // Average speed accounting for hopping
+        val x = startX + direction * avgSpeed * elapsedMs
+        
         val px = parallaxCalculator.getOffsetXForDepth(-0.12f)
         val py = parallaxCalculator.getOffsetYForDepth(-0.12f)
         canvas.save()

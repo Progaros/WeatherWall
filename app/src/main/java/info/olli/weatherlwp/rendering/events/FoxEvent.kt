@@ -11,25 +11,26 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Fox with proper tail and ears using local coordinate system
+ * Fox with proper tail and ears using local coordinate system.
+ * Uses absolute time for deterministic position across preview/wallpaper.
  */
-class FoxEvent(random: Random) : RandomEvent {
-    private var x = if (random.nextBoolean()) -0.1f else 1.1f
-    private val direction = if (x < 0.5f) 1f else -1f
+class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
+    private val startX = if (random.nextBoolean()) -0.1f else 1.1f
+    private val direction = if (startX < 0.5f) 1f else -1f
     private val groundY = 0.82f + random.nextFloat() * 0.06f
-    private var walkPhase = 0f
     private val size = 0.7f + random.nextFloat() * 0.3f
     private val path = Path()
     
-    override fun update(deltaTimeMs: Long, state: SimulationState, width: Float, height: Float): Boolean {
-        x += direction * 0.00008f * deltaTimeMs
-        walkPhase += deltaTimeMs * 0.015f
-        return x > -0.15f && x < 1.15f
-    }
+    // Fox crosses ~1.25 screen widths at speed 0.00008/ms
+    override val durationMs: Long = (1.25f / 0.00008f).toLong()
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
+        val elapsedMs = System.currentTimeMillis() - spawnTimeMs
+        val x = startX + direction * 0.00008f * elapsedMs
+        val walkPhase = elapsedMs * 0.015f
+        
         val px = parallaxCalculator.getOffsetXForDepth(-0.10f)
         val py = parallaxCalculator.getOffsetYForDepth(-0.10f)
         canvas.save()
