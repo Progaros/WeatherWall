@@ -3,91 +3,56 @@ package info.olli.weatherlwp.parallax
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Calculates parallax offset values using a velocity-based system.
+ * Calculates parallax offset values using a position-based (tilt-following) system.
  * 
  * Key behavior:
- * - Scene starts at center (0,0)
- * - Sensor provides VELOCITY (change), which moves the scene position
- * - Position is clamped to maxOffsetPx in any direction
- * - When at edge and moving further in same direction: no movement
- * - When at edge and moving opposite direction: immediate response
- * - Gradual drift back to center when no movement detected
+ * - Scene offset follows the device tilt angle
+ * - Holding the phone at an angle keeps the scene offset stable
+ * - Smooth interpolation (lerp) toward target for natural feel
+ * - No drift back to center - offset stays where the tilt puts it
  * 
  * Performance optimized:
  * - Uses AtomicReference for lock-free thread safety
  * - Minimizes allocations in update loop
  * 
  * Usage:
- * 1. Call updateFromSensor(velocityX, velocityY) when sensor data arrives
- * 2. Call update() each frame to apply position updates and center drift
+ * 1. Call updateFromSensor(tiltX, tiltY) when sensor data arrives
+ * 2. Call update() each frame to smoothly interpolate toward target
  * 3. Use getOffsetForDepth(depth) to get parallax for a specific layer
  */
 class ParallaxCalculator {
     companion object {
-        /** How quickly velocity input is integrated into position */
-        private const val VELOCITY_SCALE = 1.2f
-        
-        /** How fast position drifts back to center when idle (per frame) */
-        private const val CENTER_DRIFT_RATE = 0.015f
-        
-        /** Frames without input before starting center drift */
-        private const val IDLE_FRAMES_BEFORE_DRIFT = 30
+        /** How fast position approaches target (per frame, 0-1) */
+        private const val POSITION_LERP_RATE = 0.08f
     }
     
-    // Velocity holder for atomic operations (lock-free)
-    private data class VelocityPair(val x: Float, val y: Float)
-    private val pendingVelocity = AtomicReference(VelocityPair(0f, 0f))
+    // Tilt holder for atomic operations (lock-free)
+    private data class TiltPair(val x: Float, val y: Float)
+    private val pendingTilt = AtomicReference(TiltPair(0f, 0f))
     
     // Current parallax offset position (pixels) - only modified on render thread
     private var positionX = 0f
     private var positionY = 0f
     
-    // Smoothed velocity values (for smooth movement)
-    private var smoothedVelocityX = 0f
-    private var smoothedVelocityY = 0f
-    
-    // Previous raw sensor values for low-pass filtering
-    private var lastRawVelocityX = 0f
-    private var lastRawVelocityY = 0f
-    
-    /** Low-pass filter alpha for raw sensor input (0.7 = 70% new, 30% previous) */
-    private val sensorFilterAlpha = 0.7f
-    
-    // Frame counter for idle detection
-    private var idleFrameCount = 0
+    // Target position based on sensor tilt
+    private var targetX = 0f
+    private var targetY = 0f
     
     // User-configurable settings
     var strength = 1.0f                 // Sensitivity multiplier
     var maxOffsetPx = 80f               // Maximum offset in any direction
-    var centerDriftRate = CENTER_DRIFT_RATE  // How fast to return to center
-    var smoothing = 0.4f                // Velocity smoothing factor (0.4 = 40% filter)
+    var smoothing = 0.4f                // Position smoothing factor (higher = smoother but slower)
     var depthSeparation = 0.25f         // How much depth affects movement
     
     /**
      * Update from sensor input.
      * Thread-safe: can be called from sensor callback thread.
      * Uses lock-free atomic operations for minimal overhead.
-     * @param velocityX Change in X tilt (-1 to 1, where magnitude = speed)
-     * @param velocityY Change in Y tilt (-1 to 1, where magnitude = speed)
+     * @param tiltX Current tilt in X axis (-1 to 1, absolute position)
+     * @param tiltY Current tilt in Y axis (-1 to 1, absolute position)
      */
-    fun updateFromSensor(velocityX: Float, velocityY: Float) {
-        // Low-pass filter on raw sensor input
-        val filteredX = velocityX * sensorFilterAlpha + lastRawVelocityX * (1f - sensorFilterAlpha)
-        val filteredY = velocityY * sensorFilterAlpha + lastRawVelocityY * (1f - sensorFilterAlpha)
-        lastRawVelocityX = filteredX
-        lastRawVelocityY = filteredY
-        
-        // Lock-free accumulation using CAS loop
-        while (true) {
-            val current = pendingVelocity.get()
-            val updated = VelocityPair(current.x + filteredX, current.y + filteredY)
-            if (pendingVelocity.compareAndSet(current, updated)) break
-        }
-        
-        // Reset idle counter if there's any movement
-        if (filteredX != 0f || filteredY != 0f) {
-            idleFrameCount = 0
-        }
+    fun updateFromSensor(tiltX: Float, tiltY: Float) {
+        pendingTilt.set(TiltPair(tiltX, tiltY))
     }
     
     /**
@@ -97,62 +62,29 @@ class ParallaxCalculator {
     fun update(deltaTimeMs: Long = 16L) {
         val deltaScale = deltaTimeMs / 16f  // Normalize to ~60fps
         
-        // Atomically read and clear pending velocity (lock-free)
-        val pending = pendingVelocity.getAndSet(VelocityPair(0f, 0f))
-        val currentPendingX = pending.x
-        val currentPendingY = pending.y
+        // Get latest tilt from sensor
+        val tilt = pendingTilt.get()
         
-        // Smoothing: lerp smoothed velocity toward pending velocity
-        val filterStrength = smoothing.coerceIn(0f, 0.95f)
-        smoothedVelocityX = smoothedVelocityX * filterStrength + currentPendingX * (1f - filterStrength)
-        smoothedVelocityY = smoothedVelocityY * filterStrength + currentPendingY * (1f - filterStrength)
+        // Calculate target position from tilt
+        // Tilt values are -1 to 1, map to pixel offset
+        targetX = tilt.x * maxOffsetPx * strength
+        targetY = tilt.y * maxOffsetPx * strength
         
-        // Fast magnitude check (avoid sqrt when possible)
-        val velocityMagSq = smoothedVelocityX * smoothedVelocityX + smoothedVelocityY * smoothedVelocityY
+        // Clamp target to bounds
+        targetX = targetX.coerceIn(-maxOffsetPx, maxOffsetPx)
+        targetY = targetY.coerceIn(-maxOffsetPx, maxOffsetPx)
         
-        if (velocityMagSq > 0.000001f) {
-            // Edge damping: reduce velocity as we approach the edges
-            val edgeDistX = 1f - kotlin.math.abs(positionX) / maxOffsetPx
-            val edgeDistY = 1f - kotlin.math.abs(positionY) / maxOffsetPx
-            // Use quadratic falloff for smoother edge approach
-            val edgeDampX = edgeDistX * edgeDistX * 0.7f + 0.3f  // 30% minimum at edge
-            val edgeDampY = edgeDistY * edgeDistY * 0.7f + 0.3f
-            
-            // Move position based on smoothed velocity with edge damping
-            val scale = VELOCITY_SCALE * strength * maxOffsetPx * deltaScale
-            positionX += smoothedVelocityX * scale * edgeDampX
-            positionY += smoothedVelocityY * scale * edgeDampY
-            
-            // Clamp to bounds
-            if (positionX > maxOffsetPx) positionX = maxOffsetPx
-            else if (positionX < -maxOffsetPx) positionX = -maxOffsetPx
-            if (positionY > maxOffsetPx) positionY = maxOffsetPx
-            else if (positionY < -maxOffsetPx) positionY = -maxOffsetPx
-            
-            // Fix boundary momentum: clear velocity when hitting edge in same direction
-            if (positionX == maxOffsetPx && smoothedVelocityX > 0f) smoothedVelocityX = 0f
-            if (positionX == -maxOffsetPx && smoothedVelocityX < 0f) smoothedVelocityX = 0f
-            if (positionY == maxOffsetPx && smoothedVelocityY > 0f) smoothedVelocityY = 0f
-            if (positionY == -maxOffsetPx && smoothedVelocityY < 0f) smoothedVelocityY = 0f
-        }
+        // Calculate effective lerp rate based on smoothing setting
+        // Higher smoothing = slower response (smaller lerp rate)
+        val effectiveLerpRate = POSITION_LERP_RATE * (1f - smoothing * 0.8f) * deltaScale
         
-        // Increment idle counter
-        idleFrameCount++
+        // Smoothly interpolate position toward target
+        positionX += (targetX - positionX) * effectiveLerpRate
+        positionY += (targetY - positionY) * effectiveLerpRate
         
-        // Drift back to center when idle
-        val isIdle = idleFrameCount > IDLE_FRAMES_BEFORE_DRIFT
-        val isLowInput = velocityMagSq < 0.0001f  // Nearly stationary input
-        
-        if (isIdle || isLowInput) {
-            val effectiveDriftRate = if (isIdle) centerDriftRate else centerDriftRate * 0.3f
-            val driftMult = 1f - effectiveDriftRate * deltaScale
-            positionX *= driftMult
-            positionY *= driftMult
-            
-            // Snap to zero when very close
-            if (positionX > -0.5f && positionX < 0.5f) positionX = 0f
-            if (positionY > -0.5f && positionY < 0.5f) positionY = 0f
-        }
+        // Snap to target when very close (prevents tiny oscillations)
+        if (kotlin.math.abs(targetX - positionX) < 0.1f) positionX = targetX
+        if (kotlin.math.abs(targetY - positionY) < 0.1f) positionY = targetY
     }
     
     /**
@@ -201,11 +133,8 @@ class ParallaxCalculator {
     fun reset() {
         positionX = 0f
         positionY = 0f
-        smoothedVelocityX = 0f
-        smoothedVelocityY = 0f
-        lastRawVelocityX = 0f
-        lastRawVelocityY = 0f
-        pendingVelocity.set(VelocityPair(0f, 0f))
-        idleFrameCount = 0
+        targetX = 0f
+        targetY = 0f
+        pendingTilt.set(TiltPair(0f, 0f))
     }
 }

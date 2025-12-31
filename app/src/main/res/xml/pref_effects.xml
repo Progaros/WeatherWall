@@ -2,6 +2,31 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <!-- Sky & Celestial -->
+    <PreferenceCategory android:title="Sky">
+        <SwitchPreferenceCompat
+            android:key="pref_sun_enabled"
+            android:title="Show Sun"
+            android:summary="Display sun in daytime sky"
+            android:defaultValue="true" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_moon_enabled"
+            android:title="Show Moon"
+            android:summary="Display moon at night"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_celestial_size"
+            android:title="Sun/Moon Size"
+            android:summary="Size of celestial bodies (50=small, 100=normal, 200=large)"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="25"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
     <!-- Wind Effects -->
     <PreferenceCategory android:title="Wind Animation">
         <SeekBarPreference
@@ -129,6 +154,33 @@
             app:showSeekBarValue="true"
             app:updatesContinuously="true"
             android:dependency="pref_clouds_enabled" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_cloud_shadows"
+            android:title="Cloud Shadows"
+            android:summary="Clouds cast soft shadows on terrain"
+            android:defaultValue="true"
+            android:dependency="pref_clouds_enabled" />
+    </PreferenceCategory>
+
+    <!-- Shadows & Lighting -->
+    <PreferenceCategory android:title="Shadows &amp; Lighting">
+        <SwitchPreferenceCompat
+            android:key="pref_shadows_enabled"
+            android:title="Enable Shadows"
+            android:summary="Trees and mountains cast shadows"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_shadow_strength"
+            android:title="Shadow Intensity"
+            android:summary="Darkness of shadows (0=subtle, 50=normal, 100=strong)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_shadows_enabled" />
     </PreferenceCategory>
 
 </PreferenceScreen>

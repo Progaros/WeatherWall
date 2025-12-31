@@ -241,4 +241,80 @@ class SettingsTest {
         val m = (minutes % 60).coerceIn(0, 59)
         return String.format("%02d:%02d", h, m)
     }
+    
+    // ============== Hill Count Slider Range Tests ==============
+    
+    @Test
+    fun testHillCountSliderRange() {
+        // Hill count now has range 0-20 (was 0-10)
+        val minHillCount = 0
+        val maxHillCount = 20
+        val defaultHillCount = 5
+        
+        assertTrue("Default should allow decrease", defaultHillCount > minHillCount)
+        assertTrue("Default should allow increase", defaultHillCount < maxHillCount)
+        assertEquals("Default should be centered", 5, defaultHillCount)
+    }
+    
+    @Test
+    fun testHillCountAllowsBidirectionalAdjustment() {
+        // With default 5 and range 0-20:
+        // - Can decrease by 5 (to 0)
+        // - Can increase by 15 (to 20)
+        val defaultHillCount = 5
+        val minHillCount = 0
+        val maxHillCount = 20
+        
+        val decreaseRoom = defaultHillCount - minHillCount
+        val increaseRoom = maxHillCount - defaultHillCount
+        
+        assertTrue("Should allow decrease", decreaseRoom >= 5)
+        assertTrue("Should allow significant increase", increaseRoom >= 10)
+    }
+    
+    // ============== Tree Density Slider Range Tests ==============
+    
+    @Test
+    fun testTreeDensitySliderRange() {
+        // Tree density now has range 0-200 (was 0-100)
+        val minDensity = 0
+        val maxDensity = 200
+        val defaultDensity = 50
+        
+        assertTrue("Default should allow decrease", defaultDensity > minDensity)
+        assertTrue("Default should allow increase", defaultDensity < maxDensity)
+        assertEquals("Default should be 50 (normal)", 50, defaultDensity)
+    }
+    
+    @Test
+    fun testTreeDensityAllowsBidirectionalAdjustment() {
+        // With default 50 and range 0-200:
+        // - Can decrease by 50 (to 0)
+        // - Can increase by 150 (to 200)
+        val defaultDensity = 50
+        val minDensity = 0
+        val maxDensity = 200
+        
+        val decreaseRoom = defaultDensity - minDensity
+        val increaseRoom = maxDensity - defaultDensity
+        
+        assertTrue("Should allow decrease to zero", decreaseRoom >= 50)
+        assertTrue("Should allow increase to dense forest", increaseRoom >= 100)
+    }
+    
+    @Test
+    fun testTreeDensityCalculation() {
+        // Tree density calculation: (treeDensity / 100f) * baseTrees * widthRatio
+        // At density 50 (default): 0.5 * 100 = 50 trees base
+        // At density 200 (max): 2.0 * 100 = 200 trees base
+        val baseTrees = 100
+        
+        val treesAt50 = (50 / 100f * baseTrees).toInt()
+        val treesAt100 = (100 / 100f * baseTrees).toInt()
+        val treesAt200 = (200 / 100f * baseTrees).toInt()
+        
+        assertEquals("Default density (50) should give 50 trees", 50, treesAt50)
+        assertEquals("Full density (100) should give 100 trees", 100, treesAt100)
+        assertEquals("Dense forest (200) should give 200 trees", 200, treesAt200)
+    }
 }

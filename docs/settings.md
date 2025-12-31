@@ -24,18 +24,18 @@ Complete reference for all WeatherWall configuration options.
 
 | Setting | Key | Range | Default | Description |
 |---------|-----|-------|---------|-------------|
-| Hill Layers | `pref_hill_count` | 0-10 | 4 | Number of rolling terrain layers |
+| Hill Layers | `pref_hill_count` | 0-20 | 5 | Number of rolling terrain layers (0=none, 5=normal, 20=many) |
 | Hills Start | `pref_hill_lower_start` | 30-70% | 60 | Where far hills appear on screen (Y position) |
 | Hills End | `pref_hill_upper_end` | 60-100% | 95 | Where near hills appear on screen (Y position) |
 | Hill Roughness | `pref_hill_roughness` | 0-200 | 100 | Hill curve detail (0=smooth, 200=rough) |
-| Hill Amplitude | `pref_hill_amplitude` | 0-1000 | 100 | Hill vertical height |
-| Hill Frequency | `pref_hill_frequency` | 0-1000 | 100 | How many hills visible per layer |
+| Hill Amplitude | `pref_hill_amplitude` | 0-200 | 100 | Hill vertical height |
+| Hill Frequency | `pref_hill_frequency` | 25-200 | 100 | How many hills visible per layer |
 
 ### Trees
 
 | Setting | Key | Range | Default | Description |
 |---------|-----|-------|---------|-------------|
-| Tree Density | `pref_tree_density` | 0-100 | 50 | Tree coverage (0=none, 100=dense forest) |
+| Tree Density | `pref_tree_density` | 0-200 | 50 | Tree coverage (0=none, 50=normal, 200=dense forest) |
 | Tree Spread | `pref_tree_spread` | 0-100 | 80 | Horizontal coverage (0=peaks only, 100=full hillside) |
 | Tree Sparsity | `pref_tree_sparsity` | 0-100 | 30 | Gap probability (0=dense, 100=sparse with gaps) |
 | Tree Size Randomness | `pref_tree_size_randomness` | 0-100 | 30 | Size variation (0=uniform, 100=varied) |
@@ -107,6 +107,42 @@ Complete reference for all WeatherWall configuration options.
 |---------|-----|-------|---------|-------------|
 | Enable Clouds | `pref_clouds_enabled` | on/off | on | Show animated clouds |
 | Cloud Density | `pref_cloud_density` | 0-50 | 10 | Number of cloud shapes |
+
+---
+
+## Sky & Celestial Bodies
+
+| Setting | Key | Range | Default | Description |
+|---------|-----|-------|---------|-------------|
+| Show Sun | `pref_sun_enabled` | on/off | on | Display sun during daytime hours |
+| Show Moon | `pref_moon_enabled` | on/off | on | Display moon during nighttime hours |
+| Celestial Size | `pref_celestial_size` | 50-200% | 100 | Size of sun and moon |
+
+### Sun Behavior
+- Visible from 6am to 6pm (18:00)
+- Follows arc across sky: rises on left, peaks at noon, sets on right
+- Includes warm glow effect
+
+### Moon Behavior
+- Visible from 6pm to 6am
+- Follows arc across sky during night hours
+- Crescent shadow effect for realism
+
+---
+
+## Shadows & Lighting
+
+| Setting | Key | Range | Default | Description |
+|---------|-----|-------|---------|-------------|
+| Enable Shadows | `pref_shadows_enabled` | on/off | on | Cast shadows from sun position |
+| Shadow Strength | `pref_shadow_strength` | 0-100% | 50 | Shadow darkness intensity |
+| Cloud Shadows | `pref_cloud_shadows` | on/off | off | Clouds cast ground shadows |
+
+### Light Level System
+- Light levels automatically adjust based on time of day
+- Night: 15% light level (darker fog, reduced shadows)
+- Dawn/Dusk transitions: Gradual fade between 15-100%
+- Day: 100% light level
 
 ---
 

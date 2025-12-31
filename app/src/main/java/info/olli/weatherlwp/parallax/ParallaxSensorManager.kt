@@ -26,10 +26,12 @@ import kotlin.math.sqrt
  * 2. Remap coordinate system based on display rotation  
  * 3. Extract gravity as -[R[6], R[7], R[8]] (negative third row of remapped matrix)
  * 4. Use screen-parallel gravity components for parallax with deadzone for flat positions
+ * 5. Output absolute tilt position (not velocity) so parallax follows held angle
  * 
  * Key behavior:
  * - Tilt phone left = scene shifts right (revealing left side)
  * - Tilt phone right = scene shifts left (revealing right side)
+ * - Holding phone at angle keeps scene offset (no drift to center)
  * - Works consistently in any device orientation (upright, flat, angled)
  */
 class ParallaxSensorManager(context: Context) : SensorEventListener {
@@ -41,20 +43,16 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         
         // Deadzone threshold for flat device (prevents noise when screen-parallel gravity is tiny)
         private const val DEADZONE = 0.08f
-        
-        // Sensitivity multiplier for velocity output
-        private const val VELOCITY_SCALE = 8f
-        
-        // Minimum velocity threshold (filters micro-jitters)
-        private const val MIN_VELOCITY = 0.005f
     }
     
     interface Listener {
         /**
-         * Called with velocity (change) in X and Y.
-         * Values are normalized: -1 to 1 where magnitude indicates speed of tilt change.
+         * Called with absolute tilt position in X and Y.
+         * Values are normalized: -1 to 1 where the value represents tilt angle.
+         * Tilt left = negative X, tilt right = positive X.
+         * Tilt forward = negative Y, tilt back = positive Y.
          */
-        fun onOffsetChanged(velocityX: Float, velocityY: Float)
+        fun onTiltChanged(tiltX: Float, tiltY: Float)
     }
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -219,24 +217,12 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             return
         }
         
-        // Compute velocity (change over time)
-        var velocityX = if (dt > 0f) (filteredX - prevFilteredX) * VELOCITY_SCALE else 0f
-        var velocityY = if (dt > 0f) (filteredY - prevFilteredY) * VELOCITY_SCALE else 0f
-        
-        // Apply dead zone for micro-jitters
-        if (kotlin.math.abs(velocityX) < MIN_VELOCITY) velocityX = 0f
-        if (kotlin.math.abs(velocityY) < MIN_VELOCITY) velocityY = 0f
-        
-        // Clamp to valid range
-        velocityX = velocityX.coerceIn(-1f, 1f)
-        velocityY = velocityY.coerceIn(-1f, 1f)
-        
         // Store for next frame
         prevFilteredX = filteredX
         prevFilteredY = filteredY
         
-        // Send to listener
-        listener?.onOffsetChanged(velocityX, velocityY)
+        // Send absolute tilt position to listener
+        listener?.onTiltChanged(filteredX, filteredY)
     }
     
     /**

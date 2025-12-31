@@ -33,6 +33,11 @@ data class SimulationState(
     val windMultiplier: Float = 1f,     // User setting multiplier for wind effect
     val treeSwaySpeed: Float = 1f,      // User setting multiplier for tree sway speed
     
+    // Shadows & Lighting
+    val shadowsEnabled: Boolean = true,      // Global shadow toggle
+    val shadowStrength: Float = 0.5f,        // 0-1 shadow intensity from settings
+    val cloudShadowsEnabled: Boolean = true, // Cloud shadows on terrain
+    
     // Screen
     val screenWidth: Float,
     val screenHeight: Float,
@@ -49,6 +54,39 @@ data class SimulationState(
      * Get wind Y component (-1 to 1).
      */
     fun getWindY(): Float = windStrength * kotlin.math.sin(Math.toRadians(windDirection.toDouble())).toFloat()
+    
+    /**
+     * Get ambient light level (0.0 = deep night, 1.0 = bright day).
+     * Used to adjust colors of fog, rain, and other weather effects.
+     * 
+     * Timeline:
+     * - 0:00-5:00: Night (0.15)
+     * - 5:00-7:00: Dawn transition (0.15 -> 1.0)
+     * - 7:00-17:00: Day (1.0)
+     * - 17:00-20:00: Dusk transition (1.0 -> 0.15)
+     * - 20:00-24:00: Night (0.15)
+     */
+    fun getLightLevel(): Float {
+        val hour = timeOfDayHours
+        return when {
+            hour < 5f -> 0.15f  // Night
+            hour < 7f -> 0.15f + (hour - 5f) / 2f * 0.85f  // Dawn transition
+            hour < 17f -> 1f  // Day
+            hour < 20f -> 1f - (hour - 17f) / 3f * 0.85f  // Dusk transition  
+            else -> 0.15f  // Night
+        }
+    }
+    
+    /**
+     * Get effective shadow intensity combining settings and light level.
+     * Shadows are strongest during bright day and fade at night.
+     * @return 0.0 = no shadow, 1.0 = full shadow intensity
+     */
+    fun getEffectiveShadowStrength(): Float {
+        if (!shadowsEnabled) return 0f
+        // Shadows scale with light level - no point in shadows at night
+        return shadowStrength * getLightLevel()
+    }
     
     /**
      * Get cloud count based on density setting.

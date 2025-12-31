@@ -194,4 +194,107 @@ class SimulationStateTest {
         assertEquals(0f, state.getWindX(), 0.01f)
         assertEquals(0f, state.getWindY(), 0.01f)
     }
+    
+    // ============== Light Level Tests ==============
+    
+    @Test
+    fun `getLightLevel returns low value at midnight`() {
+        val state = SimulationState.default().copy(timeOfDayHours = 0f)
+        assertEquals(0.15f, state.getLightLevel(), 0.01f)
+    }
+    
+    @Test
+    fun `getLightLevel returns low value at 3am`() {
+        val state = SimulationState.default().copy(timeOfDayHours = 3f)
+        assertEquals(0.15f, state.getLightLevel(), 0.01f)
+    }
+    
+    @Test
+    fun `getLightLevel transitions during dawn`() {
+        // At 5am, just starting dawn
+        val state5am = SimulationState.default().copy(timeOfDayHours = 5f)
+        assertEquals(0.15f, state5am.getLightLevel(), 0.01f)
+        
+        // At 6am, halfway through dawn
+        val state6am = SimulationState.default().copy(timeOfDayHours = 6f)
+        assertTrue(state6am.getLightLevel() > 0.4f)
+        assertTrue(state6am.getLightLevel() < 0.7f)
+        
+        // At 7am, dawn complete
+        val state7am = SimulationState.default().copy(timeOfDayHours = 7f)
+        assertEquals(1f, state7am.getLightLevel(), 0.01f)
+    }
+    
+    @Test
+    fun `getLightLevel returns full value during day`() {
+        val stateNoon = SimulationState.default().copy(timeOfDayHours = 12f)
+        assertEquals(1f, stateNoon.getLightLevel(), 0.01f)
+        
+        val state3pm = SimulationState.default().copy(timeOfDayHours = 15f)
+        assertEquals(1f, state3pm.getLightLevel(), 0.01f)
+    }
+    
+    @Test
+    fun `getLightLevel transitions during dusk`() {
+        // At 17:00, just starting dusk
+        val state5pm = SimulationState.default().copy(timeOfDayHours = 17f)
+        assertEquals(1f, state5pm.getLightLevel(), 0.01f)
+        
+        // At 18:30, midway through dusk
+        val state630pm = SimulationState.default().copy(timeOfDayHours = 18.5f)
+        assertTrue(state630pm.getLightLevel() > 0.4f)
+        assertTrue(state630pm.getLightLevel() < 0.7f)
+        
+        // At 20:00, night begins
+        val state8pm = SimulationState.default().copy(timeOfDayHours = 20f)
+        assertEquals(0.15f, state8pm.getLightLevel(), 0.01f)
+    }
+    
+    @Test
+    fun `getLightLevel returns low value at 11pm`() {
+        val state = SimulationState.default().copy(timeOfDayHours = 23f)
+        assertEquals(0.15f, state.getLightLevel(), 0.01f)
+    }
+    
+    // ============== Shadow Tests ==============
+    
+    @Test
+    fun `getEffectiveShadowStrength returns zero when disabled`() {
+        val state = SimulationState.default().copy(
+            shadowsEnabled = false,
+            shadowStrength = 1f,
+            timeOfDayHours = 12f  // Bright day
+        )
+        assertEquals(0f, state.getEffectiveShadowStrength(), 0.01f)
+    }
+    
+    @Test
+    fun `getEffectiveShadowStrength returns full strength at midday`() {
+        val state = SimulationState.default().copy(
+            shadowsEnabled = true,
+            shadowStrength = 0.5f,
+            timeOfDayHours = 12f
+        )
+        // Light level at noon = 1.0, so effective = 0.5 * 1.0 = 0.5
+        assertEquals(0.5f, state.getEffectiveShadowStrength(), 0.01f)
+    }
+    
+    @Test
+    fun `getEffectiveShadowStrength scales with light level at night`() {
+        val state = SimulationState.default().copy(
+            shadowsEnabled = true,
+            shadowStrength = 1f,
+            timeOfDayHours = 0f  // Midnight
+        )
+        // Light level at midnight = 0.15, so effective = 1.0 * 0.15 = 0.15
+        assertEquals(0.15f, state.getEffectiveShadowStrength(), 0.01f)
+    }
+    
+    @Test
+    fun `default state has shadows enabled`() {
+        val state = SimulationState.default()
+        assertTrue(state.shadowsEnabled)
+        assertTrue(state.cloudShadowsEnabled)
+        assertEquals(0.5f, state.shadowStrength, 0.01f)
+    }
 }

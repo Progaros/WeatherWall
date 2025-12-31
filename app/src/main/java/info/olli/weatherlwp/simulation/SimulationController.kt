@@ -96,6 +96,9 @@ class SimulationController(private val context: Context) {
             windGust = windGust,
             windMultiplier = settings.windMultiplier,
             treeSwaySpeed = settings.treeSwaySpeed,
+            shadowsEnabled = settings.shadowsEnabled,
+            shadowStrength = settings.shadowStrength,
+            cloudShadowsEnabled = settings.cloudShadowsEnabled,
             screenWidth = screenWidth,
             screenHeight = screenHeight,
             isDebugMode = settings.debugEnabled

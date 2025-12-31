@@ -275,7 +275,7 @@ class WeatherLayer : SceneLayer {
             EffectType.SNOW -> renderSnow(canvas, state)
             EffectType.HAIL -> renderHail(canvas, state)
             EffectType.LIGHTNING -> renderLightning(canvas, state)
-            EffectType.FOG -> renderFog(canvas)
+            EffectType.FOG -> renderFog(canvas, state)
             EffectType.NONE -> {}
         }
     }
@@ -523,15 +523,26 @@ class WeatherLayer : SceneLayer {
     /**
      * Render fog as a smooth gradient overlay with subtle animation.
      * Dense at bottom, fading to transparent at top. Intensity affects opacity.
+     * Color adjusts based on light level - darker/bluer at night.
      */
-    private fun renderFog(canvas: Canvas) {
+    private fun renderFog(canvas: Canvas, state: SimulationState) {
         // Base fog opacity depends on intensity (30-70%)
         val baseAlpha = (60 + intensity * 120).toInt().coerceIn(50, 170)
         
-        // Fog color from centralized constants
-        val fogR = RenderConstants.FOG_R
-        val fogG = RenderConstants.FOG_G
-        val fogB = RenderConstants.FOG_B
+        // Adjust fog color based on light level
+        // Day: bright gray (210, 215, 225)
+        // Night: dark blue-gray (40, 45, 60)
+        val lightLevel = state.getLightLevel()
+        val nightR = 40
+        val nightG = 45
+        val nightB = 60
+        val dayR = RenderConstants.FOG_R
+        val dayG = RenderConstants.FOG_G
+        val dayB = RenderConstants.FOG_B
+        
+        val fogR = (nightR + (dayR - nightR) * lightLevel).toInt()
+        val fogG = (nightG + (dayG - nightG) * lightLevel).toInt()
+        val fogB = (nightB + (dayB - nightB) * lightLevel).toInt()
         
         // Create a smooth vertical gradient from bottom (dense) to top (clear)
         // Extend gradient BELOW screen to avoid visible sharp edge at bottom

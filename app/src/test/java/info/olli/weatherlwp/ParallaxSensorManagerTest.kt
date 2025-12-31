@@ -14,15 +14,13 @@ import kotlin.math.sqrt
  * - Gravity in screen coords = -[R[6], R[7], R[8]] (negative third row of remapped matrix)
  * - Deadzone prevents noise when device is flat
  * - Low-pass filter for smooth motion
- * - Velocity = delta(filtered_tilt) for parallax effect
+ * - Outputs absolute tilt position (not velocity) so parallax follows held angle
  */
 class ParallaxSensorManagerTest {
 
     companion object {
         const val FILTER_ALPHA = 0.12f  // Matches ParallaxSensorManager
         const val DEADZONE = 0.08f
-        const val VELOCITY_SCALE = 8f
-        const val MIN_VELOCITY = 0.005f
     }
 
     // ============== Gravity Extraction Tests ==============
@@ -136,46 +134,60 @@ class ParallaxSensorManagerTest {
             kotlin.math.abs(filtered - target) < 0.01f)
     }
     
-    // ============== Velocity Calculation Tests ==============
+    // ============== Tilt Position Output Tests ==============
     
     @Test
-    fun `velocity is zero when filtered values unchanged`() {
-        val prevFiltered = 0.5f
-        val currentFiltered = 0.5f
-        val dt = 0.016f  // ~60fps
+    fun `filtered tilt position is output directly`() {
+        // The new system outputs filtered tilt position, not velocity
+        var filtered = 0f
+        val target = 0.6f
         
-        val velocity = if (dt > 0f) (currentFiltered - prevFiltered) * VELOCITY_SCALE else 0f
+        // Simulate several filter updates
+        for (i in 0 until 50) {
+            filtered += FILTER_ALPHA * (target - filtered)
+        }
         
-        assertEquals("No change = no velocity", 0f, velocity, 0.001f)
+        // The filtered value IS the output (no velocity calculation)
+        assertTrue("Filtered value should be close to target after convergence",
+            kotlin.math.abs(filtered - target) < 0.05f)
     }
     
     @Test
-    fun `velocity scales with rate of change`() {
-        val prevFiltered = 0.3f
-        val currentFiltered = 0.5f
-        val dt = 0.016f
+    fun `tilt position is stable when device held at angle`() {
+        // Simulate holding device at constant tilt
+        var filtered = 0f
+        val constantTarget = 0.5f
         
-        val velocity = (currentFiltered - prevFiltered) * VELOCITY_SCALE
+        // Initial convergence
+        for (i in 0 until 100) {
+            filtered += FILTER_ALPHA * (constantTarget - filtered)
+        }
+        val initialPosition = filtered
         
-        assertTrue("Positive change = positive velocity", velocity > 0)
-        assertEquals("Velocity should be scaled delta", 
-            (0.5f - 0.3f) * VELOCITY_SCALE, velocity, 0.001f)
+        // Continue with same target (device held steady)
+        for (i in 0 until 50) {
+            filtered += FILTER_ALPHA * (constantTarget - filtered)
+        }
+        val laterPosition = filtered
+        
+        // Position should be stable
+        assertEquals("Position should remain stable when tilt is constant",
+            initialPosition, laterPosition, 0.001f)
     }
     
     @Test
-    fun `small velocity filtered by dead zone`() {
-        val velocity = MIN_VELOCITY * 0.5f
-        val filtered = if (kotlin.math.abs(velocity) < MIN_VELOCITY) 0f else velocity
+    fun `tilt position returns to zero when device leveled`() {
+        var filtered = 0.5f  // Start at some offset
+        val levelTarget = 0f  // Device is now level
         
-        assertEquals("Below threshold should be zero", 0f, filtered, 0.0001f)
-    }
-    
-    @Test
-    fun `velocity clamped to valid range`() {
-        val largeVelocity = 5f
-        val clamped = largeVelocity.coerceIn(-1f, 1f)
+        // Simulate returning to level
+        for (i in 0 until 100) {
+            filtered += FILTER_ALPHA * (levelTarget - filtered)
+        }
         
-        assertEquals("Large velocity should be clamped to 1", 1f, clamped, 0.001f)
+        // Should return to near zero
+        assertTrue("Position should return to near zero when leveled",
+            kotlin.math.abs(filtered) < 0.01f)
     }
     
     // ============== Display Rotation Vector Remapping Tests ==============

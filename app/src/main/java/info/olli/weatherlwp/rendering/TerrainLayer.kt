@@ -199,9 +199,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         // Calculate tree count based on density and extended width
         // More width = more trees to maintain density
+        // Density 50 = normal (50 trees base), 200 = dense forest (200 trees base)
         val widthRatio = extendedWidth / (height * RenderConstants.REFERENCE_ASPECT_RATIO).coerceAtLeast(1f)
-        val baseTrees = 100  // Base number for standard density
-        val treeCount = ((treeDensity / 100f) * baseTrees * widthRatio).toInt().coerceIn(0, 500)
+        val baseTrees = 100  // Base number for standard density (at 100% = 100 trees)
+        val treeCount = ((treeDensity / 100f) * baseTrees * widthRatio).toInt().coerceIn(0, 1000)
         if (treeCount <= 0) {
             trees = emptyList()
             return
@@ -523,9 +524,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // Random seed for consistent placement
         randomSeed = prefs.getInt("pref_random_seed", 42)
         
-        hillCount = prefs.getInt("pref_hill_count", 2)  // 2 hill layers
+        hillCount = prefs.getInt("pref_hill_count", 5)  // 5 hill layers default, range 0-20
         
-        // Tree density: 0-100 percentage
+        // Tree density: 0-200 percentage (50 = normal, 200 = dense forest)
         treeDensity = prefs.getInt("pref_tree_density", 50)
         
         // Tree spread: how far along hills trees spread (0=peaks only, 100=full hillside)

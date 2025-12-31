@@ -40,7 +40,7 @@ class ParallaxScene(
     
     // Layers
     private val layers = ArrayList<SceneLayer>()
-    private val skyLayer = SkyLayer()
+    private val skyLayer = SkyLayer(context)
     private val mountainLayer = MountainLayer(context)
     private val cloudLayer = CloudLayer(context)
     private val terrainLayer = TerrainLayer(context)
@@ -57,7 +57,6 @@ class ParallaxScene(
     // Settings
     private var parallaxStrength = 1.0f
     private var parallaxMaxOffsetPx = 40f
-    private var parallaxReturnRate = 0.02f
     private var weatherEnabled = true
     private var seasonalEnabled = true
     
@@ -83,9 +82,9 @@ class ParallaxScene(
         sensor.stop()
     }
 
-    override fun onOffsetChanged(velocityX: Float, velocityY: Float) {
-        // Pass normalized sensor input to calculator
-        parallaxCalculator.updateFromSensor(velocityX, velocityY)
+    override fun onTiltChanged(tiltX: Float, tiltY: Float) {
+        // Pass absolute tilt position to calculator
+        parallaxCalculator.updateFromSensor(tiltX, tiltY)
     }
 
     fun render(canvas: Canvas) {
@@ -220,16 +219,6 @@ class ParallaxScene(
             // Max offset slider: 5..200 px (default 80)
             parallaxMaxOffsetPx = (prefs.getInt("pref_parallax_max_offset", 80)).toFloat().coerceIn(5f, 200f)
             
-            // Return speed slider: 1..100 represents 0-5 seconds return time (log scale)
-            // Slider value 1 = ~0 seconds (instant), 100 = ~5 seconds
-            // At 60fps, we calculate drift rate to reach ~95% reduction in target time
-            // Formula: driftRate = 1 - 0.05^(1/frames) where frames = seconds * 60
-            val returnSpeedVal = prefs.getInt("pref_parallax_return_speed", 50).coerceIn(1, 100)
-            // Log scale: 1->0.1s, 50->1s, 100->5s (exponential mapping)
-            val returnSeconds = 0.1 * Math.pow(50.0, returnSpeedVal.toDouble() / 100.0)  // 0.1 to 5.0 seconds
-            val returnFrames = (returnSeconds * 60.0).coerceAtLeast(1.0)
-            parallaxReturnRate = (1.0 - Math.pow(0.05, 1.0 / returnFrames)).toFloat()
-            
             // Smoothing slider: map 1..100 -> 0.1f..0.9f (filter strength)
             // Higher = more filtering = smoother but slower response
             val smoothingVal = prefs.getInt("pref_parallax_smoothing", 40).coerceIn(1, 100)
@@ -243,7 +232,6 @@ class ParallaxScene(
             // Apply to parallax calculator
             parallaxCalculator.strength = parallaxStrength
             parallaxCalculator.maxOffsetPx = parallaxMaxOffsetPx
-            parallaxCalculator.centerDriftRate = parallaxReturnRate
             parallaxCalculator.smoothing = smoothingFactor
             parallaxCalculator.depthSeparation = depthSeparation
             

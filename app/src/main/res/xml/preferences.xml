@@ -76,9 +76,9 @@
         <SeekBarPreference
             android:key="pref_hill_count"
             android:title="Hill Layers"
-            android:summary="Rolling terrain layers (0-10)"
+            android:summary="Rolling terrain layers (0=none, 5=normal, 20=many)"
             android:defaultValue="5"
-            android:max="10"
+            android:max="20"
             app:min="0"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
@@ -136,9 +136,9 @@
         <SeekBarPreference
             android:key="pref_tree_density"
             android:title="Tree Density"
-            android:summary="Tree coverage (0=none, 50=normal, 100=dense forest)"
+            android:summary="Tree coverage (0=none, 50=normal, 200=dense forest)"
             android:defaultValue="50"
-            android:max="100"
+            android:max="200"
             app:min="0"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />

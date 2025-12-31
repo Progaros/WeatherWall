@@ -43,6 +43,14 @@ class SimulationSettings(context: Context) {
     var cloudDensity: CloudDensity = CloudDensity.AUTO
         private set
     
+    // Shadow settings
+    var shadowsEnabled: Boolean = true
+        private set
+    var shadowStrength: Float = 0.5f
+        private set
+    var cloudShadowsEnabled: Boolean = true
+        private set
+    
     // Debug
     var debugEnabled: Boolean = false
         private set
@@ -101,6 +109,12 @@ class SimulationSettings(context: Context) {
         } else {
             CloudDensity.AUTO
         }
+        
+        // Shadow settings
+        shadowsEnabled = prefs.getBoolean("pref_shadows_enabled", true)
+        val shadowVal = prefs.getInt("pref_shadow_strength", 50)
+        shadowStrength = shadowVal / 100f
+        cloudShadowsEnabled = prefs.getBoolean("pref_cloud_shadows", true)
         
         // Debug - also handle cloud and weather overrides from simulation mode
         if (debugEnabled) {

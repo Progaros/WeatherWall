@@ -1,11 +1,13 @@
 package info.olli.weatherlwp.rendering
 
+import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.RadialGradient
 import android.graphics.Shader
+import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationState
 import kotlin.math.abs
@@ -13,10 +15,10 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Renders the sky background with gradient colors, stars, and vignette.
+ * Renders the sky background with gradient colors, stars, sun, moon, and vignette.
  * 
  * Uses SimulationState for:
- * - Time of day (colors, star visibility)
+ * - Time of day (colors, star visibility, sun/moon position)
  * - absoluteTimeMs (star twinkle animation)
  * 
  * Uses RenderConstants for:
@@ -26,9 +28,10 @@ import kotlin.random.Random
  * 
  * Design notes:
  * - Night scenes should have darker corners (vignette effect)
- * - Creates focus and atmosphere
+ * - Sun follows arc across sky during day
+ * - Moon visible at night
  */
-class SkyLayer : SceneLayer {
+class SkyLayer(private val context: Context? = null) : SceneLayer {
     private val skyPaint = Paint()
     private val starPaint = Paint().apply { 
         color = Color.WHITE 
@@ -37,6 +40,14 @@ class SkyLayer : SceneLayer {
     }
     private val vignettePaint = Paint().apply {
         isAntiAlias = true
+    }
+    private val sunPaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.FILL
+    }
+    private val moonPaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.FILL
     }
     
     private var width = 0f
@@ -49,9 +60,15 @@ class SkyLayer : SceneLayer {
     private var skyTop = Color.BLUE
     private var skyMid = Color.CYAN
     private var skyHorizon = Color.WHITE
+    
+    // Settings
+    private var sunEnabled = true
+    private var moonEnabled = true
+    private var celestialSize = 1.0f
 
     init {
         generateStars()
+        reloadSettings()
     }
 
     private fun generateStars() {
@@ -180,6 +197,18 @@ class SkyLayer : SceneLayer {
             }
         }
         
+        // Sun and Moon with subtle parallax
+        val celestialParallaxX = px * RenderConstants.PARALLAX_SKY * 0.5f
+        val celestialParallaxY = py * RenderConstants.PARALLAX_SKY * 0.5f
+        
+        if (sunEnabled) {
+            drawSun(canvas, state, celestialParallaxX, celestialParallaxY)
+        }
+        
+        if (moonEnabled) {
+            drawMoon(canvas, state, celestialParallaxX, celestialParallaxY)
+        }
+        
         // Vignette effect for night/dusk - darker corners for atmosphere
         if (state.isNight || state.isDusk) {
             val vignetteAlpha = if (state.isNight) 80 else 40
@@ -213,8 +242,123 @@ class SkyLayer : SceneLayer {
         vignettePaint.shader = null
     }
 
+    /**
+     * Draw the sun as a bright circle following an arc across the sky.
+     * Position is based on time of day - rises in east (left), sets in west (right).
+     * Arc goes from bottom left at sunrise (6am), peaks at noon (12pm), to bottom right at sunset (6pm).
+     */
+    private fun drawSun(canvas: Canvas, state: SimulationState, parallaxX: Float, parallaxY: Float) {
+        val hour = state.timeOfDayHours
+        
+        // Sun visible from 6am to 18pm (6pm)
+        if (hour < 6f || hour > 18f) return
+        
+        // Calculate position along arc (0 = sunrise at 6am, 1 = sunset at 6pm)
+        val dayProgress = (hour - 6f) / 12f  // 0 to 1 over daytime
+        
+        // X position: left to right across screen
+        val sunX = width * (0.1f + dayProgress * 0.8f)
+        
+        // Y position: parabolic arc, highest at noon
+        // At progress 0.5 (noon), should be at top. At 0 and 1, near horizon.
+        val arcHeight = height * 0.7f  // How high the arc goes
+        val baseY = height * 0.85f  // Horizon level
+        val arcProgress = 1f - 4f * (dayProgress - 0.5f) * (dayProgress - 0.5f)  // Parabola: 0 at edges, 1 at center
+        val sunY = baseY - arcHeight * arcProgress
+        
+        // Sun size
+        val baseRadius = kotlin.math.min(width, height) * 0.04f
+        val radius = baseRadius * celestialSize
+        
+        // Sun glow gradient (warm yellow/orange center, fading out)
+        val glowRadius = radius * 3f
+        val sunGradient = RadialGradient(
+            sunX + parallaxX, sunY + parallaxY, glowRadius,
+            intArrayOf(
+                Color.argb(255, 255, 250, 200),  // Bright warm center
+                Color.argb(200, 255, 230, 150),
+                Color.argb(100, 255, 200, 100),
+                Color.argb(0, 255, 180, 50)
+            ),
+            floatArrayOf(0f, 0.3f, 0.6f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        
+        sunPaint.shader = sunGradient
+        canvas.drawCircle(sunX + parallaxX, sunY + parallaxY, glowRadius, sunPaint)
+        
+        // Solid sun core
+        sunPaint.shader = null
+        sunPaint.color = Color.argb(255, 255, 255, 220)
+        canvas.drawCircle(sunX + parallaxX, sunY + parallaxY, radius, sunPaint)
+    }
+
+    /**
+     * Draw the moon as a pale circle with crescent effect.
+     * Visible at night, follows arc opposite to sun.
+     */
+    private fun drawMoon(canvas: Canvas, state: SimulationState, parallaxX: Float, parallaxY: Float) {
+        val hour = state.timeOfDayHours
+        
+        // Moon visible from 18pm (6pm) to 6am
+        if (hour >= 6f && hour <= 18f) return
+        
+        // Calculate position along arc (normalize night hours)
+        // Night runs from 18 to 24 (6pm to midnight) and 0 to 6 (midnight to 6am)
+        val nightProgress = if (hour >= 18f) {
+            (hour - 18f) / 12f  // 18-24 maps to 0-0.5
+        } else {
+            (hour + 6f) / 12f  // 0-6 maps to 0.5-1
+        }
+        
+        // X position: left to right across screen
+        val moonX = width * (0.1f + nightProgress * 0.8f)
+        
+        // Y position: parabolic arc, highest at midnight
+        val arcHeight = height * 0.6f  // Moon arc is a bit lower than sun
+        val baseY = height * 0.85f
+        val arcProgress = 1f - 4f * (nightProgress - 0.5f) * (nightProgress - 0.5f)
+        val moonY = baseY - arcHeight * arcProgress
+        
+        // Moon size
+        val baseRadius = kotlin.math.min(width, height) * 0.03f
+        val radius = baseRadius * celestialSize
+        
+        // Moon glow gradient (soft silver/blue)
+        val glowRadius = radius * 2.5f
+        val moonGradient = RadialGradient(
+            moonX + parallaxX, moonY + parallaxY, glowRadius,
+            intArrayOf(
+                Color.argb(180, 220, 230, 255),  // Pale silver center
+                Color.argb(100, 180, 200, 230),
+                Color.argb(30, 150, 170, 200),
+                Color.TRANSPARENT
+            ),
+            floatArrayOf(0f, 0.4f, 0.7f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        
+        moonPaint.shader = moonGradient
+        canvas.drawCircle(moonX + parallaxX, moonY + parallaxY, glowRadius, moonPaint)
+        
+        // Solid moon disc
+        moonPaint.shader = null
+        moonPaint.color = Color.argb(255, 240, 245, 255)
+        canvas.drawCircle(moonX + parallaxX, moonY + parallaxY, radius, moonPaint)
+        
+        // Crescent shadow (create crescent effect by drawing a dark circle offset)
+        moonPaint.color = Color.argb(220, 30, 35, 60)  // Match night sky
+        val crescentOffset = radius * 0.3f
+        canvas.drawCircle(moonX + parallaxX + crescentOffset, moonY + parallaxY - crescentOffset * 0.5f, radius * 0.85f, moonPaint)
+    }
+
     override fun reloadSettings() {
-        // No user settings for sky yet
+        context?.let { ctx ->
+            val prefs = PreferenceManager.getDefaultSharedPreferences(ctx)
+            sunEnabled = prefs.getBoolean("pref_sun_enabled", true)
+            moonEnabled = prefs.getBoolean("pref_moon_enabled", true)
+            celestialSize = prefs.getInt("pref_celestial_size", 100) / 100f
+        }
     }
 
     override fun destroy() {
