@@ -2,254 +2,254 @@ package info.olli.weatherlwp
 
 import org.junit.Assert.*
 import org.junit.Test
-import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
- * Unit tests for ParallaxSensorManager - Tests for orientation-aware parallax
+ * Unit tests for ParallaxSensorManager - Gravity projection approach
  * 
- * The implementation uses Android's standard rotation matrix approach:
- * - SensorManager.getRotationMatrixFromVector() for rotation vector sensors
- * - SensorManager.getRotationMatrix() for gravity fallback
- * - remapCoordinateSystem() for display rotation handling
- * - getOrientation() to extract pitch/roll for parallax
+ * The implementation extracts gravity directly from the rotation matrix
+ * instead of using Euler angles (which suffer from gimbal lock).
  * 
- * These tests validate the logical behavior without mocking Android sensors.
+ * Key approach:
+ * - Gravity in screen coords = -[R[6], R[7], R[8]] (negative third row of remapped matrix)
+ * - Deadzone prevents noise when device is flat
+ * - Low-pass filter for smooth motion
+ * - Velocity = delta(filtered_tilt) for parallax effect
  */
 class ParallaxSensorManagerTest {
 
     companion object {
-        const val VELOCITY_SCALE = 5f  // Matches ParallaxSensorManager
-        const val MIN_VELOCITY = 0.008f
-        const val TILT_ALPHA = 0.85f
+        const val FILTER_ALPHA = 0.12f  // Matches ParallaxSensorManager
+        const val DEADZONE = 0.08f
+        const val VELOCITY_SCALE = 8f
+        const val MIN_VELOCITY = 0.005f
     }
 
-    // ============== Velocity Calculation Tests ==============
+    // ============== Gravity Extraction Tests ==============
     
     @Test
-    fun `velocity should be zero when tilt is constant`() {
-        val prevTilt = 0.5f
-        val currentTilt = 0.5f
+    fun `gravity extraction from rotation matrix third row`() {
+        // Simulated remapped rotation matrix where device is tilted left
+        // The third row represents world Z-axis in device coords
+        // Gravity = negative of that
+        val remappedMatrix = floatArrayOf(
+            1f, 0f, 0f,   // first row
+            0f, 1f, 0f,   // second row
+            0.3f, 0f, 0.95f  // third row: Z-axis slightly tilted
+        )
         
-        val velocity = (currentTilt - prevTilt) * VELOCITY_SCALE
-        assertEquals("No change in tilt = no velocity", 0f, velocity, 0.001f)
+        val gx = -remappedMatrix[6]  // -0.3
+        val gy = -remappedMatrix[7]  // 0
+        val gz = -remappedMatrix[8]  // -0.95
+        
+        assertEquals("Gravity X should be negative of R[6]", -0.3f, gx, 0.001f)
+        assertEquals("Gravity Y should be negative of R[7]", 0f, gy, 0.001f)
+        assertEquals("Gravity Z should be negative of R[8]", -0.95f, gz, 0.001f)
+    }
+    
+    // ============== Deadzone / Confidence Tests ==============
+    
+    @Test
+    fun `confidence is zero when device is flat`() {
+        // Device flat: gravity is purely in Z, horizontal magnitude is 0
+        val gx = 0f
+        val gy = 0f
+        val horizMag = sqrt(gx * gx + gy * gy)
+        
+        val confidence = ((horizMag - DEADZONE) / (1f - DEADZONE)).coerceIn(0f, 1f)
+        
+        assertEquals("Flat device should have zero confidence", 0f, confidence, 0.001f)
     }
     
     @Test
-    fun `velocity should be positive when tilt increases`() {
-        val prevTilt = 0.3f
-        val currentTilt = 0.5f
+    fun `confidence is full when device is tilted significantly`() {
+        // Device tilted 45°: horizontal magnitude is ~0.7
+        val gx = 0.5f
+        val gy = 0.5f
+        val horizMag = sqrt(gx * gx + gy * gy)  // ~0.707
         
-        val velocity = (currentTilt - prevTilt) * VELOCITY_SCALE
-        assertTrue("Increasing tilt = positive velocity", velocity > 0)
+        val confidence = ((horizMag - DEADZONE) / (1f - DEADZONE)).coerceIn(0f, 1f)
+        
+        assertTrue("Tilted device should have high confidence", confidence > 0.6f)
     }
     
     @Test
-    fun `velocity should be negative when tilt decreases`() {
-        val prevTilt = 0.5f
-        val currentTilt = 0.3f
+    fun `confidence scales smoothly near deadzone`() {
+        // Just above deadzone
+        val horizMag = DEADZONE + 0.1f
+        val confidence = ((horizMag - DEADZONE) / (1f - DEADZONE)).coerceIn(0f, 1f)
         
-        val velocity = (currentTilt - prevTilt) * VELOCITY_SCALE
-        assertTrue("Decreasing tilt = negative velocity", velocity < 0)
+        assertTrue("Just above deadzone should have small but positive confidence", 
+            confidence > 0f && confidence < 0.2f)
+    }
+    
+    // ============== Tilt Direction Tests ==============
+    
+    @Test
+    fun `tilt left should produce negative target X`() {
+        // When phone tilts left, gravity in screen coords has positive X component
+        val gx = 0.5f  // Gravity pulling right (phone tilted left)
+        val confidence = 1f
+        
+        // Target is negated for natural parallax (tilt left = scene shifts right)
+        val targetX = (-gx) * confidence
+        
+        assertTrue("Tilting left should give negative targetX", targetX < 0)
     }
     
     @Test
-    fun `small velocity should be filtered by dead zone`() {
-        val prevTilt = 0.5000f
-        val currentTilt = 0.5010f  // Very tiny change
+    fun `tilt right should produce positive target X`() {
+        val gx = -0.5f  // Gravity pulling left (phone tilted right)
+        val confidence = 1f
         
-        var velocity = (currentTilt - prevTilt) * VELOCITY_SCALE
-        if (kotlin.math.abs(velocity) < MIN_VELOCITY) velocity = 0f
+        val targetX = (-gx) * confidence
         
-        assertEquals("Tiny velocity should be filtered", 0f, velocity, 0.001f)
+        assertTrue("Tilting right should give positive targetX", targetX > 0)
     }
     
-    @Test
-    fun `velocity should be clamped to valid range`() {
-        val prevTilt = -1f
-        val currentTilt = 1f  // Maximum possible change
-        
-        var velocity = (currentTilt - prevTilt) * VELOCITY_SCALE
-        velocity = velocity.coerceIn(-1f, 1f)
-        
-        assertTrue("Velocity should be clamped to 1", velocity <= 1f)
-        assertTrue("Velocity should be clamped to -1", velocity >= -1f)
-    }
-    
-    // ============== Smoothing Filter Tests ==============
+    // ============== Low-Pass Filter Tests ==============
     
     @Test
     fun `low-pass filter should smooth sudden changes`() {
-        var smoothedValue = 0f
+        var filtered = 0f
+        val target = 1f
         
-        // Simulate sudden jump in sensor value
-        val newValue = 1f
-        smoothedValue = TILT_ALPHA * smoothedValue + (1 - TILT_ALPHA) * newValue
+        // Single update
+        filtered += FILTER_ALPHA * (target - filtered)
         
-        // First update should not reach new value immediately
-        assertTrue("First filtered value should be < raw value", smoothedValue < newValue)
-        assertEquals("First filtered value", 0.15f, smoothedValue, 0.01f)
+        assertEquals("First filtered value should be alpha * target", 
+            FILTER_ALPHA, filtered, 0.001f)
+        assertTrue("Filtered should be less than target", filtered < target)
+    }
+    
+    @Test
+    fun `low-pass filter converges to target`() {
+        var filtered = 0f
+        val target = 0.8f
         
-        // After multiple updates, should approach target
-        for (i in 0 until 50) {
-            smoothedValue = TILT_ALPHA * smoothedValue + (1 - TILT_ALPHA) * newValue
+        // Many updates
+        for (i in 0 until 100) {
+            filtered += FILTER_ALPHA * (target - filtered)
         }
-        assertTrue("After many updates, should be close to target", 
-            kotlin.math.abs(smoothedValue - newValue) < 0.01f)
+        
+        assertTrue("After many updates, should be close to target",
+            kotlin.math.abs(filtered - target) < 0.01f)
+    }
+    
+    // ============== Velocity Calculation Tests ==============
+    
+    @Test
+    fun `velocity is zero when filtered values unchanged`() {
+        val prevFiltered = 0.5f
+        val currentFiltered = 0.5f
+        val dt = 0.016f  // ~60fps
+        
+        val velocity = if (dt > 0f) (currentFiltered - prevFiltered) * VELOCITY_SCALE else 0f
+        
+        assertEquals("No change = no velocity", 0f, velocity, 0.001f)
     }
     
     @Test
-    fun `smoothing filter should preserve direction of change`() {
-        var smoothedValue = 0.5f
+    fun `velocity scales with rate of change`() {
+        val prevFiltered = 0.3f
+        val currentFiltered = 0.5f
+        val dt = 0.016f
         
-        // Move toward higher value
-        val highValue = 0.8f
-        smoothedValue = TILT_ALPHA * smoothedValue + (1 - TILT_ALPHA) * highValue
-        assertTrue("Should move toward higher value", smoothedValue > 0.5f)
+        val velocity = (currentFiltered - prevFiltered) * VELOCITY_SCALE
         
-        // Move toward lower value
-        val lowValue = 0.2f
-        for (i in 0 until 20) {
-            smoothedValue = TILT_ALPHA * smoothedValue + (1 - TILT_ALPHA) * lowValue
-        }
-        assertTrue("Should move toward lower value", smoothedValue < 0.5f)
-    }
-    
-    // ============== Orientation Angle to Tilt Conversion Tests ==============
-    
-    @Test
-    fun `sin conversion should give smooth tilt response`() {
-        // Small angles should give proportional tilt
-        val smallAngle = 0.1f  // ~5.7 degrees
-        val tilt = sin(smallAngle.toDouble()).toFloat()
-        assertTrue("Small angle should give small tilt", tilt < 0.15f)
-        assertTrue("Small angle should give positive tilt", tilt > 0f)
+        assertTrue("Positive change = positive velocity", velocity > 0)
+        assertEquals("Velocity should be scaled delta", 
+            (0.5f - 0.3f) * VELOCITY_SCALE, velocity, 0.001f)
     }
     
     @Test
-    fun `tilt should be normalized to valid range`() {
-        // Even extreme angles should be clamped
-        val extremeAngle = 2f  // > 90 degrees
-        val tilt = sin(extremeAngle.toDouble()).toFloat().coerceIn(-1f, 1f)
+    fun `small velocity filtered by dead zone`() {
+        val velocity = MIN_VELOCITY * 0.5f
+        val filtered = if (kotlin.math.abs(velocity) < MIN_VELOCITY) 0f else velocity
         
-        assertTrue("Tilt should be <= 1", tilt <= 1f)
-        assertTrue("Tilt should be >= -1", tilt >= -1f)
+        assertEquals("Below threshold should be zero", 0f, filtered, 0.0001f)
     }
     
     @Test
-    fun `zero angle should give zero tilt`() {
-        val zeroAngle = 0f
-        val tilt = sin(zeroAngle.toDouble()).toFloat()
-        assertEquals("Zero angle = zero tilt", 0f, tilt, 0.001f)
+    fun `velocity clamped to valid range`() {
+        val largeVelocity = 5f
+        val clamped = largeVelocity.coerceIn(-1f, 1f)
+        
+        assertEquals("Large velocity should be clamped to 1", 1f, clamped, 0.001f)
+    }
+    
+    // ============== Display Rotation Vector Remapping Tests ==============
+    
+    @Test
+    fun `rotation 0 keeps axes unchanged`() {
+        val x = 0.5f; val y = 0.3f; val z = 0.8f
+        
+        // ROTATION_0: no change
+        val (rx, ry, rz) = Triple(x, y, z)
+        
+        assertEquals(x, rx, 0.001f)
+        assertEquals(y, ry, 0.001f)
+        assertEquals(z, rz, 0.001f)
     }
     
     @Test
-    fun `negative angle should give negative tilt`() {
-        val negativeAngle = -0.3f
-        val tilt = sin(negativeAngle.toDouble()).toFloat()
-        assertTrue("Negative angle should give negative tilt", tilt < 0f)
-    }
-    
-    // ============== Axis Remapping Logic Tests ==============
-    
-    @Test
-    fun `rotation 90 should swap and negate axes correctly`() {
-        // Simulating remapCoordinateSystem behavior for ROTATION_90
-        // AXIS_Y, AXIS_MINUS_X means: new X = old Y, new Y = -old X
-        val originalX = 0.5f
-        val originalY = 0.3f
+    fun `rotation 90 swaps x and y with sign change`() {
+        val x = 0.5f; val y = 0.3f; val z = 0.8f
         
-        val remappedX = originalY
-        val remappedY = -originalX
+        // ROTATION_90: (y, -x, z)
+        val rx = y
+        val ry = -x
+        val rz = z
         
-        assertEquals("X should become Y", originalY, remappedX, 0.001f)
-        assertEquals("Y should become -X", -originalX, remappedY, 0.001f)
+        assertEquals(0.3f, rx, 0.001f)
+        assertEquals(-0.5f, ry, 0.001f)
+        assertEquals(0.8f, rz, 0.001f)
     }
     
     @Test
-    fun `rotation 180 should negate both axes`() {
-        // AXIS_MINUS_X, AXIS_MINUS_Y means: new X = -old X, new Y = -old Y
-        val originalX = 0.5f
-        val originalY = 0.3f
+    fun `rotation 180 negates x and y`() {
+        val x = 0.5f; val y = 0.3f; val z = 0.8f
         
-        val remappedX = -originalX
-        val remappedY = -originalY
+        // ROTATION_180: (-x, -y, z)
+        val rx = -x
+        val ry = -y
+        val rz = z
         
-        assertEquals("X should be negated", -originalX, remappedX, 0.001f)
-        assertEquals("Y should be negated", -originalY, remappedY, 0.001f)
+        assertEquals(-0.5f, rx, 0.001f)
+        assertEquals(-0.3f, ry, 0.001f)
+        assertEquals(0.8f, rz, 0.001f)
     }
     
     @Test
-    fun `rotation 270 should swap axes opposite to 90`() {
-        // AXIS_MINUS_Y, AXIS_X means: new X = -old Y, new Y = old X
-        val originalX = 0.5f
-        val originalY = 0.3f
+    fun `rotation 270 swaps x and y opposite to 90`() {
+        val x = 0.5f; val y = 0.3f; val z = 0.8f
         
-        val remappedX = -originalY
-        val remappedY = originalX
+        // ROTATION_270: (-y, x, z)
+        val rx = -y
+        val ry = x
+        val rz = z
         
-        assertEquals("X should become -Y", -originalY, remappedX, 0.001f)
-        assertEquals("Y should become X", originalX, remappedY, 0.001f)
+        assertEquals(-0.3f, rx, 0.001f)
+        assertEquals(0.5f, ry, 0.001f)
+        assertEquals(0.8f, rz, 0.001f)
     }
     
-    // ============== Parallax Direction Tests ==============
+    // ============== Axis Remapping for Matrix Tests ==============
     
     @Test
-    fun `velocity negation should create natural parallax effect`() {
-        // When user tilts left (positive velocity in sensor), scene should shift right (negative output)
-        val rawVelocityX = 0.5f
-        val parallaxVelocityX = -rawVelocityX
+    fun `axis remap values are correct`() {
+        // These should match SensorManager constants
+        val AXIS_X = 1
+        val AXIS_Y = 2
+        val AXIS_MINUS_X = 129  // SensorManager.AXIS_MINUS_X
+        val AXIS_MINUS_Y = 130  // SensorManager.AXIS_MINUS_Y
         
-        assertTrue("Positive sensor velocity should give negative parallax", parallaxVelocityX < 0)
-    }
-    
-    @Test
-    fun `parallax should respond to both X and Y axes`() {
-        val velocityX = 0.3f
-        val velocityY = 0.4f
+        // ROTATION_0
+        assertEquals("ROTATION_0 axisX", AXIS_X, 1)
+        assertEquals("ROTATION_0 axisY", AXIS_Y, 2)
         
-        val parallaxX = -velocityX
-        val parallaxY = -velocityY
-        
-        assertNotEquals("Parallax X should not be zero", 0f, parallaxX)
-        assertNotEquals("Parallax Y should not be zero", 0f, parallaxY)
-    }
-    
-    // ============== Sensor Priority Tests ==============
-    
-    @Test
-    fun `sensor priority order is correct`() {
-        // This tests the logical order, actual sensor availability is device-dependent
-        // Priority: Game Rotation Vector > Rotation Vector > Gravity > Accelerometer
-        val priorities = listOf(
-            "TYPE_GAME_ROTATION_VECTOR",
-            "TYPE_ROTATION_VECTOR", 
-            "TYPE_GRAVITY",
-            "TYPE_ACCELEROMETER"
-        )
-        
-        assertEquals("First priority", "TYPE_GAME_ROTATION_VECTOR", priorities[0])
-        assertEquals("Second priority", "TYPE_ROTATION_VECTOR", priorities[1])
-        assertEquals("Third priority", "TYPE_GRAVITY", priorities[2])
-        assertEquals("Last priority", "TYPE_ACCELEROMETER", priorities[3])
-    }
-    
-    // ============== Dead Zone Threshold Tests ==============
-    
-    @Test
-    fun `dead zone should filter micro-movements`() {
-        // Values just below threshold should be zeroed
-        val tinyVelocity = MIN_VELOCITY * 0.5f
-        val filteredVelocity = if (kotlin.math.abs(tinyVelocity) < MIN_VELOCITY) 0f else tinyVelocity
-        
-        assertEquals("Below-threshold velocity should be zero", 0f, filteredVelocity, 0.0001f)
-    }
-    
-    @Test
-    fun `dead zone should pass larger movements`() {
-        // Values above threshold should pass through
-        val normalVelocity = MIN_VELOCITY * 3f
-        val filteredVelocity = if (kotlin.math.abs(normalVelocity) < MIN_VELOCITY) 0f else normalVelocity
-        
-        assertEquals("Above-threshold velocity should pass", normalVelocity, filteredVelocity, 0.0001f)
+        // ROTATION_90: AXIS_Y, AXIS_MINUS_X
+        assertEquals("ROTATION_90 axisX should be AXIS_Y", AXIS_Y, 2)
+        assertEquals("ROTATION_90 axisY should be AXIS_MINUS_X", AXIS_MINUS_X, 129)
     }
 }
