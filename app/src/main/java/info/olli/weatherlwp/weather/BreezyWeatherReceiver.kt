@@ -70,17 +70,31 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
             }
             
             // Sunrise/sunset (Unix timestamps in seconds)
-            val sunrise = data.optLong("todaySunrise", -1)
-            val sunset = data.optLong("todaySunset", -1)
+            val sunrise = data.optLong("sunRise", data.optLong("todaySunrise", -1))
+            val sunset = data.optLong("sunSet", data.optLong("todaySunset", -1))
             
             // Wind speed in m/s (Breezy sends currentWindSpeed or windSpeed)
             val windSpeed = data.optDouble("currentWindSpeed", 
                 data.optDouble("windSpeed", 0.0)).toFloat()
             
-            // Store in repository (including raw JSON for debugging)
-            WeatherRepository.updateWeather(context, weatherType, sunrise, sunset, windSpeed, json)
+            // Extended weather data
+            val extendedData = WeatherRepository.ExtendedWeatherData(
+                precipProbability = data.optInt("precipProbability", 0),
+                cloudCover = data.optInt("cloudCover", 0),
+                humidity = data.optInt("currentHumidity", data.optInt("humidity", 0)),
+                visibility = data.optInt("visibility", 10000),
+                pressure = data.optInt("pressure", 1013),
+                moonPhase = data.optInt("moonPhase", 0),
+                moonRise = data.optLong("moonRise", -1L),
+                moonSet = data.optLong("moonSet", -1L),
+                windDirection = data.optInt("windDirection", 0)
+            )
             
-            Log.i(TAG, "Weather updated: $weatherType (code=$conditionCode), wind=$windSpeed m/s")
+            // Store in repository (including raw JSON for debugging)
+            WeatherRepository.updateWeather(context, weatherType, sunrise, sunset, windSpeed, json, extendedData)
+            
+            Log.i(TAG, "Weather updated: $weatherType (code=$conditionCode), wind=$windSpeed m/s, " +
+                "precip=${extendedData.precipProbability}%, clouds=${extendedData.cloudCover}%")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse weather JSON", e)
         }

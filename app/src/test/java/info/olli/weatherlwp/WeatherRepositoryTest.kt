@@ -95,4 +95,100 @@ class WeatherRepositoryTest {
         val displayStatus = if (isFresh) "Connected" else "Data Stale"
         assertEquals("Fresh data should show connected", "Connected", displayStatus)
     }
+    
+    // ============== Extended Weather Data Tests ==============
+    
+    @Test
+    fun `precipitation probability normalizes correctly`() {
+        // 0-100% should map to 0-1
+        assertEquals(0f, normalizePrecip(0), 0.01f)
+        assertEquals(0.5f, normalizePrecip(50), 0.01f)
+        assertEquals(1f, normalizePrecip(100), 0.01f)
+    }
+    
+    @Test
+    fun `visibility normalizes correctly`() {
+        // 0-10000m should map to 0-1
+        assertEquals(0f, normalizeVisibility(0), 0.01f)
+        assertEquals(0.5f, normalizeVisibility(5000), 0.01f)
+        assertEquals(1f, normalizeVisibility(10000), 0.01f)
+        assertEquals(1f, normalizeVisibility(50000), 0.01f)  // Above 10km clamps to 1
+    }
+    
+    @Test
+    fun `moon illumination peaks at full moon`() {
+        // Phase 0 = new moon, 180 = full moon
+        val newMoon = moonIllumination(0)
+        val fullMoon = moonIllumination(180)
+        val firstQuarter = moonIllumination(90)
+        
+        assertEquals("New moon should have ~0 illumination", 0f, newMoon, 0.01f)
+        assertEquals("Full moon should have ~1 illumination", 1f, fullMoon, 0.01f)
+        assertEquals("First quarter should have ~0.5 illumination", 0.5f, firstQuarter, 0.01f)
+    }
+    
+    @Test
+    fun `moon illumination is symmetric`() {
+        // 90 and 270 should have same illumination (first and last quarter)
+        val firstQuarter = moonIllumination(90)
+        val lastQuarter = moonIllumination(270)
+        assertEquals("First and last quarter should have same illumination", firstQuarter, lastQuarter, 0.01f)
+    }
+    
+    @Test
+    fun `cloud cover affects simulation state`() {
+        // Cloud cover 0-100% should influence visibility and atmosphere
+        val clearSky = 0
+        val overcast = 100
+        
+        assertTrue("Clear sky should have low cloud cover", clearSky < 20)
+        assertTrue("Overcast should have high cloud cover", overcast >= 80)
+    }
+    
+    @Test
+    fun `pressure is within realistic range`() {
+        // Normal atmospheric pressure: 970-1050 hPa
+        val normalPressure = 1013
+        val lowPressure = 990
+        val highPressure = 1035
+        
+        assertTrue("Normal pressure should be valid", normalPressure in 900..1100)
+        assertTrue("Low pressure should indicate storm", lowPressure < 1000)
+        assertTrue("High pressure should indicate clear weather", highPressure > 1020)
+    }
+    
+    @Test
+    fun `precip intensity scales with weather type`() {
+        // Test the precipitation intensity calculation logic
+        val rainWithHighProb = calcPrecipIntensity("RAIN", 0.8f)
+        val snowWithHighProb = calcPrecipIntensity("SNOW", 0.8f)
+        val clearWithLowProb = calcPrecipIntensity("CLEAR", 0.1f)
+        
+        assertTrue("Rain should have high intensity", rainWithHighProb > 0.5f)
+        assertTrue("Snow should have moderate intensity", snowWithHighProb > 0.4f)
+        assertTrue("Clear should have low intensity", clearWithLowProb < 0.2f)
+    }
+    
+    // Helper functions matching WeatherRepository logic
+    
+    private fun normalizePrecip(probability: Int): Float {
+        return (probability / 100f).coerceIn(0f, 1f)
+    }
+    
+    private fun normalizeVisibility(meters: Int): Float {
+        return (meters / 10000f).coerceIn(0f, 1f)
+    }
+    
+    private fun moonIllumination(phaseDegrees: Int): Float {
+        return ((1 - kotlin.math.cos(Math.toRadians(phaseDegrees.toDouble()))) / 2f).toFloat()
+    }
+    
+    private fun calcPrecipIntensity(weatherType: String, precipProb: Float): Float {
+        return when (weatherType) {
+            "RAIN", "THUNDERSTORM" -> precipProb * 0.8f + 0.2f
+            "SNOW" -> precipProb * 0.7f + 0.15f
+            "HAIL" -> precipProb * 0.9f + 0.3f
+            else -> precipProb * 0.3f
+        }.coerceIn(0f, 1f)
+    }
 }

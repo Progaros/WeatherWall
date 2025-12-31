@@ -26,6 +26,16 @@ data class SimulationState(
     val weather: WeatherType,
     val cloudDensity: CloudDensity,
     
+    // Extended weather data
+    val precipProbability: Float = 0f,  // 0-1 (from 0-100%)
+    val precipIntensity: Float = 0f,    // 0-1 effective precipitation intensity
+    val cloudCover: Float = 0f,         // 0-1 (from 0-100%)
+    val humidity: Float = 0f,           // 0-1 (from 0-100%)
+    val visibility: Float = 1f,         // 0-1 normalized (0=poor, 1=excellent)
+    val pressure: Int = 1013,           // hPa
+    val moonPhase: Float = 0f,          // 0-1 (0=new, 0.5=full, 1=new again)
+    val moonIllumination: Float = 0f,   // 0-1 (0=new moon dark, 1=full moon bright)
+    
     // Wind
     val windStrength: Float,            // 0-1 normalized base wind
     val windDirection: Float,           // Degrees (0 = right, 90 = up)
@@ -136,6 +146,14 @@ data class SimulationState(
             dayProgress = 0.5f,
             weather = WeatherType.CLEAR,
             cloudDensity = CloudDensity.AUTO,
+            precipProbability = 0f,
+            precipIntensity = 0f,
+            cloudCover = 0f,
+            humidity = 0.5f,
+            visibility = 1f,
+            pressure = 1013,
+            moonPhase = 0f,
+            moonIllumination = 0f,
             windStrength = 0.5f,
             windDirection = 0f,
             windGust = 0f,

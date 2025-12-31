@@ -75,6 +75,24 @@ class SimulationController(private val context: Context) {
         
         val windGust = calculateWindGust(effectiveWind, deltaMs)
         
+        // Get extended weather data from repository
+        val extendedData = WeatherRepository.getExtendedData(context)
+        val precipProbability = extendedData.precipProbability / 100f
+        val cloudCover = extendedData.cloudCover / 100f
+        val humidity = extendedData.humidity / 100f
+        val visibility = WeatherRepository.getNormalizedVisibility(context)
+        val moonIllumination = WeatherRepository.getMoonIllumination(context)
+        val moonPhase = extendedData.moonPhase / 360f  // Normalize to 0-1
+        val windDirection = extendedData.windDirection.toFloat()
+        
+        // Calculate effective precipitation intensity based on weather type and probability
+        val precipIntensity = when (effectiveWeather) {
+            WeatherType.RAIN, WeatherType.THUNDERSTORM -> precipProbability * 0.8f + 0.2f  // Min 20% intensity
+            WeatherType.SNOW -> precipProbability * 0.7f + 0.15f
+            WeatherType.HAIL -> precipProbability * 0.9f + 0.3f
+            else -> precipProbability * 0.3f  // Light background precipitation possibility
+        }
+        
         // Smooth time transitions for eased color changes
         val rawTime = clock.getTimeOfDayHours()
         val smoothedTime = smoothTimeTransitions(rawTime)
@@ -91,8 +109,16 @@ class SimulationController(private val context: Context) {
             smoothedProgress = smoothedTime / 24f,
             weather = effectiveWeather,
             cloudDensity = settings.cloudDensity,
+            precipProbability = precipProbability.coerceIn(0f, 1f),
+            precipIntensity = precipIntensity.coerceIn(0f, 1f),
+            cloudCover = cloudCover.coerceIn(0f, 1f),
+            humidity = humidity.coerceIn(0f, 1f),
+            visibility = visibility.coerceIn(0f, 1f),
+            pressure = extendedData.pressure,
+            moonPhase = moonPhase.coerceIn(0f, 1f),
+            moonIllumination = moonIllumination.coerceIn(0f, 1f),
             windStrength = effectiveWind.coerceIn(0f, 1f),
-            windDirection = 0f,  // Default: wind blows right
+            windDirection = windDirection,
             windGust = windGust,
             windMultiplier = settings.windMultiplier,
             treeSwaySpeed = settings.treeSwaySpeed,

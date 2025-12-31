@@ -13,18 +13,19 @@
         android:src="@drawable/ic_dice"
         android:background="?attr/selectableItemBackgroundBorderless"
         android:contentDescription="Spawn Event"
-        android:focusable="false"
+        android:focusable="true"
         android:clickable="true"
         android:layout_marginEnd="8dp"
         android:scaleType="centerInside"
         android:padding="8dp" />
 
     <!-- The Switch - ID matches AndroidX expectation for auto-binding -->
+    <!-- Note: clickable=true and focusable=true allow the switch to respond to clicks -->
     <androidx.appcompat.widget.SwitchCompat
         android:id="@android:id/switch_widget"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:focusable="false"
-        android:clickable="false" />
+        android:focusable="true"
+        android:clickable="true" />
 
 </LinearLayout>

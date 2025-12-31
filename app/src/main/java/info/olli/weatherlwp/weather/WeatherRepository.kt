@@ -18,22 +18,70 @@ object WeatherRepository {
     private const val KEY_WIND_SPEED = "weather_wind_speed"  // Wind speed in m/s
     private const val KEY_RAW_JSON = "weather_raw_json"  // Full JSON for debugging
     
-    fun updateWeather(context: Context, type: WeatherType, sunrise: Long, sunset: Long, windSpeed: Float = 0f, rawJson: String? = null) {
+    // Extended weather data
+    private const val KEY_PRECIP_PROBABILITY = "weather_precip_probability"  // 0-100%
+    private const val KEY_CLOUD_COVER = "weather_cloud_cover"  // 0-100%
+    private const val KEY_HUMIDITY = "weather_humidity"  // 0-100%
+    private const val KEY_VISIBILITY = "weather_visibility"  // meters
+    private const val KEY_PRESSURE = "weather_pressure"  // hPa
+    private const val KEY_MOON_PHASE = "weather_moon_phase"  // 0-360 degrees
+    private const val KEY_MOON_RISE = "weather_moon_rise"  // Unix timestamp
+    private const val KEY_MOON_SET = "weather_moon_set"  // Unix timestamp
+    private const val KEY_WIND_DIRECTION = "weather_wind_direction"  // 0-360 degrees
+    
+    /**
+     * Extended weather data from Breezy Weather.
+     */
+    data class ExtendedWeatherData(
+        val precipProbability: Int = 0,     // 0-100%
+        val cloudCover: Int = 0,            // 0-100%
+        val humidity: Int = 0,              // 0-100%
+        val visibility: Int = 0,            // meters
+        val pressure: Int = 1013,           // hPa
+        val moonPhase: Int = 0,             // 0-360 degrees (0=new, 180=full)
+        val moonRise: Long = -1L,           // Unix timestamp
+        val moonSet: Long = -1L,            // Unix timestamp
+        val windDirection: Int = 0          // 0-360 degrees
+    )
+    
+    fun updateWeather(
+        context: Context,
+        type: WeatherType,
+        sunrise: Long,
+        sunset: Long,
+        windSpeed: Float = 0f,
+        rawJson: String? = null,
+        extendedData: ExtendedWeatherData? = null
+    ) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        prefs.edit()
+        val editor = prefs.edit()
             .putString(KEY_WEATHER_TYPE, type.name)
             .putLong(KEY_SUNRISE, sunrise)
             .putLong(KEY_SUNSET, sunset)
             .putFloat(KEY_WIND_SPEED, windSpeed)
             .putLong(KEY_LAST_UPDATE, System.currentTimeMillis())
-            .apply {
-                if (rawJson != null) {
-                    putString(KEY_RAW_JSON, rawJson)
-                }
-            }
-            .apply()
         
-        Log.d(TAG, "Weather updated: type=$type, sunrise=$sunrise, sunset=$sunset, wind=$windSpeed m/s")
+        if (rawJson != null) {
+            editor.putString(KEY_RAW_JSON, rawJson)
+        }
+        
+        // Store extended data if provided
+        if (extendedData != null) {
+            editor.putInt(KEY_PRECIP_PROBABILITY, extendedData.precipProbability)
+            editor.putInt(KEY_CLOUD_COVER, extendedData.cloudCover)
+            editor.putInt(KEY_HUMIDITY, extendedData.humidity)
+            editor.putInt(KEY_VISIBILITY, extendedData.visibility)
+            editor.putInt(KEY_PRESSURE, extendedData.pressure)
+            editor.putInt(KEY_MOON_PHASE, extendedData.moonPhase)
+            editor.putLong(KEY_MOON_RISE, extendedData.moonRise)
+            editor.putLong(KEY_MOON_SET, extendedData.moonSet)
+            editor.putInt(KEY_WIND_DIRECTION, extendedData.windDirection)
+        }
+        
+        editor.apply()
+        
+        Log.d(TAG, "Weather updated: type=$type, sunrise=$sunrise, sunset=$sunset, wind=$windSpeed m/s" +
+            (extendedData?.let { ", precip=${it.precipProbability}%, clouds=${it.cloudCover}%" } ?: ""))
     }
     
     fun getWeatherType(context: Context): WeatherType {
@@ -91,5 +139,127 @@ object WeatherRepository {
     fun getRawJson(context: Context): String? {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         return prefs.getString(KEY_RAW_JSON, null)
+    }
+    
+    // ============== Extended Weather Data Getters ==============
+    
+    /**
+     * Get precipitation probability (0-100%).
+     * Used to determine rain/snow intensity.
+     */
+    fun getPrecipProbability(context: Context): Int {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        return prefs.getInt(KEY_PRECIP_PROBABILITY, 0)
+    }
+    
+    /**
+     * Get normalized precipitation intensity (0.0 to 1.0).
+     * Combines precipitation probability with weather type for effect intensity.
+     */
+    fun getNormalizedPrecipIntensity(context: Context): Float {
+        val prob = getPrecipProbability(context)
+        return (prob / 100f).coerceIn(0f, 1f)
+    }
+    
+    /**
+     * Get cloud cover percentage (0-100%).
+     */
+    fun getCloudCover(context: Context): Int {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        return prefs.getInt(KEY_CLOUD_COVER, 0)
+    }
+    
+    /**
+     * Get humidity percentage (0-100%).
+     */
+    fun getHumidity(context: Context): Int {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        return prefs.getInt(KEY_HUMIDITY, 0)
+    }
+    
+    /**
+     * Get visibility in meters.
+     */
+    fun getVisibility(context: Context): Int {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        return prefs.getInt(KEY_VISIBILITY, 10000)
+    }
+    
+    /**
+     * Get normalized visibility (0.0 = very poor, 1.0 = excellent).
+     * Maps 0-10km to 0-1 range.
+     */
+    fun getNormalizedVisibility(context: Context): Float {
+        val vis = getVisibility(context)
+        return (vis / 10000f).coerceIn(0f, 1f)
+    }
+    
+    /**
+     * Get atmospheric pressure in hPa.
+     */
+    fun getPressure(context: Context): Int {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        return prefs.getInt(KEY_PRESSURE, 1013)
+    }
+    
+    /**
+     * Get moon phase in degrees (0-360).
+     * 0 = new moon, 90 = first quarter, 180 = full moon, 270 = last quarter
+     */
+    fun getMoonPhase(context: Context): Int {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        return prefs.getInt(KEY_MOON_PHASE, 0)
+    }
+    
+    /**
+     * Get normalized moon illumination (0.0 = new moon, 1.0 = full moon).
+     */
+    fun getMoonIllumination(context: Context): Float {
+        val phase = getMoonPhase(context)
+        // Moon illumination peaks at 180 degrees (full moon)
+        // cos(phase) gives -1 at 180, we invert and normalize to 0-1
+        return ((1 - kotlin.math.cos(Math.toRadians(phase.toDouble()))) / 2f).toFloat()
+    }
+    
+    /**
+     * Get moon rise time (Unix timestamp in seconds).
+     */
+    fun getMoonRise(context: Context): Long {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        return prefs.getLong(KEY_MOON_RISE, -1L)
+    }
+    
+    /**
+     * Get moon set time (Unix timestamp in seconds).
+     */
+    fun getMoonSet(context: Context): Long {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        return prefs.getLong(KEY_MOON_SET, -1L)
+    }
+    
+    /**
+     * Get wind direction in degrees (0-360, 0=North, 90=East, etc.)
+     */
+    fun getWindDirection(context: Context): Int {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        return prefs.getInt(KEY_WIND_DIRECTION, 0)
+    }
+    
+    /**
+     * Get all extended weather data as a data class.
+     */
+    fun getExtendedData(context: Context): ExtendedWeatherData {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        return ExtendedWeatherData(
+            precipProbability = prefs.getInt(KEY_PRECIP_PROBABILITY, 0),
+            cloudCover = prefs.getInt(KEY_CLOUD_COVER, 0),
+            humidity = prefs.getInt(KEY_HUMIDITY, 0),
+            visibility = prefs.getInt(KEY_VISIBILITY, 10000),
+            pressure = prefs.getInt(KEY_PRESSURE, 1013),
+            moonPhase = prefs.getInt(KEY_MOON_PHASE, 0),
+            moonRise = prefs.getLong(KEY_MOON_RISE, -1L),
+            moonSet = prefs.getLong(KEY_MOON_SET, -1L),
+            windDirection = prefs.getInt(KEY_WIND_DIRECTION, 0)
+        )
     }
 }

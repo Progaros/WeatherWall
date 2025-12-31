@@ -3,6 +3,7 @@ package info.olli.weatherlwp.settings
 import android.content.Context
 import android.util.AttributeSet
 import android.widget.ImageButton
+import androidx.appcompat.widget.SwitchCompat
 import androidx.preference.PreferenceViewHolder
 import androidx.preference.SwitchPreferenceCompat
 import info.olli.weatherlwp.R
@@ -39,5 +40,19 @@ class SpawnSwitchPreference @JvmOverloads constructor(
         // Spawn button is always enabled - manual spawn works regardless of auto-spawn toggle
         spawnButton?.isEnabled = true
         spawnButton?.alpha = 1.0f
+        
+        // Ensure switch is properly bound and clickable
+        val switchWidget = holder.findViewById(android.R.id.switch_widget) as? SwitchCompat
+        switchWidget?.apply {
+            // Sync with preference state
+            isChecked = this@SpawnSwitchPreference.isChecked
+            
+            // Handle direct switch clicks
+            setOnCheckedChangeListener { _, isChecked ->
+                if (callChangeListener(isChecked)) {
+                    this@SpawnSwitchPreference.isChecked = isChecked
+                }
+            }
+        }
     }
 }
