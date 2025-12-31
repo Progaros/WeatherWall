@@ -219,6 +219,38 @@ object RenderConstants {
     /** Trail angle (degrees from horizontal, down-left) */
     const val CHRISTMAS_STAR_TRAIL_ANGLE = 225.0
     
+    // ============== Random Event Positioning ==============
+    // Y position ranges as fraction of screen height
+    
+    /** Sky events (airplanes, birds, eagles, balloons, shooting stars) */
+    const val EVENT_SKY_Y_MIN = 0.08f
+    const val EVENT_SKY_Y_MAX = 0.40f
+    
+    /** High sky events (balloons) */
+    const val EVENT_HIGH_SKY_Y_MIN = 0.10f
+    const val EVENT_HIGH_SKY_Y_MAX = 0.30f
+    
+    /** Ground events (rabbits, foxes) */
+    const val EVENT_GROUND_Y_MIN = 0.82f
+    const val EVENT_GROUND_Y_MAX = 0.92f
+    
+    /** Low sky events (butterflies, fireflies, owls) */
+    const val EVENT_LOW_SKY_Y_MIN = 0.50f
+    const val EVENT_LOW_SKY_Y_MAX = 0.75f
+    
+    /** Event durations (milliseconds) */
+    const val EVENT_DURATION_AIRPLANE = 25000L
+    const val EVENT_DURATION_BIRD_FLOCK = 12000L
+    const val EVENT_DURATION_EAGLE = 18000L
+    const val EVENT_DURATION_SHOOTING_STAR = 2000L
+    const val EVENT_DURATION_BALLOON = 40000L
+    const val EVENT_DURATION_BUTTERFLY = 15000L
+    const val EVENT_DURATION_RABBIT = 8000L
+    const val EVENT_DURATION_FOX = 12000L
+    const val EVENT_DURATION_FIREFLY = 10000L
+    const val EVENT_DURATION_OWL = 15000L
+    const val EVENT_DURATION_ALIEN = 20000L
+    
     // ============== Utility Functions ==============
     
     /**

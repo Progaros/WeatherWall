@@ -162,9 +162,10 @@ class SimulationSettings(context: Context) {
      * Get effective weather, considering debug overrides.
      */
     fun getEffectiveWeather(realWeather: WeatherType): WeatherType {
-        if (debugEnabled && debugWeatherOverride != null) {
+        val override = debugWeatherOverride
+        if (debugEnabled && override != null) {
             return try {
-                WeatherType.valueOf(debugWeatherOverride!!.uppercase())
+                WeatherType.valueOf(override.uppercase())
             } catch (e: Exception) {
                 realWeather
             }

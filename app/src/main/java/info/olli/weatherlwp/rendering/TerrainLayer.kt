@@ -297,7 +297,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     
     private fun getHillY(xRatio: Float, hill: HillData): Float {
         val points = hill.controlPoints
-        if (points.isEmpty()) return hill.heightOffset
+        // Need at least 2 points to interpolate between
+        if (points.size < 2) return hill.heightOffset
         
         // xRatio is 0-1 across the extended width (matches hill control points)
         // Simply interpolate along the points array

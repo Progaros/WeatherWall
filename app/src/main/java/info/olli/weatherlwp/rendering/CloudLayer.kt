@@ -192,10 +192,12 @@ class CloudLayer(private val context: Context) : SceneLayer {
      */
     private fun renderGroupToBitmap(group: CloudGroup, bitmapWidth: Int, bitmapHeight: Int, color: Int) {
         // Recycle old bitmap if size changed
-        if (group.cachedBitmap != null && 
+        // Fix race condition: null the reference first, then recycle
+        val oldBitmap = group.cachedBitmap
+        if (oldBitmap != null && 
             (group.lastWidth != bitmapWidth || group.lastHeight != bitmapHeight)) {
-            group.cachedBitmap?.recycle()
-            group.cachedBitmap = null
+            group.cachedBitmap = null  // Clear reference first to prevent use-after-recycle
+            oldBitmap.recycle()
         }
         
         // Create or reuse bitmap

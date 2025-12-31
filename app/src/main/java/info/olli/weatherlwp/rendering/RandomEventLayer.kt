@@ -176,9 +176,14 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         
         for (event in currentEvents) {
             if (event.layer == targetLayer) {
-                // Pass extendedWidth so events can span the full parallax area
-                event.draw(canvas, paint, strokePaint, parallaxCalculator, extendedWidth, height, 
-                    state.timeSeconds, ambientColor, extendedOffset)
+                try {
+                    // Pass extendedWidth so events can span the full parallax area
+                    event.draw(canvas, paint, strokePaint, parallaxCalculator, extendedWidth, height, 
+                        state.timeSeconds, ambientColor, extendedOffset)
+                } catch (e: Exception) {
+                    // Log but don't crash - one bad event shouldn't break the layer
+                    android.util.Log.e("RandomEventLayer", "Error drawing event ${event.javaClass.simpleName}", e)
+                }
             }
         }
     }
