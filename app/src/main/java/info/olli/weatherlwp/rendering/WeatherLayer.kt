@@ -170,7 +170,7 @@ class WeatherLayer : SceneLayer {
             EffectType.SNOW -> renderSnowLegacy(canvas, defaultWindStrength)
             EffectType.HAIL -> renderHailLegacy(canvas, defaultWindStrength)
             EffectType.LIGHTNING -> renderLightningLegacy(canvas, defaultTimeSeconds)
-            EffectType.FOG -> renderFog(canvas)
+            EffectType.FOG -> renderFogLegacy(canvas)
             EffectType.NONE -> {}
         }
     }
@@ -254,6 +254,29 @@ class WeatherLayer : SceneLayer {
             drawLightningBolt(canvas)
             if (lightningTimer > 4) lightningFlash = false
         }
+    }
+    
+    private fun renderFogLegacy(canvas: Canvas) {
+        // Base fog opacity depends on intensity (30-70%)
+        val baseAlpha = (60 + intensity * 120).toInt().coerceIn(50, 170)
+        
+        // Use day colors for legacy rendering (no state available)
+        val fogR = RenderConstants.FOG_R
+        val fogG = RenderConstants.FOG_G
+        val fogB = RenderConstants.FOG_B
+        
+        // Create a smooth vertical gradient from bottom (dense) to top (clear)
+        val gradientShader = android.graphics.LinearGradient(
+            0f, screenHeight * 0.20f,  // Start: 20% from top (clear)
+            0f, screenHeight * 1.2f,   // End: 120% height (below screen edge)
+            Color.argb(0, fogR, fogG, fogB),  // Transparent at top
+            Color.argb(baseAlpha, fogR, fogG, fogB),  // Dense below screen
+            android.graphics.Shader.TileMode.CLAMP
+        )
+        
+        fogPaint.shader = gradientShader
+        canvas.drawRect(0f, 0f, screenWidth.toFloat(), screenHeight.toFloat(), fogPaint)
+        fogPaint.shader = null
     }
 
     fun render(canvas: Canvas, state: SimulationState) {

@@ -72,18 +72,18 @@ class ParallaxCalculatorTest {
         calculator.strength = 1.0f
         calculator.maxOffsetPx = 40f
         
-        // Set a tilt
+        // Set a tilt and let it fully converge
         calculator.updateFromSensor(0.5f, 0f)
-        repeat(50) { calculator.update(16) }
+        repeat(200) { calculator.update(16) }  // More frames to fully converge
         val initialOffset = calculator.getOffsetX()
         
         // Continue with same tilt for more frames (no sensor change needed - same value)
         repeat(50) { calculator.update(16) }
         val laterOffset = calculator.getOffsetX()
         
-        // Position should stay stable
+        // Position should stay stable (fully converged)
         assertEquals("Position should remain stable when tilt is constant", 
-            initialOffset, laterOffset, 1f)
+            initialOffset, laterOffset, 0.5f)
     }
 
     // P5: Test returning to center when tilt goes to zero
