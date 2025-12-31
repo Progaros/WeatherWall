@@ -21,6 +21,11 @@
             android:title="Check Connection"
             android:summary="Test Breezy Weather connection" />
 
+        <Preference
+            android:key="pref_copy_weather_data"
+            android:title="Copy Weather Data"
+            android:summary="Copy raw JSON to clipboard for debugging" />
+
         <SwitchPreferenceCompat
             android:key="pref_weather_enabled"
             android:title="Weather Effects"

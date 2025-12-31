@@ -39,6 +39,12 @@ class SystemSettingsFragment : PreferenceFragmentCompat() {
             true
         }
         
+        // Copy weather data to clipboard
+        findPreference<Preference>("pref_copy_weather_data")?.setOnPreferenceClickListener {
+            copyWeatherDataToClipboard()
+            true
+        }
+        
         // Export debug log
         findPreference<Preference>("pref_export_log")?.setOnPreferenceClickListener {
             exportDebugLog()
@@ -65,6 +71,27 @@ class SystemSettingsFragment : PreferenceFragmentCompat() {
         }
         
         Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+    }
+    
+    private fun copyWeatherDataToClipboard() {
+        val context = requireContext()
+        val rawJson = WeatherRepository.getRawJson(context)
+        
+        if (rawJson != null) {
+            // Pretty print the JSON
+            val prettyJson = try {
+                org.json.JSONObject(rawJson).toString(2)
+            } catch (e: Exception) {
+                rawJson
+            }
+            
+            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            val clip = android.content.ClipData.newPlainText("Weather Data", prettyJson)
+            clipboard.setPrimaryClip(clip)
+            Toast.makeText(context, "Weather data copied to clipboard", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "No weather data available. Open Breezy Weather first.", Toast.LENGTH_LONG).show()
+        }
     }
     
     private fun exportDebugLog() {

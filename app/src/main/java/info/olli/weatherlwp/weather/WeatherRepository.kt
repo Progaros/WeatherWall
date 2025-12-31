@@ -16,8 +16,9 @@ object WeatherRepository {
     private const val KEY_SUNSET = "weather_sunset"
     private const val KEY_LAST_UPDATE = "weather_last_update"
     private const val KEY_WIND_SPEED = "weather_wind_speed"  // Wind speed in m/s
+    private const val KEY_RAW_JSON = "weather_raw_json"  // Full JSON for debugging
     
-    fun updateWeather(context: Context, type: WeatherType, sunrise: Long, sunset: Long, windSpeed: Float = 0f) {
+    fun updateWeather(context: Context, type: WeatherType, sunrise: Long, sunset: Long, windSpeed: Float = 0f, rawJson: String? = null) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         prefs.edit()
             .putString(KEY_WEATHER_TYPE, type.name)
@@ -25,6 +26,11 @@ object WeatherRepository {
             .putLong(KEY_SUNSET, sunset)
             .putFloat(KEY_WIND_SPEED, windSpeed)
             .putLong(KEY_LAST_UPDATE, System.currentTimeMillis())
+            .apply {
+                if (rawJson != null) {
+                    putString(KEY_RAW_JSON, rawJson)
+                }
+            }
             .apply()
         
         Log.d(TAG, "Weather updated: type=$type, sunrise=$sunrise, sunset=$sunset, wind=$windSpeed m/s")
@@ -76,5 +82,14 @@ object WeatherRepository {
     fun isDataFresh(context: Context, maxAgeMs: Long = 3600000L): Boolean {
         val lastUpdate = getLastUpdate(context)
         return (System.currentTimeMillis() - lastUpdate) < maxAgeMs
+    }
+    
+    /**
+     * Get raw JSON data from last Breezy Weather update.
+     * Useful for debugging and checking available data fields.
+     */
+    fun getRawJson(context: Context): String? {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        return prefs.getString(KEY_RAW_JSON, null)
     }
 }

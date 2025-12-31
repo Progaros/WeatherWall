@@ -77,8 +77,8 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
             val windSpeed = data.optDouble("currentWindSpeed", 
                 data.optDouble("windSpeed", 0.0)).toFloat()
             
-            // Store in repository
-            WeatherRepository.updateWeather(context, weatherType, sunrise, sunset, windSpeed)
+            // Store in repository (including raw JSON for debugging)
+            WeatherRepository.updateWeather(context, weatherType, sunrise, sunset, windSpeed, json)
             
             Log.i(TAG, "Weather updated: $weatherType (code=$conditionCode), wind=$windSpeed m/s")
         } catch (e: Exception) {
