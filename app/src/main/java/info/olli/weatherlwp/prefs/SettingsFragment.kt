@@ -52,8 +52,8 @@ class SettingsFragment : PreferenceFragmentCompat() {
             }
         }
 
-        // Manual time slider - now controlled by pref_debug_enabled via XML dependency
-        val manualTimePref = findPreference<SeekBarPreference>("pref_manual_time")
+        // Manual time slider - uses custom TimeSeekBarPreference for HH:MM display
+        val manualTimePref = findPreference<TimeSeekBarPreference>("pref_manual_time")
         
         // Format time display (minutes -> HH:MM)
         fun formatTimeMinutes(minutes: Int): String {
@@ -62,12 +62,12 @@ class SettingsFragment : PreferenceFragmentCompat() {
             return String.format("%02d:%02d", h, m)
         }
         
-        // Set initial summary
+        // Set initial summary with HH:MM format
         manualTimePref?.summary = "Time: ${formatTimeMinutes(manualTimePref?.value ?: 720)}"
         
         // Update summary on change
         manualTimePref?.setOnPreferenceChangeListener { pref, newValue ->
-            (pref as SeekBarPreference).summary = "Time: ${formatTimeMinutes(newValue as Int)}"
+            (pref as TimeSeekBarPreference).summary = "Time: ${formatTimeMinutes(newValue as Int)}"
             true
         }
 

@@ -187,7 +187,7 @@
             android:key="pref_tree_width"
             android:title="Tree Width"
             android:summary="Width as % of height (100 = proportional)"
-            android:defaultValue="50"
+            android:defaultValue="100"
             android:max="200"
             app:min="20"
             app:showSeekBarValue="true"
@@ -519,10 +519,10 @@
             android:summary="Override weather, time, wind, and season for testing"
             android:defaultValue="false" />
 
-        <SeekBarPreference
+        <info.olli.weatherlwp.prefs.TimeSeekBarPreference
             android:key="pref_manual_time"
             android:title="Simulate Time of Day"
-            android:summary="Minutes since midnight (0-1439)"
+            android:summary="Drag to set simulation time"
             android:defaultValue="720"
             android:max="1439"
             app:min="0"

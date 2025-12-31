@@ -1,19 +1,29 @@
 package info.olli.weatherlwp.rendering
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Path
+import android.graphics.PorterDuff
+import android.graphics.RectF
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.parallax.ParallaxCalculator
-import info.olli.weatherlwp.simulation.CloudDensity
 import info.olli.weatherlwp.simulation.SimulationState
 import kotlin.random.Random
 
 /**
- * Renders clouds with wind-based movement.
+ * Renders clouds with wind-based movement using pre-calculated cloud groups.
+ * 
+ * PERFORMANCE OPTIMIZATION (Issue: Overcast lag)
+ * Instead of drawing 120 individual clouds with blur each frame, we:
+ * 1. Pre-render cloud groups to bitmaps with transparency baked in
+ * 2. Keep most clouds in back layers (75%) with lower alpha
+ * 3. Few clouds in front layers (25%) for depth
+ * 4. Move entire groups as units, not individual clouds
+ * 
+ * This reduces draw calls from ~500/frame to ~12-20/frame.
  * 
  * Uses SimulationState for:
  * - windStrength (affects cloud speed)
@@ -21,27 +31,23 @@ import kotlin.random.Random
  * - cloudDensity (how many clouds to show)
  * - isNight/isDusk/isDawn (affects cloud color tint)
  * - timeOfDayHours (for sunrise/sunset coloring)
- * 
- * Uses RenderConstants for:
- * - World coordinate bounds
- * - Parallax depth
- * - Reference aspect ratio
- * 
- * Design notes:
- * - Clouds should be soft, wispy, and semi-transparent
- * - Use low alpha (30-50%) with blur effects
- * - Apply time-of-day tinting (orange at sunset, purple at night)
  */
 class CloudLayer(private val context: Context) : SceneLayer {
-    private val paint = Paint().apply {
+    
+    // Paint for rendering to bitmap (with blur)
+    private val bitmapPaint = Paint().apply {
         color = Color.WHITE
         style = Paint.Style.FILL
         isAntiAlias = true
-        alpha = 80  // Lower alpha for atmospheric softness
-        maskFilter = BlurMaskFilter(25f, BlurMaskFilter.Blur.NORMAL)  // Reduced blur for better performance
+        maskFilter = BlurMaskFilter(15f, BlurMaskFilter.Blur.NORMAL)
     }
     
-    private val path = Path()
+    // Paint for drawing cached bitmaps to screen (no blur - already baked)
+    private val drawPaint = Paint().apply {
+        isAntiAlias = true
+        isFilterBitmap = true
+    }
+    
     private var width = 0f
     private var height = 0f
     
@@ -50,67 +56,200 @@ class CloudLayer(private val context: Context) : SceneLayer {
     private var extendedOffset = 0f
     
     /**
-     * Cloud data with initial position.
-     * Actual position is computed from initial + time * speed
+     * Pre-calculated cloud group with cached bitmap.
+     * Each group contains multiple cloud puffs rendered to a single bitmap.
      */
-    private data class CloudData(
-        val initialX: Float,   // 0-1 across extended width
-        val y: Float,          // Y position (doesn't change)
-        val size: Float,
-        val speed: Float,
-        val alpha: Int,        // Base alpha (30-80 for soft appearance)
-        val seed: Long,
-        val elongation: Float  // Horizontal stretch factor for wispy shape
-    )
+    internal data class CloudGroup(
+        val initialX: Float,      // 0-1 across extended width
+        val y: Float,             // Y center position (0-1)
+        val speed: Float,         // Movement speed
+        val alpha: Int,           // Pre-calculated alpha (0-255)
+        val isBackLayer: Boolean, // True = back layer (75%), False = front layer (25%)
+        val depthFactor: Float,   // For parallax (0.15-0.35)
+        val groupWidth: Float,    // Width of the group (0-1 normalized)
+        val groupHeight: Float,   // Height of the group (0-1 normalized)
+        val seed: Long            // For deterministic regeneration
+    ) {
+        // Cached bitmap - rendered once, reused many frames
+        @Volatile var cachedBitmap: Bitmap? = null
+        var lastWidth: Int = 0
+        var lastHeight: Int = 0
+    }
     
-    // Thread-safe cloud list using volatile reference + immutable list
-    // Settings thread creates new list, render thread reads current snapshot
-    @Volatile private var clouds: List<CloudData> = emptyList()
+    // Thread-safe cloud group list
+    @Volatile private var cloudGroups: List<CloudGroup> = emptyList()
+    
+    // Cached cloud color for bitmap regeneration
+    @Volatile private var cachedCloudColor: Int = Color.WHITE
     
     private var cloudCount = 10
-    private var cloudStretch = 2.0f  // Horizontal stretch multiplier (1.0 = normal, 2.0 = wispy)
-    private var cloudOpacity = 0.4f  // Base opacity multiplier (0-1)
-    private var densityMultiplier = 1.0f  // Multiplier on weather-based cloud count (0-2)
+    private var cloudStretch = 2.0f
+    private var cloudOpacity = 0.4f
+    private var densityMultiplier = 1.0f
     private var cloudsEnabled = true
     private var randomSeed = 42
+    
+    // Configuration constants
+    companion object {
+        // Layer distribution: 75% back, 25% front
+        const val BACK_LAYER_RATIO = 0.75f
+        
+        // Clouds per group (reduces individual draw calls)
+        const val CLOUDS_PER_GROUP_MIN = 4
+        const val CLOUDS_PER_GROUP_MAX = 8
+        
+        // Back layer: lower alpha, smaller parallax
+        const val BACK_LAYER_ALPHA_MULT = 0.5f
+        const val BACK_LAYER_DEPTH_MIN = 0.15f
+        const val BACK_LAYER_DEPTH_MAX = 0.22f
+        
+        // Front layer: higher alpha, larger parallax
+        const val FRONT_LAYER_ALPHA_MULT = 0.8f
+        const val FRONT_LAYER_DEPTH_MIN = 0.28f
+        const val FRONT_LAYER_DEPTH_MAX = 0.35f
+        
+        // Group size ranges (as fraction of screen)
+        const val GROUP_WIDTH_MIN = 0.15f
+        const val GROUP_WIDTH_MAX = 0.35f
+        const val GROUP_HEIGHT_MIN = 0.06f
+        const val GROUP_HEIGHT_MAX = 0.12f
+        
+        // Max groups for performance (even at overcast)
+        const val MAX_GROUPS = 20
+    }
     
     init {
         reloadSettings()
     }
     
-    private fun generateClouds() {
-        // Build new list (thread-safe: atomic swap at end)
-        val newClouds = ArrayList<CloudData>(cloudCount)
-        val random = Random(randomSeed.toLong() + 3000)  // Offset from terrain
+    /**
+     * Generate cloud groups with pre-calculated properties.
+     * Groups are distributed: 75% back layer, 25% front layer.
+     */
+    internal fun generateCloudGroups() {
+        // Calculate target group count based on cloud count
+        // Each group represents 4-8 clouds, so fewer groups needed
+        val avgCloudsPerGroup = (CLOUDS_PER_GROUP_MIN + CLOUDS_PER_GROUP_MAX) / 2
+        val targetGroups = (cloudCount / avgCloudsPerGroup).coerceIn(2, MAX_GROUPS)
         
-        for (i in 0 until cloudCount) {
-            // x is 0-1 across extended width
-            val x = random.nextFloat()
-            val y = RenderConstants.CLOUD_Y_MIN + random.nextFloat() * RenderConstants.CLOUD_Y_RANGE
-            val size = RenderConstants.CLOUD_SIZE_MIN + random.nextFloat() * RenderConstants.CLOUD_SIZE_RANGE
-            // Base speed - smaller clouds move faster (further away)
-            val speed = RenderConstants.CLOUD_SPEED_BASE + (1f - size / 0.33f) * RenderConstants.CLOUD_SPEED_RANGE
-            // Alpha based on size and opacity setting
-            val baseAlpha = (10 + size * 150).toInt()  // 10-60 range before opacity
-            val alpha = (baseAlpha * cloudOpacity).toInt().coerceIn(5, 100)
-            // Horizontal elongation - base from setting, with random variation
-            val elongation = cloudStretch * (0.8f + random.nextFloat() * 0.4f)
-            
-            newClouds.add(CloudData(x, y, size, speed, alpha, random.nextLong(), elongation))
+        val newGroups = ArrayList<CloudGroup>(targetGroups)
+        val random = Random(randomSeed.toLong() + 4000)
+        
+        val backCount = (targetGroups * BACK_LAYER_RATIO).toInt().coerceAtLeast(1)
+        val frontCount = (targetGroups - backCount).coerceAtLeast(1)
+        
+        // Generate back layer groups (majority of clouds, lower alpha)
+        for (i in 0 until backCount) {
+            newGroups.add(createCloudGroup(random, isBackLayer = true))
         }
         
-        // Atomic reference swap (volatile ensures visibility to render thread)
-        clouds = newClouds
+        // Generate front layer groups (fewer clouds, higher alpha)
+        for (i in 0 until frontCount) {
+            newGroups.add(createCloudGroup(random, isBackLayer = false))
+        }
+        
+        cloudGroups = newGroups
+    }
+    
+    private fun createCloudGroup(random: Random, isBackLayer: Boolean): CloudGroup {
+        val x = random.nextFloat()
+        val y = RenderConstants.CLOUD_Y_MIN + random.nextFloat() * RenderConstants.CLOUD_Y_RANGE
+        
+        val groupWidth = GROUP_WIDTH_MIN + random.nextFloat() * (GROUP_WIDTH_MAX - GROUP_WIDTH_MIN)
+        val groupHeight = GROUP_HEIGHT_MIN + random.nextFloat() * (GROUP_HEIGHT_MAX - GROUP_HEIGHT_MIN)
+        
+        val speed = RenderConstants.CLOUD_SPEED_BASE + random.nextFloat() * RenderConstants.CLOUD_SPEED_RANGE
+        
+        // Alpha and depth based on layer
+        val (alphaMult, depthMin, depthMax) = if (isBackLayer) {
+            Triple(BACK_LAYER_ALPHA_MULT, BACK_LAYER_DEPTH_MIN, BACK_LAYER_DEPTH_MAX)
+        } else {
+            Triple(FRONT_LAYER_ALPHA_MULT, FRONT_LAYER_DEPTH_MIN, FRONT_LAYER_DEPTH_MAX)
+        }
+        
+        val baseAlpha = (30 + random.nextFloat() * 40).toInt()
+        val alpha = (baseAlpha * alphaMult * cloudOpacity).toInt().coerceIn(10, 180)
+        val depth = depthMin + random.nextFloat() * (depthMax - depthMin)
+        
+        return CloudGroup(
+            initialX = x,
+            y = y,
+            speed = speed,
+            alpha = alpha,
+            isBackLayer = isBackLayer,
+            depthFactor = depth,
+            groupWidth = groupWidth,
+            groupHeight = groupHeight,
+            seed = random.nextLong()
+        )
+    }
+    
+    /**
+     * Render a cloud group to its cached bitmap.
+     * This is called once per group, then the bitmap is reused.
+     */
+    private fun renderGroupToBitmap(group: CloudGroup, bitmapWidth: Int, bitmapHeight: Int, color: Int) {
+        // Recycle old bitmap if size changed
+        if (group.cachedBitmap != null && 
+            (group.lastWidth != bitmapWidth || group.lastHeight != bitmapHeight)) {
+            group.cachedBitmap?.recycle()
+            group.cachedBitmap = null
+        }
+        
+        // Create or reuse bitmap
+        val bitmap = group.cachedBitmap ?: Bitmap.createBitmap(
+            bitmapWidth, bitmapHeight, Bitmap.Config.ARGB_8888
+        )
+        
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+        
+        bitmapPaint.color = color
+        bitmapPaint.alpha = group.alpha
+        
+        val random = Random(group.seed)
+        val numPuffs = CLOUDS_PER_GROUP_MIN + random.nextInt(CLOUDS_PER_GROUP_MAX - CLOUDS_PER_GROUP_MIN + 1)
+        
+        val centerX = bitmapWidth / 2f
+        val centerY = bitmapHeight / 2f
+        
+        for (i in 0 until numPuffs) {
+            // Distribute puffs across the group
+            val offsetX = (random.nextFloat() - 0.5f) * bitmapWidth * 0.8f
+            val offsetY = (random.nextFloat() - 0.5f) * bitmapHeight * 0.6f
+            
+            val puffCenterX = centerX + offsetX
+            val puffCenterY = centerY + offsetY
+            
+            // Elongated ellipses for wispy clouds
+            val radiusX = bitmapWidth * (0.15f + random.nextFloat() * 0.2f) * cloudStretch * 0.3f
+            val radiusY = bitmapHeight * (0.2f + random.nextFloat() * 0.25f)
+            
+            canvas.drawOval(
+                puffCenterX - radiusX, puffCenterY - radiusY,
+                puffCenterX + radiusX, puffCenterY + radiusY,
+                bitmapPaint
+            )
+        }
+        
+        group.cachedBitmap = bitmap
+        group.lastWidth = bitmapWidth
+        group.lastHeight = bitmapHeight
     }
 
     override fun resize(w: Float, h: Float) {
         width = w
         height = h
-        // Calculate extended width for parallax content
         extendedWidth = RenderConstants.getExtendedWidth(w, h)
         extendedOffset = RenderConstants.getExtendedOffset(w, extendedWidth)
-        // Regenerate clouds for new dimensions
-        generateClouds()
+        
+        // Invalidate cached bitmaps on resize
+        for (group in cloudGroups) {
+            group.cachedBitmap?.recycle()
+            group.cachedBitmap = null
+        }
+        
+        generateCloudGroups()
     }
 
     override fun update(state: SimulationState, deltaTimeMs: Long) {
@@ -120,31 +259,76 @@ class CloudLayer(private val context: Context) : SceneLayer {
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         if (width <= 0 || height <= 0 || !cloudsEnabled) return
         
-        // Cloud count = weather-based count * user multiplier, capped for performance
+        // Update cloud count based on weather
         val baseCount = state.getCloudCount()
-        val targetCount = (baseCount * densityMultiplier).toInt().coerceIn(0, 120)  // Max 120 clouds for overcast
+        val targetCount = (baseCount * densityMultiplier).toInt().coerceIn(0, 120)
         if (targetCount != cloudCount) {
             cloudCount = targetCount
-            generateClouds()
+            generateCloudGroups()
         }
         
-        // Take local snapshot of clouds for thread-safe iteration
-        val currentClouds = clouds
-        if (currentClouds.isEmpty()) return
+        val currentGroups = cloudGroups
+        if (currentGroups.isEmpty()) return
         
-        val px = parallaxCalculator.getOffsetXForDepth(RenderConstants.PARALLAX_CLOUDS)
-        val py = parallaxCalculator.getOffsetYForDepth(RenderConstants.PARALLAX_CLOUDS)
+        // Calculate cloud color for this frame
+        val cloudColor = calculateCloudColor(state)
         
-        // Wind affects cloud speed
+        // Regenerate bitmaps if color changed significantly
+        val colorChanged = cloudColor != cachedCloudColor
+        if (colorChanged) {
+            cachedCloudColor = cloudColor
+            for (group in currentGroups) {
+                group.cachedBitmap?.recycle()
+                group.cachedBitmap = null
+            }
+        }
+        
         val windSpeed = RenderConstants.WIND_CLOUD_SPEED_MIN + 
             state.windStrength * (RenderConstants.WIND_CLOUD_SPEED_MAX - RenderConstants.WIND_CLOUD_SPEED_MIN)
         
-        // Time-of-day cloud color tinting
+        // Draw back layer first, then front layer
+        for (isBack in listOf(true, false)) {
+            for (group in currentGroups) {
+                if (group.isBackLayer != isBack) continue
+                
+                // Calculate parallax for this group's depth
+                val px = parallaxCalculator.getOffsetXForDepth(group.depthFactor)
+                val py = parallaxCalculator.getOffsetYForDepth(group.depthFactor)
+                
+                // Calculate group position with time-based movement
+                val timeOffset = state.timeSeconds * group.speed * windSpeed
+                var groupX = group.initialX + timeOffset / extendedWidth * 0.1f
+                groupX = groupX % 1f
+                if (groupX < 0) groupX += 1f
+                
+                // Convert to screen coordinates
+                val screenX = groupX * extendedWidth - extendedOffset + px
+                val screenY = group.y * height + py
+                
+                val groupWidthPx = (group.groupWidth * width).toInt().coerceAtLeast(50)
+                val groupHeightPx = (group.groupHeight * height).toInt().coerceAtLeast(30)
+                
+                // Ensure bitmap is rendered
+                if (group.cachedBitmap == null) {
+                    renderGroupToBitmap(group, groupWidthPx, groupHeightPx, cloudColor)
+                }
+                
+                group.cachedBitmap?.let { bitmap ->
+                    canvas.drawBitmap(
+                        bitmap,
+                        screenX - groupWidthPx / 2f,
+                        screenY - groupHeightPx / 2f,
+                        drawPaint
+                    )
+                }
+            }
+        }
+    }
+    
+    private fun calculateCloudColor(state: SimulationState): Int {
         val hour = state.timeOfDayHours
-        val cloudColor = when {
-            // Night: bluish-gray clouds
+        return when {
             state.isNight -> Color.rgb(150, 155, 180)
-            // Dawn/dusk: orange/pink tint
             state.isDawn -> {
                 val t = (hour - 5f).coerceIn(0f, 2f) / 2f
                 RenderConstants.lerpColor(Color.rgb(180, 170, 190), Color.rgb(255, 200, 180), t)
@@ -153,58 +337,14 @@ class CloudLayer(private val context: Context) : SceneLayer {
                 val t = (hour - 17f).coerceIn(0f, 2f) / 2f
                 RenderConstants.lerpColor(Color.rgb(255, 220, 200), Color.rgb(200, 170, 190), t)
             }
-            // Day: white with slight warmth
             else -> Color.rgb(250, 250, 255)
         }
-        paint.color = cloudColor
-        
-        canvas.save()
-        canvas.translate(px, py)
-        
-        for (cloud in currentClouds) {
-            paint.alpha = cloud.alpha
-            
-            // Calculate cloud X position based on time
-            // Cloud wraps around extended width
-            val timeOffset = state.timeSeconds * cloud.speed * windSpeed
-            var cloudX = cloud.initialX + timeOffset / extendedWidth * 0.1f  // Slow wrap
-            
-            // Wrap around when cloud moves past the right edge
-            cloudX = cloudX % 1f
-            if (cloudX < 0) cloudX += 1f
-            
-            // Convert 0-1 to screen coordinates
-            val cx = cloudX * extendedWidth - extendedOffset
-            val cy = cloud.y * height
-            val cSize = cloud.size * height * 0.5f
-            
-            drawCloud(canvas, cx, cy, cSize, cloud.seed, cloud.elongation)
-        }
-        
-        canvas.restore()
     }
     
-    private fun drawCloud(canvas: Canvas, cx: Float, cy: Float, size: Float, seed: Long, elongation: Float) {
-        val random = Random(seed)
-        // Fewer puffs for better performance (was 4-8, now 3-5)
-        val puffs = 3 + random.nextInt(3)
-        
-        for (i in 0 until puffs) {
-            // Elongated horizontal spread for wispy look
-            val px = cx + (random.nextFloat() - 0.5f) * size * elongation * 1.8f
-            val py = cy + (random.nextFloat() - 0.5f) * size * 0.4f  // Less vertical spread
-            // Varied radii for organic look
-            val radiusX = size * (0.4f + random.nextFloat() * 0.6f) * elongation * 0.6f
-            val radiusY = size * (0.3f + random.nextFloat() * 0.4f)
-            
-            // Draw elongated ellipse for wispy appearance
-            canvas.drawOval(
-                px - radiusX, py - radiusY,
-                px + radiusX, py + radiusY,
-                paint
-            )
-        }
-    }
+    // Expose for testing
+    internal fun getCloudGroups(): List<CloudGroup> = cloudGroups
+    internal fun getBackLayerCount(): Int = cloudGroups.count { it.isBackLayer }
+    internal fun getFrontLayerCount(): Int = cloudGroups.count { !it.isBackLayer }
 
     override fun reloadSettings() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
@@ -242,14 +382,28 @@ class CloudLayer(private val context: Context) : SceneLayer {
         
         if (!cloudsEnabled) {
             cloudCount = 0
-            clouds = emptyList()  // Thread-safe: atomic reference swap
+            // Cleanup cached bitmaps
+            for (group in cloudGroups) {
+                group.cachedBitmap?.recycle()
+            }
+            cloudGroups = emptyList()
         } else if (enabledChanged || stretchChanged || seedChanged || opacityChanged || multiplierChanged) {
-            // Regenerate clouds with new settings - count will be recalculated in draw()
-            generateClouds()
+            // Invalidate cached bitmaps when settings change
+            for (group in cloudGroups) {
+                group.cachedBitmap?.recycle()
+                group.cachedBitmap = null
+            }
+            // Regenerate cloud groups with new settings
+            generateCloudGroups()
         }
     }
 
     override fun destroy() {
-        // Cleanup
+        // Cleanup cached bitmaps to prevent memory leaks
+        for (group in cloudGroups) {
+            group.cachedBitmap?.recycle()
+            group.cachedBitmap = null
+        }
+        cloudGroups = emptyList()
     }
 }

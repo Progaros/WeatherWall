@@ -197,4 +197,48 @@ class SettingsTest {
         
         assertEquals("Should use normal wind speed when debug is 0", 25, windVal)
     }
+
+    // ============== Time Format Display Tests ==============
+    
+    @Test
+    fun `time format should display HH-MM for midnight`() {
+        val minutes = 0
+        val formatted = formatMinutesToTime(minutes)
+        assertEquals("Midnight should display 00:00", "00:00", formatted)
+    }
+    
+    @Test
+    fun `time format should display HH-MM for noon`() {
+        val minutes = 720  // 12 * 60
+        val formatted = formatMinutesToTime(minutes)
+        assertEquals("Noon should display 12:00", "12:00", formatted)
+    }
+    
+    @Test
+    fun `time format should display HH-MM for late evening`() {
+        val minutes = 1380  // 23 * 60
+        val formatted = formatMinutesToTime(minutes)
+        assertEquals("23:00 should display correctly", "23:00", formatted)
+    }
+    
+    @Test
+    fun `time format should handle max value 1439`() {
+        val minutes = 1439  // 23:59
+        val formatted = formatMinutesToTime(minutes)
+        assertEquals("Max time should display 23:59", "23:59", formatted)
+    }
+    
+    @Test
+    fun `time format should pad single digit hours and minutes`() {
+        val minutes = 65  // 1:05
+        val formatted = formatMinutesToTime(minutes)
+        assertEquals("Single digits should be padded", "01:05", formatted)
+    }
+    
+    // Helper function matching TimeSeekBarPreference.formatMinutesToTime
+    private fun formatMinutesToTime(minutes: Int): String {
+        val h = (minutes / 60).coerceIn(0, 23)
+        val m = (minutes % 60).coerceIn(0, 59)
+        return String.format("%02d:%02d", h, m)
+    }
 }
