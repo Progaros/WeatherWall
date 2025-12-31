@@ -177,8 +177,8 @@ object RenderConstants {
     /** Hill curve generation */
     const val HILL_CURVE_POINTS_MIN = 80
     const val HILL_CURVE_POINTS_RANGE = 40
-    const val HILL_BASE_HEIGHT = 0.3f
-    const val HILL_HEIGHT_RANGE = 0.2f
+    const val HILL_BASE_HEIGHT = 0.35f     // Base position (higher = hills start lower on screen)
+    const val HILL_HEIGHT_RANGE = 0.4f     // Max variation from base (higher = taller hills)
     const val HILL_SMOOTHING_FACTOR = 0.15f  // Max change between adjacent points
     
     /** Tree generation */

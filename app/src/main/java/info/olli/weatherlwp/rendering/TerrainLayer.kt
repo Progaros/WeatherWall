@@ -165,9 +165,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 // Background hills have smaller amplitude to appear further away
                 val effectiveAmplitude = hillAmplitude * depthAmplitudeScale
                 // noiseVal is 0.0-1.0, center it and apply amplitude
+                // HILL_HEIGHT_RANGE is now 0.4, so at amplitude 2.0 we get 0.8 range!
                 val normalizedValue = (RenderConstants.HILL_BASE_HEIGHT + 
                     (noiseVal - 0.5f) * RenderConstants.HILL_HEIGHT_RANGE * effectiveAmplitude)
-                    .coerceIn(0.1f, 0.6f)
+                    .coerceIn(0.05f, 0.75f)  // Allow taller hills reaching higher on screen
                 
                 points.add(normalizedValue)
             }
@@ -199,10 +200,14 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         // Calculate tree count based on density and extended width
         // More width = more trees to maintain density
-        // Density 50 = normal (50 trees base), 200 = dense forest (200 trees base)
+        // Density 100 = normal forest, 200 = very dense forest
         val widthRatio = extendedWidth / (height * RenderConstants.REFERENCE_ASPECT_RATIO).coerceAtLeast(1f)
-        val baseTrees = 100  // Base number for standard density (at 100% = 100 trees)
-        val treeCount = ((treeDensity / 100f) * baseTrees * widthRatio).toInt().coerceIn(0, 1000)
+        // Base trees gives target coverage at 100% density
+        // 200 trees across standard width creates moderate density
+        val baseTrees = 200
+        // Square root scaling: density 200 gives ~1.4x base (not 2x) for more nuanced control
+        // Use linear scaling for now: 200% = 2x trees
+        val treeCount = ((treeDensity / 100f) * baseTrees * widthRatio).toInt().coerceIn(0, 3000)
         if (treeCount <= 0) {
             trees = emptyList()
             return
@@ -242,30 +247,24 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             
             // Place trees along the extended width
             for (t in 0 until hillTreeCount) {
-                // Apply sparsity: randomly skip some tree positions to create gaps
+                // Apply sparsity: randomly skip some tree positions to create horizontal gaps
                 if (random.nextFloat() < treeSparsity) {
-                    continue  // Skip this tree (creates a gap)
+                    continue  // Skip this tree (creates a horizontal gap)
                 }
                 
-                // xRatio is 0-1 across the extended width
-                val xRatio: Float
-                if (treeSpread < 0.1f) {
-                    // Very low spread: only on peaks with tiny scatter
-                    val peakX = peakPositions[random.nextInt(peakPositions.size)]
-                    xRatio = (peakX + (random.nextFloat() - 0.5f) * 0.05f).coerceIn(0f, 1f)
-                } else {
-                    // Normal spread: distribute along entire extended width
-                    val baseSpacing = 1.0f / hillTreeCount
-                    val baseX = t * baseSpacing + random.nextFloat() * baseSpacing
-                    
-                    // At low spread, bias toward peaks; at high spread, allow full range
-                    val nearestPeak = peakPositions.minByOrNull { kotlin.math.abs(it - baseX) } ?: 0.5f
-                    xRatio = (nearestPeak + (baseX - nearestPeak) * treeSpread).coerceIn(0f, 1f)
-                }
+                // xRatio is 0-1 across the extended width - distributed evenly with some randomness
+                val baseSpacing = 1.0f / hillTreeCount
+                val xRatio = (t * baseSpacing + random.nextFloat() * baseSpacing).coerceIn(0f, 1f)
                 
-                // Get the hill surface Y at this X position
+                // Get the hill surface Y at this X position (this is the hill line)
                 val groundY = getHillY(xRatio, hill)
-                val yRatio = groundY
+                
+                // Tree spread controls vertical distribution DOWN from the hill line
+                // Spread 0 = trees sit exactly on hill line
+                // Spread 1 = trees can spread down significantly below hill line
+                val maxVerticalOffset = treeSpread * 0.15f  // Max 15% of height below hill line
+                val verticalOffset = random.nextFloat() * maxVerticalOffset
+                val yRatio = groundY + verticalOffset  // Move tree down (higher Y = lower on screen)
                 
                 // With new parallax: depthFactor goes from -0.5 (background) to +0.05 (foreground)
                 // Normalize to 0-1 range for scale: 0 = background (small), 1 = foreground (large)
