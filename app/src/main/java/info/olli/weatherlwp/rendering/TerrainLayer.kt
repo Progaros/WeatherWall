@@ -453,16 +453,24 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // swaySpeed=0 freezes trees, swaySpeed=1 is normal, swaySpeed=2 is fast
         val baseFreq = RenderConstants.TREE_SWAY_FREQUENCY * swaySpeed
         
-        // Spatial coherence: nearby trees sway together (wind gusts are spatial)
-        val spatialPhase = tree.xRatio * 2f
+        // TRAVELING WIND WAVE: Gusts move across the scene left-to-right
+        // Phase based on tree X position - creates spatial coherence (nearby trees move together)
+        // The wave travels across the screen based on time
+        val spatialPhase = tree.xRatio * kotlin.math.PI.toFloat() * 4f  // 4 wave cycles across screen
+        val waveSpeed = 0.8f + baseWindStrength * 0.6f  // Wave travels faster with more wind
         
-        // Time-traveling wave: wind gusts move across the scene
-        val gustWaveSpeed = 0.2f + baseWindStrength * 0.4f
-        val gustWave = sin(timeSec * gustWaveSpeed - spatialPhase * 3f) * 0.5f + 0.5f
+        // The gust wave: a traveling sine wave that affects tree intensity
+        // Trees at similar X positions have similar phase, creating "waves" of wind
+        val gustWavePhase = timeSec * waveSpeed - spatialPhase
+        val gustWave = (sin(gustWavePhase) * 0.5f + 0.5f)  // 0-1 wave intensity at this tree
+        
+        // When gust is active, the wave causes trees to lean in sequence
+        // Local gust intensity = base gust * wave position (so gust "passes through")
+        val localGust = gustIntensity * gustWave
         
         // Gust impact: when gustIntensity is high, trees lean strongly then recover
         // Use a stronger one-sided push during gusts
-        val gustPush = gustIntensity * gustIntensity * 1.5f  // Quadratic for snappy response
+        val gustPush = localGust * localGust * 1.8f  // Quadratic for snappy response
         
         // Maximum sway amplitude at tree top
         // ALWAYS have ambient sway (affected by swaySpeed), plus wind effects
@@ -498,8 +506,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 sin(timeSec * baseFreq * 2.5f + tipPhase) * 0.2f
             
             // Gust push is one-directional (trees lean in wind direction then spring back)
-            // During gust: lean right strongly. Recovery: oscillate back to center
-            val gustLean = gustPush * (1f + gustWave * 0.3f)
+            // The wave effect is already in gustPush via localGust
+            val gustLean = gustPush
             
             // Sway increases with height squared (natural bending curve)
             // Include ambient sway even without wind (baseWave still oscillates)

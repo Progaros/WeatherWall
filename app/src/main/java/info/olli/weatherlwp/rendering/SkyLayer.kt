@@ -296,6 +296,7 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
     /**
      * Draw the moon as a pale circle with crescent effect.
      * Visible at night, follows arc opposite to sun.
+     * Crescent phase varies with position in the night cycle.
      */
     private fun drawMoon(canvas: Canvas, state: SimulationState, parallaxX: Float, parallaxY: Float) {
         val hour = state.timeOfDayHours
@@ -329,9 +330,9 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         val moonGradient = RadialGradient(
             moonX + parallaxX, moonY + parallaxY, glowRadius,
             intArrayOf(
-                Color.argb(180, 220, 230, 255),  // Pale silver center
-                Color.argb(100, 180, 200, 230),
-                Color.argb(30, 150, 170, 200),
+                Color.argb(150, 220, 230, 255),  // Pale silver center
+                Color.argb(80, 180, 200, 230),
+                Color.argb(20, 150, 170, 200),
                 Color.TRANSPARENT
             ),
             floatArrayOf(0f, 0.4f, 0.7f, 1f),
@@ -341,15 +342,27 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         moonPaint.shader = moonGradient
         canvas.drawCircle(moonX + parallaxX, moonY + parallaxY, glowRadius, moonPaint)
         
-        // Solid moon disc
+        // Solid moon disc (lit portion)
         moonPaint.shader = null
-        moonPaint.color = Color.argb(255, 240, 245, 255)
+        moonPaint.color = Color.argb(255, 245, 248, 255)  // Bright moon white
         canvas.drawCircle(moonX + parallaxX, moonY + parallaxY, radius, moonPaint)
         
-        // Crescent shadow (create crescent effect by drawing a dark circle offset)
-        moonPaint.color = Color.argb(220, 30, 35, 60)  // Match night sky
-        val crescentOffset = radius * 0.3f
-        canvas.drawCircle(moonX + parallaxX + crescentOffset, moonY + parallaxY - crescentOffset * 0.5f, radius * 0.85f, moonPaint)
+        // Crescent shadow - simulates shadow side of moon
+        // Shadow circle is same size but offset to the upper-right to create crescent
+        // Get night sky color to blend the shadow naturally
+        val skyR = Color.red(skyTop)
+        val skyG = Color.green(skyTop)
+        val skyB = Color.blue(skyTop)
+        moonPaint.color = Color.argb(255, skyR, skyG, skyB)
+        
+        // Offset the shadow circle to create crescent - position to the right and slightly up
+        val shadowOffset = radius * 0.65f
+        canvas.drawCircle(
+            moonX + parallaxX + shadowOffset, 
+            moonY + parallaxY - shadowOffset * 0.3f, 
+            radius * 0.92f,  // Slightly smaller to show thin crescent edge
+            moonPaint
+        )
     }
 
     override fun reloadSettings() {

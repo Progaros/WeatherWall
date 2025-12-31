@@ -32,11 +32,12 @@ class SpawnSwitchPreference @JvmOverloads constructor(
         val spawnButton = holder.findViewById(R.id.spawn_button) as? ImageButton
         spawnButton?.setOnClickListener {
             // Trigger the callback when the dice button is clicked
+            // Manual spawn works regardless of toggle state
             onSpawnClickListener?.invoke()
         }
 
-        // Disable button if the switch is off
-        spawnButton?.isEnabled = isChecked
-        spawnButton?.alpha = if (isChecked) 1.0f else 0.4f
+        // Spawn button is always enabled - manual spawn works regardless of auto-spawn toggle
+        spawnButton?.isEnabled = true
+        spawnButton?.alpha = 1.0f
     }
 }

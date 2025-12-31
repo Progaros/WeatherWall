@@ -187,6 +187,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
     /**
      * Render a cloud group to its cached bitmap.
      * This is called once per group, then the bitmap is reused.
+     * 
+     * Includes edge fadeout to prevent hard cuts when clouds overlap.
      */
     private fun renderGroupToBitmap(group: CloudGroup, bitmapWidth: Int, bitmapHeight: Int, color: Int) {
         // Recycle old bitmap if size changed
@@ -213,6 +215,10 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val centerX = bitmapWidth / 2f
         val centerY = bitmapHeight / 2f
         
+        // Edge fadeout margin (25% from each edge)
+        val fadeMarginX = bitmapWidth * 0.25f
+        val fadeMarginY = bitmapHeight * 0.25f
+        
         for (i in 0 until numPuffs) {
             // Distribute puffs across the group
             val offsetX = (random.nextFloat() - 0.5f) * bitmapWidth * 0.8f
@@ -220,6 +226,20 @@ class CloudLayer(private val context: Context) : SceneLayer {
             
             val puffCenterX = centerX + offsetX
             val puffCenterY = centerY + offsetY
+            
+            // Calculate edge proximity factor for soft edges (0 at edge, 1 in center)
+            val distFromLeftEdge = puffCenterX
+            val distFromRightEdge = bitmapWidth - puffCenterX
+            val distFromTopEdge = puffCenterY
+            val distFromBottomEdge = bitmapHeight - puffCenterY
+            
+            val xFade = (minOf(distFromLeftEdge, distFromRightEdge) / fadeMarginX).coerceIn(0f, 1f)
+            val yFade = (minOf(distFromTopEdge, distFromBottomEdge) / fadeMarginY).coerceIn(0f, 1f)
+            val edgeFade = xFade * yFade  // Combined fade factor
+            
+            // Apply edge fade to alpha
+            val puffAlpha = (group.alpha * edgeFade).toInt().coerceIn(0, 255)
+            bitmapPaint.alpha = puffAlpha
             
             // Elongated ellipses for wispy clouds
             val radiusX = bitmapWidth * (0.15f + random.nextFloat() * 0.2f) * cloudStretch * 0.3f
