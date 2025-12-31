@@ -106,15 +106,22 @@ class ParallaxScene(
             val state = simulationController.getState()
             
             // Check for manual spawn trigger from settings
-            if (prefs.getBoolean("trigger_spawn_event", false)) {
-                prefs.edit().putBoolean("trigger_spawn_event", false).apply()
+            // Use timestamp-based trigger to allow multiple scenes to respond
+            val spawnTriggerTime = prefs.getLong("trigger_spawn_event_time", 0L)
+            if (spawnTriggerTime > 0 && System.currentTimeMillis() - spawnTriggerTime < 500) {
+                // Only clear if we're the first to respond (within 500ms window)
+                prefs.edit().putLong("trigger_spawn_event_time", 0L).apply()
                 randomEventLayer.debugSpawnEvent()
             }
             
             // Check for specific event spawn trigger from individual toggles
+            val specificEventTime = prefs.getLong("trigger_spawn_specific_event_time", 0L)
             val specificEvent = prefs.getString("trigger_spawn_specific_event", null)
-            if (specificEvent != null) {
-                prefs.edit().remove("trigger_spawn_specific_event").apply()
+            if (specificEvent != null && specificEventTime > 0 && System.currentTimeMillis() - specificEventTime < 500) {
+                prefs.edit()
+                    .remove("trigger_spawn_specific_event")
+                    .putLong("trigger_spawn_specific_event_time", 0L)
+                    .apply()
                 randomEventLayer.spawnSpecificEvent(specificEvent)
             }
             

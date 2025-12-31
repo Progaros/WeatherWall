@@ -43,17 +43,22 @@ class EventsSettingsFragment : PreferenceFragmentCompat() {
     }
     
     private fun spawnEvent(eventType: String, eventName: String) {
-        // Use preference flag that ParallaxScene checks
+        // Use timestamp-based preference trigger that all active scenes check
         val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
-        prefs.edit().putString("trigger_spawn_specific_event", eventType).apply()
+        prefs.edit()
+            .putString("trigger_spawn_specific_event", eventType)
+            .putLong("trigger_spawn_specific_event_time", System.currentTimeMillis())
+            .apply()
         
         Toast.makeText(context, "Spawning $eventName...", Toast.LENGTH_SHORT).show()
     }
     
     private fun spawnRandomEvent() {
-        // Use preference flag that ParallaxScene checks  
+        // Use timestamp-based preference trigger that all active scenes check
         val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
-        prefs.edit().putBoolean("trigger_spawn_event", true).apply()
+        prefs.edit()
+            .putLong("trigger_spawn_event_time", System.currentTimeMillis())
+            .apply()
         
         Toast.makeText(context, "Spawning random event...", Toast.LENGTH_SHORT).show()
     }

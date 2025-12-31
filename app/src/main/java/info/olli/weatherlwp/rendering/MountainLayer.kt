@@ -213,8 +213,9 @@ class MountainLayer(private val context: Context) : SceneLayer {
         val offsetPx = mountainBottomOffset * height
         val peakY = height * (1f - mountain.height) - offsetPx
         val baseY = height - offsetPx
-        // Scale width based on extended width for consistent look
-        val halfWidthPx = extendedWidth * mountain.width * 0.15f
+        // Scale width based on HEIGHT for consistent proportions across orientations
+        // (Mountains should look the same size relative to screen height in portrait and landscape)
+        val halfWidthPx = height * mountain.width * 0.25f
         
         // Generate jagged shape
         val random = Random(mountain.shapeSeed)
