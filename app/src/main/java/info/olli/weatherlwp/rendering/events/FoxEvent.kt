@@ -25,9 +25,10 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
     private val path = Path()
     
     // Depth based on groundY: lower on screen = more foreground (higher depthFactor)
-    // groundY 0.82 -> depthFactor -0.35 (background)
-    // groundY 0.88 -> depthFactor -0.05 (foreground)
-    override val depthFactor: Float = -0.35f + (groundY - 0.82f) / 0.06f * 0.30f
+    // Using normalized range matching hills: PARALLAX_HILLS_MIN (0.50) to PARALLAX_HILLS_MAX (0.80)
+    // groundY 0.82 -> depthFactor 0.50 (background, near back hills)
+    // groundY 0.88 -> depthFactor 0.80 (foreground, near front hills)
+    override val depthFactor: Float = 0.50f + (groundY - 0.82f) / 0.06f * 0.30f
     
     // Reduced speed: was 0.00008, now 0.000025 (~3x slower)
     private val speed = 0.000025f
@@ -40,8 +41,9 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         val x = startX + direction * speed * elapsedMs
         val walkPhase = elapsedMs * 0.008f  // Slower walk animation
         
-        val px = parallaxCalculator.getOffsetXForDepth(-0.10f)
-        val py = parallaxCalculator.getOffsetYForDepth(-0.10f)
+        // Use depthFactor for parallax so fox moves with terrain at correct depth
+        val px = parallaxCalculator.getOffsetXForDepth(depthFactor)
+        val py = parallaxCalculator.getOffsetYForDepth(depthFactor)
         canvas.save()
         canvas.translate(px, py)
         

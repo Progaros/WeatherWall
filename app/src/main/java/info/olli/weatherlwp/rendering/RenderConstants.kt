@@ -60,25 +60,26 @@ object RenderConstants {
     const val WORLD_WIDTH = WORLD_MAX_X - WORLD_MIN_X
     
     // ============== Parallax Depth Factors ==============
-    // 0.0 = infinitely far (no movement), 1.0 = foreground (max movement)
-    // Negative values = opposite movement (creates depth illusion)
+    // All values 0.0 to 1.0: 0 = far (moves least), 1 = near (moves most)
+    // All layers move in SAME direction at different speeds to create depth
+    // Near objects (trees, animals) move MORE than far objects (sky, mountains)
     
-    /** Sky parallax - moves opposite direction for infinite depth */
-    const val PARALLAX_SKY = -0.15f
+    /** Sky parallax - very far, minimal movement */
+    const val PARALLAX_SKY = 0.05f
     
-    /** Stars parallax - subtle movement */
-    const val PARALLAX_STARS = 0.30f
+    /** Stars parallax - subtle movement, far background */
+    const val PARALLAX_STARS = 0.10f
     
     /** Clouds parallax - far background */
-    const val PARALLAX_CLOUDS = 0.08f
+    const val PARALLAX_CLOUDS = 0.15f
     
-    /** Mountains parallax range */
-    const val PARALLAX_MOUNTAIN_MIN = 0.15f
+    /** Mountains parallax range - background */
+    const val PARALLAX_MOUNTAIN_MIN = 0.20f
     const val PARALLAX_MOUNTAIN_MAX = 0.35f
     
-    /** Hills/terrain parallax range */
-    const val PARALLAX_HILLS_MIN = 0.75f
-    const val PARALLAX_HILLS_MAX = 0.95f
+    /** Hills/terrain parallax range - midground to foreground */
+    const val PARALLAX_HILLS_MIN = 0.50f
+    const val PARALLAX_HILLS_MAX = 0.80f
     
     // ============== Sky Colors (3-stop gradients: Top, Middle, Horizon) ==============
     // Always use a 3-stop LinearGradient for the sky.

@@ -95,10 +95,9 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
             val spawnSeed = currentBucket + baseSeed
             val spawnRandom = Random(spawnSeed)
             
-            // Spawn chance is checked per 500ms interval
-            val effectiveChance = spawnChance * 50f
-            
-            if (spawnRandom.nextFloat() < effectiveChance && currentEvents.size < 8) {
+            // Spawn chance is already scaled appropriately in reloadSettings()
+            // 0.0001 (rare) to 0.5 (very frequent) per 500ms bucket check
+            if (spawnRandom.nextFloat() < spawnChance && currentEvents.size < 8) {
                 // Use bucket + offset as seed for event creation (deterministic)
                 val eventRandom = Random(spawnSeed + 12345)
                 val spawnTime = currentBucket * 500  // Aligned spawn time for position sync

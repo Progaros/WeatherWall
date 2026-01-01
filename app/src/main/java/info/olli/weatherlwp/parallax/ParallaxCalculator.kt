@@ -22,8 +22,8 @@ import java.util.concurrent.atomic.AtomicReference
  */
 class ParallaxCalculator {
     companion object {
-        /** How fast position approaches target (per frame, 0-1) */
-        private const val POSITION_LERP_RATE = 0.15f
+        /** How fast position approaches target (per frame, 0-1) - increased for faster response */
+        private const val POSITION_LERP_RATE = 0.22f
     }
     
     // Tilt holder for atomic operations (lock-free)
@@ -78,7 +78,8 @@ class ParallaxCalculator {
         // Higher smoothing = slower response (smaller lerp rate)
         // At smoothing=0: full lerp rate for instant response
         // At smoothing=1: reduced lerp rate for smooth motion
-        val effectiveLerpRate = POSITION_LERP_RATE * (1f - smoothing * 0.6f) * deltaScale
+        // Clamp to max 1.0 to prevent overshoot after stalls (e.g., GC, doze)
+        val effectiveLerpRate = (POSITION_LERP_RATE * (1f - smoothing * 0.6f) * deltaScale).coerceAtMost(1f)
         
         // Smoothly interpolate position toward target
         positionX += (targetX - positionX) * effectiveLerpRate

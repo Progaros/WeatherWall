@@ -135,8 +135,8 @@ class ParallaxScene(
             val spawnTriggerTime = prefs.getLong("trigger_spawn_event_time", 0L)
             val timeSinceSpawnTrigger = System.currentTimeMillis() - spawnTriggerTime
             if (spawnTriggerTime > 0 && timeSinceSpawnTrigger < 10000) {
-                // Clear immediately to prevent duplicate spawns
-                prefs.edit().putLong("trigger_spawn_event_time", 0L).commit()
+                // Clear immediately to prevent duplicate spawns (use apply() to avoid blocking render)
+                prefs.edit().putLong("trigger_spawn_event_time", 0L).apply()
                 randomEventLayer.debugSpawnEvent()
                 Log.d(TAG, "Manual spawn trigger received (delay: ${timeSinceSpawnTrigger}ms)")
             }
@@ -149,7 +149,7 @@ class ParallaxScene(
                 prefs.edit()
                     .remove("trigger_spawn_specific_event")
                     .putLong("trigger_spawn_specific_event_time", 0L)
-                    .commit()
+                    .apply()  // Use apply() to avoid blocking render thread
                 randomEventLayer.spawnSpecificEvent(specificEvent)
                 Log.d(TAG, "Specific spawn trigger received: $specificEvent (delay: ${timeSinceSpecificTrigger}ms)")
             }
@@ -252,10 +252,11 @@ class ParallaxScene(
             // Max offset slider: 5..200 px (default 80)
             parallaxMaxOffsetPx = (prefs.getInt("pref_parallax_max_offset", 80)).toFloat().coerceIn(5f, 200f)
             
-            // Smoothing slider: map 1..100 -> 0.1f..0.9f (filter strength)
+            // Smoothing slider: map 1..100 -> 0.05f..0.50f (reduced range for responsiveness)
             // Higher = more filtering = smoother but slower response
+            // Reduced upper bound from 0.9 to 0.5 to avoid double-smoothing with sensor filter
             val smoothingVal = prefs.getInt("pref_parallax_smoothing", 40).coerceIn(1, 100)
-            val smoothingFactor = 0.1f + (smoothingVal / 100f) * 0.8f
+            val smoothingFactor = 0.05f + (smoothingVal / 100f) * 0.45f
             
             // Depth separation slider: map 0..100 -> 0f..2.0f (default 50 = full 3D effect)
             // At max (100), gives 2.0x depth separation for dramatic window-like parallax

@@ -42,10 +42,11 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         private const val TAG = "ParallaxSensorManager"
         
         // Low-pass filter alpha (0..1, smaller = smoother but slower response)
-        private const val FILTER_ALPHA = 0.12f
+        // Increased for faster parallax response
+        private const val FILTER_ALPHA = 0.18f
         
         // Deadzone threshold for flat device (prevents noise when tilt is tiny)
-        private const val DEADZONE = 0.08f
+        private const val DEADZONE = 0.06f
     }
     
     interface Listener {
@@ -154,7 +155,12 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         val qx = values[0]
         val qy = values[1]
         val qz = values[2]
-        val qw = if (values.size >= 4) values[3] else sqrt(1f - qx*qx - qy*qy - qz*qz).coerceIn(0f, 1f)
+        // Safe qw computation: clamp BEFORE sqrt to prevent NaN from floating-point errors
+        val qw = if (values.size >= 4) {
+            values[3]
+        } else {
+            sqrt((1f - qx*qx - qy*qy - qz*qz).coerceIn(0f, 1f))
+        }
         
         // Extract pitch (tilt forward/back) from quaternion
         // Pitch: rotation around device X-axis
@@ -169,8 +175,9 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         
         // Normalize to -1..1 range (max tilt = 90 degrees = PI/2)
         // These are in device coordinates - pitch is forward/back, roll is left/right
-        val rawTiltX = (roll / (PI / 2)).toFloat().coerceIn(-1f, 1f)
-        val rawTiltY = (pitch / (PI / 2)).toFloat().coerceIn(-1f, 1f)
+        // NEGATE to match gravity fallback convention (tilt right -> scene moves left)
+        val rawTiltX = (-(roll) / (PI / 2)).toFloat().coerceIn(-1f, 1f)
+        val rawTiltY = (-(pitch) / (PI / 2)).toFloat().coerceIn(-1f, 1f)
         
         // Apply display rotation remapping to convert device coords to screen coords
         val (tiltX, tiltY) = remapTiltForDisplay(rawTiltX, rawTiltY, displayRotation)
@@ -192,15 +199,10 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         val ngx = gx / norm
         val ngy = gy / norm
         
-        // Compute horizontal magnitude (how much gravity is parallel to screen)
-        val horizMag = sqrt(ngx * ngx + ngy * ngy)
-        
-        // Confidence factor: when device is nearly flat, horizMag is tiny and noisy.
-        val confidence = ((horizMag - DEADZONE) / (1f - DEADZONE)).coerceIn(0f, 1f)
-        
-        // Target tilt values (negate for natural parallax direction)
-        val targetX = (-ngx) * confidence
-        val targetY = (-ngy) * confidence
+        // Pass normalized gravity directly - let processTiltValues handle deadzone
+        // (Removes double-deadzone attenuation for consistent feel vs quaternion path)
+        val targetX = -ngx
+        val targetY = -ngy
         
         processTiltValues(targetX, targetY, dt)
     }

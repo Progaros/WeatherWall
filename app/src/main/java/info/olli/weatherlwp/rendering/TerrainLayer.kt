@@ -84,6 +84,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     // Settings thread creates new lists, render thread reads current snapshots
     @Volatile private var hills: List<HillData> = emptyList()
     @Volatile private var trees: List<TreeData> = emptyList()
+    // Pre-grouped trees by depth factor (built once during generation, avoids per-frame filter)
+    @Volatile private var treesByDepth: Map<Float, List<TreeData>> = emptyMap()
     
     // Settings
     private var treeDensity = 50        // 0-100 percentage of tree coverage
@@ -147,11 +149,12 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         for (i in 0 until hillCount) {
             val depth = i.toFloat() / hillCount.coerceAtLeast(1)
             
-            // Parallax with inverted background movement:
-            // - Background hills (depth=0): NEGATIVE factor = moves opposite to tilt (creates depth)
-            // - Foreground hills (depth=1): near-zero factor = nearly static
-            // Range: -0.5 (background) to 0.05 (foreground)
-            val depthFactor = -0.5f + depth * 0.55f  // -0.5 to +0.05
+            // Parallax depth factor using normalized 0-1 range from RenderConstants
+            // - Background hills (depth=0): lower factor = less movement
+            // - Foreground hills (depth=1): higher factor = more movement  
+            // Range: PARALLAX_HILLS_MIN (0.50) to PARALLAX_HILLS_MAX (0.80)
+            val depthFactor = RenderConstants.PARALLAX_HILLS_MIN + 
+                depth * (RenderConstants.PARALLAX_HILLS_MAX - RenderConstants.PARALLAX_HILLS_MIN)
             
             val heightOffset = hillStartY + depth * (hillEndY - hillStartY)
             
@@ -309,9 +312,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 val verticalOffset = random.nextFloat() * maxVerticalOffset
                 val yRatio = groundY + verticalOffset  // Move tree down (higher Y = lower on screen)
                 
-                // With new parallax: depthFactor goes from -0.5 (background) to +0.05 (foreground)
-                // Normalize to 0-1 range for scale: 0 = background (small), 1 = foreground (large)
-                val normalizedDepth = ((depthFactor + 0.5f) / 0.55f).coerceIn(0f, 1f)
+                // Normalize depth to 0-1 range for scale using RenderConstants
+                // depthFactor is PARALLAX_HILLS_MIN to PARALLAX_HILLS_MAX (0.50 to 0.80)
+                val hillsRange = RenderConstants.PARALLAX_HILLS_MAX - RenderConstants.PARALLAX_HILLS_MIN
+                val normalizedDepth = ((depthFactor - RenderConstants.PARALLAX_HILLS_MIN) / hillsRange).coerceIn(0f, 1f)
                 
                 // Tree scale: foreground trees (normalizedDepth near 1) are larger
                 // Apply size randomness: random variation within treeSizeRandomness range
@@ -331,11 +335,15 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 newTrees.add(TreeData(xRatio, yRatio, scale, depthFactor, dayColor))
             }
         }
-        // Sort by depthFactor: LOW depthFactor (background, negative) draws first
+        // Sort by depthFactor: LOWER depthFactor (background) draws first
         newTrees.sortBy { it.depthFactor }
+        
+        // Build pre-grouped tree map (avoids per-frame filter allocations)
+        val groupedByDepth = newTrees.groupBy { it.depthFactor }
         
         // Atomic reference swap (volatile ensures visibility to render thread)
         trees = newTrees
+        treesByDepth = groupedByDepth
     }
     
     private fun getHillY(xRatio: Float, hill: HillData): Float {
@@ -375,7 +383,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         // Take local snapshots for thread-safe iteration
         val currentHills = hills
-        val currentTrees = trees
+        val currentTreesByDepth = treesByDepth  // Use pre-grouped map instead of per-frame filter
         
         // Get ambient color for current time of day (global tint system)
         val ambientColor = RenderConstants.getAmbientColor(
@@ -383,7 +391,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         )
         
         // Track previous hill depth for ground event integration
-        var previousHillDepth = -1f  // Start with very far background
+        // Start before minimum hill depth to catch any events in front of first hills
+        var previousHillDepth = RenderConstants.PARALLAX_HILLS_MIN - 0.1f
         
         // Draw Hills AND their Trees together, sorted by depth
         // This ensures trees on background hills are drawn before foreground hills
@@ -410,7 +419,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             canvas.restore()
             
             // Draw trees belonging to this hill (same depthFactor) AFTER the hill
-            val hillTrees = currentTrees.filter { it.depthFactor == hill.depthFactor }
+            // Use pre-grouped map (O(1) lookup) instead of per-frame filter (O(n))
+            val hillTrees = currentTreesByDepth[hill.depthFactor] ?: emptyList()
             for (tree in hillTrees) {
                 val treePx = parallaxCalculator.getOffsetXForDepth(tree.depthFactor)
                 val treePy = parallaxCalculator.getOffsetYForDepth(tree.depthFactor)

@@ -23,9 +23,10 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
     private val size = 0.5f + random.nextFloat() * 0.2f
     
     // Depth based on groundY: lower on screen = more foreground (higher depthFactor)
-    // groundY 0.85 -> depthFactor -0.25 (background)
-    // groundY 0.90 -> depthFactor 0.00 (foreground)
-    override val depthFactor: Float = -0.25f + (groundY - 0.85f) / 0.05f * 0.25f
+    // Using normalized range matching hills: PARALLAX_HILLS_MIN (0.50) to PARALLAX_HILLS_MAX (0.80)
+    // groundY 0.85 -> depthFactor 0.55 (background, near back hills)  
+    // groundY 0.90 -> depthFactor 0.75 (foreground, near front hills)
+    override val depthFactor: Float = 0.55f + (groundY - 0.85f) / 0.05f * 0.20f
     
     // Reduced speed: was 0.0001, now 0.00003 (~3x slower)
     private val avgSpeed = 0.00003f
@@ -41,8 +42,9 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
         // Calculate X position based on average speed
         val x = startX + direction * avgSpeed * elapsedMs
         
-        val px = parallaxCalculator.getOffsetXForDepth(-0.12f)
-        val py = parallaxCalculator.getOffsetYForDepth(-0.12f)
+        // Use depthFactor for parallax so rabbit moves with terrain at correct depth
+        val px = parallaxCalculator.getOffsetXForDepth(depthFactor)
+        val py = parallaxCalculator.getOffsetYForDepth(depthFactor)
         canvas.save()
         canvas.translate(px, py)
         
