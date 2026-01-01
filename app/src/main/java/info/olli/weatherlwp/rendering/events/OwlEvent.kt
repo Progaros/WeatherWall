@@ -23,7 +23,7 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
     private val speed = 0.000025f + random.nextFloat() * 0.000015f
     override val durationMs: Long = (1.35f / speed).toLong()
     
-    private val size = 14f + random.nextFloat() * 6f
+    private val baseSize = 14f + random.nextFloat() * 6f  // Renamed: will be scaled by height
 
     // Animation tuning (random per owl)
     private val flapInterval = 1.8f + random.nextFloat() * 0.8f   // seconds between flap bursts
@@ -45,6 +45,10 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
         timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long
     ) {
+        // Scale size to 1% of height
+        val unit = height * 0.01f
+        val size = baseSize * unit
+        
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val localTime = elapsedMs * 0.001f
         val progress = -0.15f + speed * elapsedMs

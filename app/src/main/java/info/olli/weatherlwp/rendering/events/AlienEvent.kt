@@ -21,10 +21,10 @@ class AlienEvent(random: Random, override val spawnTimeMs: Long = System.current
     private val startX = if (random.nextBoolean()) -0.1f else 1.1f
     private val direction = if (startX < 0.5f) 1f else -1f
     private val startY = 0.1f + random.nextFloat() * 0.15f
-    private val speed = 0.00012f + random.nextFloat() * 0.0001f  // Slower UFO drift
+    private val speed = 0.00004f + random.nextFloat() * 0.00003f  // Much slower UFO drift (60% reduction)
     override val durationMs: Long = (1.25f / speed).toLong()
     
-    private val size = 12f + random.nextFloat() * 6f
+    private val baseSize = 12f + random.nextFloat() * 6f  // Renamed: will be scaled by height
     private val path = Path()
     private val initialWobblePhase = random.nextFloat() * 6.28f
     private val initialHoverPhase = random.nextFloat() * 6.28f
@@ -39,6 +39,10 @@ class AlienEvent(random: Random, override val spawnTimeMs: Long = System.current
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long) {
+        // Scale size to 1% of height
+        val unit = height * 0.01f
+        val size = baseSize * unit
+        
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val x = startX + direction * speed * elapsedMs
         val wobblePhase = initialWobblePhase + elapsedMs * 0.005f

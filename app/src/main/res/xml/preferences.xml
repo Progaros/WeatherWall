@@ -219,8 +219,8 @@
         <SeekBarPreference
             android:key="pref_wind_multiplier"
             android:title="Wind Effect Strength"
-            android:summary="Multiplier for tree sway amplitude (0=none, 100=normal, 300=extreme)"
-            android:defaultValue="100"
+            android:summary="Tree sway intensity (0=none, 100=subtle, 200=normal, 300=extreme)"
+            android:defaultValue="200"
             android:max="300"
             app:min="0"
             app:showSeekBarValue="true"
@@ -229,8 +229,8 @@
         <SeekBarPreference
             android:key="pref_tree_sway_speed"
             android:title="Tree Sway Speed"
-            android:summary="How fast trees sway (0=frozen, 50=slow, 100=normal, 200=fast)"
-            android:defaultValue="100"
+            android:summary="Sway animation speed (0=frozen, 100=slow, 200=normal)"
+            android:defaultValue="200"
             android:max="200"
             app:min="0"
             app:showSeekBarValue="true"

@@ -170,10 +170,10 @@ object RenderConstants {
     
     /** Tree sway animation parameters */
     const val TREE_SWAY_FREQUENCY = 0.6f   // Base frequency (slower, more natural)
-    const val TREE_SWAY_AMPLITUDE = 0.35f  // Increased for more visible sway at high wind
+    const val TREE_SWAY_AMPLITUDE = 0.20f  // Reduced for subtler base sway (user multiplier scales this)
     
     /** Gust effect multiplier for tree lean */
-    const val GUST_LEAN_FACTOR = 0.4f      // How much gusts bend trees (was 0.15f)
+    const val GUST_LEAN_FACTOR = 0.25f     // Moderate gust bending (balance of 0.15 and 0.4)
     
     /** Star twinkle animation */
     const val STAR_TWINKLE_SPEED = 0.001f

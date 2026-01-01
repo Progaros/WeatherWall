@@ -23,12 +23,16 @@ class EagleEvent(random: Random, override val spawnTimeMs: Long = System.current
     override val durationMs: Long = (1.4f / speed).toLong()
     
     private val path = Path()
-    private val size = 18f + random.nextFloat() * 8f
+    private val baseSize = 18f + random.nextFloat() * 8f  // Renamed: will be scaled by height
     private val soarPhase = random.nextFloat() * 6.28f
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long) {
+        // Scale size to 1% of height
+        val unit = height * 0.01f
+        val size = baseSize * unit
+        
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val progress = -0.1f + speed * elapsedMs
         

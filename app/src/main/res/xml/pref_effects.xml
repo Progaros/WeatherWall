@@ -25,6 +25,16 @@
             app:min="25"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_celestial_arc_height"
+            android:title="Arc Height"
+            android:summary="How high sun/moon travel (100=top, 50=middle, 0=near horizon)"
+            android:defaultValue="100"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
     </PreferenceCategory>
 
     <!-- Wind Effects -->

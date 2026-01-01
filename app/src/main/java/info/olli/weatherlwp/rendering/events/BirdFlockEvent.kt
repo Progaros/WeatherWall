@@ -33,7 +33,7 @@ class BirdFlockEvent(random: Random, override val spawnTimeMs: Long = System.cur
         val offsetX = random.nextFloat() * 0.08f
         val offsetY = (random.nextFloat() - 0.5f) * 0.04f
         val wingPhase = random.nextFloat() * 6.28f
-        val size = 4f + random.nextFloat() * 3f
+        val baseSize = 4f + random.nextFloat() * 3f  // Renamed: will be scaled by height
     }
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
@@ -61,25 +61,29 @@ class BirdFlockEvent(random: Random, override val spawnTimeMs: Long = System.cur
         canvas.save()
         canvas.translate(px, py)
         
+        // Scale size to 1% of height
+        val unit = height * 0.01f
+        
         strokePaint.color = RenderConstants.blendWithAmbient(Color.rgb(30, 30, 30), ambientColor, 0.4f)
         strokePaint.style = Paint.Style.STROKE
         
         for (bird in birds) {
+            val size = bird.baseSize * unit  // Scale bird size by height
             val birdX = (x + bird.offsetX) * width - extendedOffset
             val birdY = (y + bird.offsetY) * height
             
             val wingY = if (isFlapping) {
-                sin(timeSeconds * 18f + bird.wingPhase) * bird.size * 1.0f
+                sin(timeSeconds * 18f + bird.wingPhase) * size * 1.0f
             } else {
-                sin(timeSeconds * 1.5f + bird.wingPhase) * bird.size * 0.15f - bird.size * 0.3f
+                sin(timeSeconds * 1.5f + bird.wingPhase) * size * 0.15f - size * 0.3f
             }
             
-            strokePaint.strokeWidth = (bird.size * 0.35f).coerceAtLeast(1.2f)
+            strokePaint.strokeWidth = (size * 0.35f).coerceAtLeast(1.2f)
             
             path.reset()
-            path.moveTo(birdX - bird.size, birdY)
-            path.quadTo(birdX - bird.size * 0.2f, birdY - wingY, birdX, birdY)
-            path.quadTo(birdX + bird.size * 0.2f, birdY - wingY, birdX + bird.size, birdY)
+            path.moveTo(birdX - size, birdY)
+            path.quadTo(birdX - size * 0.2f, birdY - wingY, birdX, birdY)
+            path.quadTo(birdX + size * 0.2f, birdY - wingY, birdX + size, birdY)
             canvas.drawPath(path, strokePaint)
         }
         canvas.restore()

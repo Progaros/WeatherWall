@@ -31,6 +31,9 @@ class ShootingStarEvent(random: Random, override val spawnTimeMs: Long = System.
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long) {
+        // Scale size to 1% of height
+        val unit = height * 0.01f
+        
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val progress = speed * elapsedMs
         
@@ -50,7 +53,7 @@ class ShootingStarEvent(random: Random, override val spawnTimeMs: Long = System.
             Color.argb(255, 255, 255, 240),
             android.graphics.Shader.TileMode.CLAMP
         )
-        trailPaint.strokeWidth = 3f
+        trailPaint.strokeWidth = 3f * unit
         canvas.drawLine(tailX, tailY, headX, headY, trailPaint)
         
         trailPaint.shader = android.graphics.LinearGradient(
@@ -59,11 +62,11 @@ class ShootingStarEvent(random: Random, override val spawnTimeMs: Long = System.
             Color.argb(200, 255, 255, 200),
             android.graphics.Shader.TileMode.CLAMP
         )
-        trailPaint.strokeWidth = 1.5f
+        trailPaint.strokeWidth = 1.5f * unit
         canvas.drawLine(tailX + (headX-tailX)*0.5f, tailY + (headY-tailY)*0.5f, headX, headY, trailPaint)
         
         paint.color = Color.WHITE
-        canvas.drawCircle(headX, headY, 2.5f, paint)
+        canvas.drawCircle(headX, headY, 2.5f * unit, paint)
         
         trailPaint.shader = null
         canvas.restore()

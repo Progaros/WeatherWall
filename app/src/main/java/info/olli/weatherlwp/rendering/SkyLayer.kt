@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.RadialGradient
+import android.graphics.RectF
 import android.graphics.Shader
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.parallax.ParallaxCalculator
@@ -49,6 +50,12 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         isAntiAlias = true
         style = Paint.Style.FILL
     }
+    private val moonShadowPaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.FILL
+        color = Color.parseColor("#1A1A24")  // Earthshine/shadow color
+    }
+    private val moonPath = android.graphics.Path()  // Reusable path for moon phase
     
     private var width = 0f
     private var height = 0f
@@ -65,6 +72,7 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
     private var sunEnabled = true
     private var moonEnabled = true
     private var celestialSize = 1.0f
+    private var celestialArcHeight = 1.0f  // 1.0 = full arc, 0.0 = near horizon
 
     init {
         generateStars()
@@ -246,9 +254,11 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
      * Draw the sun as a bright circle following an arc across the sky.
      * Position is based on time of day - rises in east (left), sets in west (right).
      * Arc goes from bottom left at sunrise (6am), peaks at noon (12pm), to bottom right at sunset (6pm).
+     * Uses smoothedTimeOfDayHours for animated transitions when simulation time changes.
      */
     private fun drawSun(canvas: Canvas, state: SimulationState, parallaxX: Float, parallaxY: Float) {
-        val hour = state.timeOfDayHours
+        // Use smoothed time for animated position transitions (matches sky gradient)
+        val hour = state.smoothedTimeOfDayHours
         
         // Sun visible from 6am to 18pm (6pm)
         if (hour < 6f || hour > 18f) return
@@ -261,7 +271,10 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         
         // Y position: parabolic arc, highest at noon
         // At progress 0.5 (noon), should be at top. At 0 and 1, near horizon.
-        val arcHeight = height * 0.7f  // How high the arc goes
+        // celestialArcHeight: 1.0 = full arc (high), 0.0 = near horizon
+        val maxArcHeight = height * 0.7f  // Maximum arc height at setting = 100
+        val minArcHeight = height * 0.15f  // Minimum arc height at setting = 0
+        val arcHeight = minArcHeight + (maxArcHeight - minArcHeight) * celestialArcHeight
         val baseY = height * 0.85f  // Horizon level
         val arcProgress = 1f - 4f * (dayProgress - 0.5f) * (dayProgress - 0.5f)  // Parabola: 0 at edges, 1 at center
         val sunY = baseY - arcHeight * arcProgress
@@ -296,10 +309,11 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
     /**
      * Draw the moon as a pale circle with crescent effect.
      * Visible at night, follows arc opposite to sun.
-     * Crescent phase varies with position in the night cycle.
+     * Uses smoothedTimeOfDayHours for animated transitions when simulation time changes.
      */
     private fun drawMoon(canvas: Canvas, state: SimulationState, parallaxX: Float, parallaxY: Float) {
-        val hour = state.timeOfDayHours
+        // Use smoothed time for animated position transitions (matches sky gradient)
+        val hour = state.smoothedTimeOfDayHours
         
         // Moon visible from 18pm (6pm) to 6am
         if (hour >= 6f && hour <= 18f) return
@@ -313,13 +327,16 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         }
         
         // X position: left to right across screen
-        val moonX = width * (0.1f + nightProgress * 0.8f)
+        val moonX = width * (0.1f + nightProgress * 0.8f) + parallaxX
         
         // Y position: parabolic arc, highest at midnight
-        val arcHeight = height * 0.6f  // Moon arc is a bit lower than sun
+        // celestialArcHeight: 1.0 = full arc (high), 0.0 = near horizon
+        val maxArcHeight = height * 0.6f  // Maximum arc height at setting = 100
+        val minArcHeight = height * 0.12f  // Minimum arc height at setting = 0
+        val arcHeight = minArcHeight + (maxArcHeight - minArcHeight) * celestialArcHeight
         val baseY = height * 0.85f
         val arcProgress = 1f - 4f * (nightProgress - 0.5f) * (nightProgress - 0.5f)
-        val moonY = baseY - arcHeight * arcProgress
+        val moonY = baseY - arcHeight * arcProgress + parallaxY
         
         // Moon size
         val baseRadius = kotlin.math.min(width, height) * 0.03f
@@ -328,7 +345,7 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         // Outer soft glow (pale silver/blue halo)
         val glowRadius = radius * 3f
         val glowGradient = RadialGradient(
-            moonX + parallaxX, moonY + parallaxY, glowRadius,
+            moonX, moonY, glowRadius,
             intArrayOf(
                 Color.argb(60, 200, 220, 255),   // Very subtle silver center
                 Color.argb(30, 180, 200, 240),
@@ -339,80 +356,162 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
             Shader.TileMode.CLAMP
         )
         moonPaint.shader = glowGradient
-        canvas.drawCircle(moonX + parallaxX, moonY + parallaxY, glowRadius, moonPaint)
+        canvas.drawCircle(moonX, moonY, glowRadius, moonPaint)
         
-        // Main moon disc with subtle gradient (brighter at edge facing sun)
-        val moonDiscGradient = RadialGradient(
-            moonX + parallaxX - radius * 0.3f, moonY + parallaxY - radius * 0.2f, radius * 1.2f,
+        // Draw moon phase using procedural rendering
+        // moonPhase: 0 = new moon, 0.5 = full moon, 1 = new moon (end of cycle)
+        // 0 -> 0.5: waxing (lit on right side)
+        // 0.5 -> 1: waning (lit on left side)
+        val phase = state.moonPhase
+        
+        // Calculate illumination fraction (0 at new moon, 1 at full moon)
+        val illumination = 1f - 2f * abs(phase - 0.5f)  // 0 at new, 1 at full
+        
+        // Determine if waxing (right side lit) or waning (left side lit)
+        val isWaxing = phase < 0.5f
+        
+        // Draw the shadow/dark side first (earthshine)
+        moonShadowPaint.color = Color.parseColor("#1A1A24")  // Dark night sky color
+        canvas.drawCircle(moonX, moonY, radius, moonShadowPaint)
+        
+        // Add subtle earthshine to the dark side
+        val earthshineGradient = RadialGradient(
+            moonX, moonY, radius,
             intArrayOf(
-                Color.argb(255, 255, 255, 250),  // Bright cream white
-                Color.argb(255, 240, 243, 248),  // Slightly cooler edge
-                Color.argb(255, 220, 225, 235)   // Subtle darker limb
-            ),
-            floatArrayOf(0f, 0.7f, 1f),
-            Shader.TileMode.CLAMP
-        )
-        moonPaint.shader = moonDiscGradient
-        canvas.drawCircle(moonX + parallaxX, moonY + parallaxY, radius, moonPaint)
-        
-        // Subtle maria (dark patches) - soft and organic, NOT sharp circles
-        // These are drawn as very subtle, low-alpha darker spots with soft edges
-        moonPaint.shader = null
-        
-        // Mare 1 - large, soft patch in upper left quadrant
-        val mare1Gradient = RadialGradient(
-            moonX + parallaxX - radius * 0.25f, moonY + parallaxY - radius * 0.15f, radius * 0.5f,
-            intArrayOf(
-                Color.argb(25, 100, 110, 130),   // Very subtle grey center
-                Color.argb(12, 110, 120, 140),
+                Color.argb(15, 120, 140, 180),  // Very subtle blue-grey
+                Color.argb(8, 100, 120, 160),
                 Color.TRANSPARENT
             ),
-            floatArrayOf(0f, 0.5f, 1f),
+            floatArrayOf(0f, 0.6f, 1f),
             Shader.TileMode.CLAMP
         )
-        moonPaint.shader = mare1Gradient
-        canvas.drawCircle(moonX + parallaxX - radius * 0.25f, moonY + parallaxY - radius * 0.15f, radius * 0.5f, moonPaint)
+        moonPaint.shader = earthshineGradient
+        canvas.drawCircle(moonX, moonY, radius, moonPaint)
         
-        // Mare 2 - smaller patch lower right
-        val mare2Gradient = RadialGradient(
-            moonX + parallaxX + radius * 0.2f, moonY + parallaxY + radius * 0.25f, radius * 0.35f,
-            intArrayOf(
-                Color.argb(20, 90, 100, 120),
-                Color.argb(8, 100, 110, 130),
-                Color.TRANSPARENT
-            ),
-            floatArrayOf(0f, 0.5f, 1f),
-            Shader.TileMode.CLAMP
-        )
-        moonPaint.shader = mare2Gradient
-        canvas.drawCircle(moonX + parallaxX + radius * 0.2f, moonY + parallaxY + radius * 0.25f, radius * 0.35f, moonPaint)
-        
-        // Mare 3 - tiny accent spot
-        val mare3Gradient = RadialGradient(
-            moonX + parallaxX + radius * 0.1f, moonY + parallaxY - radius * 0.35f, radius * 0.2f,
-            intArrayOf(
-                Color.argb(15, 80, 90, 110),
-                Color.TRANSPARENT
-            ),
-            floatArrayOf(0f, 1f),
-            Shader.TileMode.CLAMP
-        )
-        moonPaint.shader = mare3Gradient
-        canvas.drawCircle(moonX + parallaxX + radius * 0.1f, moonY + parallaxY - radius * 0.35f, radius * 0.2f, moonPaint)
+        // Now draw the lit portion using a path
+        if (illumination > 0.01f) {  // Skip at new moon
+            moonPath.reset()
+            
+            val rect = RectF(moonX - radius, moonY - radius, moonX + radius, moonY + radius)
+            
+            // The terminator curve is an ellipse - at half phase it's a straight line,
+            // at full/new it's the full circle edge
+            // k controls the ellipse width: k=0 -> straight line, k=1 -> full circle
+            val k = abs(2f * illumination - 1f)  // 0 at quarter, 1 at full/new
+            
+            // Terminator ellipse semi-minor axis
+            val terminatorX = radius * k
+            
+            if (illumination >= 0.5f) {
+                // More than half lit - draw arc on one side, arc on other
+                if (isWaxing) {
+                    // Waxing gibbous: lit from right, dark crescent on left
+                    // Draw right semicircle (always lit)
+                    moonPath.arcTo(rect, -90f, 180f, true)
+                    // Draw terminator ellipse curving right (into lit area)
+                    val termRect = RectF(moonX - terminatorX, moonY - radius, 
+                                         moonX + terminatorX, moonY + radius)
+                    moonPath.arcTo(termRect, 90f, 180f, false)
+                } else {
+                    // Waning gibbous: lit from left, dark crescent on right
+                    moonPath.arcTo(rect, 90f, 180f, true)
+                    val termRect = RectF(moonX - terminatorX, moonY - radius, 
+                                         moonX + terminatorX, moonY + radius)
+                    moonPath.arcTo(termRect, -90f, 180f, false)
+                }
+            } else {
+                // Less than half lit - crescent
+                if (isWaxing) {
+                    // Waxing crescent: thin sliver on right
+                    moonPath.arcTo(rect, -90f, 180f, true)
+                    val termRect = RectF(moonX - terminatorX, moonY - radius, 
+                                         moonX + terminatorX, moonY + radius)
+                    moonPath.arcTo(termRect, 90f, -180f, false)  // Curve left into shadow
+                } else {
+                    // Waning crescent: thin sliver on left
+                    moonPath.arcTo(rect, 90f, 180f, true)
+                    val termRect = RectF(moonX - terminatorX, moonY - radius, 
+                                         moonX + terminatorX, moonY + radius)
+                    moonPath.arcTo(termRect, -90f, -180f, false)  // Curve right into shadow
+                }
+            }
+            moonPath.close()
+            
+            // Draw lit portion with gradient
+            val moonDiscGradient = RadialGradient(
+                moonX - radius * 0.3f, moonY - radius * 0.2f, radius * 1.2f,
+                intArrayOf(
+                    Color.argb(255, 255, 255, 250),  // Bright cream white
+                    Color.argb(255, 240, 243, 248),  // Slightly cooler edge
+                    Color.argb(255, 220, 225, 235)   // Subtle darker limb
+                ),
+                floatArrayOf(0f, 0.7f, 1f),
+                Shader.TileMode.CLAMP
+            )
+            moonPaint.shader = moonDiscGradient
+            canvas.drawPath(moonPath, moonPaint)
+            
+            // Draw maria (dark patches) on lit portion only - clip to path
+            canvas.save()
+            canvas.clipPath(moonPath)
+            
+            // Mare 1 - large, soft patch in upper left quadrant
+            val mare1Gradient = RadialGradient(
+                moonX - radius * 0.25f, moonY - radius * 0.15f, radius * 0.5f,
+                intArrayOf(
+                    Color.argb(25, 100, 110, 130),
+                    Color.argb(12, 110, 120, 140),
+                    Color.TRANSPARENT
+                ),
+                floatArrayOf(0f, 0.5f, 1f),
+                Shader.TileMode.CLAMP
+            )
+            moonPaint.shader = mare1Gradient
+            canvas.drawCircle(moonX - radius * 0.25f, moonY - radius * 0.15f, radius * 0.5f, moonPaint)
+            
+            // Mare 2 - smaller patch lower right
+            val mare2Gradient = RadialGradient(
+                moonX + radius * 0.2f, moonY + radius * 0.25f, radius * 0.35f,
+                intArrayOf(
+                    Color.argb(20, 90, 100, 120),
+                    Color.argb(8, 100, 110, 130),
+                    Color.TRANSPARENT
+                ),
+                floatArrayOf(0f, 0.5f, 1f),
+                Shader.TileMode.CLAMP
+            )
+            moonPaint.shader = mare2Gradient
+            canvas.drawCircle(moonX + radius * 0.2f, moonY + radius * 0.25f, radius * 0.35f, moonPaint)
+            
+            // Mare 3 - tiny accent spot
+            val mare3Gradient = RadialGradient(
+                moonX + radius * 0.1f, moonY - radius * 0.35f, radius * 0.2f,
+                intArrayOf(
+                    Color.argb(15, 80, 90, 110),
+                    Color.TRANSPARENT
+                ),
+                floatArrayOf(0f, 1f),
+                Shader.TileMode.CLAMP
+            )
+            moonPaint.shader = mare3Gradient
+            canvas.drawCircle(moonX + radius * 0.1f, moonY - radius * 0.35f, radius * 0.2f, moonPaint)
+            
+            canvas.restore()
+        }
         
         // Subtle limb darkening (edge of disc) for 3D effect
         val limbGradient = RadialGradient(
-            moonX + parallaxX, moonY + parallaxY, radius,
+            moonX, moonY, radius,
             intArrayOf(
                 Color.TRANSPARENT,
                 Color.TRANSPARENT,
-                Color.argb(30, 100, 110, 130)   // Subtle dark edge
+                Color.argb(30, 100, 110, 130)
             ),
             floatArrayOf(0f, 0.75f, 1f),
             Shader.TileMode.CLAMP
         )
         moonPaint.shader = limbGradient
-        canvas.drawCircle(moonX + parallaxX, moonY + parallaxY, radius, moonPaint)
+        canvas.drawCircle(moonX, moonY, radius, moonPaint)
         
         moonPaint.shader = null
     }
@@ -423,6 +522,7 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
             sunEnabled = prefs.getBoolean("pref_sun_enabled", true)
             moonEnabled = prefs.getBoolean("pref_moon_enabled", true)
             celestialSize = prefs.getInt("pref_celestial_size", 100) / 100f
+            celestialArcHeight = prefs.getInt("pref_celestial_arc_height", 100) / 100f
         }
     }
 

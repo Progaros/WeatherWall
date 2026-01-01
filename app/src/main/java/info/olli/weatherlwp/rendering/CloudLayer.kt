@@ -112,10 +112,10 @@ class CloudLayer(private val context: Context) : SceneLayer {
         const val FRONT_LAYER_DEPTH_MIN = 0.28f
         const val FRONT_LAYER_DEPTH_MAX = 0.35f
         
-        // Group size ranges - larger groups for better sky coverage
-        // Each group spans a significant portion of the sky
-        const val GROUP_WIDTH_MIN = 0.40f
-        const val GROUP_WIDTH_MAX = 0.80f
+        // Group size ranges - relative to HEIGHT for consistent sizing
+        // Width values are larger because they're now relative to height (portrait: height ~2x width)
+        const val GROUP_WIDTH_MIN = 0.80f
+        const val GROUP_WIDTH_MAX = 1.60f
         const val GROUP_HEIGHT_MIN = 0.15f
         const val GROUP_HEIGHT_MAX = 0.28f
         
@@ -406,7 +406,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
                 val screenX = groupX * extendedWidth - extendedOffset + px
                 val screenY = group.y * height + py
                 
-                val groupWidthPx = (group.groupWidth * width).toInt().coerceAtLeast(50)
+                // Use HEIGHT as reference for both dimensions to maintain aspect ratio
+                // This ensures clouds look the same size regardless of screen dimensions
+                val groupWidthPx = (group.groupWidth * height).toInt().coerceAtLeast(50)
                 val groupHeightPx = (group.groupHeight * height).toInt().coerceAtLeast(30)
                 
                 // Calculate padded dimensions (must match renderGroupToBitmap)

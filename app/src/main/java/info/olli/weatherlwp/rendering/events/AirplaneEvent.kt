@@ -22,7 +22,7 @@ class AirplaneEvent(random: Random, override val spawnTimeMs: Long = System.curr
     
     private val y = 0.08f + random.nextFloat() * 0.15f
     private val path = Path()
-    private val size = 10f + random.nextFloat() * 4f
+    private val baseSize = 10f + random.nextFloat() * 4f  // Renamed: will be scaled by height
     private val contrailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
@@ -32,6 +32,10 @@ class AirplaneEvent(random: Random, override val spawnTimeMs: Long = System.curr
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long) {
+        // Scale size to 1% of height
+        val unit = height * 0.01f
+        val size = baseSize * unit
+        
         // Calculate progress from absolute time
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val progress = (elapsedMs * speed).coerceIn(-0.1f, 1.3f)

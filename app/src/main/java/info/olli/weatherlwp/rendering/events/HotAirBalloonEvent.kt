@@ -21,7 +21,7 @@ class HotAirBalloonEvent(random: Random, override val spawnTimeMs: Long = System
     private val speed = 0.000015f + random.nextFloat() * 0.00001f  // Slowed 2x - graceful drift
     override val durationMs: Long = (1.3f / speed).toLong()
     
-    private val size = 8f + random.nextFloat() * 4f
+    private val baseSize = 8f + random.nextFloat() * 4f  // Renamed: will be scaled by height
     private val path = Path()
     private val color = when (random.nextInt(5)) {
         0 -> Color.rgb(220, 80, 80)
@@ -40,6 +40,10 @@ class HotAirBalloonEvent(random: Random, override val spawnTimeMs: Long = System
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long) {
+        // Scale size to 1% of height
+        val unit = height * 0.01f
+        val size = baseSize * unit
+        
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val progress = -0.1f + speed * elapsedMs
         

@@ -29,14 +29,17 @@ class FireflyEvent(random: Random, override val spawnTimeMs: Long = System.curre
         val offsetX = (random.nextFloat() - 0.5f) * 0.15f
         val offsetY = (random.nextFloat() - 0.5f) * 0.12f
         val phase = random.nextFloat() * 6.28f
-        val speed = 0.5f + random.nextFloat() * 1.5f
-        val driftX = (random.nextFloat() - 0.5f) * 0.0001f
-        val driftY = (random.nextFloat() - 0.5f) * 0.00008f
+        val speed = 0.2f + random.nextFloat() * 0.5f  // Slowed 3x (was too fast)
+        val driftX = (random.nextFloat() - 0.5f) * 0.00003f  // Slowed 3x
+        val driftY = (random.nextFloat() - 0.5f) * 0.000025f // Slowed 3x
     }
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long) {
+        // Scale size to 1% of height
+        val unit = height * 0.01f
+        
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         
         // Use foreground depth for parallax (matches front hills where fireflies float)
@@ -57,10 +60,10 @@ class FireflyEvent(random: Random, override val spawnTimeMs: Long = System.curre
             if (flicker > 0.2f) {
                 val alpha = ((flicker - 0.2f) / 0.8f * 200).toInt().coerceIn(0, 200)
                 paint.color = Color.argb(alpha, 200, 255, 100)
-                canvas.drawCircle(x, y, 2.5f + flicker, paint)
+                canvas.drawCircle(x, y, (2.5f + flicker) * unit, paint)
                 
                 paint.color = Color.argb(alpha / 3, 200, 255, 100)
-                canvas.drawCircle(x, y, 5f + flicker * 2, paint)
+                canvas.drawCircle(x, y, (5f + flicker * 2) * unit, paint)
             }
         }
         
