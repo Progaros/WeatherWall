@@ -118,7 +118,8 @@ class MainActivity : AppCompatActivity() {
         val previewSurface = findViewById<SurfaceView>(R.id.preview_surface)
         val previewContainer = findViewById<FrameLayout>(R.id.preview_container)
         // ParallaxScene handles all rendering including weather and seasonal internally
-        previewScene = ParallaxScene(this, sensorManager, weatherRepo)
+        // isPreview=true so it uses preview-specific trigger keys
+        previewScene = ParallaxScene(this, sensorManager, weatherRepo, isPreview = true)
         
         // Load saved preview height or use default
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)

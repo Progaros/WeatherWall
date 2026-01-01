@@ -44,11 +44,17 @@ class EventsSettingsFragment : PreferenceFragmentCompat() {
     
     private fun spawnEvent(eventType: String, eventName: String) {
         // Use timestamp-based preference trigger that all active scenes check
-        // Use commit() for synchronous write - more reliable for cross-process triggers
+        // Write to BOTH preview and wallpaper keys with same timestamp (for deterministic spawning)
+        // Each context will only read/clear its own key to avoid race conditions
         val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
+        val triggerTime = System.currentTimeMillis()
         prefs.edit()
-            .putString("trigger_spawn_specific_event", eventType)
-            .putLong("trigger_spawn_specific_event_time", System.currentTimeMillis())
+            // Preview keys
+            .putString("trigger_spawn_specific_event_preview", eventType)
+            .putLong("trigger_spawn_specific_event_time_preview", triggerTime)
+            // Wallpaper keys
+            .putString("trigger_spawn_specific_event_wallpaper", eventType)
+            .putLong("trigger_spawn_specific_event_time_wallpaper", triggerTime)
             .commit()
         
         Toast.makeText(context, "Spawning $eventName...", Toast.LENGTH_SHORT).show()
@@ -56,10 +62,13 @@ class EventsSettingsFragment : PreferenceFragmentCompat() {
     
     private fun spawnRandomEvent() {
         // Use timestamp-based preference trigger that all active scenes check
-        // Use commit() for synchronous write - more reliable for cross-process triggers
+        // Write to BOTH preview and wallpaper keys with same timestamp (for deterministic spawning)
+        // Each context will only read/clear its own key to avoid race conditions
         val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
+        val triggerTime = System.currentTimeMillis()
         prefs.edit()
-            .putLong("trigger_spawn_event_time", System.currentTimeMillis())
+            .putLong("trigger_spawn_event_time_preview", triggerTime)
+            .putLong("trigger_spawn_event_time_wallpaper", triggerTime)
             .commit()
         
         Toast.makeText(context, "Spawning random event...", Toast.LENGTH_SHORT).show()

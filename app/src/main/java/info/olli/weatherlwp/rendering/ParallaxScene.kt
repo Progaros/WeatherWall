@@ -24,7 +24,8 @@ import info.olli.weatherlwp.weather.WeatherRepository
 class ParallaxScene(
     private val context: Context,
     private val sensor: ParallaxSensorManager,
-    private val weatherRepo: WeatherRepository
+    private val weatherRepo: WeatherRepository,
+    private val isPreview: Boolean = false  // True for MainActivity preview, false for live wallpaper
 ) : ParallaxSensorManager.Listener {
 
     companion object {
@@ -32,6 +33,9 @@ class ParallaxScene(
     }
 
     private val prefs: SharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
+    
+    // Trigger key suffixes based on context (preview vs wallpaper)
+    private val triggerSuffix = if (isPreview) "_preview" else "_wallpaper"
     
     // Simulation Controller - single source of truth
     private val simulationController = SimulationController(context)
@@ -131,29 +135,33 @@ class ParallaxScene(
             lastState = state
             
             // Check for manual spawn trigger from settings
-            // Use timestamp-based trigger - extended window to 10s for reliability when 
-            // switching from settings back to home screen (wallpaper may not be visible immediately)
-            // Both preview and live wallpaper will respond to this trigger
-            val spawnTriggerTime = prefs.getLong("trigger_spawn_event_time", 0L)
+            // Use context-specific keys (preview vs wallpaper) to avoid race conditions
+            // Each context reads and clears only its own key, but uses same seed for deterministic events
+            val spawnTriggerKey = "trigger_spawn_event_time$triggerSuffix"
+            val spawnTriggerTime = prefs.getLong(spawnTriggerKey, 0L)
             val timeSinceSpawnTrigger = System.currentTimeMillis() - spawnTriggerTime
             if (spawnTriggerTime > 0 && timeSinceSpawnTrigger < 10000) {
-                // Clear immediately to prevent duplicate spawns (use apply() to avoid blocking render)
-                prefs.edit().putLong("trigger_spawn_event_time", 0L).apply()
-                randomEventLayer.debugSpawnEvent()
-                Log.d(TAG, "Manual spawn trigger received (delay: ${timeSinceSpawnTrigger}ms)")
+                // Clear only our own key to prevent duplicate spawns
+                prefs.edit().putLong(spawnTriggerKey, 0L).apply()
+                // Use trigger time as seed for deterministic event spawning
+                randomEventLayer.debugSpawnEvent(spawnTriggerTime)
+                Log.d(TAG, "Manual spawn trigger received [${if (isPreview) "preview" else "wallpaper"}] (delay: ${timeSinceSpawnTrigger}ms)")
             }
             
             // Check for specific event spawn trigger from individual toggles
-            val specificEventTime = prefs.getLong("trigger_spawn_specific_event_time", 0L)
-            val specificEvent = prefs.getString("trigger_spawn_specific_event", null)
+            val specificEventKey = "trigger_spawn_specific_event$triggerSuffix"
+            val specificEventTimeKey = "trigger_spawn_specific_event_time$triggerSuffix"
+            val specificEventTime = prefs.getLong(specificEventTimeKey, 0L)
+            val specificEvent = prefs.getString(specificEventKey, null)
             val timeSinceSpecificTrigger = System.currentTimeMillis() - specificEventTime
             if (specificEvent != null && specificEventTime > 0 && timeSinceSpecificTrigger < 10000) {
                 prefs.edit()
-                    .remove("trigger_spawn_specific_event")
-                    .putLong("trigger_spawn_specific_event_time", 0L)
+                    .remove(specificEventKey)
+                    .putLong(specificEventTimeKey, 0L)
                     .apply()  // Use apply() to avoid blocking render thread
-                randomEventLayer.spawnSpecificEvent(specificEvent)
-                Log.d(TAG, "Specific spawn trigger received: $specificEvent (delay: ${timeSinceSpecificTrigger}ms)")
+                // Use trigger time as seed for deterministic event spawning
+                randomEventLayer.spawnSpecificEvent(specificEvent, specificEventTime)
+                Log.d(TAG, "Specific spawn trigger received [${if (isPreview) "preview" else "wallpaper"}]: $specificEvent (delay: ${timeSinceSpecificTrigger}ms)")
             }
             
             // Update parallax physics with real frame delta for accurate smoothing

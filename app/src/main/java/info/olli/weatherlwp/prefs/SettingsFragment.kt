@@ -268,9 +268,14 @@ class SettingsFragment : PreferenceFragmentCompat() {
     }
     
     private fun spawnRandomEvent() {
-        // Set a flag that the wallpaper will read and clear
+        // Use timestamp-based preference trigger that all active scenes check
+        // Write to BOTH preview and wallpaper keys with same timestamp (for deterministic spawning)
         val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
-        prefs.edit().putBoolean("trigger_spawn_event", true).apply()
+        val triggerTime = System.currentTimeMillis()
+        prefs.edit()
+            .putLong("trigger_spawn_event_time_preview", triggerTime)
+            .putLong("trigger_spawn_event_time_wallpaper", triggerTime)
+            .commit()
         Toast.makeText(context, "🎬 Spawning random event...", Toast.LENGTH_SHORT).show()
     }
 }

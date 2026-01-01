@@ -298,59 +298,61 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     
     /**
      * Debug method to spawn a random event immediately.
+     * @param seed Optional seed for deterministic spawning (both preview and wallpaper get same event)
      */
-    fun debugSpawnEvent() {
+    fun debugSpawnEvent(seed: Long = System.currentTimeMillis()) {
         val currentEvents = events.toMutableList()
-        val random = Random(System.currentTimeMillis())
+        val random = Random(seed)
         
         val eventTypes = listOf<() -> RandomEvent>(
-            { AirplaneEvent(random) },
-            { BirdFlockEvent(random) },
-            { EagleEvent(random) },
-            { ButterflyEvent(random) },
-            { RabbitEvent(random) },
-            { FoxEvent(random) },
-            { ShootingStarEvent(random) },
-            { FireflyEvent(random) },
-            { OwlEvent(random) },
-            { HotAirBalloonEvent(random) },
-            { AlienEvent(random) }
+            { AirplaneEvent(random, seed) },
+            { BirdFlockEvent(random, seed) },
+            { EagleEvent(random, seed) },
+            { ButterflyEvent(random, seed) },
+            { RabbitEvent(random, seed) },
+            { FoxEvent(random, seed) },
+            { ShootingStarEvent(random, seed) },
+            { FireflyEvent(random, seed) },
+            { OwlEvent(random, seed) },
+            { HotAirBalloonEvent(random, seed) },
+            { AlienEvent(random, seed) }
         )
         
         val event = eventTypes[random.nextInt(eventTypes.size)]()
         currentEvents.add(event)
         events = currentEvents.toList()
         
-        android.util.Log.d("RandomEventLayer", "Debug spawned: ${event.javaClass.simpleName}")
+        android.util.Log.d("RandomEventLayer", "Debug spawned: ${event.javaClass.simpleName} (seed: $seed)")
     }
     
     /**
      * Spawn a specific event type by name.
      * Used when toggling individual event switches in settings.
+     * @param seed Optional seed for deterministic spawning (both preview and wallpaper get same event)
      */
-    fun spawnSpecificEvent(eventType: String) {
+    fun spawnSpecificEvent(eventType: String, seed: Long = System.currentTimeMillis()) {
         val currentEvents = events.toMutableList()
-        val random = Random(System.currentTimeMillis())
+        val random = Random(seed)
         
         val event: RandomEvent? = when (eventType) {
-            "airplane" -> AirplaneEvent(random)
-            "birds" -> BirdFlockEvent(random)
-            "eagle" -> EagleEvent(random)
-            "butterfly" -> ButterflyEvent(random)
-            "rabbit" -> RabbitEvent(random)
-            "fox" -> FoxEvent(random)
-            "shootingstar" -> ShootingStarEvent(random)
-            "fireflies" -> FireflyEvent(random)
-            "owl" -> OwlEvent(random)
-            "balloon" -> HotAirBalloonEvent(random)
-            "alien" -> AlienEvent(random)
+            "airplane" -> AirplaneEvent(random, seed)
+            "birds" -> BirdFlockEvent(random, seed)
+            "eagle" -> EagleEvent(random, seed)
+            "butterfly" -> ButterflyEvent(random, seed)
+            "rabbit" -> RabbitEvent(random, seed)
+            "fox" -> FoxEvent(random, seed)
+            "shootingstar" -> ShootingStarEvent(random, seed)
+            "fireflies" -> FireflyEvent(random, seed)
+            "owl" -> OwlEvent(random, seed)
+            "balloon" -> HotAirBalloonEvent(random, seed)
+            "alien" -> AlienEvent(random, seed)
             else -> null
         }
         
         event?.let {
             currentEvents.add(it)
             events = currentEvents.toList()
-            android.util.Log.d("RandomEventLayer", "Spawned specific event: $eventType")
+            android.util.Log.d("RandomEventLayer", "Spawned specific event: $eventType (seed: $seed)")
         }
     }
     
