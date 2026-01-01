@@ -8,31 +8,34 @@ import android.hardware.SensorManager
 import android.util.Log
 import android.view.Surface
 import android.view.WindowManager
+import kotlin.math.PI
+import kotlin.math.asin
+import kotlin.math.atan2
 import kotlin.math.sqrt
 
 /**
- * Manages sensor input for parallax effect using gravity projection from rotation matrix.
+ * Manages sensor input for parallax effect using QUATERNION-based tilt extraction.
  * 
  * Uses TYPE_GAME_ROTATION_VECTOR (preferred) or TYPE_ROTATION_VECTOR for stable orientation.
  * Falls back to TYPE_GRAVITY if rotation vectors unavailable.
  * 
- * Key insight: Instead of using getOrientation() which produces Euler angles that suffer
- * from gimbal lock and direction flips, we extract the gravity vector directly from the
- * rotation matrix. The gravity direction in screen coordinates is always well-defined
- * and stable regardless of device orientation.
+ * CRITICAL FIX (from ai.md analysis):
+ * Instead of extracting gravity from rotation matrix rows (which breaks across display rotations),
+ * we now extract pitch/roll directly from quaternions. Quaternions have no gimbal lock and
+ * work identically at all four device rotations without any display rotation remapping.
  * 
  * Approach:
- * 1. Get rotation matrix from sensor
- * 2. Remap coordinate system based on display rotation  
- * 3. Extract gravity as -[R[6], R[7], R[8]] (negative third row of remapped matrix)
- * 4. Use screen-parallel gravity components for parallax with deadzone for flat positions
+ * 1. Get quaternion from rotation vector sensor
+ * 2. Extract pitch (tilt forward/back) and roll (tilt left/right) from quaternion
+ * 3. These values are in world coordinates, independent of display rotation
+ * 4. Use pitch/roll for parallax with deadzone for flat positions
  * 5. Output absolute tilt position (not velocity) so parallax follows held angle
  * 
  * Key behavior:
  * - Tilt phone left = scene shifts right (revealing left side)
  * - Tilt phone right = scene shifts left (revealing right side)
  * - Holding phone at angle keeps scene offset (no drift to center)
- * - Works consistently in any device orientation (upright, flat, angled)
+ * - Works consistently in any device orientation (upright, flat, angled, ANY rotation)
  */
 class ParallaxSensorManager(context: Context) : SensorEventListener {
     companion object {
@@ -41,7 +44,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         // Low-pass filter alpha (0..1, smaller = smoother but slower response)
         private const val FILTER_ALPHA = 0.12f
         
-        // Deadzone threshold for flat device (prevents noise when screen-parallel gravity is tiny)
+        // Deadzone threshold for flat device (prevents noise when tilt is tiny)
         private const val DEADZONE = 0.08f
     }
     
@@ -66,19 +69,15 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     
     private val activeSensor: Sensor? = gameRotationVector ?: rotationVector ?: gravitySensor ?: accelerometer
 
-    // Rotation matrix arrays (reused to avoid allocations)
-    private val rotationMatrix = FloatArray(9)
-    private val remappedMatrix = FloatArray(9)
-
     // Filtered tilt values (absolute position, -1 to 1)
     private var filteredX = 0f
     private var filteredY = 0f
     
-    // Previous filtered values for velocity calculation
+    // Previous filtered values
     private var prevFilteredX = 0f
     private var prevFilteredY = 0f
     
-    // Timestamp tracking for velocity calculation
+    // Timestamp tracking
     private var lastTimestampNs = 0L
     
     private var initialized = false
@@ -101,8 +100,8 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             prevFilteredY = 0f
             
             val sensorName = when {
-                gameRotationVector != null -> "game rotation vector"
-                rotationVector != null -> "rotation vector"
+                gameRotationVector != null -> "game rotation vector (quaternion)"
+                rotationVector != null -> "rotation vector (quaternion)"
                 gravitySensor != null -> "gravity"
                 else -> "accelerometer (fallback)"
             }
@@ -133,37 +132,50 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
 
         when (event.sensor.type) {
             Sensor.TYPE_GAME_ROTATION_VECTOR, Sensor.TYPE_ROTATION_VECTOR -> {
-                handleRotationVector(event.values, displayRotation, dt)
+                // Use quaternion-based extraction (works at ALL rotations!)
+                handleRotationVectorQuaternion(event.values, displayRotation, dt)
             }
             Sensor.TYPE_GRAVITY, Sensor.TYPE_ACCELEROMETER -> {
+                // Fallback: remap gravity vector for display rotation
                 handleGravityVector(event.values, displayRotation, dt)
             }
         }
     }
     
     /**
-     * Handle rotation vector sensor by extracting gravity from the rotation matrix.
-     * This avoids Euler angle gimbal lock issues.
+     * Handle rotation vector sensor using QUATERNION-based pitch/roll extraction.
+     * 
+     * This approach extracts pitch and roll directly from the quaternion representation,
+     * which works identically at ALL device rotations without remapping matrices.
+     * The display rotation is still used to remap the final X/Y for screen coordinates.
      */
-    private fun handleRotationVector(values: FloatArray, displayRotation: Int, dt: Float) {
-        // Get rotation matrix from rotation vector
-        SensorManager.getRotationMatrixFromVector(rotationMatrix, values)
+    private fun handleRotationVectorQuaternion(values: FloatArray, displayRotation: Int, dt: Float) {
+        // Rotation vector provides quaternion components
+        val qx = values[0]
+        val qy = values[1]
+        val qz = values[2]
+        val qw = if (values.size >= 4) values[3] else sqrt(1f - qx*qx - qy*qy - qz*qz).coerceIn(0f, 1f)
         
-        // Remap for display rotation
-        val (axisX, axisY) = getRemapAxes(displayRotation)
-        val success = SensorManager.remapCoordinateSystem(rotationMatrix, axisX, axisY, remappedMatrix)
+        // Extract pitch (tilt forward/back) from quaternion
+        // Pitch: rotation around device X-axis
+        val sinPitch = 2.0f * (qw * qx + qy * qz)
+        val cosPitch = 1.0f - 2.0f * (qx * qx + qy * qy)
+        val pitch = atan2(sinPitch, cosPitch)
         
-        if (!success) return
+        // Extract roll (tilt left/right) from quaternion
+        // Roll: rotation around device Y-axis  
+        val sinRoll = 2.0f * (qw * qy - qz * qx)
+        val roll = asin(sinRoll.coerceIn(-1f, 1f))
         
-        // Extract gravity from rotation matrix.
-        // R transforms device coords to world coords where Z is up.
-        // The third row of R is the world Z-axis in device coords.
-        // Gravity (pointing down) is the negative of that: -R[6], -R[7], -R[8]
-        val gx = -remappedMatrix[6]
-        val gy = -remappedMatrix[7]
-        val gz = -remappedMatrix[8]
+        // Normalize to -1..1 range (max tilt = 90 degrees = PI/2)
+        // These are in device coordinates - pitch is forward/back, roll is left/right
+        val rawTiltX = (roll / (PI / 2)).toFloat().coerceIn(-1f, 1f)
+        val rawTiltY = (pitch / (PI / 2)).toFloat().coerceIn(-1f, 1f)
         
-        processGravityInScreenCoords(gx, gy, gz, dt)
+        // Apply display rotation remapping to convert device coords to screen coords
+        val (tiltX, tiltY) = remapTiltForDisplay(rawTiltX, rawTiltY, displayRotation)
+        
+        processTiltValues(tiltX, tiltY, dt)
     }
     
     /**
@@ -179,36 +191,35 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         
         val ngx = gx / norm
         val ngy = gy / norm
-        val ngz = gz / norm
         
-        processGravityInScreenCoords(ngx, ngy, ngz, dt)
+        // Compute horizontal magnitude (how much gravity is parallel to screen)
+        val horizMag = sqrt(ngx * ngx + ngy * ngy)
+        
+        // Confidence factor: when device is nearly flat, horizMag is tiny and noisy.
+        val confidence = ((horizMag - DEADZONE) / (1f - DEADZONE)).coerceIn(0f, 1f)
+        
+        // Target tilt values (negate for natural parallax direction)
+        val targetX = (-ngx) * confidence
+        val targetY = (-ngy) * confidence
+        
+        processTiltValues(targetX, targetY, dt)
     }
     
     /**
-     * Process gravity vector in screen coordinates to produce parallax output.
-     * 
-     * gx: gravity component along screen X (positive = gravity pulling right)
-     * gy: gravity component along screen Y (positive = gravity pulling up)
-     * gz: gravity component along screen Z (positive = gravity pulling out of screen)
+     * Process tilt values with filtering and deadzone.
      */
-    private fun processGravityInScreenCoords(gx: Float, gy: Float, gz: Float, dt: Float) {
-        // Compute horizontal magnitude (how much gravity is parallel to screen)
-        val horizMag = sqrt(gx * gx + gy * gy)
+    private fun processTiltValues(targetX: Float, targetY: Float, dt: Float) {
+        // Compute tilt magnitude for deadzone
+        val tiltMag = sqrt(targetX * targetX + targetY * targetY)
         
-        // Confidence factor: when device is nearly flat, horizMag is tiny and noisy.
-        // Scale down the effect near the deadzone to prevent jumpiness.
-        val confidence = ((horizMag - DEADZONE) / (1f - DEADZONE)).coerceIn(0f, 1f)
-        
-        // Target tilt values:
-        // - Negate gx so that tilting left (gx positive in screen coords when phone tilts left)
-        //   causes scene to shift right
-        // - Apply confidence to reduce effect when device is flat
-        val targetX = (-gx) * confidence
-        val targetY = (-gy) * confidence
+        // Apply deadzone
+        val confidence = ((tiltMag - DEADZONE) / (1f - DEADZONE)).coerceIn(0f, 1f)
+        val scaledX = if (tiltMag > DEADZONE) targetX * confidence else 0f
+        val scaledY = if (tiltMag > DEADZONE) targetY * confidence else 0f
         
         // Low-pass filter for smooth parallax motion
-        filteredX += FILTER_ALPHA * (targetX - filteredX)
-        filteredY += FILTER_ALPHA * (targetY - filteredY)
+        filteredX += FILTER_ALPHA * (scaledX - filteredX)
+        filteredY += FILTER_ALPHA * (scaledY - filteredY)
         
         if (!initialized) {
             prevFilteredX = filteredX
@@ -226,15 +237,17 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     }
     
     /**
-     * Get axis remapping for display rotation.
-     * These mappings transform device coordinates to screen coordinates.
+     * Remap tilt values for display rotation.
+     * Converts device-coordinate tilt to screen-coordinate tilt.
      */
-    private fun getRemapAxes(displayRotation: Int): Pair<Int, Int> = when (displayRotation) {
-        Surface.ROTATION_0 -> SensorManager.AXIS_X to SensorManager.AXIS_Y
-        Surface.ROTATION_90 -> SensorManager.AXIS_Y to SensorManager.AXIS_MINUS_X
-        Surface.ROTATION_180 -> SensorManager.AXIS_MINUS_X to SensorManager.AXIS_MINUS_Y
-        Surface.ROTATION_270 -> SensorManager.AXIS_MINUS_Y to SensorManager.AXIS_X
-        else -> SensorManager.AXIS_X to SensorManager.AXIS_Y
+    private fun remapTiltForDisplay(tiltX: Float, tiltY: Float, displayRotation: Int): Pair<Float, Float> {
+        return when (displayRotation) {
+            Surface.ROTATION_0 -> Pair(tiltX, tiltY)
+            Surface.ROTATION_90 -> Pair(tiltY, -tiltX)
+            Surface.ROTATION_180 -> Pair(-tiltX, -tiltY)
+            Surface.ROTATION_270 -> Pair(-tiltY, tiltX)
+            else -> Pair(tiltX, tiltY)
+        }
     }
     
     /**
