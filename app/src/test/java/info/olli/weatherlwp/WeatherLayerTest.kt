@@ -224,13 +224,3 @@ class WeatherLayerTest {
         assertTrue("Front layer largest", sizeFront <= 1.0f)
     }
 }
-    fun `storm cloud size multipliers create depth`() {
-        val sizeBack = RenderConstants.STORM_CLOUD_SIZE_BACK
-        val sizeMid = RenderConstants.STORM_CLOUD_SIZE_MID
-        val sizeFront = RenderConstants.STORM_CLOUD_SIZE_FRONT
-        
-        assertTrue("Back layer smallest", sizeBack < sizeMid)
-        assertTrue("Mid layer medium", sizeMid < sizeFront)
-        assertTrue("Front layer largest", sizeFront <= 1.0f)
-    }
-}
