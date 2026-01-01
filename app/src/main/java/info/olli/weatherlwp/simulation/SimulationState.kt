@@ -99,6 +99,63 @@ data class SimulationState(
     }
     
     /**
+     * Get the light source angle in radians.
+     * This is used to determine shadow direction from entities.
+     * 
+     * During day: Sun moves from left (6am) across top to right (6pm)
+     * During night: Moon follows similar arc
+     * 
+     * @return Angle in radians where:
+     *   - 0 = light from right
+     *   - PI/2 = light from above
+     *   - PI = light from left
+     */
+    fun getLightSourceAngle(): Float {
+        val hour = timeOfDayHours
+        return when {
+            // Day: 6am-6pm, sun arc from left to right
+            hour in 6f..18f -> {
+                val dayProgress = (hour - 6f) / 12f  // 0 to 1
+                // Start at PI (left), arc through PI/2 (top), end at 0 (right)
+                kotlin.math.PI.toFloat() * (1f - dayProgress)
+            }
+            // Night: moon arc similar to sun
+            else -> {
+                val nightProgress = if (hour >= 18f) {
+                    (hour - 18f) / 12f  // 6pm to midnight = 0 to 0.5
+                } else {
+                    (hour + 6f) / 12f  // midnight to 6am = 0.5 to 1
+                }
+                kotlin.math.PI.toFloat() * (1f - nightProgress)
+            }
+        }
+    }
+    
+    /**
+     * Get shadow offset for an entity based on light source position.
+     * Returns (dx, dy) offset to apply to shadow relative to object.
+     * 
+     * @param objectHeight Relative height of the object (affects shadow length)
+     * @return Pair of (shadowOffsetX, shadowOffsetY) normalized -1 to 1
+     */
+    fun getShadowOffset(objectHeight: Float = 1f): Pair<Float, Float> {
+        if (!shadowsEnabled) return Pair(0f, 0f)
+        
+        val angle = getLightSourceAngle()
+        val strength = getEffectiveShadowStrength()
+        
+        // Shadow length based on light angle (longer shadows at sunrise/sunset)
+        val lightHeight = kotlin.math.sin(angle).coerceIn(0.1f, 1f)
+        val shadowLength = (1f / lightHeight).coerceIn(0.3f, 2f) * objectHeight * strength
+        
+        // Shadow direction is opposite to light source
+        val dx = -kotlin.math.cos(angle) * shadowLength
+        val dy = kotlin.math.abs(kotlin.math.sin(angle)) * shadowLength * 0.3f  // Compressed vertically
+        
+        return Pair(dx, dy)
+    }
+    
+    /**
      * Get cloud count based on density setting.
      * Cloud counts are tuned so:
      * - LIGHT: Few clouds visible, mostly clear sky

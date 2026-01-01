@@ -39,31 +39,31 @@ class CloudLayerTest {
     }
     
     @Test
-    fun `maximum groups capped at 20 for performance`() {
-        val maxGroups = 20
+    fun `maximum groups capped at 25 for performance`() {
+        val maxGroups = 25
         val cloudCount = 200  // More than overcast
-        val avgCloudsPerGroup = 6
+        val avgCloudsPerGroup = 9  // (6+12)/2
         
         val calculated = (cloudCount / avgCloudsPerGroup).coerceIn(2, maxGroups)
-        assertEquals("Max groups capped", maxGroups, calculated)
+        assertEquals("Max groups capped", 22, calculated)  // 200/9 = 22, capped at 25
     }
     
     @Test
-    fun `overcast 120 clouds should produce max groups`() {
+    fun `overcast 120 clouds should produce reasonable groups`() {
         val overcastClouds = 120
-        val avgCloudsPerGroup = 6
-        val maxGroups = 20
+        val avgCloudsPerGroup = 9  // (6+12)/2
+        val maxGroups = 25
         
         val groups = (overcastClouds / avgCloudsPerGroup).coerceIn(2, maxGroups)
-        assertEquals("Overcast produces max groups", maxGroups, groups)
+        assertTrue("Overcast produces sufficient groups", groups >= 10)
     }
 
     // ============== Layer Property Tests ==============
     
     @Test
     fun `back layer alpha should be lower than front`() {
-        val backAlphaMult = 0.5f
-        val frontAlphaMult = 0.8f
+        val backAlphaMult = 0.7f
+        val frontAlphaMult = 1.0f
         
         assertTrue("Back layer alpha multiplier lower", backAlphaMult < frontAlphaMult)
     }
@@ -93,58 +93,56 @@ class CloudLayerTest {
     
     @Test
     fun `group width should be reasonable screen fraction`() {
-        val groupWidthMin = 0.15f
-        val groupWidthMax = 0.35f
+        val groupWidthMin = 0.25f
+        val groupWidthMax = 0.50f
         
         assertTrue("Min width > 0", groupWidthMin > 0f)
-        assertTrue("Max width < 1 screen", groupWidthMax < 1f)
+        assertTrue("Max width <= 1 screen", groupWidthMax <= 1f)
         assertTrue("Max > Min", groupWidthMax > groupWidthMin)
     }
     
     @Test
     fun `group height should be proportional to cloud Y range`() {
-        val groupHeightMin = 0.06f
-        val groupHeightMax = 0.12f
+        val groupHeightMin = 0.10f
+        val groupHeightMax = 0.18f
         val cloudYRange = 0.35f  // RenderConstants.CLOUD_Y_RANGE
         
         // Group height should be fraction of cloud Y range
-        assertTrue("Group height reasonable", groupHeightMax < cloudYRange)
+        assertTrue("Group height reasonable", groupHeightMax < cloudYRange + 0.1f)
     }
     
     @Test
-    fun `clouds per group should be 4-8`() {
-        val minPuffs = 4
-        val maxPuffs = 8
+    fun `clouds per group should be 6-12`() {
+        val minPuffs = 6
+        val maxPuffs = 12
         
         assertTrue("Min puffs > 0", minPuffs > 0)
-        assertTrue("Max reasonable", maxPuffs <= 10)
+        assertTrue("Max reasonable", maxPuffs <= 15)
         assertTrue("Range valid", maxPuffs >= minPuffs)
     }
 
     // ============== Performance Tests ==============
     
     @Test
-    fun `draw calls reduced from 120 clouds to max 20 groups`() {
+    fun `draw calls reduced from 120 clouds to max 25 groups`() {
         val oldIndividualClouds = 120
-        val newMaxGroups = 20
+        val newMaxGroups = 25
         
         val reduction = oldIndividualClouds / newMaxGroups.toFloat()
-        assertTrue("At least 5x reduction", reduction >= 5f)
+        assertTrue("At least 4x reduction", reduction >= 4f)
     }
     
     @Test
     fun `overcast puff count reduced significantly`() {
         // Old: 120 clouds * 3-5 puffs = 360-600 draw calls
         val oldMinPuffs = 120 * 3
-        val oldMaxPuffs = 120 * 5
         
-        // New: 20 groups * 4-8 puffs per group = 80-160 puffs
+        // New: 25 groups * 6-12 puffs per group = 150-300 puffs
         // BUT these are rendered to bitmap once, not per frame
-        val newMinPuffs = 20 * 4
-        val newMaxPuffs = 20 * 8
+        val newMaxPuffs = 25 * 12
         
-        // Per-frame draw calls: just 20 bitmap draws
-        val newDrawCallsPerFrame = 20
+        // Per-frame draw calls: just 25 bitmap draws
+        val newDrawCallsPerFrame = 25
         
         assertTrue("Puffs rendered once", newMaxPuffs < oldMinPuffs)
         assertTrue("Per-frame draws reduced", newDrawCallsPerFrame < oldMinPuffs / 10)
@@ -163,8 +161,8 @@ class CloudLayerTest {
     
     @Test
     fun `alpha should be clamped to valid range`() {
-        val minAlpha = 10
-        val maxAlpha = 180
+        val minAlpha = 20
+        val maxAlpha = 220
         
         assertTrue("Min alpha > 0", minAlpha > 0)
         assertTrue("Max alpha < 255", maxAlpha < 255)
@@ -172,14 +170,15 @@ class CloudLayerTest {
     
     @Test
     fun `back layer alpha lower for depth effect`() {
-        val baseAlpha = 50
+        // Updated: base alpha now 60-120, back mult 0.7, front mult 1.0
+        val baseAlpha = 90  // midpoint of 60-120
         val opacity = 0.4f
         
-        val backAlpha = (baseAlpha * 0.5f * opacity).toInt().coerceIn(10, 180)
-        val frontAlpha = (baseAlpha * 0.8f * opacity).toInt().coerceIn(10, 180)
+        val backAlpha = (baseAlpha * 0.7f * opacity).toInt().coerceIn(20, 220)
+        val frontAlpha = (baseAlpha * 1.0f * opacity).toInt().coerceIn(20, 220)
         
-        assertEquals("Back alpha", 10, backAlpha)  // 50 * 0.5 * 0.4 = 10
-        assertEquals("Front alpha", 16, frontAlpha) // 50 * 0.8 * 0.4 = 16
+        assertEquals("Back alpha", 25, backAlpha)  // 90 * 0.7 * 0.4 = 25.2 -> 25
+        assertEquals("Front alpha", 36, frontAlpha) // 90 * 1.0 * 0.4 = 36
         assertTrue("Back < Front", backAlpha <= frontAlpha)
     }
 

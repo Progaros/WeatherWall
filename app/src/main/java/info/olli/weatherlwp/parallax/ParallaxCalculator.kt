@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicReference
 class ParallaxCalculator {
     companion object {
         /** How fast position approaches target (per frame, 0-1) */
-        private const val POSITION_LERP_RATE = 0.08f
+        private const val POSITION_LERP_RATE = 0.15f
     }
     
     // Tilt holder for atomic operations (lock-free)
@@ -42,7 +42,7 @@ class ParallaxCalculator {
     var strength = 1.0f                 // Sensitivity multiplier
     var maxOffsetPx = 80f               // Maximum offset in any direction
     var smoothing = 0.4f                // Position smoothing factor (higher = smoother but slower)
-    var depthSeparation = 0.25f         // How much depth affects movement
+    var depthSeparation = 1.0f          // How much depth affects movement (1.0 = full effect)
     
     /**
      * Update from sensor input.
@@ -76,7 +76,9 @@ class ParallaxCalculator {
         
         // Calculate effective lerp rate based on smoothing setting
         // Higher smoothing = slower response (smaller lerp rate)
-        val effectiveLerpRate = POSITION_LERP_RATE * (1f - smoothing * 0.8f) * deltaScale
+        // At smoothing=0: full lerp rate for instant response
+        // At smoothing=1: reduced lerp rate for smooth motion
+        val effectiveLerpRate = POSITION_LERP_RATE * (1f - smoothing * 0.6f) * deltaScale
         
         // Smoothly interpolate position toward target
         positionX += (targetX - positionX) * effectiveLerpRate
@@ -109,12 +111,14 @@ class ParallaxCalculator {
      * @return (x, y) offset to apply to this layer
      */
     fun getOffsetForDepth(depthFactor: Float): Pair<Float, Float> {
+        // depthSeparation scales the overall effect, depthFactor determines per-layer intensity
         val effectiveDepth = depthFactor * depthSeparation
         return Pair(positionX * effectiveDepth, positionY * effectiveDepth)
     }
     
     /**
      * Get X offset for a specific depth.
+     * Uses full depth range for fluid "looking out a window" effect.
      */
     fun getOffsetXForDepth(depthFactor: Float): Float {
         return positionX * depthFactor * depthSeparation
@@ -122,6 +126,7 @@ class ParallaxCalculator {
     
     /**
      * Get Y offset for a specific depth.
+     * Uses full depth range for fluid "looking out a window" effect.
      */
     fun getOffsetYForDepth(depthFactor: Float): Float {
         return positionY * depthFactor * depthSeparation

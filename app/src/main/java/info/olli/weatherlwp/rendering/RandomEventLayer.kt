@@ -85,16 +85,26 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
             }
         }
         
-        // Spawn new events (throttled to avoid too many)
-        // Use absoluteTimeMs for deterministic spawning across preview/wallpaper
-        val spawnBucket = state.absoluteTimeMs / 100  // Check every 100ms bucket
-        val spawnRandom = Random(baseSeed + spawnBucket)
-        
+        // Spawn new events with improved randomness
+        // Use a combination of absoluteTimeMs for synchronization and actual randomness for variety
         lastSpawnCheck += deltaTimeMs
-        if (lastSpawnCheck > 100) {
+        if (lastSpawnCheck > 500) {  // Check every 500ms for spawn opportunity
             lastSpawnCheck = 0
-            if (spawnRandom.nextFloat() < spawnChance * 6 && currentEvents.size < 5) {
-                spawnRandomEvent(state, currentEvents, spawnRandom)
+            
+            // Create a random with mixed seed for better distribution
+            // Combine absolute time (for sync) with system nanos (for variety)
+            val spawnSeed = state.absoluteTimeMs / 500 + System.nanoTime() / 1000000
+            val spawnRandom = Random(spawnSeed)
+            
+            // Spawn chance is checked per 500ms interval
+            // At default (spawnChance ~0.001), effective chance per check = spawnChance * 50 = 5%
+            // Increased multiplier for more frequent spawns
+            val effectiveChance = spawnChance * 50f
+            
+            if (spawnRandom.nextFloat() < effectiveChance && currentEvents.size < 8) {
+                // Use a fresh random for event creation (not tied to spawn bucket)
+                val eventRandom = Random(System.nanoTime())
+                spawnRandomEvent(state, currentEvents, eventRandom)
             }
         }
         
@@ -103,7 +113,8 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     
     private fun spawnRandomEvent(state: SimulationState, currentEvents: MutableList<RandomEvent>, random: Random) {
         val availableEvents = mutableListOf<() -> RandomEvent?>()
-        val spawnTime = state.absoluteTimeMs
+        // Use System.currentTimeMillis() for consistent spawn time across preview and live
+        val spawnTime = System.currentTimeMillis()
         
         // Day events
         if (airplaneEnabled && !state.isNight) availableEvents.add { AirplaneEvent(random, spawnTime) }

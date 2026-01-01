@@ -30,7 +30,13 @@ import kotlin.random.Random
 class TerrainLayer(private val context: Context) : SceneLayer {
     private val hillPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val treePaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
+    private val shadowPaint = Paint().apply { 
+        style = Paint.Style.FILL
+        isAntiAlias = true
+        color = Color.argb(60, 0, 0, 0)  // Semi-transparent black for shadows
+    }
     private val treePath = Path()
+    private val shadowPath = Path()
     private val hillPath = Path()
 
     private var width = 0f
@@ -479,6 +485,56 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val ambientSway = 0.15f * swaySpeed  // Visible ambient movement controlled by speed
         val windSway = effectiveWind * 0.3f * swaySpeed  // Wind sway also affected by speed
         val maxAmplitude = totalHeight * (ambientSway + windSway + gustPush * 0.3f)
+        
+        // Get shadow offset from light source (sun/moon position)
+        val shadowStrength = state.getEffectiveShadowStrength()
+        val (shadowDx, shadowDy) = state.getShadowOffset(tree.scale)
+        val shadowOffsetX = shadowDx * totalHeight * 0.4f  // Scale shadow offset with tree size
+        val shadowOffsetY = shadowDy * totalHeight * 0.3f
+        
+        // Draw shadow first (if shadows enabled)
+        if (shadowStrength > 0.05f) {
+            // Shadow alpha based on strength and distance
+            val shadowAlpha = (40 * shadowStrength).toInt().coerceIn(10, 80)
+            shadowPaint.color = Color.argb(shadowAlpha, 0, 0, 0)
+            
+            // Draw shadow segments (simplified flat projection on ground)
+            for (seg in 0 until treeSegments) {
+                val widthMultiplier = 1.0f - (seg.toFloat() / treeSegments * 0.6f)
+                val segWidth = baseTreeWidth * widthMultiplier
+                
+                val baseHeightRatio = seg.toFloat() / treeSegments
+                val tipHeightRatio = (seg + 1).toFloat() / treeSegments
+                
+                // Shadow sway follows tree sway
+                val basePhase = spatialPhase + baseHeightRatio * 0.4f
+                val tipPhase = spatialPhase + tipHeightRatio * 0.4f
+                val baseWave = sin(timeSec * baseFreq + basePhase) * 0.5f + 
+                    sin(timeSec * baseFreq * 0.4f + basePhase) * 0.3f +
+                    sin(timeSec * baseFreq * 2.5f + basePhase) * 0.2f
+                val tipWave = sin(timeSec * baseFreq + tipPhase) * 0.5f +
+                    sin(timeSec * baseFreq * 0.4f + tipPhase) * 0.3f +
+                    sin(timeSec * baseFreq * 2.5f + tipPhase) * 0.2f
+                val gustLean = gustPush
+                val ambientFactor = swaySpeed * 0.4f
+                val baseSway = (baseWave * (effectiveWind + ambientFactor) + gustLean) * maxAmplitude * baseHeightRatio * baseHeightRatio
+                val tipSway = (tipWave * (effectiveWind + ambientFactor) + gustLean) * maxAmplitude * tipHeightRatio * tipHeightRatio
+                
+                // Shadow is projected onto ground - compress Y and offset based on light angle
+                val shadowTipX = x + tipSway + shadowOffsetX * tipHeightRatio
+                val shadowTipY = groundY + shadowOffsetY * tipHeightRatio * 0.5f  // Flattened on ground
+                val shadowBaseX = x + baseSway + shadowOffsetX * baseHeightRatio
+                val shadowBaseY = groundY + shadowOffsetY * baseHeightRatio * 0.3f
+                
+                shadowPath.reset()
+                shadowPath.moveTo(shadowTipX, shadowTipY)
+                shadowPath.lineTo(shadowBaseX - segWidth * 0.8f, shadowBaseY)
+                shadowPath.lineTo(shadowBaseX + segWidth * 0.8f, shadowBaseY)
+                shadowPath.close()
+                
+                canvas.drawPath(shadowPath, shadowPaint)
+            }
+        }
         
         // Draw tree segments from bottom to top
         for (seg in 0 until treeSegments) {
