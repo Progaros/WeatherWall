@@ -315,7 +315,10 @@ class CloudLayer(private val context: Context) : SceneLayer {
         // Cloud count comes directly from weather/simulation data
         // fluffinessMultiplier only affects each cloud's internal density (number of puffs)
         val targetCount = state.getCloudCount().coerceIn(0, MAX_GROUPS)
-        if (targetCount != cloudCount) {
+        // Only regenerate if count changed significantly (by more than 3) to prevent jumping
+        if (kotlin.math.abs(targetCount - cloudCount) > 3 || 
+            (targetCount == 0 && cloudCount > 0) || 
+            (targetCount > 0 && cloudCount == 0)) {
             cloudCount = targetCount
             generateCloudGroups()
         }
@@ -353,10 +356,13 @@ class CloudLayer(private val context: Context) : SceneLayer {
                 
                 // Calculate group position with time-based movement
                 // Wind affects speed: low wind = slow drift, high wind = fast movement
-                val timeOffset = state.timeSeconds * group.speed * effectiveSpeed
-                var groupX = group.initialX + timeOffset / extendedWidth * 0.25f  // Increased for more visible movement
-                groupX = groupX % 1f
-                if (groupX < 0) groupX += 1f
+                // Use fmod for smooth wrapping to prevent jumps
+                val baseMovement = state.timeSeconds * group.speed * effectiveSpeed * 0.001f  // Slower base movement
+                val positionOffset = baseMovement % 1f
+                var groupX = group.initialX + positionOffset
+                // Wrap position smoothly
+                while (groupX > 1f) groupX -= 1f
+                while (groupX < 0f) groupX += 1f
                 
                 // Convert to screen coordinates
                 val screenX = groupX * extendedWidth - extendedOffset + px

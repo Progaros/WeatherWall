@@ -63,11 +63,11 @@ class SimulationController(private val context: Context) {
         val realWeather = WeatherRepository.getWeatherType(context)
         val effectiveWeather = settings.getEffectiveWeather(realWeather)
         
-        // Get wind - combine settings with weather
+        // Get wind - use weather data when available, settings when in debug mode
         val weatherWindStrength = WeatherRepository.getNormalizedWindStrength(context)
         val effectiveWind = if (settings.useWeatherWind && WeatherRepository.isDataFresh(context)) {
-            // Blend settings wind with weather wind
-            (settings.windStrength + weatherWindStrength) / 2f
+            // Use weather wind directly (not blended) when weather data is fresh
+            weatherWindStrength
         } else {
             settings.windStrength
         }

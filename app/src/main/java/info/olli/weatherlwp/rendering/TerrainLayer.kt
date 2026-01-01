@@ -513,44 +513,49 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // Get shadow offset from light source (sun/moon position)
         val shadowStrength = state.getEffectiveShadowStrength()
         val (shadowDx, shadowDy) = state.getShadowOffset(tree.scale)
-        // Increase shadow offset for better visibility
-        val shadowOffsetX = shadowDx * totalHeight * 0.8f  // Longer shadows
-        val shadowOffsetY = shadowDy * totalHeight * 0.5f  // More vertical spread
         
         // Draw shadow first (if shadows enabled)
         if (shadowStrength > 0.01f) {
-            // Shadow alpha based on strength - more visible range
-            val shadowAlpha = (100 * shadowStrength).toInt().coerceIn(30, 180)
+            // Shadow alpha based on strength
+            val shadowAlpha = (80 * shadowStrength).toInt().coerceIn(20, 150)
             shadowPaint.color = Color.argb(shadowAlpha, 0, 0, 0)
             
-            // Calculate tree tip sway for shadow direction
+            // Calculate shadow skew direction based on light angle
+            // Shadow extends horizontally along ground, skewed away from light source
+            val skewDirection = if (shadowDx > 0) 1f else -1f
+            val skewFactor = kotlin.math.abs(shadowDx).coerceIn(0.2f, 2.0f)  // How far shadow stretches
+            
+            // Calculate tree tip sway for shadow
             val tipPhase = spatialPhase + 0.4f
             val tipWave = sin(timeSec * baseFreq + tipPhase) * 0.5f +
-                sin(timeSec * baseFreq * 0.4f + tipPhase) * 0.3f +
-                sin(timeSec * baseFreq * 2.5f + tipPhase) * 0.2f
+                sin(timeSec * baseFreq * 0.4f + tipPhase) * 0.3f
             val ambientFactor = swaySpeed * 0.4f
-            val tipSway = (tipWave * (effectiveWind + ambientFactor) + gustPush) * maxAmplitude
+            val tipSway = (tipWave * (effectiveWind + ambientFactor) + gustPush) * maxAmplitude * 0.5f
             
-            // Draw a simple elongated shadow blob on the ground
-            // Shadow starts at tree base and extends in the direction of light offset
-            val shadowCenterX = x + shadowOffsetX * 0.5f + tipSway * 0.3f
-            val shadowCenterY = groundY + shadowOffsetY * 0.6f
-            val shadowWidth = baseTreeWidth * 1.2f
-            val shadowLength = kotlin.math.abs(shadowOffsetX).coerceAtLeast(totalHeight * 0.3f)
+            // Draw shadow as a skewed tree triangle flattened onto the ground
+            // The shadow is a triangle: base at tree trunk, tip extended along ground
+            val shadowLength = totalHeight * skewFactor * 0.8f
+            val shadowBaseWidth = baseTreeWidth * 0.6f
             
-            // Use oval for soft shadow blob
-            val shadowRect = android.graphics.RectF(
-                shadowCenterX - shadowWidth,
-                shadowCenterY - shadowLength * 0.15f,  // Compressed vertically (flat on ground)
-                shadowCenterX + shadowWidth,
-                shadowCenterY + shadowLength * 0.4f
-            )
+            // Shadow tip is where the tree top would project onto the ground
+            val shadowTipX = x + shadowLength * skewDirection + tipSway
+            val shadowTipY = groundY + 2f  // Slightly below ground line to blend
             
-            // Rotate shadow to point away from light source
+            // Shadow base is at the tree trunk (same as tree base)
+            val shadowBaseX = x
+            val shadowBaseY = groundY + 2f
+            
+            // Draw triangular shadow shape
+            treePath.reset()
+            treePath.moveTo(shadowTipX, shadowTipY)  // Far tip of shadow
+            treePath.lineTo(shadowBaseX - shadowBaseWidth, shadowBaseY)  // Left side of trunk
+            treePath.lineTo(shadowBaseX + shadowBaseWidth, shadowBaseY)  // Right side of trunk
+            treePath.close()
+            
+            // Clip shadow to not extend beyond screen bottom (ground level)
             canvas.save()
-            val rotationAngle = kotlin.math.atan2(shadowOffsetY, shadowOffsetX) * 180f / kotlin.math.PI.toFloat()
-            canvas.rotate(rotationAngle, x, groundY)
-            canvas.drawOval(shadowRect, shadowPaint)
+            canvas.clipRect(0f, 0f, width, groundY + 10f)
+            canvas.drawPath(treePath, shadowPaint)
             canvas.restore()
         }
         

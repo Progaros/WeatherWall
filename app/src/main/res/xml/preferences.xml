@@ -520,6 +520,17 @@
             app:showSeekBarValue="true"
             app:updatesContinuously="true"
             android:dependency="pref_seasonal_enabled" />
+            
+        <SeekBarPreference
+            android:key="pref_firework_frequency"
+            android:title="Firework Frequency"
+            android:summary="How often fireworks launch (0=rare, 100=constant)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_seasonal_enabled" />
     </PreferenceCategory>
 
     <!-- Simulation / Debug -->

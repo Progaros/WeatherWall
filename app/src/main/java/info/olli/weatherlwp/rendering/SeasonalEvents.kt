@@ -81,7 +81,7 @@ class SeasonalEvents(private val context: Context? = null) {
 
     // Pre-allocated pools
     private val stars = Array(30) { Star() }
-    private val fireworks = Array(150) { Firework() }  // More particles for better explosions
+    private val fireworks = Array(250) { Firework() }  // Larger pool for multiple simultaneous explosions
     private val rockets = Array(5) { Rocket() }  // Up to 5 rockets in flight
     private val trailParticles = Array(20) { TrailParticle() }
     private var christmasStar: ChristmasStar? = null
@@ -135,6 +135,7 @@ class SeasonalEvents(private val context: Context? = null) {
     // Settings-controlled values
     private var starSizeMultiplier = 1.0f
     private var trailLengthMultiplier = 1.0f
+    private var fireworkFrequency = 50  // 0-100, default 50
     
     // Track last settings load time to avoid polling SharedPreferences every frame
     private var lastSettingsLoad = 0L
@@ -153,6 +154,7 @@ class SeasonalEvents(private val context: Context? = null) {
         prefs?.let {
             starSizeMultiplier = (it.getInt("pref_christmas_star_size", 100) / 100f).coerceIn(0.5f, 2.0f)
             trailLengthMultiplier = (it.getInt("pref_christmas_star_trail", 100) / 100f).coerceIn(0f, 2.0f)
+            fireworkFrequency = it.getInt("pref_firework_frequency", 50).coerceIn(0, 100)
         }
         lastSettingsLoad = System.currentTimeMillis()
     }
@@ -352,8 +354,22 @@ class SeasonalEvents(private val context: Context? = null) {
     private fun renderNewYearFireworks(canvas: Canvas) {
         fireworkTimer++
 
-        // Launch new rocket every 40-90 frames
-        if (fireworkTimer > 40 + Random.nextInt(50)) {
+        // Launch new rocket based on frequency setting
+        // At 0: every 200+ frames (rare), at 50: every 40-90 frames, at 100: every 10-30 frames
+        val minInterval = when {
+            fireworkFrequency >= 80 -> 10
+            fireworkFrequency >= 50 -> 30
+            fireworkFrequency >= 20 -> 60
+            else -> 150
+        }
+        val intervalRange = when {
+            fireworkFrequency >= 80 -> 20
+            fireworkFrequency >= 50 -> 50
+            fireworkFrequency >= 20 -> 80
+            else -> 100
+        }
+        
+        if (fireworkFrequency > 0 && fireworkTimer > minInterval + Random.nextInt(intervalRange)) {
             fireworkTimer = 0
             launchRocket()
         }
@@ -385,8 +401,9 @@ class SeasonalEvents(private val context: Context? = null) {
                 rocketPaint.color = Color.WHITE
                 canvas.drawCircle(r.x, r.y, 3f, rocketPaint)
                 
-                // Explode when reaching target
-                if (r.y <= r.targetY) {
+                // Explode when reaching target or when rocket starts falling (vy > 0)
+                // This ensures rockets always explode even if they don't quite reach target
+                if (r.y <= r.targetY || r.vy > 0) {
                     explodeRocket(r)
                     r.active = false
                 }

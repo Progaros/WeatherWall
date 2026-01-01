@@ -91,10 +91,9 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         if (lastSpawnCheck > 500) {  // Check every 500ms for spawn opportunity
             lastSpawnCheck = 0
             
-            // Create a random with mixed seed for better distribution
-            // Use absolute time for consistent spawning across preview and wallpaper
-            val spawnSeed = state.absoluteTimeMs / 500
-            val spawnRandom = Random(spawnSeed)
+            // Each instance independently decides whether to spawn
+            // Use instance-based random with unique seed per layer instance
+            val spawnRandom = Random(System.nanoTime())
             
             // Spawn chance is checked per 500ms interval
             // At default (spawnChance ~0.001), effective chance per check = spawnChance * 50 = 5%
@@ -102,8 +101,8 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
             val effectiveChance = spawnChance * 50f
             
             if (spawnRandom.nextFloat() < effectiveChance && currentEvents.size < 8) {
-                // Use spawn time for event creation random (consistent across instances)
-                val eventRandom = Random(state.absoluteTimeMs)
+                // Use current time for event creation - each instance creates its own events
+                val eventRandom = Random(System.nanoTime())
                 spawnRandomEvent(state, currentEvents, eventRandom)
             }
         }
