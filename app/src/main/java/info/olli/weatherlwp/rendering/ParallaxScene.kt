@@ -279,12 +279,18 @@ class ParallaxScene(
             val perspectiveVal = prefs.getInt("pref_parallax_perspective", 0).coerceIn(0, 100)
             val perspective = perspectiveVal / 100f
             
+            // Return speed slider: map 1..100 -> 0f..1f
+            // 1 = instant return to center, 50 = medium, 100 = never return (stays offset)
+            val returnSpeedVal = prefs.getInt("pref_parallax_return_speed", 30).coerceIn(1, 100)
+            val returnSpeed = (returnSpeedVal - 1) / 99f  // 1->0, 100->1
+            
             // Apply to parallax calculator
             parallaxCalculator.strength = parallaxStrength
             parallaxCalculator.maxOffsetPx = parallaxMaxOffsetPx
             parallaxCalculator.smoothing = smoothingFactor
             parallaxCalculator.depthSeparation = depthSeparation
             parallaxCalculator.perspective = perspective
+            parallaxCalculator.returnSpeed = returnSpeed
             
             // Weather and seasonal toggles
             weatherEnabled = prefs.getBoolean("pref_weather_enabled", true)

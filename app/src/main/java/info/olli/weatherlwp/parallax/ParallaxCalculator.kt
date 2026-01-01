@@ -9,7 +9,7 @@ import java.util.concurrent.atomic.AtomicReference
  * - Scene offset follows the device tilt angle
  * - Holding the phone at an angle keeps the scene offset stable
  * - Smooth interpolation (lerp) toward target for natural feel
- * - No drift back to center - offset stays where the tilt puts it
+ * - Optional return-to-center when tilt is near zero (controlled by returnSpeed)
  * 
  * Performance optimized:
  * - Uses AtomicReference for lock-free thread safety
@@ -24,6 +24,9 @@ class ParallaxCalculator {
     companion object {
         /** How fast position approaches target (per frame, 0-1) - increased for faster response */
         private const val POSITION_LERP_RATE = 0.5f
+        
+        /** Tilt magnitude below which return-to-center kicks in */
+        private const val RETURN_TILT_THRESHOLD = 0.05f
     }
     
     // Tilt holder for atomic operations (lock-free)
@@ -44,6 +47,13 @@ class ParallaxCalculator {
     var smoothing = 0.2f                // Position smoothing factor (higher = smoother but slower)
                                         // Reduced from 0.4 since sensor already has smoothing
     var depthSeparation = 1.0f          // How much depth affects movement (1.0 = full effect)
+    
+    /**
+     * Return speed: how fast position drifts back to center when tilt is zero.
+     * 0.0 = instant return, 0.5 = medium, 1.0 = never return (disabled)
+     * Maps from pref setting: 1=instant (0.0), 50=medium (0.5), 100=slow (1.0)
+     */
+    var returnSpeed = 0.3f
     
     /**
      * Parallax perspective: controls which layers move more.
@@ -85,6 +95,7 @@ class ParallaxCalculator {
         
         // Get latest tilt from sensor
         val tilt = pendingTilt.get()
+        val tiltMagnitude = kotlin.math.sqrt(tilt.x * tilt.x + tilt.y * tilt.y)
         
         // Calculate target position from tilt
         // Tilt values are -1 to 1, map to pixel offset
@@ -94,6 +105,17 @@ class ParallaxCalculator {
         // Clamp target to bounds
         targetX = targetX.coerceIn(-maxOffsetPx, maxOffsetPx)
         targetY = targetY.coerceIn(-maxOffsetPx, maxOffsetPx)
+        
+        // Apply return-to-center when tilt is near zero
+        // returnSpeed: 0.0 = instant return, 1.0 = never return
+        if (tiltMagnitude < RETURN_TILT_THRESHOLD && returnSpeed < 0.99f) {
+            // Gradually pull target toward center
+            // Lower returnSpeed = faster pull
+            val returnRate = 1f - returnSpeed  // 0-1 where 1 is fastest
+            val returnLerp = (returnRate * 0.3f * deltaScale).coerceAtMost(1f)
+            targetX *= (1f - returnLerp)
+            targetY *= (1f - returnLerp)
+        }
         
         // Calculate effective lerp rate based on smoothing setting
         // Higher smoothing = slower response (smaller lerp rate)

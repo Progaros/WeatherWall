@@ -50,6 +50,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
     
     private var width = 0f
     private var height = 0f
+    private var minDim = 0f  // min(width, height) - used for cloud sizing to prevent giant bitmaps
     
     // Extended canvas dimensions for parallax content
     private var extendedWidth = 0f
@@ -112,18 +113,24 @@ class CloudLayer(private val context: Context) : SceneLayer {
         const val FRONT_LAYER_DEPTH_MIN = 0.28f
         const val FRONT_LAYER_DEPTH_MAX = 0.35f
         
-        // Group size ranges - relative to HEIGHT for consistent sizing
-        // Width values are larger because they're now relative to height (portrait: height ~2x width)
-        const val GROUP_WIDTH_MIN = 0.80f
-        const val GROUP_WIDTH_MAX = 1.60f
-        const val GROUP_HEIGHT_MIN = 0.15f
-        const val GROUP_HEIGHT_MAX = 0.28f
+        // Group size ranges - relative to minDim (min of width/height) for consistent sizing
+        // Using minDim prevents gigantic bitmaps on tall portrait screens
+        const val GROUP_WIDTH_MIN = 0.60f
+        const val GROUP_WIDTH_MAX = 1.20f
+        const val GROUP_HEIGHT_MIN = 0.20f
+        const val GROUP_HEIGHT_MAX = 0.40f
         
         // Extra padding for blur effect to prevent edge cutoff (fraction of group size)
-        const val BLUR_PADDING = 0.3f
+        const val BLUR_PADDING = 0.25f  // Reduced from 0.3 to save memory
+        
+        // Hard cap on bitmap dimensions to avoid GPU texture limits
+        const val MAX_BITMAP_DIMENSION = 1536
         
         // Max groups for performance (increased for better overcast coverage)
         const val MAX_GROUPS = 40
+        
+        // Maximum bitmap regenerations per frame to prevent spikes
+        const val MAX_REGENERATIONS_PER_FRAME = 3
     }
     
     init {
@@ -296,6 +303,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
     override fun resize(w: Float, h: Float) {
         width = w
         height = h
+        minDim = minOf(w, h)  // Use smaller dimension to prevent gigantic bitmaps on portrait
         extendedWidth = RenderConstants.getExtendedWidth(w, h)
         extendedOffset = RenderConstants.getExtendedOffset(w, extendedWidth)
         
@@ -380,8 +388,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
         // Calculate cloud color for this frame
         val cloudColor = calculateCloudColor(state)
         
-        // Regenerate bitmaps if color changed significantly
-        val colorChanged = cloudColor != cachedCloudColor
+        // Regenerate bitmaps only if color changed significantly (not on small interpolation steps)
+        // This prevents expensive bitmap recreation during dawn/dusk color transitions
+        val colorChanged = !colorsAreSimilar(cloudColor, cachedCloudColor, threshold = 15)
         if (colorChanged) {
             cachedCloudColor = cloudColor
             for (group in currentGroups) {
@@ -391,6 +400,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         }
         
         // Draw back layer first, then front layer
+        var regenerationsThisFrame = 0
         for (isBack in listOf(true, false)) {
             for (group in currentGroups) {
                 if (group.isBackLayer != isBack) continue
@@ -406,10 +416,12 @@ class CloudLayer(private val context: Context) : SceneLayer {
                 val screenX = groupX * extendedWidth - extendedOffset + px
                 val screenY = group.y * height + py
                 
-                // Use HEIGHT as reference for both dimensions to maintain aspect ratio
-                // This ensures clouds look the same size regardless of screen dimensions
-                val groupWidthPx = (group.groupWidth * height).toInt().coerceAtLeast(50)
-                val groupHeightPx = (group.groupHeight * height).toInt().coerceAtLeast(30)
+                // Use minDim as reference to prevent gigantic bitmaps on tall portrait screens
+                // Apply hard cap to prevent GPU texture limit issues
+                val groupWidthPx = (group.groupWidth * minDim).toInt()
+                    .coerceIn(50, MAX_BITMAP_DIMENSION)
+                val groupHeightPx = (group.groupHeight * minDim).toInt()
+                    .coerceIn(30, MAX_BITMAP_DIMENSION)
                 
                 // Calculate padded dimensions (must match renderGroupToBitmap)
                 val paddingX = (groupWidthPx * BLUR_PADDING).toInt()
@@ -417,9 +429,15 @@ class CloudLayer(private val context: Context) : SceneLayer {
                 val paddedWidth = groupWidthPx + paddingX * 2
                 val paddedHeight = groupHeightPx + paddingY * 2
                 
-                // Ensure bitmap is rendered
+                // Ensure bitmap is rendered - but limit regenerations per frame
                 if (group.cachedBitmap == null) {
-                    renderGroupToBitmap(group, groupWidthPx, groupHeightPx, cloudColor)
+                    if (regenerationsThisFrame < MAX_REGENERATIONS_PER_FRAME) {
+                        renderGroupToBitmap(group, groupWidthPx, groupHeightPx, cloudColor)
+                        regenerationsThisFrame++
+                    } else {
+                        // Skip this cloud this frame, will be rendered next frame
+                        continue
+                    }
                 }
                 
                 group.cachedBitmap?.let { bitmap ->
@@ -449,6 +467,23 @@ class CloudLayer(private val context: Context) : SceneLayer {
             }
             else -> Color.rgb(250, 250, 255)
         }
+    }
+    
+    /**
+     * Check if two colors are similar within a threshold.
+     * Used to avoid expensive bitmap regeneration on small color changes.
+     */
+    private fun colorsAreSimilar(color1: Int, color2: Int, threshold: Int): Boolean {
+        val r1 = Color.red(color1)
+        val g1 = Color.green(color1)
+        val b1 = Color.blue(color1)
+        val r2 = Color.red(color2)
+        val g2 = Color.green(color2)
+        val b2 = Color.blue(color2)
+        
+        return kotlin.math.abs(r1 - r2) <= threshold &&
+               kotlin.math.abs(g1 - g2) <= threshold &&
+               kotlin.math.abs(b1 - b2) <= threshold
     }
     
     // Expose for testing
