@@ -62,7 +62,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
     internal data class CloudGroup(
         val initialX: Float,      // 0-1 across extended width
         val y: Float,             // Y center position (0-1)
-        val speed: Float,         // Movement speed
+        val speed: Float,         // Movement speed multiplier
         val alpha: Int,           // Pre-calculated alpha (0-255)
         val isBackLayer: Boolean, // True = back layer (75%), False = front layer (25%)
         val depthFactor: Float,   // For parallax (0.15-0.35)
@@ -74,6 +74,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
         @Volatile var cachedBitmap: Bitmap? = null
         var lastWidth: Int = 0
         var lastHeight: Int = 0
+        
+        // Current X position (accumulated via delta time, wraps 0-1)
+        @Volatile var currentX: Float = initialX
     }
     
     // Thread-safe cloud group list
@@ -306,7 +309,28 @@ class CloudLayer(private val context: Context) : SceneLayer {
     }
 
     override fun update(state: SimulationState, deltaTimeMs: Long) {
-        // Position is computed in draw() using state.timeSeconds
+        // Update cloud positions using delta time for smooth wind-speed transitions
+        val currentGroups = cloudGroups
+        if (currentGroups.isEmpty()) return
+        
+        // Calculate effective wind speed
+        val windSpeed = RenderConstants.WIND_CLOUD_SPEED_MIN + 
+            state.windStrength * (RenderConstants.WIND_CLOUD_SPEED_MAX - RenderConstants.WIND_CLOUD_SPEED_MIN)
+        val effectiveSpeed = windSpeed * cloudSpeedMultiplier
+        
+        // Convert delta time to seconds
+        val deltaSec = deltaTimeMs / 1000f
+        
+        // Update each cloud group's position
+        for (group in currentGroups) {
+            // Move cloud based on current speed (delta-based, not absolute time)
+            val movement = deltaSec * group.speed * effectiveSpeed * 0.001f
+            var newX = group.currentX + movement
+            // Wrap position smoothly (0-1 range)
+            while (newX > 1f) newX -= 1f
+            while (newX < 0f) newX += 1f
+            group.currentX = newX
+        }
     }
 
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
@@ -339,12 +363,6 @@ class CloudLayer(private val context: Context) : SceneLayer {
             }
         }
         
-        val windSpeed = RenderConstants.WIND_CLOUD_SPEED_MIN + 
-            state.windStrength * (RenderConstants.WIND_CLOUD_SPEED_MAX - RenderConstants.WIND_CLOUD_SPEED_MIN)
-        
-        // Apply user speed multiplier on top of wind speed
-        val effectiveSpeed = windSpeed * cloudSpeedMultiplier
-        
         // Draw back layer first, then front layer
         for (isBack in listOf(true, false)) {
             for (group in currentGroups) {
@@ -354,15 +372,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
                 val px = parallaxCalculator.getOffsetXForDepth(group.depthFactor)
                 val py = parallaxCalculator.getOffsetYForDepth(group.depthFactor)
                 
-                // Calculate group position with time-based movement
-                // Wind affects speed: low wind = slow drift, high wind = fast movement
-                // Use fmod for smooth wrapping to prevent jumps
-                val baseMovement = state.timeSeconds * group.speed * effectiveSpeed * 0.001f  // Slower base movement
-                val positionOffset = baseMovement % 1f
-                var groupX = group.initialX + positionOffset
-                // Wrap position smoothly
-                while (groupX > 1f) groupX -= 1f
-                while (groupX < 0f) groupX += 1f
+                // Use accumulated position from update() - no more time-based jumps
+                val groupX = group.currentX
                 
                 // Convert to screen coordinates
                 val screenX = groupX * extendedWidth - extendedOffset + px

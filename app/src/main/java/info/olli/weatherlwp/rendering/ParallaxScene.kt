@@ -95,6 +95,8 @@ class ParallaxScene(
 
     fun start() {
         sensor.start()
+        // Reset timing to avoid delta spikes after visibility changes
+        simulationController.resetTiming()
     }
 
     fun stop() {

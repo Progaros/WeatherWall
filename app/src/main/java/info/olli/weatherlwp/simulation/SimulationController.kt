@@ -47,6 +47,14 @@ class SimulationController(private val context: Context) {
     }
     
     /**
+     * Reset timing state after visibility changes to avoid delta spikes.
+     * Call this when the wallpaper becomes visible again.
+     */
+    fun resetTiming() {
+        lastUpdateMs = 0L
+    }
+    
+    /**
      * Update screen dimensions.
      */
     fun resize(width: Float, height: Float) {
@@ -128,7 +136,7 @@ class SimulationController(private val context: Context) {
             moonIllumination = moonIllumination.coerceIn(0f, 1f),
             windStrength = smoothedWind.coerceIn(0f, 1f),
             windDirection = smoothedDir,
-            windGust = windGust,
+            windGust = windGust.coerceIn(0f, 1f),  // Clamp to valid range
             windMultiplier = settings.windMultiplier,
             treeSwaySpeed = settings.treeSwaySpeed,
             shadowsEnabled = settings.shadowsEnabled,
@@ -148,10 +156,11 @@ class SimulationController(private val context: Context) {
      */
     private fun calculateWindGust(baseWind: Float, deltaMs: Long): Float {
         val currentMs = System.currentTimeMillis()
-        val deltaSec = deltaMs / 1000f
+        // Cap deltaSec to 100ms to prevent explosion after visibility changes
+        val deltaSec = (deltaMs / 1000f).coerceIn(0f, 0.1f)
         
         // Decay target gust intensity (this is what we're ramping towards)
-        targetGust = (targetGust - gustDecay * deltaSec).coerceAtLeast(0f)
+        targetGust = (targetGust - gustDecay * deltaSec).coerceIn(0f, 1f)
         
         // Check if it's time for a new gust
         if (currentMs >= nextGustTime) {
@@ -185,6 +194,8 @@ class SimulationController(private val context: Context) {
             smoothedGust = targetGust
         }
         
+        // Ensure output stays in valid range
+        smoothedGust = smoothedGust.coerceIn(0f, 1f)
         gustIntensity = smoothedGust
         return smoothedGust
     }

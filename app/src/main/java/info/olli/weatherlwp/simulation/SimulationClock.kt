@@ -52,7 +52,8 @@ class SimulationClock {
      * This allows wind, clouds, trees to have deterministic positions at any given real-world time.
      */
     fun getElapsedTimeMs(): Long {
-        return ((System.currentTimeMillis() - startTimeMs) * timeMultiplier).toLong()
+        // Use Double for multiplication to avoid precision loss with large epoch times
+        return ((System.currentTimeMillis() - startTimeMs).toDouble() * timeMultiplier).toLong()
     }
     
     /**
@@ -60,7 +61,8 @@ class SimulationClock {
      * Use this when you need positions to be consistent regardless of app restart.
      */
     fun getAbsoluteTimeMs(): Long {
-        return (System.currentTimeMillis() * timeMultiplier).toLong()
+        // Use Double for multiplication to avoid precision loss with large epoch times
+        return (System.currentTimeMillis().toDouble() * timeMultiplier).toLong()
     }
     
     /**
