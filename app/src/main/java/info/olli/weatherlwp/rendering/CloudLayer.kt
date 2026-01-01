@@ -314,8 +314,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
         if (currentGroups.isEmpty()) return
         
         // Calculate effective wind using windStrength, windGust, and windMultiplier
-        val baseWind = (state.windStrength * state.windMultiplier).coerceIn(0f, 1f)
-        val gustAdd = (state.windGust * 0.6f).coerceIn(0f, 1f)
+        // Don't clamp windMultiplier - allow values > 1.0 for dramatic wind (settings allow 0-300%)
+        val baseWind = state.windStrength * state.windMultiplier
+        val gustAdd = state.windGust * 0.6f
         
         // Storm boost for dramatic cloud movement
         val stormBoost = when (state.weather) {
@@ -324,10 +325,11 @@ class CloudLayer(private val context: Context) : SceneLayer {
             else -> 1.0f
         }
         
-        // Combined wind factor (0-1) fed into speed range
-        val wind01 = (baseWind + gustAdd).coerceIn(0f, 1f)
+        // Combined wind factor - don't clamp, allow gusty strong winds to exceed 1.0
+        // This creates more dramatic cloud movement at high wind settings
+        val windFactor = (baseWind + gustAdd).coerceAtLeast(0f)  // Only prevent negative
         val windSpeed = RenderConstants.WIND_CLOUD_SPEED_MIN + 
-            wind01 * (RenderConstants.WIND_CLOUD_SPEED_MAX - RenderConstants.WIND_CLOUD_SPEED_MIN)
+            windFactor * (RenderConstants.WIND_CLOUD_SPEED_MAX - RenderConstants.WIND_CLOUD_SPEED_MIN)
         val effectiveSpeed = windSpeed * cloudSpeedMultiplier * stormBoost
         
         // Get wind direction for X component (-1 to 1, positive = rightward)
@@ -339,12 +341,12 @@ class CloudLayer(private val context: Context) : SceneLayer {
         
         // Update each cloud group's position
         // Speed is in normalized units per second (0-1 = screen width)
-        // At max wind + storm, clouds cross screen in ~15-25 seconds
-        // At calm weather, clouds cross screen in ~90-150 seconds
+        // At max wind + storm, clouds cross screen in ~8-15 seconds
+        // At calm weather, clouds cross screen in ~60-90 seconds
         for (group in currentGroups) {
             // Move cloud based on current speed with direction
-            // 0.015f scales to reasonable speed (full screen in ~15s at max, ~120s at min)
-            val movement = deltaSec * group.speed * effectiveSpeed * 0.015f * dirX
+            // 0.025f scales to reasonable speed (full screen in ~8s at max, ~80s at min)
+            val movement = deltaSec * group.speed * effectiveSpeed * 0.025f * dirX
             var newX = group.currentX + movement
             // Wrap position smoothly (0-1 range)
             while (newX > 1f) newX -= 1f

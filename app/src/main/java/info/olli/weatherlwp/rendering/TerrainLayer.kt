@@ -555,10 +555,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // Maximum sway amplitude at tree top
         // ALWAYS have ambient sway (affected by swaySpeed), plus wind effects
         // When swaySpeed=0, amplitude is 0 (frozen). When swaySpeed=1, normal ambient sway.
-        // NOTE: gustSway removed from here - gust is applied separately via gustLean to avoid double-counting
-        val ambientSway = 0.08f * swaySpeed  // Subtle ambient movement (reduced from 0.12)
-        val windSway = effectiveWind * 0.25f  // Wind sway (decoupled from swaySpeed for amplitude)
-        val maxAmplitude = totalHeight * (ambientSway + windSway)
+        // Only use ambient sway in maxAmplitude - wind effect is applied in sway formula
+        val ambientSway = 0.08f * swaySpeed  // Subtle ambient movement
+        val maxAmplitude = totalHeight * (ambientSway + 0.15f)  // Base amplitude with minimum movement
         
         // Get shadow offset from light source (sun/moon position)
         val shadowStrength = state.getEffectiveShadowStrength()
@@ -580,9 +579,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             val tipWave = sin(timeSec * baseFreq + tipPhase) * 0.5f +
                 sin(timeSec * baseFreq * 0.4f + tipPhase) * 0.3f
             val ambientFactor = swaySpeed * 0.4f
+            val shadowWindFactor = ambientFactor + effectiveWind * 0.6f  // Match tree sway calculation
             val shadowGustLean = gustPush * 0.15f
-            // Use ambientFactor only (not effectiveWind) to match tree sway calculation
-            val tipSway = tipWave * ambientFactor * maxAmplitude * 0.5f + shadowGustLean * totalHeight * 0.5f
+            val tipSway = tipWave * shadowWindFactor * maxAmplitude * 0.5f + shadowGustLean * totalHeight * 0.5f
             
             // Draw shadow as a skewed tree triangle flattened onto the ground
             // The shadow is a triangle: base at tree trunk, tip extended along ground
@@ -645,11 +644,11 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             // Sway increases with height squared (natural bending curve)
             // Include ambient sway even without wind (baseWave still oscillates)
             // swaySpeed directly affects the ambient movement factor
-            // NOTE: maxAmplitude already includes wind effect (windSway), so we only use ambientFactor here
-            // to avoid double-applying wind amplitude (which causes excessive movement)
+            // effectiveWind adds wind-driven sway on top of ambient
             val ambientFactor = swaySpeed * 0.4f  // Scale ambient movement by sway speed
-            val baseSway = baseWave * ambientFactor * maxAmplitude * baseHeightRatio * baseHeightRatio + gustLean * totalHeight * baseHeightRatio * baseHeightRatio
-            val tipSway = tipWave * ambientFactor * maxAmplitude * tipHeightRatio * tipHeightRatio + gustLean * totalHeight * tipHeightRatio * tipHeightRatio
+            val windFactor = ambientFactor + effectiveWind * 0.6f  // Wind significantly increases sway
+            val baseSway = baseWave * windFactor * maxAmplitude * baseHeightRatio * baseHeightRatio + gustLean * totalHeight * baseHeightRatio * baseHeightRatio
+            val tipSway = tipWave * windFactor * maxAmplitude * tipHeightRatio * tipHeightRatio + gustLean * totalHeight * tipHeightRatio * tipHeightRatio
             
             treePath.reset()
             treePath.moveTo(x + tipSway, segTipY)
