@@ -18,7 +18,8 @@ class EagleEvent(random: Random, override val spawnTimeMs: Long = System.current
     override val layer = EventLayer.MID_SKY  // In front of mountains, between clouds and terrain
     
     private val baseY = 0.2f + random.nextFloat() * 0.15f
-    private val speed = 0.0001f + random.nextFloat() * 0.00008f
+    // Reduced speed: was 0.0001-0.00018, now 0.00003-0.00006 (~3x slower)
+    private val speed = 0.00003f + random.nextFloat() * 0.00003f
     override val durationMs: Long = (1.4f / speed).toLong()
     
     private val path = Path()

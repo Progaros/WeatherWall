@@ -325,44 +325,96 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         val baseRadius = kotlin.math.min(width, height) * 0.03f
         val radius = baseRadius * celestialSize
         
-        // Moon glow gradient (soft silver/blue)
-        val glowRadius = radius * 2.5f
-        val moonGradient = RadialGradient(
+        // Outer soft glow (pale silver/blue halo)
+        val glowRadius = radius * 3f
+        val glowGradient = RadialGradient(
             moonX + parallaxX, moonY + parallaxY, glowRadius,
             intArrayOf(
-                Color.argb(150, 220, 230, 255),  // Pale silver center
-                Color.argb(80, 180, 200, 230),
-                Color.argb(20, 150, 170, 200),
+                Color.argb(60, 200, 220, 255),   // Very subtle silver center
+                Color.argb(30, 180, 200, 240),
+                Color.argb(10, 150, 170, 210),
                 Color.TRANSPARENT
             ),
-            floatArrayOf(0f, 0.4f, 0.7f, 1f),
+            floatArrayOf(0f, 0.35f, 0.6f, 1f),
             Shader.TileMode.CLAMP
         )
-        
-        moonPaint.shader = moonGradient
+        moonPaint.shader = glowGradient
         canvas.drawCircle(moonX + parallaxX, moonY + parallaxY, glowRadius, moonPaint)
         
-        // Solid moon disc (lit portion)
-        moonPaint.shader = null
-        moonPaint.color = Color.argb(255, 245, 248, 255)  // Bright moon white
+        // Main moon disc with subtle gradient (brighter at edge facing sun)
+        val moonDiscGradient = RadialGradient(
+            moonX + parallaxX - radius * 0.3f, moonY + parallaxY - radius * 0.2f, radius * 1.2f,
+            intArrayOf(
+                Color.argb(255, 255, 255, 250),  // Bright cream white
+                Color.argb(255, 240, 243, 248),  // Slightly cooler edge
+                Color.argb(255, 220, 225, 235)   // Subtle darker limb
+            ),
+            floatArrayOf(0f, 0.7f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        moonPaint.shader = moonDiscGradient
         canvas.drawCircle(moonX + parallaxX, moonY + parallaxY, radius, moonPaint)
         
-        // Crescent shadow - simulates shadow side of moon
-        // Shadow circle is same size but offset to the upper-right to create crescent
-        // Get night sky color to blend the shadow naturally
-        val skyR = Color.red(skyTop)
-        val skyG = Color.green(skyTop)
-        val skyB = Color.blue(skyTop)
-        moonPaint.color = Color.argb(255, skyR, skyG, skyB)
+        // Subtle maria (dark patches) - soft and organic, NOT sharp circles
+        // These are drawn as very subtle, low-alpha darker spots with soft edges
+        moonPaint.shader = null
         
-        // Offset the shadow circle to create crescent - position to the right and slightly up
-        val shadowOffset = radius * 0.65f
-        canvas.drawCircle(
-            moonX + parallaxX + shadowOffset, 
-            moonY + parallaxY - shadowOffset * 0.3f, 
-            radius * 0.92f,  // Slightly smaller to show thin crescent edge
-            moonPaint
+        // Mare 1 - large, soft patch in upper left quadrant
+        val mare1Gradient = RadialGradient(
+            moonX + parallaxX - radius * 0.25f, moonY + parallaxY - radius * 0.15f, radius * 0.5f,
+            intArrayOf(
+                Color.argb(25, 100, 110, 130),   // Very subtle grey center
+                Color.argb(12, 110, 120, 140),
+                Color.TRANSPARENT
+            ),
+            floatArrayOf(0f, 0.5f, 1f),
+            Shader.TileMode.CLAMP
         )
+        moonPaint.shader = mare1Gradient
+        canvas.drawCircle(moonX + parallaxX - radius * 0.25f, moonY + parallaxY - radius * 0.15f, radius * 0.5f, moonPaint)
+        
+        // Mare 2 - smaller patch lower right
+        val mare2Gradient = RadialGradient(
+            moonX + parallaxX + radius * 0.2f, moonY + parallaxY + radius * 0.25f, radius * 0.35f,
+            intArrayOf(
+                Color.argb(20, 90, 100, 120),
+                Color.argb(8, 100, 110, 130),
+                Color.TRANSPARENT
+            ),
+            floatArrayOf(0f, 0.5f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        moonPaint.shader = mare2Gradient
+        canvas.drawCircle(moonX + parallaxX + radius * 0.2f, moonY + parallaxY + radius * 0.25f, radius * 0.35f, moonPaint)
+        
+        // Mare 3 - tiny accent spot
+        val mare3Gradient = RadialGradient(
+            moonX + parallaxX + radius * 0.1f, moonY + parallaxY - radius * 0.35f, radius * 0.2f,
+            intArrayOf(
+                Color.argb(15, 80, 90, 110),
+                Color.TRANSPARENT
+            ),
+            floatArrayOf(0f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        moonPaint.shader = mare3Gradient
+        canvas.drawCircle(moonX + parallaxX + radius * 0.1f, moonY + parallaxY - radius * 0.35f, radius * 0.2f, moonPaint)
+        
+        // Subtle limb darkening (edge of disc) for 3D effect
+        val limbGradient = RadialGradient(
+            moonX + parallaxX, moonY + parallaxY, radius,
+            intArrayOf(
+                Color.TRANSPARENT,
+                Color.TRANSPARENT,
+                Color.argb(30, 100, 110, 130)   // Subtle dark edge
+            ),
+            floatArrayOf(0f, 0.75f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        moonPaint.shader = limbGradient
+        canvas.drawCircle(moonX + parallaxX, moonY + parallaxY, radius, moonPaint)
+        
+        moonPaint.shader = null
     }
 
     override fun reloadSettings() {

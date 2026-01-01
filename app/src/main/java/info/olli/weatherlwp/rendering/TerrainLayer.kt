@@ -251,16 +251,35 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 peakPositions.add(0.75f)
             }
             
+            // Generate clearings (Lichtungen) for this hill layer
+            // Higher sparsity = more and larger clearings
+            val numClearings = ((treeSparsity * 5).toInt() + if (random.nextFloat() < treeSparsity) 1 else 0)
+                .coerceIn(0, 6)
+            val clearings = mutableListOf<Pair<Float, Float>>()  // List of (start, end) x-positions
+            for (c in 0 until numClearings) {
+                // Clearing width: 5% to 20% of the width depending on sparsity
+                val clearingWidth = 0.05f + random.nextFloat() * 0.15f * treeSparsity
+                val clearingStart = random.nextFloat() * (1f - clearingWidth)
+                val clearingEnd = clearingStart + clearingWidth
+                clearings.add(clearingStart to clearingEnd)
+            }
+            
             // Place trees along the extended width
             for (t in 0 until hillTreeCount) {
-                // Apply sparsity: randomly skip some tree positions to create horizontal gaps
-                if (random.nextFloat() < treeSparsity) {
-                    continue  // Skip this tree (creates a horizontal gap)
-                }
-                
                 // xRatio is 0-1 across the extended width - distributed evenly with some randomness
                 val baseSpacing = 1.0f / hillTreeCount
                 val xRatio = (t * baseSpacing + random.nextFloat() * baseSpacing).coerceIn(0f, 1f)
+                
+                // Skip tree if it falls within a clearing (Lichtung)
+                val inClearing = clearings.any { (start, end) -> xRatio in start..end }
+                if (inClearing) {
+                    continue  // Skip this tree - it's in a clearing
+                }
+                
+                // Additional random skip for some extra variation (but less than before)
+                if (random.nextFloat() < treeSparsity * 0.3f) {
+                    continue  // Occasional extra skip for natural variation
+                }
                 
                 // Get the hill surface Y at this X position (this is the hill line)
                 val groundY = getHillY(xRatio, hill)
@@ -463,77 +482,76 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // TRAVELING WIND WAVE: Gusts move across the scene left-to-right
         // Phase based on tree X position - creates spatial coherence (nearby trees move together)
         // The wave travels across the screen based on time
-        val spatialPhase = tree.xRatio * kotlin.math.PI.toFloat() * 4f  // 4 wave cycles across screen
-        val waveSpeed = 0.8f + baseWindStrength * 0.6f  // Wave travels faster with more wind
+        val spatialPhase = tree.xRatio * kotlin.math.PI.toFloat() * 3f  // 3 wave cycles across screen
+        val waveSpeed = 1.2f + baseWindStrength * 1.0f  // Wave travels faster with more wind
         
         // The gust wave: a traveling sine wave that affects tree intensity
-        // Trees at similar X positions have similar phase, creating "waves" of wind
+        // Trees at similar X positions have similar phase, creating "waves" of wind passing through
         val gustWavePhase = timeSec * waveSpeed - spatialPhase
         val gustWave = (sin(gustWavePhase) * 0.5f + 0.5f)  // 0-1 wave intensity at this tree
         
+        // Additional secondary wave for more natural variation
+        val secondaryWave = (sin(gustWavePhase * 0.6f + 1.5f) * 0.3f + 0.5f)  // Slower secondary wave
+        val combinedWave = gustWave * 0.7f + secondaryWave * 0.3f
+        
         // When gust is active, the wave causes trees to lean in sequence
         // Local gust intensity = base gust * wave position (so gust "passes through")
-        val localGust = gustIntensity * gustWave
+        val localGust = gustIntensity * combinedWave
         
         // Gust impact: when gustIntensity is high, trees lean strongly then recover
-        // Use a stronger one-sided push during gusts
-        val gustPush = localGust * localGust * 1.8f  // Quadratic for snappy response
+        // Use a stronger one-sided push during gusts - trees bend in wind direction
+        val gustPush = localGust * localGust * 2.5f  // Quadratic for snappy response, stronger effect
         
         // Maximum sway amplitude at tree top
         // ALWAYS have ambient sway (affected by swaySpeed), plus wind effects
         // When swaySpeed=0, amplitude is 0 (frozen). When swaySpeed=1, normal ambient sway.
-        val ambientSway = 0.15f * swaySpeed  // Visible ambient movement controlled by speed
-        val windSway = effectiveWind * 0.3f * swaySpeed  // Wind sway also affected by speed
-        val maxAmplitude = totalHeight * (ambientSway + windSway + gustPush * 0.3f)
+        val ambientSway = 0.12f * swaySpeed  // Subtle ambient movement controlled by speed
+        val windSway = effectiveWind * 0.35f * swaySpeed  // Wind sway also affected by speed
+        val gustSway = gustPush * 0.5f  // Strong bending during gusts
+        val maxAmplitude = totalHeight * (ambientSway + windSway + gustSway)
         
         // Get shadow offset from light source (sun/moon position)
         val shadowStrength = state.getEffectiveShadowStrength()
         val (shadowDx, shadowDy) = state.getShadowOffset(tree.scale)
-        val shadowOffsetX = shadowDx * totalHeight * 0.4f  // Scale shadow offset with tree size
-        val shadowOffsetY = shadowDy * totalHeight * 0.3f
+        // Increase shadow offset for better visibility
+        val shadowOffsetX = shadowDx * totalHeight * 0.8f  // Longer shadows
+        val shadowOffsetY = shadowDy * totalHeight * 0.5f  // More vertical spread
         
         // Draw shadow first (if shadows enabled)
-        if (shadowStrength > 0.05f) {
-            // Shadow alpha based on strength and distance
-            val shadowAlpha = (40 * shadowStrength).toInt().coerceIn(10, 80)
+        if (shadowStrength > 0.01f) {
+            // Shadow alpha based on strength - more visible range
+            val shadowAlpha = (100 * shadowStrength).toInt().coerceIn(30, 180)
             shadowPaint.color = Color.argb(shadowAlpha, 0, 0, 0)
             
-            // Draw shadow segments (simplified flat projection on ground)
-            for (seg in 0 until treeSegments) {
-                val widthMultiplier = 1.0f - (seg.toFloat() / treeSegments * 0.6f)
-                val segWidth = baseTreeWidth * widthMultiplier
-                
-                val baseHeightRatio = seg.toFloat() / treeSegments
-                val tipHeightRatio = (seg + 1).toFloat() / treeSegments
-                
-                // Shadow sway follows tree sway
-                val basePhase = spatialPhase + baseHeightRatio * 0.4f
-                val tipPhase = spatialPhase + tipHeightRatio * 0.4f
-                val baseWave = sin(timeSec * baseFreq + basePhase) * 0.5f + 
-                    sin(timeSec * baseFreq * 0.4f + basePhase) * 0.3f +
-                    sin(timeSec * baseFreq * 2.5f + basePhase) * 0.2f
-                val tipWave = sin(timeSec * baseFreq + tipPhase) * 0.5f +
-                    sin(timeSec * baseFreq * 0.4f + tipPhase) * 0.3f +
-                    sin(timeSec * baseFreq * 2.5f + tipPhase) * 0.2f
-                val gustLean = gustPush
-                val ambientFactor = swaySpeed * 0.4f
-                val baseSway = (baseWave * (effectiveWind + ambientFactor) + gustLean) * maxAmplitude * baseHeightRatio * baseHeightRatio
-                val tipSway = (tipWave * (effectiveWind + ambientFactor) + gustLean) * maxAmplitude * tipHeightRatio * tipHeightRatio
-                
-                // Shadow is projected onto ground - compress Y and offset based on light angle
-                val shadowTipX = x + tipSway + shadowOffsetX * tipHeightRatio
-                val shadowTipY = groundY + shadowOffsetY * tipHeightRatio * 0.5f  // Flattened on ground
-                val shadowBaseX = x + baseSway + shadowOffsetX * baseHeightRatio
-                val shadowBaseY = groundY + shadowOffsetY * baseHeightRatio * 0.3f
-                
-                shadowPath.reset()
-                shadowPath.moveTo(shadowTipX, shadowTipY)
-                shadowPath.lineTo(shadowBaseX - segWidth * 0.8f, shadowBaseY)
-                shadowPath.lineTo(shadowBaseX + segWidth * 0.8f, shadowBaseY)
-                shadowPath.close()
-                
-                canvas.drawPath(shadowPath, shadowPaint)
-            }
+            // Calculate tree tip sway for shadow direction
+            val tipPhase = spatialPhase + 0.4f
+            val tipWave = sin(timeSec * baseFreq + tipPhase) * 0.5f +
+                sin(timeSec * baseFreq * 0.4f + tipPhase) * 0.3f +
+                sin(timeSec * baseFreq * 2.5f + tipPhase) * 0.2f
+            val ambientFactor = swaySpeed * 0.4f
+            val tipSway = (tipWave * (effectiveWind + ambientFactor) + gustPush) * maxAmplitude
+            
+            // Draw a simple elongated shadow blob on the ground
+            // Shadow starts at tree base and extends in the direction of light offset
+            val shadowCenterX = x + shadowOffsetX * 0.5f + tipSway * 0.3f
+            val shadowCenterY = groundY + shadowOffsetY * 0.6f
+            val shadowWidth = baseTreeWidth * 1.2f
+            val shadowLength = kotlin.math.abs(shadowOffsetX).coerceAtLeast(totalHeight * 0.3f)
+            
+            // Use oval for soft shadow blob
+            val shadowRect = android.graphics.RectF(
+                shadowCenterX - shadowWidth,
+                shadowCenterY - shadowLength * 0.15f,  // Compressed vertically (flat on ground)
+                shadowCenterX + shadowWidth,
+                shadowCenterY + shadowLength * 0.4f
+            )
+            
+            // Rotate shadow to point away from light source
+            canvas.save()
+            val rotationAngle = kotlin.math.atan2(shadowOffsetY, shadowOffsetX) * 180f / kotlin.math.PI.toFloat()
+            canvas.rotate(rotationAngle, x, groundY)
+            canvas.drawOval(shadowRect, shadowPaint)
+            canvas.restore()
         }
         
         // Draw tree segments from bottom to top

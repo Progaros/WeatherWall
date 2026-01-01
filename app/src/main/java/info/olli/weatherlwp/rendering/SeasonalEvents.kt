@@ -59,12 +59,30 @@ class SeasonalEvents(private val context: Context? = null) {
         var vy: Float = 0f,
         var color: Int = 0,
         var life: Int = 0,
-        var maxLife: Int = 0
+        var maxLife: Int = 0,
+        var size: Float = 3f,
+        var hasSparkle: Boolean = false,
+        var sparkleTrailX: Float = 0f,
+        var sparkleTrailY: Float = 0f
+    )
+    
+    // Rocket that shoots up before exploding
+    private data class Rocket(
+        var x: Float = 0f,
+        var y: Float = 0f,
+        var vy: Float = 0f,
+        var targetY: Float = 0f,
+        var colors: IntArray = intArrayOf(),  // 1-3 colors for this rocket's explosion
+        var active: Boolean = false,
+        var trailX1: Float = 0f, var trailY1: Float = 0f,
+        var trailX2: Float = 0f, var trailY2: Float = 0f,
+        var trailX3: Float = 0f, var trailY3: Float = 0f
     )
 
     // Pre-allocated pools
     private val stars = Array(30) { Star() }
-    private val fireworks = Array(100) { Firework() }
+    private val fireworks = Array(150) { Firework() }  // More particles for better explosions
+    private val rockets = Array(5) { Rocket() }  // Up to 5 rockets in flight
     private val trailParticles = Array(20) { TrailParticle() }
     private var christmasStar: ChristmasStar? = null
 
@@ -95,8 +113,22 @@ class SeasonalEvents(private val context: Context? = null) {
     private var fireworkTimer = 0
     private val fireworkColors = intArrayOf(
         Color.RED, Color.YELLOW, Color.GREEN, Color.CYAN,
-        Color.MAGENTA, Color.WHITE, 0xFFFF6600.toInt()
+        Color.MAGENTA, Color.WHITE, 0xFFFF6600.toInt(),  // Orange
+        0xFFFF69B4.toInt(),  // Hot pink
+        0xFF00FF7F.toInt(),  // Spring green
+        0xFFFFD700.toInt(),  // Gold
+        0xFF7B68EE.toInt()   // Medium slate blue
     )
+    
+    private val rocketPaint = Paint().apply {
+        color = Color.WHITE
+        isAntiAlias = true
+    }
+    
+    private val sparklePaint = Paint().apply {
+        isAntiAlias = true
+        color = Color.WHITE
+    }
 
     private val prefs: SharedPreferences? = context?.let { PreferenceManager.getDefaultSharedPreferences(it) }
     
@@ -240,6 +272,11 @@ class SeasonalEvents(private val context: Context? = null) {
         for (f in fireworks) {
             f.life = 0
         }
+        
+        // Reset rockets
+        for (r in rockets) {
+            r.active = false
+        }
     }
 
     private fun renderChristmasStars(canvas: Canvas) {
@@ -315,51 +352,147 @@ class SeasonalEvents(private val context: Context? = null) {
     private fun renderNewYearFireworks(canvas: Canvas) {
         fireworkTimer++
 
-        // Launch new firework every 60-120 frames
-        if (fireworkTimer > 60 + Random.nextInt(60)) {
+        // Launch new rocket every 40-90 frames
+        if (fireworkTimer > 40 + Random.nextInt(50)) {
             fireworkTimer = 0
-            launchFirework()
+            launchRocket()
         }
 
-        // Update and render fireworks
+        // Update and render rockets
+        for (r in rockets) {
+            if (r.active) {
+                // Store trail positions (previous positions for trail effect)
+                r.trailX3 = r.trailX2
+                r.trailY3 = r.trailY2
+                r.trailX2 = r.trailX1
+                r.trailY2 = r.trailY1
+                r.trailX1 = r.x
+                r.trailY1 = r.y
+                
+                // Move rocket upward
+                r.y += r.vy
+                r.vy += 0.05f  // Slight deceleration
+                
+                // Draw rocket trail (fading dots behind)
+                rocketPaint.color = Color.argb(60, 255, 200, 100)
+                canvas.drawCircle(r.trailX3, r.trailY3, 1.5f, rocketPaint)
+                rocketPaint.color = Color.argb(120, 255, 220, 150)
+                canvas.drawCircle(r.trailX2, r.trailY2, 2f, rocketPaint)
+                rocketPaint.color = Color.argb(200, 255, 240, 200)
+                canvas.drawCircle(r.trailX1, r.trailY1, 2.5f, rocketPaint)
+                
+                // Draw rocket head
+                rocketPaint.color = Color.WHITE
+                canvas.drawCircle(r.x, r.y, 3f, rocketPaint)
+                
+                // Explode when reaching target
+                if (r.y <= r.targetY) {
+                    explodeRocket(r)
+                    r.active = false
+                }
+            }
+        }
+
+        // Update and render explosion particles
         for (f in fireworks) {
             if (f.life > 0) {
+                // Store previous position for sparkle trail
+                f.sparkleTrailX = f.x
+                f.sparkleTrailY = f.y
+                
                 f.x += f.vx
                 f.y += f.vy
-                f.vy += 0.15f // gravity
+                f.vy += 0.12f // gravity
+                f.vx *= 0.98f // air resistance
                 f.life--
 
-                val alpha = (255 * f.life / f.maxLife.toFloat()).toInt().coerceIn(0, 255)
+                val lifeRatio = f.life / f.maxLife.toFloat()
+                val alpha = (255 * lifeRatio).toInt().coerceIn(0, 255)
+                
+                // Draw sparkle trail behind the ball (fine particles)
+                if (f.hasSparkle && lifeRatio > 0.3f) {
+                    sparklePaint.color = f.color
+                    sparklePaint.alpha = (alpha * 0.4f).toInt()
+                    canvas.drawCircle(f.sparkleTrailX, f.sparkleTrailY, f.size * 0.4f, sparklePaint)
+                    
+                    // Additional tiny sparkles
+                    val sparkleAlpha = (alpha * 0.25f).toInt()
+                    sparklePaint.alpha = sparkleAlpha
+                    canvas.drawCircle(
+                        f.sparkleTrailX + (Random.nextFloat() - 0.5f) * 4f,
+                        f.sparkleTrailY + (Random.nextFloat() - 0.5f) * 4f,
+                        f.size * 0.2f, sparklePaint
+                    )
+                }
+                
+                // Draw main colorful ball
                 fireworkPaint.color = f.color
                 fireworkPaint.alpha = alpha
-
-                val size = 3f + (f.life / f.maxLife.toFloat()) * 4f
+                val size = f.size * (0.5f + lifeRatio * 0.5f)  // Shrink as it fades
                 canvas.drawCircle(f.x, f.y, size, fireworkPaint)
+                
+                // Bright core
+                fireworkPaint.alpha = (alpha * 0.7f).toInt()
+                fireworkPaint.color = Color.WHITE
+                canvas.drawCircle(f.x, f.y, size * 0.4f, fireworkPaint)
             }
         }
     }
-
-    private fun launchFirework() {
-        val cx = screenWidth * 0.2f + Random.nextFloat() * screenWidth * 0.6f
-        val cy = screenHeight * 0.2f + Random.nextFloat() * screenHeight * 0.3f
-        val color = fireworkColors[Random.nextInt(fireworkColors.size)]
-
-        // Burst particles
+    
+    private fun launchRocket() {
+        // Find an inactive rocket slot
+        for (r in rockets) {
+            if (!r.active) {
+                r.x = screenWidth * 0.15f + Random.nextFloat() * screenWidth * 0.7f
+                r.y = screenHeight.toFloat()
+                r.vy = -12f - Random.nextFloat() * 6f  // Upward velocity
+                r.targetY = screenHeight * 0.15f + Random.nextFloat() * screenHeight * 0.25f
+                
+                // Choose 1-3 colors for this rocket's explosion
+                val numColors = 1 + Random.nextInt(3)  // 1, 2, or 3 colors
+                r.colors = IntArray(numColors) { fireworkColors[Random.nextInt(fireworkColors.size)] }
+                
+                r.active = true
+                r.trailX1 = r.x
+                r.trailY1 = r.y
+                r.trailX2 = r.x
+                r.trailY2 = r.y
+                r.trailX3 = r.x
+                r.trailY3 = r.y
+                break
+            }
+        }
+    }
+    
+    private fun explodeRocket(rocket: Rocket) {
+        val cx = rocket.x
+        val cy = rocket.y
+        val colors = rocket.colors
+        
+        // Spawn explosion particles
+        var particleCount = 0
+        val targetParticles = 25 + Random.nextInt(20)  // 25-45 particles per explosion
+        
         for (f in fireworks) {
-            if (f.life <= 0) {
+            if (f.life <= 0 && particleCount < targetParticles) {
                 val angle = Random.nextFloat() * 360f
-                val speed = 3f + Random.nextFloat() * 5f
+                val speed = 4f + Random.nextFloat() * 6f
 
                 f.x = cx
                 f.y = cy
                 f.vx = (speed * kotlin.math.cos(Math.toRadians(angle.toDouble()))).toFloat()
                 f.vy = (speed * kotlin.math.sin(Math.toRadians(angle.toDouble()))).toFloat()
-                f.color = color
-                f.maxLife = 40 + Random.nextInt(30)
+                
+                // Randomly pick one of the rocket's colors
+                f.color = colors[Random.nextInt(colors.size)]
+                f.maxLife = 50 + Random.nextInt(40)
                 f.life = f.maxLife
-
-                // Only spawn 15-25 particles per burst
-                if (Random.nextFloat() > 0.75f) break
+                f.size = 2.5f + Random.nextFloat() * 3f
+                f.hasSparkle = Random.nextFloat() > 0.4f  // 60% have sparkle trails
+                f.sparkleTrailX = cx
+                f.sparkleTrailY = cy
+                
+                particleCount++
             }
         }
     }

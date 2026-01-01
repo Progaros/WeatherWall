@@ -85,7 +85,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
     private var cloudCount = 10
     private var cloudStretch = 2.0f
     private var cloudOpacity = 0.4f
-    private var densityMultiplier = 1.0f
+    private var fluffinessMultiplier = 1.0f  // Controls puffs per cloud (density of each cloud)
     private var cloudsEnabled = true
     private var randomSeed = 42
     
@@ -94,9 +94,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
         // Layer distribution: 75% back, 25% front
         const val BACK_LAYER_RATIO = 0.75f
         
-        // Clouds per group (reduces individual draw calls)
-        const val CLOUDS_PER_GROUP_MIN = 6
-        const val CLOUDS_PER_GROUP_MAX = 12
+        // Base clouds per group (will be multiplied by fluffinessMultiplier)
+        const val CLOUDS_PER_GROUP_MIN_BASE = 5
+        const val CLOUDS_PER_GROUP_MAX_BASE = 9
         
         // Back layer: higher alpha for visibility, smaller parallax
         const val BACK_LAYER_ALPHA_MULT = 0.7f
@@ -108,17 +108,17 @@ class CloudLayer(private val context: Context) : SceneLayer {
         const val FRONT_LAYER_DEPTH_MIN = 0.28f
         const val FRONT_LAYER_DEPTH_MAX = 0.35f
         
-        // Group size ranges - increased for more visible clouds
-        const val GROUP_WIDTH_MIN = 0.25f
-        const val GROUP_WIDTH_MAX = 0.50f
-        const val GROUP_HEIGHT_MIN = 0.10f
-        const val GROUP_HEIGHT_MAX = 0.18f
+        // Group size ranges - large enough to provide good coverage with fewer groups
+        const val GROUP_WIDTH_MIN = 0.30f
+        const val GROUP_WIDTH_MAX = 0.65f
+        const val GROUP_HEIGHT_MIN = 0.12f
+        const val GROUP_HEIGHT_MAX = 0.22f
         
         // Extra padding for blur effect to prevent edge cutoff (fraction of group size)
         const val BLUR_PADDING = 0.3f
         
-        // Max groups for performance (even at overcast)
-        const val MAX_GROUPS = 25
+        // Max groups for performance
+        const val MAX_GROUPS = 30
     }
     
     init {
@@ -128,12 +128,12 @@ class CloudLayer(private val context: Context) : SceneLayer {
     /**
      * Generate cloud groups with pre-calculated properties.
      * Groups are distributed: 75% back layer, 25% front layer.
+     * Cloud count comes from weather/simulation data; fluffiness affects each cloud's density.
      */
     internal fun generateCloudGroups() {
-        // Calculate target group count based on cloud count
-        // Each group represents 4-8 clouds, so fewer groups needed
-        val avgCloudsPerGroup = (CLOUDS_PER_GROUP_MIN + CLOUDS_PER_GROUP_MAX) / 2
-        val targetGroups = (cloudCount / avgCloudsPerGroup).coerceIn(2, MAX_GROUPS)
+        // Cloud count is directly from weather - number of cloud groups on screen
+        // fluffinessMultiplier only affects how many puffs each cloud has (set later in render)
+        val targetGroups = cloudCount.coerceIn(0, MAX_GROUPS)
         
         val newGroups = ArrayList<CloudGroup>(targetGroups)
         val random = Random(randomSeed.toLong() + 4000)
@@ -193,6 +193,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
      * This is called once per group, then the bitmap is reused.
      * 
      * Includes edge fadeout and extra padding for blur to prevent cutoff.
+     * fluffinessMultiplier controls how many puffs make up each cloud (more puffs = denser/fluffier).
      */
     private fun renderGroupToBitmap(group: CloudGroup, bitmapWidth: Int, bitmapHeight: Int, color: Int) {
         // Add padding for blur effect to prevent edge cutoff
@@ -222,7 +223,11 @@ class CloudLayer(private val context: Context) : SceneLayer {
         bitmapPaint.alpha = group.alpha
         
         val random = Random(group.seed)
-        val numPuffs = CLOUDS_PER_GROUP_MIN + random.nextInt(CLOUDS_PER_GROUP_MAX - CLOUDS_PER_GROUP_MIN + 1)
+        
+        // Apply fluffiness multiplier to puff count - more puffs = denser/fluffier clouds
+        val minPuffs = (CLOUDS_PER_GROUP_MIN_BASE * fluffinessMultiplier).toInt().coerceAtLeast(3)
+        val maxPuffs = (CLOUDS_PER_GROUP_MAX_BASE * fluffinessMultiplier).toInt().coerceAtLeast(minPuffs + 1)
+        val numPuffs = minPuffs + random.nextInt(maxPuffs - minPuffs + 1)
         
         // Center of padded bitmap (cloud content is centered)
         val centerX = paddedWidth / 2f
@@ -299,9 +304,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         if (width <= 0 || height <= 0 || !cloudsEnabled) return
         
-        // Update cloud count based on weather
-        val baseCount = state.getCloudCount()
-        val targetCount = (baseCount * densityMultiplier).toInt().coerceIn(0, 120)
+        // Cloud count comes directly from weather/simulation data
+        // fluffinessMultiplier only affects each cloud's internal density (number of puffs)
+        val targetCount = state.getCloudCount().coerceIn(0, MAX_GROUPS)
         if (targetCount != cloudCount) {
             cloudCount = targetCount
             generateCloudGroups()
@@ -414,12 +419,13 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val opacityVal = prefs.getInt("pref_cloud_opacity", 40)
         val newOpacity = opacityVal / 100f
         
-        // Density multiplier: 0-200 -> 0.0-2.0 (multiplies weather-based count)
-        // 0 = no clouds, 100 = normal weather-based, 200 = double
+        // Fluffiness/density multiplier: 50-300 -> 0.5-3.0 (controls puffs per cloud)
+        // Higher = more puffs per cloud = denser/fluffier individual clouds
+        // Does NOT affect number of clouds (that comes from weather data)
         val densityVal = prefs.getInt("pref_cloud_density", 100)
-        val newMultiplier = densityVal / 100f
-        val multiplierChanged = kotlin.math.abs(newMultiplier - densityMultiplier) > 0.01f
-        densityMultiplier = newMultiplier
+        val newFluffiness = densityVal / 100f
+        val fluffinessChanged = kotlin.math.abs(newFluffiness - fluffinessMultiplier) > 0.01f
+        fluffinessMultiplier = newFluffiness
         
         // Detect changes that require regeneration
         val stretchChanged = kotlin.math.abs(newStretch - cloudStretch) > 0.01f
@@ -434,7 +440,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
                 group.cachedBitmap?.recycle()
             }
             cloudGroups = emptyList()
-        } else if (enabledChanged || stretchChanged || seedChanged || opacityChanged || multiplierChanged) {
+        } else if (enabledChanged || stretchChanged || seedChanged || opacityChanged || fluffinessChanged) {
             // Invalidate cached bitmaps when settings change
             for (group in cloudGroups) {
                 group.cachedBitmap?.recycle()

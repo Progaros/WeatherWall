@@ -16,9 +16,8 @@ import kotlin.random.Random
 class AirplaneEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
     override val layer = EventLayer.MID_SKY  // In front of mountains, between clouds and terrain
     
-    // Duration based on speed - event lasts until it crosses the screen
-    // At speed 0.0002 per ms, it takes 1.3/0.0002 = 6500ms to cross
-    private val speed = 0.00015f + random.nextFloat() * 0.0001f
+    // Reduced speed: was 0.00015-0.00025, now 0.00005-0.00008 (~3x slower)
+    private val speed = 0.00005f + random.nextFloat() * 0.00003f
     override val durationMs: Long = (1.3f / speed).toLong()
     
     private val y = 0.08f + random.nextFloat() * 0.15f

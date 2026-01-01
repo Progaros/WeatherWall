@@ -30,6 +30,7 @@ import info.olli.weatherlwp.settings.SystemSettingsFragment
 import android.os.Handler
 import android.os.Looper
 import android.view.ViewGroup
+import android.widget.FrameLayout
 
 class MainActivity : AppCompatActivity() {
     companion object {
@@ -40,9 +41,9 @@ class MainActivity : AppCompatActivity() {
         
         // Preview resize constants
         private const val PREVIEW_HEIGHT_MIN_DP = 80
-        private const val PREVIEW_HEIGHT_MAX_DP = 500
         private const val PREVIEW_HEIGHT_DEFAULT_DP = 180
-        private const val SNAP_THRESHOLD_DP = 30  // Snap to default if within this range
+        private const val PREVIEW_HEIGHT_MAX_PERCENT = 0.90f  // Allow up to 90% of screen
+        private const val SNAP_THRESHOLD_DP = 40  // Snap to default if within this range
     }
     
     private var previewScene: ParallaxScene? = null
@@ -54,6 +55,7 @@ class MainActivity : AppCompatActivity() {
     private var dragStartY = 0f
     private var dragStartHeight = 0
     private var density = 1f
+    private var screenHeightPx = 0
     
     // Dependencies
     private lateinit var sensorManager: ParallaxSensorManager
@@ -148,14 +150,16 @@ class MainActivity : AppCompatActivity() {
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
         setSupportActionBar(toolbar)
         
-        // Initialize density for dp to px conversions
+        // Initialize density and screen dimensions for dp to px conversions
         density = resources.displayMetrics.density
+        screenHeightPx = resources.displayMetrics.heightPixels
 
         // Initialize dependencies
         sensorManager = ParallaxSensorManager(this)
 
         // Setup live preview
         val previewSurface = findViewById<SurfaceView>(R.id.preview_surface)
+        val previewContainer = findViewById<FrameLayout>(R.id.preview_container)
         previewScene = ParallaxScene(this, sensorManager, weatherRepo)
         weatherLayer = WeatherLayer()
         seasonalEvents = SeasonalEvents(this)
@@ -164,10 +168,10 @@ class MainActivity : AppCompatActivity() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val savedHeightDp = prefs.getInt("preview_height_dp", PREVIEW_HEIGHT_DEFAULT_DP)
         previewHeightPx = (savedHeightDp * density).toInt()
-        updatePreviewHeight(previewSurface)
+        updatePreviewHeight(previewContainer)
         
         // Setup resize handle for dragging preview height
-        setupResizeHandle(previewSurface)
+        setupResizeHandle(previewContainer)
         
         // Register preference change listener for live updates
         prefs.registerOnSharedPreferenceChangeListener(prefListener)
@@ -217,7 +221,7 @@ class MainActivity : AppCompatActivity() {
         }.attach()
     }
     
-    private fun setupResizeHandle(previewSurface: SurfaceView) {
+    private fun setupResizeHandle(previewContainer: FrameLayout) {
         val resizeHandle = findViewById<View>(R.id.resize_handle)
         
         resizeHandle.setOnTouchListener { _, event ->
@@ -231,9 +235,11 @@ class MainActivity : AppCompatActivity() {
                     val deltaY = event.rawY - dragStartY
                     val newHeight = (dragStartHeight + deltaY).toInt()
                     val minPx = (PREVIEW_HEIGHT_MIN_DP * density).toInt()
-                    val maxPx = (PREVIEW_HEIGHT_MAX_DP * density).toInt()
+                    // Calculate max as 90% of available screen height (minus toolbar ~56dp and tabs ~48dp)
+                    val toolbarAndTabsHeight = (104 * density).toInt()  // toolbar + tabs
+                    val maxPx = ((screenHeightPx - toolbarAndTabsHeight) * PREVIEW_HEIGHT_MAX_PERCENT).toInt()
                     previewHeightPx = newHeight.coerceIn(minPx, maxPx)
-                    updatePreviewHeight(previewSurface)
+                    updatePreviewHeight(previewContainer)
                     true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
@@ -242,7 +248,7 @@ class MainActivity : AppCompatActivity() {
                     val snapThresholdPx = (SNAP_THRESHOLD_DP * density).toInt()
                     if (kotlin.math.abs(previewHeightPx - defaultPx) < snapThresholdPx) {
                         previewHeightPx = defaultPx
-                        updatePreviewHeight(previewSurface)
+                        updatePreviewHeight(previewContainer)
                     }
                     // Save the height preference
                     val heightDp = (previewHeightPx / density).toInt()
@@ -257,10 +263,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    private fun updatePreviewHeight(previewSurface: SurfaceView) {
-        val params = previewSurface.layoutParams
+    private fun updatePreviewHeight(previewContainer: FrameLayout) {
+        val params = previewContainer.layoutParams
         params.height = previewHeightPx
-        previewSurface.layoutParams = params
+        previewContainer.layoutParams = params
     }
     
     /**

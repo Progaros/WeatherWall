@@ -19,22 +19,18 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
     private val groundY = 0.85f + random.nextFloat() * 0.05f
     private val size = 0.5f + random.nextFloat() * 0.2f
     
-    // Rabbit crosses 1.15 screen widths at hop speed
-    // When hopping (sin > 0.5), speed is 0.0002/ms
-    // Approximately 50% of time spent hopping, so average speed ~0.0001/ms
-    override val durationMs: Long = (1.15f / 0.0001f).toLong()
+    // Reduced speed: was 0.0001, now 0.00003 (~3x slower)
+    private val avgSpeed = 0.00003f
+    override val durationMs: Long = (1.15f / avgSpeed).toLong()
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
         val elapsedMs = System.currentTimeMillis() - spawnTimeMs
         
-        val hopPhase = (elapsedMs * 0.01f) % (2f * 3.14159f)
+        val hopPhase = (elapsedMs * 0.006f) % (2f * 3.14159f)  // Slower hop animation
         
-        // Calculate X position - only moves when hopping (sin > 0.5)
-        // Use cumulative calculation based on elapsed time
-        val hopCycles = elapsedMs / (2f * 3.14159f / 0.01f)
-        val avgSpeed = 0.0001f  // Average speed accounting for hopping
+        // Calculate X position based on average speed
         val x = startX + direction * avgSpeed * elapsedMs
         
         val px = parallaxCalculator.getOffsetXForDepth(-0.12f)

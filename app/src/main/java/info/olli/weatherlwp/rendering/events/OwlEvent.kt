@@ -17,7 +17,8 @@ import kotlin.random.Random
  */
 class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
     private val y = 0.18f + random.nextFloat() * 0.12f
-    private val speed = 0.00008f + random.nextFloat() * 0.00004f
+    // Reduced speed: was 0.00008-0.00012, now 0.000025-0.000040 (~3x slower)
+    private val speed = 0.000025f + random.nextFloat() * 0.000015f
     override val durationMs: Long = (1.35f / speed).toLong()
     
     private val size = 14f + random.nextFloat() * 6f

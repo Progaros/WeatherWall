@@ -21,15 +21,16 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
     private val size = 0.7f + random.nextFloat() * 0.3f
     private val path = Path()
     
-    // Fox crosses ~1.25 screen widths at speed 0.00008/ms
-    override val durationMs: Long = (1.25f / 0.00008f).toLong()
+    // Reduced speed: was 0.00008, now 0.000025 (~3x slower)
+    private val speed = 0.000025f
+    override val durationMs: Long = (1.25f / speed).toLong()
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
         val elapsedMs = System.currentTimeMillis() - spawnTimeMs
-        val x = startX + direction * 0.00008f * elapsedMs
-        val walkPhase = elapsedMs * 0.015f
+        val x = startX + direction * speed * elapsedMs
+        val walkPhase = elapsedMs * 0.008f  // Slower walk animation
         
         val px = parallaxCalculator.getOffsetXForDepth(-0.10f)
         val py = parallaxCalculator.getOffsetYForDepth(-0.10f)

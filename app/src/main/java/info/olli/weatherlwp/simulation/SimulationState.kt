@@ -146,46 +146,44 @@ data class SimulationState(
         
         // Shadow length based on light angle (longer shadows at sunrise/sunset)
         val lightHeight = kotlin.math.sin(angle).coerceIn(0.1f, 1f)
-        val shadowLength = (1f / lightHeight).coerceIn(0.3f, 2f) * objectHeight * strength
+        // Dramatically longer shadows at low sun angles for visibility
+        val shadowLength = (1.5f / lightHeight).coerceIn(0.5f, 4f) * objectHeight * strength
         
-        // Shadow direction is opposite to light source
+        // Shadow direction is opposite to light source (dx determines left/right)
         val dx = -kotlin.math.cos(angle) * shadowLength
-        val dy = kotlin.math.abs(kotlin.math.sin(angle)) * shadowLength * 0.3f  // Compressed vertically
+        // Shadow extends along ground (positive dy = downward on screen = extending along ground plane)
+        val dy = shadowLength * 0.4f  // Shadow projects forward onto ground
         
         return Pair(dx, dy)
     }
     
     /**
      * Get cloud count based on density setting.
-     * Cloud counts are tuned so:
-     * - LIGHT: Few clouds visible, mostly clear sky
-     * - MEDIUM: Partial cloud cover, blue sky visible
-     * - HEAVY: Significant cloud cover
-     * - OVERCAST: Sky fully covered with clouds
+     * Cloud counts map directly to number of cloud groups:
+     * - NONE: 0 clouds
+     * - LIGHT: 1-2 very fine, nearly transparent clouds
+     * - MEDIUM: 4-6 clouds, some sky visible
+     * - HEAVY: 10-15 clouds, significant coverage
+     * - OVERCAST: 20-25 clouds, full sky coverage with overlap
      * 
-     * Based on CloudLayer: clouds use 5-40% vertical, avg size 0.15-0.20.
-     * For true overcast coverage, need significant overlap:
-     * - Screen width in world coords = 9 units
-     * - Avg cloud width = ~0.5-0.8 world units
-     * - For full horizontal coverage = ~15 clouds per row
-     * - Clouds at varying depths = 3-4 rows = 45-60 base
-     * - For overlap/fullness = 2-3x = 120-180 clouds for overcast
+     * CloudLayer uses cloud groups (each group is one visual cloud blob).
+     * Groups have internal puffs controlled by fluffiness setting.
      */
     fun getCloudCount(): Int = when (cloudDensity) {
         CloudDensity.NONE -> 0
-        CloudDensity.LIGHT -> 15       // Few but visible
-        CloudDensity.MEDIUM -> 35      // Moderate coverage
-        CloudDensity.HEAVY -> 70       // Dense clouds
-        CloudDensity.OVERCAST -> 120   // Full sky coverage
+        CloudDensity.LIGHT -> 2         // 1-2 very fine clouds
+        CloudDensity.MEDIUM -> 6        // A few clouds
+        CloudDensity.HEAVY -> 14        // Significant coverage
+        CloudDensity.OVERCAST -> 25     // Full sky coverage
         CloudDensity.AUTO -> when (weather) {
-            WeatherType.CLEAR -> 8
-            WeatherType.PARTLY_CLOUDY -> 30
-            WeatherType.CLOUDY -> 60
-            WeatherType.OVERCAST -> 120
-            WeatherType.RAIN, WeatherType.THUNDERSTORM -> 90
-            WeatherType.SNOW -> 70
-            WeatherType.HAIL -> 85       // Similar to rain but slightly less
-            WeatherType.FOG -> 100
+            WeatherType.CLEAR -> 1              // Maybe one wispy cloud
+            WeatherType.PARTLY_CLOUDY -> 5      // A few clouds
+            WeatherType.CLOUDY -> 12            // Good coverage
+            WeatherType.OVERCAST -> 25          // Full coverage
+            WeatherType.RAIN, WeatherType.THUNDERSTORM -> 22  // Near full coverage
+            WeatherType.SNOW -> 15              // Moderate-heavy
+            WeatherType.HAIL -> 20              // Heavy
+            WeatherType.FOG -> 25               // Full coverage
         }
     }
     

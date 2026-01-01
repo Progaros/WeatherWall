@@ -31,8 +31,8 @@
     <PreferenceCategory android:title="Wind Animation">
         <SeekBarPreference
             android:key="pref_wind_multiplier"
-            android:title="Wind Strength"
-            android:summary="Tree sway intensity (0=still, 100=normal, 300=storm)"
+            android:title="Tree Flexibility"
+            android:summary="How much trees bend in gusts (0=rigid, 100=normal, 300=very flexible)"
             android:defaultValue="100"
             android:max="300"
             app:min="0"
@@ -42,7 +42,7 @@
         <SeekBarPreference
             android:key="pref_tree_sway_speed"
             android:title="Sway Speed"
-            android:summary="Animation speed (0=frozen, 100=normal, 200=fast)"
+            android:summary="How fast trees sway back (0=frozen, 100=normal, 200=fast)"
             android:defaultValue="100"
             android:max="200"
             app:min="0"
@@ -124,11 +124,11 @@
 
         <SeekBarPreference
             android:key="pref_cloud_density"
-            android:title="Cloud Amount"
-            android:summary="Density (0=clear, 100=normal, 200=overcast)"
+            android:title="Cloud Fluffiness"
+            android:summary="Density per cloud (50=thin, 100=normal, 300=fluffy)"
             android:defaultValue="100"
-            android:max="200"
-            app:min="0"
+            android:max="300"
+            app:min="50"
             app:showSeekBarValue="true"
             app:updatesContinuously="true"
             android:dependency="pref_clouds_enabled" />
