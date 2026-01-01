@@ -29,8 +29,6 @@ class SeasonalEvents(private val context: Context? = null) {
         NEW_YEAR,       // Dec 27 - Jan 7
         CN_NEW_YEAR,    // Chinese New Year (late Jan - mid Feb, varies)
         ST_PATRICKS,    // St. Patrick's Day (Mar 14-18)
-        SPRING_BLOOM,   // Spring (Mar 20 - May 31, excluding St. Patrick's)
-        AUTUMN,         // Fall (Sep 22 - Nov 30)
         WINTER_SNOW     // Winter snow (Dec 1-14, then Jan 8 - Feb 28)
     }
 
@@ -187,8 +185,6 @@ class SeasonalEvents(private val context: Context? = null) {
                         "newyear" -> return Season.NEW_YEAR
                         "cn_newyear" -> return Season.CN_NEW_YEAR
                         "st_patricks" -> return Season.ST_PATRICKS
-                        "spring" -> return Season.SPRING_BLOOM
-                        "autumn" -> return Season.AUTUMN
                         "winter_snow" -> return Season.WINTER_SNOW
                         "none" -> return Season.NONE
                     }
@@ -212,10 +208,6 @@ class SeasonalEvents(private val context: Context? = null) {
             (month == 0 && day >= 20) || (month == 1 && day <= 15) -> Season.CN_NEW_YEAR
             // St. Patrick's Day: Mar 14-18
             month == 2 && day in 14..18 -> Season.ST_PATRICKS
-            // Spring Bloom: Mar 20 - May 31 (after St. Patrick's)
-            (month == 2 && day >= 20) || month == 3 || (month == 4 && day <= 31) -> Season.SPRING_BLOOM
-            // Autumn: Sep 22 - Nov 30
-            (month == 8 && day >= 22) || month == 9 || month == 10 -> Season.AUTUMN
             // Winter Snow: Dec 1-14 and Jan 8 - Feb 28 (outside other winter events)
             (month == 11 && day < 15) -> Season.WINTER_SNOW
             (month == 0 && day >= 8) || (month == 1 && day >= 16) -> Season.WINTER_SNOW
@@ -248,8 +240,6 @@ class SeasonalEvents(private val context: Context? = null) {
                 Season.NEW_YEAR -> renderNewYearFireworks(canvas)
                 Season.CN_NEW_YEAR -> renderChineseNewYear(canvas)
                 Season.ST_PATRICKS -> renderStPatricksDay(canvas)
-                Season.SPRING_BLOOM -> renderSpringBloom(canvas)
-                Season.AUTUMN -> renderAutumn(canvas)
                 Season.WINTER_SNOW -> renderWinterSnow(canvas)
                 Season.NONE -> {}
             }
@@ -730,148 +720,6 @@ class SeasonalEvents(private val context: Context? = null) {
         canvas.drawCircle(dragonX + 5f, dragonY - 5f, 4f, starPaint)
         starPaint.color = Color.BLACK
         canvas.drawCircle(dragonX + 6f, dragonY - 5f, 2f, starPaint)
-    }
-    
-    // ========== SPRING BLOOM ==========
-    
-    private data class Petal(
-        var x: Float = 0f,
-        var y: Float = 0f,
-        var size: Float = 0f,
-        var rotation: Float = 0f,
-        var speed: Float = 0f,
-        var drift: Float = 0f,
-        var color: Int = 0
-    )
-    
-    private val petals = Array(30) { Petal() }
-    private var petalsInitialized = false
-    
-    private val petalColors = intArrayOf(
-        Color.rgb(255, 182, 193),  // Light pink
-        Color.rgb(255, 192, 203),  // Pink
-        Color.rgb(255, 228, 225),  // Misty rose
-        Color.rgb(255, 240, 245),  // Lavender blush
-        Color.rgb(255, 255, 255)   // White
-    )
-    
-    private fun renderSpringBloom(canvas: Canvas) {
-        if (!petalsInitialized) {
-            initPetals()
-            petalsInitialized = true
-        }
-        
-        for (petal in petals) {
-            // Update position
-            petal.y += petal.speed
-            petal.x += kotlin.math.sin(petal.y * 0.01f + petal.drift).toFloat() * 1.5f
-            petal.rotation += 2f
-            
-            // Reset if off screen
-            if (petal.y > screenHeight + 20f) {
-                petal.y = -20f
-                petal.x = Random.nextFloat() * screenWidth
-            }
-            
-            // Draw petal (oval with rotation)
-            canvas.save()
-            canvas.translate(petal.x, petal.y)
-            canvas.rotate(petal.rotation)
-            
-            starPaint.color = petal.color
-            canvas.drawOval(-petal.size, -petal.size * 0.5f, petal.size, petal.size * 0.5f, starPaint)
-            
-            canvas.restore()
-        }
-    }
-    
-    private fun initPetals() {
-        for (petal in petals) {
-            petal.x = Random.nextFloat() * screenWidth
-            petal.y = Random.nextFloat() * screenHeight
-            petal.size = 4f + Random.nextFloat() * 6f
-            petal.rotation = Random.nextFloat() * 360f
-            petal.speed = 0.8f + Random.nextFloat() * 1.2f
-            petal.drift = Random.nextFloat() * 6.28f
-            petal.color = petalColors[Random.nextInt(petalColors.size)]
-        }
-    }
-    
-    // ========== AUTUMN ==========
-    
-    private data class Leaf(
-        var x: Float = 0f,
-        var y: Float = 0f,
-        var size: Float = 0f,
-        var rotation: Float = 0f,
-        var rotSpeed: Float = 0f,
-        var fallSpeed: Float = 0f,
-        var drift: Float = 0f,
-        var color: Int = 0
-    )
-    
-    private val leaves = Array(25) { Leaf() }
-    private var leavesInitialized = false
-    
-    private val leafColors = intArrayOf(
-        Color.rgb(255, 140, 0),    // Dark orange
-        Color.rgb(255, 69, 0),     // Red-orange
-        Color.rgb(178, 34, 34),    // Firebrick
-        Color.rgb(255, 215, 0),    // Gold
-        Color.rgb(139, 69, 19)     // Saddle brown
-    )
-    
-    private fun renderAutumn(canvas: Canvas) {
-        if (!leavesInitialized) {
-            initLeaves()
-            leavesInitialized = true
-        }
-        
-        for (leaf in leaves) {
-            // Update position with gentle falling motion
-            leaf.y += leaf.fallSpeed
-            leaf.x += kotlin.math.sin(leaf.y * 0.008f + leaf.drift).toFloat() * 2f
-            leaf.rotation += leaf.rotSpeed
-            
-            // Reset if off screen
-            if (leaf.y > screenHeight + 30f) {
-                leaf.y = -30f
-                leaf.x = Random.nextFloat() * screenWidth
-            }
-            
-            // Draw maple-leaf-like shape
-            canvas.save()
-            canvas.translate(leaf.x, leaf.y)
-            canvas.rotate(leaf.rotation)
-            
-            starPaint.color = leaf.color
-            
-            // Simple leaf: pointed oval with stem
-            val path = Path()
-            val s = leaf.size
-            path.moveTo(0f, -s)        // Top point
-            path.quadTo(s * 0.7f, -s * 0.3f, s * 0.5f, s * 0.3f)
-            path.quadTo(s * 0.2f, s * 0.8f, 0f, s)  // Bottom
-            path.quadTo(-s * 0.2f, s * 0.8f, -s * 0.5f, s * 0.3f)
-            path.quadTo(-s * 0.7f, -s * 0.3f, 0f, -s)
-            path.close()
-            canvas.drawPath(path, starPaint)
-            
-            canvas.restore()
-        }
-    }
-    
-    private fun initLeaves() {
-        for (leaf in leaves) {
-            leaf.x = Random.nextFloat() * screenWidth
-            leaf.y = Random.nextFloat() * screenHeight
-            leaf.size = 8f + Random.nextFloat() * 8f
-            leaf.rotation = Random.nextFloat() * 360f
-            leaf.rotSpeed = (Random.nextFloat() - 0.5f) * 4f
-            leaf.fallSpeed = 0.5f + Random.nextFloat() * 1f
-            leaf.drift = Random.nextFloat() * 6.28f
-            leaf.color = leafColors[Random.nextInt(leafColors.size)]
-        }
     }
     
     // ========== WINTER SNOW ==========

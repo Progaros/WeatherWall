@@ -103,9 +103,51 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private var hillRoughness = 1.0f  // Controls sine wave detail/roughness
     private var hillAmplitude = 1.0f  // Controls hill vertical height (0-10 range)
     private var hillFrequency = 2.0f  // Controls how many hills visible per layer (0-10 range)
+    
+    // Seasonal settings
+    private var springFlowersEnabled = true
+    private var springFlowerDensity = 50  // 0-100
+    private var autumnGrassEnabled = true
+    private var autumnGrassIntensity = 50  // 0-100 how brown the grass is
+    private var winterSnowEnabled = true
+    private var winterSnowCoverage = 50   // 0-100 how much of hill tops are covered
+    
+    // Pre-generated flower positions (per hill)
+    private data class FlowerData(
+        val xRatio: Float,    // 0-1 along hill
+        val yOffset: Float,   // Offset from hill surface
+        val color: Int,
+        val size: Float
+    )
+    @Volatile private var flowersByHill: Map<Int, List<FlowerData>> = emptyMap()
+    
+    // Pre-generated snow patch positions (per hill)
+    private data class SnowPatchData(
+        val startXRatio: Float,
+        val endXRatio: Float,
+        val alpha: Int
+    )
+    @Volatile private var snowByHill: Map<Int, List<SnowPatchData>> = emptyMap()
+    
+    private val flowerPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
+    private val snowPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
 
     init {
         reloadSettings()
+    }
+    
+    /**
+     * Determines current terrain season based on date.
+     * Returns: "spring" (Mar-May), "summer" (Jun-Aug), "autumn" (Sep-Nov), "winter" (Dec-Feb)
+     */
+    private fun getCurrentTerrainSeason(): String {
+        val cal = java.util.Calendar.getInstance()
+        return when (cal.get(java.util.Calendar.MONTH)) {
+            2, 3, 4 -> "spring"    // Mar, Apr, May
+            5, 6, 7 -> "summer"    // Jun, Jul, Aug
+            8, 9, 10 -> "autumn"   // Sep, Oct, Nov
+            else -> "winter"       // Dec, Jan, Feb
+        }
     }
 
     // Pseudo-random hash function for value noise
@@ -133,6 +175,22 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             (Color.red(color) * factor).toInt().coerceIn(0, 255),
             (Color.green(color) * factor).toInt().coerceIn(0, 255),
             (Color.blue(color) * factor).toInt().coerceIn(0, 255)
+        )
+    }
+    
+    // Blend color towards brown for autumn
+    private fun autumnColor(color: Int, intensity: Float): Int {
+        // Brown tones: reduce green, add red/yellow
+        val r = Color.red(color)
+        val g = Color.green(color)
+        val b = Color.blue(color)
+        val brownR = 139
+        val brownG = 119
+        val brownB = 101
+        return Color.rgb(
+            (r + (brownR - r) * intensity).toInt().coerceIn(0, 255),
+            (g + (brownG - g) * intensity * 0.6f).toInt().coerceIn(0, 255),
+            (b + (brownB - b) * intensity).toInt().coerceIn(0, 255)
         )
     }
 
@@ -202,11 +260,17 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             
             // Improved brightness calculation
             val brightness = 0.5f + depth * 0.5f
-            val dayColor = Color.rgb(
+            var dayColor = Color.rgb(
                 (Color.red(RenderConstants.HILL_BASE_COLOR) * brightness).toInt(),
                 (Color.green(RenderConstants.HILL_BASE_COLOR) * brightness).toInt(),
                 (Color.blue(RenderConstants.HILL_BASE_COLOR) * brightness).toInt()
             )
+            
+            // Apply autumn brown tint if enabled
+            if (autumnGrassEnabled && getCurrentTerrainSeason() == "autumn") {
+                val autumnIntensity = autumnGrassIntensity / 100f * 0.5f  // Max 50% brown
+                dayColor = autumnColor(dayColor, autumnIntensity)
+            }
             
             newHills.add(HillData(points, depthFactor, heightOffset, dayColor))
         }
@@ -215,6 +279,68 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         // Atomic reference swap (volatile ensures visibility to render thread)
         hills = newHills
+        
+        // Generate seasonal decorations after hills are created
+        generateSeasonalDecorations(newHills)
+    }
+    
+    private fun generateSeasonalDecorations(currentHills: List<HillData>) {
+        val season = getCurrentTerrainSeason()
+        val random = Random(randomSeed.toLong() + 5000)
+        
+        // Generate spring flowers
+        if (springFlowersEnabled && season == "spring") {
+            val flowerColors = intArrayOf(
+                Color.rgb(255, 182, 193),  // Light pink
+                Color.rgb(255, 255, 0),    // Yellow
+                Color.rgb(255, 165, 0),    // Orange
+                Color.rgb(148, 0, 211),    // Violet
+                Color.rgb(255, 0, 255),    // Magenta
+                Color.rgb(255, 255, 255)   // White
+            )
+            val newFlowers = mutableMapOf<Int, List<FlowerData>>()
+            val flowersPerHill = (springFlowerDensity / 10).coerceAtLeast(2)
+            
+            for ((index, _) in currentHills.withIndex()) {
+                val hillFlowers = mutableListOf<FlowerData>()
+                for (f in 0 until flowersPerHill) {
+                    hillFlowers.add(FlowerData(
+                        xRatio = random.nextFloat(),
+                        yOffset = random.nextFloat() * 3f,  // Small offset below hill line
+                        color = flowerColors[random.nextInt(flowerColors.size)],
+                        size = 2f + random.nextFloat() * 3f
+                    ))
+                }
+                newFlowers[index] = hillFlowers
+            }
+            flowersByHill = newFlowers
+        } else {
+            flowersByHill = emptyMap()
+        }
+        
+        // Generate winter snow patches
+        if (winterSnowEnabled && season == "winter") {
+            val newSnow = mutableMapOf<Int, List<SnowPatchData>>()
+            val patchesPerHill = (winterSnowCoverage / 20).coerceAtLeast(1)
+            
+            for ((index, _) in currentHills.withIndex()) {
+                val hillSnow = mutableListOf<SnowPatchData>()
+                for (p in 0 until patchesPerHill) {
+                    // Random position for snow patches
+                    val startX = random.nextFloat() * 0.9f
+                    val width = 0.05f + random.nextFloat() * 0.1f * (winterSnowCoverage / 50f)
+                    hillSnow.add(SnowPatchData(
+                        startXRatio = startX,
+                        endXRatio = (startX + width).coerceAtMost(1f),
+                        alpha = 150 + random.nextInt(80)
+                    ))
+                }
+                newSnow[index] = hillSnow
+            }
+            snowByHill = newSnow
+        } else {
+            snowByHill = emptyMap()
+        }
     }
     
     private fun generateTrees() {
@@ -390,22 +516,12 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk
         )
         
-        // Track previous hill depth for ground event integration
-        // Start before minimum hill depth to catch any events in front of first hills
-        var previousHillDepth = RenderConstants.PARALLAX_HILLS_MIN - 0.1f
-        
         // Draw Hills AND their Trees together, sorted by depth
         // This ensures trees on background hills are drawn before foreground hills
-        // Ground events (animals) are drawn between hill layers based on their depth
+        // Ground events (animals) are drawn AFTER the hill+trees of each layer
+        // This puts animals behind trees of their own depth layer (they walk on hills, not in front of trees)
         for ((index, hill) in currentHills.withIndex()) {
-            // Before drawing this hill, draw any ground events between previous and current depth
-            groundEventDrawer?.let { drawer ->
-                val nextDepth = hill.depthFactor
-                if (previousHillDepth < nextDepth) {
-                    drawer.drawInRange(previousHillDepth, nextDepth)
-                }
-            }
-            
+            // Draw this hill layer
             val px = parallaxCalculator.getOffsetXForDepth(hill.depthFactor)
             val py = parallaxCalculator.getOffsetYForDepth(hill.depthFactor)
             canvas.save()
@@ -415,6 +531,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             val blendAmount = RenderConstants.applyAmbientTint(hill.dayColor, ambientColor, hill.depthFactor)
             val hillColor = RenderConstants.blendWithAmbient(hill.dayColor, ambientColor, blendAmount)
             drawHill(canvas, hill, hillColor)
+            
+            // Draw seasonal decorations on top of hill
+            drawSeasonalDecorations(canvas, index, hill, ambientColor)
             
             canvas.restore()
             
@@ -444,11 +563,13 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 canvas.restore()
             }
             
-            previousHillDepth = hill.depthFactor
+            // Draw ground events AFTER the hill and its trees
+            // Animals walk on the ground behind trees, not in front of them
+            groundEventDrawer?.let { drawer ->
+                val nextDepth = currentHills.getOrNull(index + 1)?.depthFactor ?: Float.MAX_VALUE
+                drawer.drawInRange(hill.depthFactor, nextDepth)
+            }
         }
-        
-        // Draw any remaining ground events in front of all hills
-        groundEventDrawer?.drawInRange(previousHillDepth, Float.MAX_VALUE)
     }
     
     private fun drawHill(canvas: Canvas, hill: HillData, hillColor: Int) {
@@ -493,6 +614,53 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         // Clear shader after drawing
         hillPaint.shader = null
+    }
+    
+    private fun drawSeasonalDecorations(canvas: Canvas, hillIndex: Int, hill: HillData, ambientColor: Int) {
+        val startX = -extendedOffset - width * 0.1f
+        val endX = width + extendedOffset + width * 0.1f
+        val stepX = (endX - startX) / (hill.controlPoints.size - 1)
+        
+        // Draw snow patches first (on top of hill)
+        snowByHill[hillIndex]?.let { patches ->
+            for (patch in patches) {
+                val patchStartX = startX + patch.startXRatio * (endX - startX)
+                val patchEndX = startX + patch.endXRatio * (endX - startX)
+                
+                // Get hill Y at patch center
+                val centerRatio = (patch.startXRatio + patch.endXRatio) / 2f
+                val pointIndex = (centerRatio * (hill.controlPoints.size - 1)).toInt()
+                    .coerceIn(0, hill.controlPoints.size - 1)
+                val yRatio = hill.heightOffset + 0.12f * (1f - hill.controlPoints[pointIndex])
+                val y = yRatio * height
+                
+                // Draw semi-transparent white overlay on hill top
+                snowPaint.color = Color.argb(patch.alpha, 255, 255, 255)
+                canvas.drawOval(
+                    patchStartX, y - 3f,
+                    patchEndX, y + 8f,
+                    snowPaint
+                )
+            }
+        }
+        
+        // Draw flowers (small colored dots)
+        flowersByHill[hillIndex]?.let { flowers ->
+            for (flower in flowers) {
+                val x = startX + flower.xRatio * (endX - startX)
+                
+                // Get hill Y at flower position
+                val pointIndex = (flower.xRatio * (hill.controlPoints.size - 1)).toInt()
+                    .coerceIn(0, hill.controlPoints.size - 1)
+                val yRatio = hill.heightOffset + 0.12f * (1f - hill.controlPoints[pointIndex])
+                val y = yRatio * height + flower.yOffset
+                
+                // Blend flower color with ambient for time-of-day consistency
+                val blendedColor = RenderConstants.blendWithAmbient(flower.color, ambientColor, 0.15f)
+                flowerPaint.color = blendedColor
+                canvas.drawCircle(x, y, flower.size, flowerPaint)
+            }
+        }
     }
     
     private fun drawTree(canvas: Canvas, tree: TreeData, state: SimulationState) {
@@ -565,8 +733,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         // Draw shadow first (if shadows enabled)
         if (shadowStrength > 0.01f) {
-            // Shadow alpha based on strength
-            val shadowAlpha = (80 * shadowStrength).toInt().coerceIn(20, 150)
+            // Shadow alpha: linear mapping from 0-1 strength to 20-150 alpha
+            // Using roundToInt for proper rounding instead of truncation
+            val shadowAlpha = (20f + 130f * shadowStrength).toInt().coerceIn(20, 150)
             shadowPaint.color = Color.argb(shadowAlpha, 0, 0, 0)
             
             // Calculate shadow skew direction based on light angle
@@ -716,6 +885,14 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         treeColorVariation = prefs.getInt("pref_tree_color_variation", 100) / 100f
         treeSegments = prefs.getInt("pref_tree_segments", 1).coerceIn(1, 5)
+        
+        // Seasonal terrain settings
+        springFlowersEnabled = prefs.getBoolean("pref_spring_flowers", true)
+        springFlowerDensity = prefs.getInt("pref_spring_flower_density", 50)
+        autumnGrassEnabled = prefs.getBoolean("pref_autumn_grass", true)
+        autumnGrassIntensity = prefs.getInt("pref_autumn_grass_intensity", 50)
+        winterSnowEnabled = prefs.getBoolean("pref_winter_snow_hills", true)
+        winterSnowCoverage = prefs.getInt("pref_winter_snow_coverage", 50)
         
         // Wind is now from SimulationState, not a separate setting
         

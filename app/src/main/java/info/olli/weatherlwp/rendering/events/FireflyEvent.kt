@@ -37,8 +37,8 @@ class FireflyEvent(random: Random, override val spawnTimeMs: Long = System.curre
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long) {
-        // Scale size to 1% of height
-        val unit = height * 0.01f
+        // Scale size to 0.1% of height - fireflies are tiny!
+        val unit = height * 0.001f
         
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         

@@ -77,34 +77,75 @@ class AirplaneEvent(random: Random, override val spawnTimeMs: Long = System.curr
             contrailPaint.shader = null
         }
         
-        // Plane body - simplified silhouette (more realistic for distance)
-        paint.color = RenderConstants.blendWithAmbient(Color.rgb(80, 80, 90), ambientColor, 0.4f)
+        // Plane body - improved sleek silhouette
+        val bodyColor = RenderConstants.blendWithAmbient(Color.rgb(220, 220, 230), ambientColor, 0.3f)
+        val shadowColor = RenderConstants.blendWithAmbient(Color.rgb(100, 100, 110), ambientColor, 0.3f)
+        paint.color = bodyColor
         
-        // Fuselage (elongated ellipse)
-        val fusW = size * 2.5f
-        val fusH = size * 0.35f
+        // Fuselage - sleek tapered shape
+        path.reset()
+        path.moveTo(currentX, currentY)  // Nose point
+        path.lineTo(currentX - size * 0.8f, currentY - size * 0.25f)  // Top curve start
+        path.lineTo(currentX - size * 2.5f, currentY - size * 0.2f)  // Top of fuselage
+        path.lineTo(currentX - size * 3f, currentY)  // Tail
+        path.lineTo(currentX - size * 2.5f, currentY + size * 0.2f)  // Bottom of fuselage
+        path.lineTo(currentX - size * 0.8f, currentY + size * 0.25f)  // Bottom curve
+        path.close()
+        canvas.drawPath(path, paint)
+        
+        // Wings (swept back, tapered)
+        path.reset()
+        path.moveTo(currentX - size * 1.0f, currentY)  // Wing root front
+        path.lineTo(currentX - size * 0.5f, currentY - size * 0.8f)  // Wing tip
+        path.lineTo(currentX - size * 1.8f, currentY - size * 0.5f)  // Wing trailing edge
+        path.lineTo(currentX - size * 1.8f, currentY)  // Back to root
+        path.close()
+        canvas.drawPath(path, paint)
+        
+        // Bottom wing (perspective)
+        path.reset()
+        path.moveTo(currentX - size * 1.0f, currentY)
+        path.lineTo(currentX - size * 0.5f, currentY + size * 0.7f)
+        path.lineTo(currentX - size * 1.8f, currentY + size * 0.4f)
+        path.lineTo(currentX - size * 1.8f, currentY)
+        path.close()
+        canvas.drawPath(path, paint)
+        
+        // Tail fin (vertical stabilizer)
+        paint.color = shadowColor
+        path.reset()
+        path.moveTo(currentX - size * 2.5f, currentY - size * 0.2f)
+        path.lineTo(currentX - size * 2.8f, currentY - size * 0.6f)  // Fin top
+        path.lineTo(currentX - size * 3.2f, currentY - size * 0.5f)
+        path.lineTo(currentX - size * 3f, currentY)
+        path.close()
+        canvas.drawPath(path, paint)
+        
+        // Horizontal tail
+        paint.color = bodyColor
+        path.reset()
+        path.moveTo(currentX - size * 2.6f, currentY)
+        path.lineTo(currentX - size * 2.5f, currentY - size * 0.35f)
+        path.lineTo(currentX - size * 3.1f, currentY - size * 0.25f)
+        path.lineTo(currentX - size * 3f, currentY)
+        path.close()
+        canvas.drawPath(path, paint)
+        path.reset()
+        path.moveTo(currentX - size * 2.6f, currentY)
+        path.lineTo(currentX - size * 2.5f, currentY + size * 0.3f)
+        path.lineTo(currentX - size * 3.1f, currentY + size * 0.2f)
+        path.lineTo(currentX - size * 3f, currentY)
+        path.close()
+        canvas.drawPath(path, paint)
+        
+        // Engine pods (under wings)
+        paint.color = shadowColor
+        val engineSize = size * 0.15f
         canvas.drawOval(
-            currentX - fusW, currentY - fusH,
-            currentX, currentY + fusH,
+            currentX - size * 0.9f - engineSize * 2f, currentY + size * 0.35f - engineSize,
+            currentX - size * 0.9f, currentY + size * 0.35f + engineSize,
             paint
         )
-        
-        // Wings (simple swept triangle)
-        path.reset()
-        path.moveTo(currentX - size * 1.2f, currentY)
-        path.lineTo(currentX - size * 0.6f, currentY - size * 0.6f)
-        path.lineTo(currentX - size * 0.3f, currentY)
-        path.lineTo(currentX - size * 0.6f, currentY + size * 0.6f)
-        path.close()
-        canvas.drawPath(path, paint)
-        
-        // Tail fin (small triangle)
-        path.reset()
-        path.moveTo(currentX - fusW, currentY)
-        path.lineTo(currentX - fusW - size * 0.3f, currentY - size * 0.3f)
-        path.lineTo(currentX - fusW - size * 0.1f, currentY)
-        path.close()
-        canvas.drawPath(path, paint)
         
         canvas.restore()
     }

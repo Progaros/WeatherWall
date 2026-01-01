@@ -89,13 +89,19 @@ data class SimulationState(
     
     /**
      * Get effective shadow intensity combining settings and light level.
-     * Shadows are strongest during bright day and fade at night.
+     * Shadows are strongest during bright day, and at night scale with moon illumination.
      * @return 0.0 = no shadow, 1.0 = full shadow intensity
      */
     fun getEffectiveShadowStrength(): Float {
         if (!shadowsEnabled) return 0f
-        // Shadows scale with light level - no point in shadows at night
-        return shadowStrength * getLightLevel()
+        // During day, shadows scale with light level
+        // At night, shadows scale with moon illumination (full moon casts shadows, new moon doesn't)
+        val lightFactor = if (isNight) {
+            moonIllumination * 0.4f  // Moon shadows are subtler than sun shadows
+        } else {
+            getLightLevel()
+        }
+        return shadowStrength * lightFactor
     }
     
     /**

@@ -45,8 +45,8 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
         timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long
     ) {
-        // Scale size to 1% of height
-        val unit = height * 0.01f
+        // Scale size to 0.6% of height - medium-sized night bird
+        val unit = height * 0.006f
         val size = baseSize * unit
         
         val elapsedMs = absoluteTimeMs - spawnTimeMs

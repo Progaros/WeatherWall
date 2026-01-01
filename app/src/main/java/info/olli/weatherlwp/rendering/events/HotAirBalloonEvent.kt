@@ -70,29 +70,49 @@ class HotAirBalloonEvent(random: Random, override val spawnTimeMs: Long = System
         val bobOffset = sin(timeSeconds * 0.4f + bobPhase) * size * bobIntensity
         val currentY = y * height + bobOffset
         
-        val balloonHeight = size * 2.2f
-        val balloonWidth = size * 1.5f
+        val balloonHeight = size * 2.0f
+        val balloonWidth = size * 1.6f
         
-        // Balloon envelope (teardrop shape)
+        // Balloon envelope (proper hot air balloon shape - wide dome with narrowing bottom)
         paint.color = RenderConstants.blendWithAmbient(color, ambientColor, 0.3f)
         path.reset()
+        // Start at top center
         path.moveTo(currentX, currentY - balloonHeight)
+        // Right side curve: top dome is wider and rounder
         path.cubicTo(
-            currentX + balloonWidth, currentY - balloonHeight * 0.75f,
-            currentX + balloonWidth * 0.7f, currentY,
-            currentX, currentY + size * 0.25f
+            currentX + balloonWidth * 1.1f, currentY - balloonHeight * 0.7f,  // Wide control point
+            currentX + balloonWidth * 0.9f, currentY - balloonHeight * 0.2f,  // Curves inward
+            currentX + size * 0.35f, currentY + size * 0.2f  // Bottom right (narrower opening)
         )
+        // Bottom (the opening/throat)
+        path.lineTo(currentX - size * 0.35f, currentY + size * 0.2f)
+        // Left side curve (mirror)
         path.cubicTo(
-            currentX - balloonWidth * 0.7f, currentY,
-            currentX - balloonWidth, currentY - balloonHeight * 0.75f,
-            currentX, currentY - balloonHeight
+            currentX - balloonWidth * 0.9f, currentY - balloonHeight * 0.2f,
+            currentX - balloonWidth * 1.1f, currentY - balloonHeight * 0.7f,
+            currentX, currentY - balloonHeight  // Back to top
         )
+        path.close()
         canvas.drawPath(path, paint)
         
-        // Horizontal stripe
+        // Vertical stripes/panels for realism (curved sections)
         paint.color = RenderConstants.blendWithAmbient(stripeColor, ambientColor, 0.3f)
-        canvas.drawRect(currentX - balloonWidth * 0.6f, currentY - balloonHeight * 0.45f,
-            currentX + balloonWidth * 0.6f, currentY - balloonHeight * 0.32f, paint)
+        // Center stripe
+        path.reset()
+        path.moveTo(currentX - size * 0.15f, currentY - balloonHeight)
+        path.cubicTo(
+            currentX - size * 0.12f, currentY - balloonHeight * 0.5f,
+            currentX - size * 0.1f, currentY - size * 0.1f,
+            currentX - size * 0.08f, currentY + size * 0.15f
+        )
+        path.lineTo(currentX + size * 0.08f, currentY + size * 0.15f)
+        path.cubicTo(
+            currentX + size * 0.1f, currentY - size * 0.1f,
+            currentX + size * 0.12f, currentY - balloonHeight * 0.5f,
+            currentX + size * 0.15f, currentY - balloonHeight
+        )
+        path.close()
+        canvas.drawPath(path, paint)
         
         // Basket
         paint.color = RenderConstants.blendWithAmbient(Color.rgb(139, 90, 43), ambientColor, 0.3f)

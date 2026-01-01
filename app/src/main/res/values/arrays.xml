@@ -67,8 +67,6 @@
         <item>New Year</item>
         <item>Chinese New Year</item>
         <item>St. Patrick\'s Day</item>
-        <item>Spring Bloom</item>
-        <item>Autumn</item>
         <item>Winter Snow</item>
     </string-array>
     <string-array name="season_values">
@@ -78,8 +76,6 @@
         <item>newyear</item>
         <item>cn_newyear</item>
         <item>st_patricks</item>
-        <item>spring</item>
-        <item>autumn</item>
         <item>winter_snow</item>
     </string-array>
 </resources>

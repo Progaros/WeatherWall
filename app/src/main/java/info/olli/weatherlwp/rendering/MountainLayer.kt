@@ -158,7 +158,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
             canvas.save()
             canvas.translate(px, py)
             
-            drawMountain(canvas, mountain, state.isNight, ambientColor)
+            drawMountain(canvas, mountain, state, ambientColor)
             
             canvas.restore()
         }
@@ -203,7 +203,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
     }
     
     @Suppress("UNUSED_PARAMETER")
-    private fun drawMountain(canvas: Canvas, mountain: MountainData, isNight: Boolean, ambientColor: Int) {
+    private fun drawMountain(canvas: Canvas, mountain: MountainData, state: SimulationState, ambientColor: Int) {
         pathLeft.reset()
         pathRight.reset()
         
@@ -299,12 +299,40 @@ class MountainLayer(private val context: Context) : SceneLayer {
         // Base blends even more with ambient (atmospheric perspective)
         val baseAtmoColor = RenderConstants.blendWithAmbient(baseColor, ambientColor, blendAmount + 0.2f)
         
-        // Three-point vertical gradient: peak color -> atmospheric color -> transparent
+        // Determine shadow side based on light source angle
+        // getLightSourceAngle() returns: π = light from left, 0 = light from right
+        val lightAngle = state.getLightSourceAngle()
+        val shadowStrength = state.getEffectiveShadowStrength()
+        
+        // Light from left (angle > π/2) means right side is shadowed
+        // Light from right (angle < π/2) means left side is shadowed
+        val rightIsShadowed = lightAngle > kotlin.math.PI.toFloat() / 2f
+        
+        // Shadow intensity based on how far from directly overhead the light is
+        // At noon (angle = π/2), minimal shadow difference
+        val angleDiff = kotlin.math.abs(lightAngle - kotlin.math.PI.toFloat() / 2f)
+        val shadowFactor = (angleDiff / (kotlin.math.PI.toFloat() / 2f)).coerceIn(0.1f, 1f)
+        val effectiveShadow = shadowStrength * shadowFactor * 0.25f  // 0-0.25 darkening
+        
+        // Left side shadow (when light from right)
+        val leftShadowDarkening = if (!rightIsShadowed) effectiveShadow else 0f
+        val leftPeakColor = Color.rgb(
+            (Color.red(peakColor) * (1f - leftShadowDarkening)).toInt().coerceIn(0, 255),
+            (Color.green(peakColor) * (1f - leftShadowDarkening)).toInt().coerceIn(0, 255),
+            (Color.blue(peakColor) * (1f - leftShadowDarkening * 0.5f)).toInt().coerceIn(0, 255)
+        )
+        val leftBaseColor = Color.rgb(
+            (Color.red(baseAtmoColor) * (1f - leftShadowDarkening * 0.7f)).toInt().coerceIn(0, 255),
+            (Color.green(baseAtmoColor) * (1f - leftShadowDarkening * 0.7f)).toInt().coerceIn(0, 255),
+            (Color.blue(baseAtmoColor) * (1f - leftShadowDarkening * 0.5f)).toInt().coerceIn(0, 255)
+        )
+        
+        // Three-point vertical gradient for left side
         val gradient = LinearGradient(
             peakCenterX, peakY,
             peakCenterX, baseY,
-            intArrayOf(peakColor, baseAtmoColor, Color.TRANSPARENT),
-            floatArrayOf(0f, 0.75f, 1f),  // Peak at 0%, atmospheric at 75%, transparent at 100%
+            intArrayOf(leftPeakColor, leftBaseColor, Color.TRANSPARENT),
+            floatArrayOf(0f, 0.75f, 1f),
             Shader.TileMode.CLAMP
         )
         
@@ -312,25 +340,26 @@ class MountainLayer(private val context: Context) : SceneLayer {
         paint.shader = gradient
         canvas.drawPath(pathLeft, paint)
         
-        // Shadow side: slightly darker gradient with same transparency fade
-        val shadowPeakColor = Color.rgb(
-            (Color.red(peakColor) * 0.8f).toInt(),
-            (Color.green(peakColor) * 0.8f).toInt(),
-            (Color.blue(peakColor) * 0.9f).toInt()
+        // Right side shadow (when light from left)
+        val rightShadowDarkening = if (rightIsShadowed) effectiveShadow else 0f
+        val rightPeakColor = Color.rgb(
+            (Color.red(peakColor) * (1f - rightShadowDarkening)).toInt().coerceIn(0, 255),
+            (Color.green(peakColor) * (1f - rightShadowDarkening)).toInt().coerceIn(0, 255),
+            (Color.blue(peakColor) * (1f - rightShadowDarkening * 0.5f)).toInt().coerceIn(0, 255)
         )
-        val shadowBaseColor = Color.rgb(
-            (Color.red(baseAtmoColor) * 0.85f).toInt(),
-            (Color.green(baseAtmoColor) * 0.85f).toInt(),
-            (Color.blue(baseAtmoColor) * 0.95f).toInt()
+        val rightBaseColor = Color.rgb(
+            (Color.red(baseAtmoColor) * (1f - rightShadowDarkening * 0.7f)).toInt().coerceIn(0, 255),
+            (Color.green(baseAtmoColor) * (1f - rightShadowDarkening * 0.7f)).toInt().coerceIn(0, 255),
+            (Color.blue(baseAtmoColor) * (1f - rightShadowDarkening * 0.5f)).toInt().coerceIn(0, 255)
         )
-        val shadowGradient = LinearGradient(
+        val rightGradient = LinearGradient(
             peakCenterX, peakY,
             peakCenterX, baseY,
-            intArrayOf(shadowPeakColor, shadowBaseColor, Color.TRANSPARENT),
+            intArrayOf(rightPeakColor, rightBaseColor, Color.TRANSPARENT),
             floatArrayOf(0f, 0.75f, 1f),
             Shader.TileMode.CLAMP
         )
-        paint.shader = shadowGradient
+        paint.shader = rightGradient
         canvas.drawPath(pathRight, paint)
         
         // Reset shader

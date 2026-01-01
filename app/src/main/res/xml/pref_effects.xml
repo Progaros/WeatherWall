@@ -215,4 +215,61 @@
             android:dependency="pref_shadows_enabled" />
     </PreferenceCategory>
 
+    <!-- Seasonal Terrain Effects -->
+    <PreferenceCategory android:title="Seasonal Terrain">
+        <!-- Spring Flowers -->
+        <SwitchPreferenceCompat
+            android:key="pref_spring_flowers"
+            android:title="Spring Flowers"
+            android:summary="Colorful flower dots on hills in spring"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_spring_flower_density"
+            android:title="Flower Density"
+            android:summary="Number of flowers per hill (0=few, 100=many)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_spring_flowers" />
+
+        <!-- Autumn Grass -->
+        <SwitchPreferenceCompat
+            android:key="pref_autumn_grass"
+            android:title="Autumn Grass Color"
+            android:summary="Browner grass color in autumn"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_autumn_grass_intensity"
+            android:title="Autumn Intensity"
+            android:summary="How brown the grass becomes (0=subtle, 100=very brown)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_autumn_grass" />
+
+        <!-- Winter Snow on Hills -->
+        <SwitchPreferenceCompat
+            android:key="pref_winter_snow_hills"
+            android:title="Winter Snow Patches"
+            android:summary="Snow patches on hill tops in winter"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_winter_snow_coverage"
+            android:title="Snow Coverage"
+            android:summary="How much of hill tops are covered (0=light, 100=heavy)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_winter_snow_hills" />
+    </PreferenceCategory>
+
 </PreferenceScreen>
