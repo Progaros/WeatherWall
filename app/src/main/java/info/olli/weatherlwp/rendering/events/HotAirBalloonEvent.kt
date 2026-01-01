@@ -43,8 +43,8 @@ class HotAirBalloonEvent(random: Random, override val spawnTimeMs: Long = System
         val elapsedMs = System.currentTimeMillis() - spawnTimeMs
         val progress = -0.1f + speed * elapsedMs
         
-        val px = parallaxCalculator.getOffsetXForDepth(0.6f)
-        val py = parallaxCalculator.getOffsetYForDepth(0.6f)
+        val px = parallaxCalculator.getOffsetXForDepth(0.25f)  // Between mountains and clouds
+        val py = parallaxCalculator.getOffsetYForDepth(0.25f)
         canvas.save()
         canvas.translate(px, py)
         

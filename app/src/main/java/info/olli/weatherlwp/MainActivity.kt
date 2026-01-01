@@ -314,9 +314,19 @@ class MainActivity : AppCompatActivity() {
             
             var consecutiveNullCanvasCount = 0
             val maxNullCanvas = 5  // Give up after 5 consecutive null canvases
+            var lastFrameTimeMs = 0L
             
             while (previewRunning && surfaceReady && !Thread.currentThread().isInterrupted) {
                 val frameStart = SystemClock.elapsedRealtime()
+                
+                // Calculate real frame delta for accurate physics
+                val deltaTimeMs = if (lastFrameTimeMs > 0) {
+                    (frameStart - lastFrameTimeMs).coerceIn(1L, 200L)
+                } else {
+                    16L
+                }
+                lastFrameTimeMs = frameStart
+                
                 val holder = surfaceHolder
                 
                 if (holder == null) {
@@ -357,8 +367,8 @@ class MainActivity : AppCompatActivity() {
                     // Clear canvas with a fallback color first (helps debug)
                     canvas.drawColor(Color.BLACK)
                     
-                    // Render scene (includes sky gradient and clouds)
-                    previewScene?.render(canvas)
+                    // Render scene with real delta time for accurate physics
+                    previewScene?.render(canvas, deltaTimeMs)
                     
                     // Render weather effects (rain, snow, lightning)
                     val prefs = PreferenceManager.getDefaultSharedPreferences(this@MainActivity)

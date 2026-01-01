@@ -106,7 +106,7 @@ class ParallaxScene(
         parallaxCalculator.updateFromSensor(tiltX, tiltY)
     }
 
-    fun render(canvas: Canvas) {
+    fun render(canvas: Canvas, deltaTimeMs: Long = 16L) {
         try {
             val w = canvas.width.toFloat()
             val h = canvas.height.toFloat()
@@ -154,15 +154,14 @@ class ParallaxScene(
                 Log.d(TAG, "Specific spawn trigger received: $specificEvent (delay: ${timeSinceSpecificTrigger}ms)")
             }
             
-            // Update parallax physics (smoothing, center drift)
-            // Note: parallax settings are applied in loadPrefs(), not here
-            parallaxCalculator.update()
+            // Update parallax physics with real frame delta for accurate smoothing
+            parallaxCalculator.update(deltaTimeMs)
             
-            // Update layers with state
+            // Update layers with real delta time
             for (layer in layers) {
-                layer.update(state, 16) // Assume ~60fps for now
+                layer.update(state, deltaTimeMs)
             }
-            weatherLayer.update(state, 16)
+            weatherLayer.update(state, deltaTimeMs)
             
             // Draw layers in proper order with events at correct depths:
             // 1. Sky (gradient)
@@ -263,11 +262,18 @@ class ParallaxScene(
             val depthVal = prefs.getInt("pref_parallax_depth", 50).coerceIn(0, 100)
             val depthSeparation = (depthVal / 100f) * 2.0f
             
+            // Perspective slider: map 0..100 -> 0f..1f
+            // 0 = foreground moves most (head tilts, window stays)
+            // 100 = background moves most (window shifts, head stays)
+            val perspectiveVal = prefs.getInt("pref_parallax_perspective", 0).coerceIn(0, 100)
+            val perspective = perspectiveVal / 100f
+            
             // Apply to parallax calculator
             parallaxCalculator.strength = parallaxStrength
             parallaxCalculator.maxOffsetPx = parallaxMaxOffsetPx
             parallaxCalculator.smoothing = smoothingFactor
             parallaxCalculator.depthSeparation = depthSeparation
+            parallaxCalculator.perspective = perspective
             
             // Weather and seasonal toggles
             weatherEnabled = prefs.getBoolean("pref_weather_enabled", true)

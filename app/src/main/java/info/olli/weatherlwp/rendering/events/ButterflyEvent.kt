@@ -16,6 +16,8 @@ import kotlin.random.Random
  * Uses absolute time for deterministic position across preview/wallpaper.
  */
 class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
+    override val layer = EventLayer.MID_SKY  // Between mountains and terrain, near flowers
+    
     private val startX = random.nextFloat()
     private val startY = 0.55f + random.nextFloat() * 0.15f
     override val durationMs = 8000L + random.nextLong(5000)

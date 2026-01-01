@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicReference
 class ParallaxCalculator {
     companion object {
         /** How fast position approaches target (per frame, 0-1) - increased for faster response */
-        private const val POSITION_LERP_RATE = 0.22f
+        private const val POSITION_LERP_RATE = 0.35f
     }
     
     // Tilt holder for atomic operations (lock-free)
@@ -43,6 +43,26 @@ class ParallaxCalculator {
     var maxOffsetPx = 80f               // Maximum offset in any direction
     var smoothing = 0.4f                // Position smoothing factor (higher = smoother but slower)
     var depthSeparation = 1.0f          // How much depth affects movement (1.0 = full effect)
+    
+    /**
+     * Parallax perspective: controls which layers move more.
+     * 0.0 = foreground moves most (head moves, window stays - current default)
+     * 1.0 = background moves most (window moves, head stays)
+     * This keeps the 3D "through a window" effect but shifts which plane feels anchored.
+     */
+    var perspective = 0.0f
+    
+    /**
+     * Calculate movement multiplier for a given depth, accounting for perspective.
+     * Blends between foreground-heavy (depth) and background-heavy (1-depth) based on perspective.
+     */
+    private fun movementMultiplier(depthFactor: Float): Float {
+        val d = depthFactor.coerceIn(0f, 1f)
+        val foregroundHeavy = d          // Model A: foreground moves most
+        val backgroundHeavy = 1f - d      // Model B: background moves most
+        val mixed = foregroundHeavy + (backgroundHeavy - foregroundHeavy) * perspective
+        return mixed * depthSeparation
+    }
     
     /**
      * Update from sensor input.
@@ -107,30 +127,30 @@ class ParallaxCalculator {
     
     /**
      * Get parallax offset for a specific layer depth.
+     * Uses perspective setting to control foreground vs background emphasis.
      * 
-     * @param depthFactor Layer depth: 0.0 = background (moves least), 1.0 = foreground (moves most)
+     * @param depthFactor Layer depth: 0.0 = background, 1.0 = foreground
      * @return (x, y) offset to apply to this layer
      */
     fun getOffsetForDepth(depthFactor: Float): Pair<Float, Float> {
-        // depthSeparation scales the overall effect, depthFactor determines per-layer intensity
-        val effectiveDepth = depthFactor * depthSeparation
-        return Pair(positionX * effectiveDepth, positionY * effectiveDepth)
+        val mult = movementMultiplier(depthFactor)
+        return Pair(positionX * mult, positionY * mult)
     }
     
     /**
      * Get X offset for a specific depth.
-     * Uses full depth range for fluid "looking out a window" effect.
+     * Uses perspective setting for "window" vs "head" movement feel.
      */
     fun getOffsetXForDepth(depthFactor: Float): Float {
-        return positionX * depthFactor * depthSeparation
+        return positionX * movementMultiplier(depthFactor)
     }
     
     /**
      * Get Y offset for a specific depth.
-     * Uses full depth range for fluid "looking out a window" effect.
+     * Uses perspective setting for "window" vs "head" movement feel.
      */
     fun getOffsetYForDepth(depthFactor: Float): Float {
-        return positionY * depthFactor * depthSeparation
+        return positionY * movementMultiplier(depthFactor)
     }
     
     /**

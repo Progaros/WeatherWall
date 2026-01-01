@@ -16,6 +16,8 @@ import kotlin.random.Random
  * Uses absolute time for deterministic position across preview/wallpaper.
  */
 class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
+    override val layer = EventLayer.MID_SKY  // Flying in sky, in front of mountains
+    
     private val y = 0.18f + random.nextFloat() * 0.12f
     // Reduced speed: was 0.00008-0.00012, now 0.000025-0.000040 (~3x slower)
     private val speed = 0.000025f + random.nextFloat() * 0.000015f

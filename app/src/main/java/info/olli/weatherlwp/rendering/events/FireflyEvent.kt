@@ -14,11 +14,16 @@ import kotlin.random.Random
  * Uses absolute time for deterministic position across preview/wallpaper.
  */
 class FireflyEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
-    override val durationMs = 12000L + random.nextLong(8000)
+    override val layer = EventLayer.GROUND  // In front of hills, integrated with terrain
+    
+    override val durationMs = 8000L + random.nextLong(5000)  // 8-13 seconds
     private val flies = List(8 + random.nextInt(12)) { Firefly(random) }
     // Position in foreground hill area (lower 40% of screen, above bottom margin)
     private val baseX = 0.15f + random.nextFloat() * 0.7f
     private val baseY = 0.65f + random.nextFloat() * 0.25f  // 0.65 to 0.90 - on hills
+    
+    // Fireflies are in the front hills area (depth 0.70-0.80)
+    override val depthFactor: Float = 0.70f + random.nextFloat() * 0.10f
     
     private class Firefly(random: Random) {
         val offsetX = (random.nextFloat() - 0.5f) * 0.15f
@@ -34,9 +39,9 @@ class FireflyEvent(random: Random, override val spawnTimeMs: Long = System.curre
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
         val elapsedMs = System.currentTimeMillis() - spawnTimeMs
         
-        // Use foreground depth for parallax (matches hill foreground)
-        val px = parallaxCalculator.getOffsetXForDepth(0.02f)
-        val py = parallaxCalculator.getOffsetYForDepth(0.02f)
+        // Use foreground depth for parallax (matches front hills where fireflies float)
+        val px = parallaxCalculator.getOffsetXForDepth(depthFactor)
+        val py = parallaxCalculator.getOffsetYForDepth(depthFactor)
         canvas.save()
         canvas.translate(px, py)
         

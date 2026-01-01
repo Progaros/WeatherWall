@@ -42,12 +42,19 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         private const val TAG = "ParallaxSensorManager"
         
         // Low-pass filter alpha (0..1, smaller = smoother but slower response)
-        // Increased for faster parallax response
-        private const val FILTER_ALPHA = 0.18f
+        // Increased from 0.18 to 0.35 for faster parallax response with less lag
+        private const val FILTER_ALPHA = 0.35f
         
         // Deadzone threshold for flat device (prevents noise when tilt is tiny)
         private const val DEADZONE = 0.06f
     }
+    
+    // Pre-allocated fields to avoid Pair/Triple allocations in hot path
+    private var remappedTiltX = 0f
+    private var remappedTiltY = 0f
+    private var remappedVectorX = 0f
+    private var remappedVectorY = 0f
+    private var remappedVectorZ = 0f
     
     interface Listener {
         /**
@@ -107,7 +114,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
                 else -> "accelerometer (fallback)"
             }
             
-            sensorManager.registerListener(this, activeSensor, SensorManager.SENSOR_DELAY_UI)
+            sensorManager.registerListener(this, activeSensor, SensorManager.SENSOR_DELAY_GAME)
             isStarted = true
             Log.d(TAG, "Sensor started using $sensorName")
         }
@@ -180,9 +187,9 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         val rawTiltY = (-(pitch) / (PI / 2)).toFloat().coerceIn(-1f, 1f)
         
         // Apply display rotation remapping to convert device coords to screen coords
-        val (tiltX, tiltY) = remapTiltForDisplay(rawTiltX, rawTiltY, displayRotation)
+        remapTiltForDisplay(rawTiltX, rawTiltY, displayRotation)
         
-        processTiltValues(tiltX, tiltY, dt)
+        processTiltValues(remappedTiltX, remappedTiltY, dt)
     }
     
     /**
@@ -190,7 +197,10 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
      */
     private fun handleGravityVector(values: FloatArray, displayRotation: Int, dt: Float) {
         // Remap gravity vector for display rotation
-        val (gx, gy, gz) = remapVectorForDisplay(values, displayRotation)
+        remapVectorForDisplay(values, displayRotation)
+        val gx = remappedVectorX
+        val gy = remappedVectorY
+        val gz = remappedVectorZ
         
         // Normalize to ~1g for consistent scaling
         val norm = sqrt(gx * gx + gy * gy + gz * gz)
@@ -241,32 +251,33 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     /**
      * Remap tilt values for display rotation.
      * Converts device-coordinate tilt to screen-coordinate tilt.
+     * Stores result in remappedTiltX/remappedTiltY to avoid allocations.
      */
-    private fun remapTiltForDisplay(tiltX: Float, tiltY: Float, displayRotation: Int): Pair<Float, Float> {
-        return when (displayRotation) {
-            Surface.ROTATION_0 -> Pair(tiltX, tiltY)
-            Surface.ROTATION_90 -> Pair(tiltY, -tiltX)
-            Surface.ROTATION_180 -> Pair(-tiltX, -tiltY)
-            Surface.ROTATION_270 -> Pair(-tiltY, tiltX)
-            else -> Pair(tiltX, tiltY)
+    private fun remapTiltForDisplay(tiltX: Float, tiltY: Float, displayRotation: Int) {
+        when (displayRotation) {
+            Surface.ROTATION_0 -> { remappedTiltX = tiltX; remappedTiltY = tiltY }
+            Surface.ROTATION_90 -> { remappedTiltX = tiltY; remappedTiltY = -tiltX }
+            Surface.ROTATION_180 -> { remappedTiltX = -tiltX; remappedTiltY = -tiltY }
+            Surface.ROTATION_270 -> { remappedTiltX = -tiltY; remappedTiltY = tiltX }
+            else -> { remappedTiltX = tiltX; remappedTiltY = tiltY }
         }
     }
     
     /**
      * Remap a gravity vector for display rotation.
-     * Returns (gx, gy, gz) in screen coordinates.
+     * Stores result in remappedVectorX/Y/Z to avoid allocations.
      */
-    private fun remapVectorForDisplay(v: FloatArray, displayRotation: Int): Triple<Float, Float, Float> {
+    private fun remapVectorForDisplay(v: FloatArray, displayRotation: Int) {
         val x = v[0]
         val y = v[1]
         val z = v[2]
         
-        return when (displayRotation) {
-            Surface.ROTATION_0 -> Triple(x, y, z)
-            Surface.ROTATION_90 -> Triple(y, -x, z)
-            Surface.ROTATION_180 -> Triple(-x, -y, z)
-            Surface.ROTATION_270 -> Triple(-y, x, z)
-            else -> Triple(x, y, z)
+        when (displayRotation) {
+            Surface.ROTATION_0 -> { remappedVectorX = x; remappedVectorY = y; remappedVectorZ = z }
+            Surface.ROTATION_90 -> { remappedVectorX = y; remappedVectorY = -x; remappedVectorZ = z }
+            Surface.ROTATION_180 -> { remappedVectorX = -x; remappedVectorY = -y; remappedVectorZ = z }
+            Surface.ROTATION_270 -> { remappedVectorX = -y; remappedVectorY = x; remappedVectorZ = z }
+            else -> { remappedVectorX = x; remappedVectorY = y; remappedVectorZ = z }
         }
     }
 

@@ -34,12 +34,13 @@ interface RandomEvent {
     
     /**
      * Depth factor for ground events, determines draw order relative to trees.
-     * Range: -0.5 (far background) to +0.05 (near foreground)
-     * Default: 0f (middle ground)
+     * Range: 0.0 (far background) to 1.0 (near foreground)
+     * For hills/ground: typically 0.50 (back hills) to 0.80 (front hills)
+     * Default: 0.65f (middle ground)
      * Only used for GROUND layer events.
      */
     val depthFactor: Float
-        get() = 0f
+        get() = 0.65f
     
     /**
      * The absolute time (epoch ms) when this event was spawned.

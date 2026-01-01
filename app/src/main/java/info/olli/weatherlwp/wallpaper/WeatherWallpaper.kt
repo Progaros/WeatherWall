@@ -229,7 +229,8 @@ class WeatherWallpaper : WallpaperService() {
                         }
                         
                         val sleep = frameTimeMs - dt
-                        if (sleep > 0) SystemClock.sleep(sleep)
+                        // Always sleep at least 1ms to prevent 100% CPU when frame exceeds budget
+                        SystemClock.sleep(sleep.coerceAtLeast(1L))
                     }
                 } catch (e: InterruptedException) {
                     // Normal exit
@@ -250,10 +251,22 @@ class WeatherWallpaper : WallpaperService() {
                 // Ignore
             }
         }
+        
+        // Track frame timing for proper delta calculation
+        private var lastFrameTimeMs = 0L
 
         private fun drawFrame() {
             val holder = surfaceHolder
             if (holder == null) return
+            
+            // Calculate real frame delta for accurate physics
+            val now = SystemClock.uptimeMillis()
+            val deltaTimeMs = if (lastFrameTimeMs > 0) {
+                (now - lastFrameTimeMs).coerceIn(1L, 200L)  // Clamp to avoid huge jumps
+            } else {
+                16L  // First frame defaults to ~60fps
+            }
+            lastFrameTimeMs = now
             
             var canvas: Canvas? = null
             try {
@@ -280,8 +293,8 @@ class WeatherWallpaper : WallpaperService() {
                 canvas.drawColor(Color.BLACK)
 
                 // Parallax scene (sky, clouds, mountains, trees, weather overlays, seasonal)
-                // Note: ParallaxScene handles weather and seasonal rendering internally
-                scene.render(canvas)
+                // Pass actual frame delta for accurate physics/smoothing
+                scene.render(canvas, deltaTimeMs)
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error drawing frame", e)

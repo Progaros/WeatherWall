@@ -531,6 +531,17 @@
             app:showSeekBarValue="true"
             app:updatesContinuously="true"
             android:dependency="pref_seasonal_enabled" />
+            
+        <SeekBarPreference
+            android:key="pref_firework_amount"
+            android:title="Firework Amount"
+            android:summary="Number of particles per explosion (10=subtle, 100=spectacular)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="10"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_seasonal_enabled" />
     </PreferenceCategory>
 
     <!-- Simulation / Debug -->

@@ -136,6 +136,7 @@ class SeasonalEvents(private val context: Context? = null) {
     private var starSizeMultiplier = 1.0f
     private var trailLengthMultiplier = 1.0f
     private var fireworkFrequency = 50  // 0-100, default 50
+    private var fireworkAmount = 50     // 10-100, controls particles per explosion
     
     // Track last settings load time to avoid polling SharedPreferences every frame
     private var lastSettingsLoad = 0L
@@ -155,6 +156,7 @@ class SeasonalEvents(private val context: Context? = null) {
             starSizeMultiplier = (it.getInt("pref_christmas_star_size", 100) / 100f).coerceIn(0.5f, 2.0f)
             trailLengthMultiplier = (it.getInt("pref_christmas_star_trail", 100) / 100f).coerceIn(0f, 2.0f)
             fireworkFrequency = it.getInt("pref_firework_frequency", 50).coerceIn(0, 100)
+            fireworkAmount = it.getInt("pref_firework_amount", 50).coerceIn(10, 100)
         }
         lastSettingsLoad = System.currentTimeMillis()
     }
@@ -486,9 +488,12 @@ class SeasonalEvents(private val context: Context? = null) {
         val cy = rocket.y
         val colors = rocket.colors
         
-        // Spawn explosion particles
+        // Spawn explosion particles based on fireworkAmount setting
+        // At 10: 10-15 particles, at 50: 25-45 particles, at 100: 60-85 particles
         var particleCount = 0
-        val targetParticles = 25 + Random.nextInt(20)  // 25-45 particles per explosion
+        val baseParticles = (fireworkAmount * 0.5f + 5).toInt()  // 10→10, 50→30, 100→55
+        val varianceParticles = (fireworkAmount * 0.3f).toInt()   // 10→3, 50→15, 100→30
+        val targetParticles = baseParticles + Random.nextInt(varianceParticles.coerceAtLeast(1))
         
         for (f in fireworks) {
             if (f.life <= 0 && particleCount < targetParticles) {

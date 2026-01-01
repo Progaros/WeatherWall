@@ -74,13 +74,19 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     override fun update(state: SimulationState, deltaTimeMs: Long) {
         if (!eventsEnabled || width <= 0) return
         
+        // Track if we need to create a new list (only allocate when events actually change)
+        var needsListUpdate = false
+        var currentEvents: MutableList<RandomEvent>? = null
+        
         // Update existing events and remove finished ones
-        val currentEvents = events.toMutableList()
-        val iterator = currentEvents.iterator()
-        while (iterator.hasNext()) {
-            val event = iterator.next()
+        for (event in events) {
             if (!event.update(deltaTimeMs, state, width, height)) {
-                iterator.remove()
+                // Event finished - need to remove it
+                if (currentEvents == null) {
+                    currentEvents = events.toMutableList()
+                }
+                currentEvents.remove(event)
+                needsListUpdate = true
             }
         }
         
@@ -97,15 +103,23 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
             
             // Spawn chance is already scaled appropriately in reloadSettings()
             // 0.0001 (rare) to 0.5 (very frequent) per 500ms bucket check
-            if (spawnRandom.nextFloat() < spawnChance && currentEvents.size < 8) {
+            val eventCount = currentEvents?.size ?: events.size
+            if (spawnRandom.nextFloat() < spawnChance && eventCount < 8) {
                 // Use bucket + offset as seed for event creation (deterministic)
                 val eventRandom = Random(spawnSeed + 12345)
                 val spawnTime = currentBucket * 500  // Aligned spawn time for position sync
+                if (currentEvents == null) {
+                    currentEvents = events.toMutableList()
+                }
                 spawnRandomEvent(state, currentEvents, eventRandom, spawnTime)
+                needsListUpdate = true
             }
         }
         
-        events = currentEvents.toList()
+        // Only update the volatile reference if something changed
+        if (needsListUpdate && currentEvents != null) {
+            events = currentEvents.toList()
+        }
     }
     
     private var lastSpawnBucket = 0L

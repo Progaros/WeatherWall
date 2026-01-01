@@ -24,10 +24,12 @@ object RenderConstants {
      * This allows parallax to reveal content beyond the visible edges.
      * 
      * Extended width = max(screen width, screen height * EXTENDED_WIDTH_MULTIPLIER)
-     * In portrait: 4x height gives lots of horizontal content for parallax
+     * In portrait: 2x height gives sufficient horizontal content for parallax
      * In landscape: Uses actual width since it's already wide
+     * 
+     * Note: Reduced from 4.0 to 2.0 for battery efficiency - fewer trees/hills to generate and draw.
      */
-    const val EXTENDED_WIDTH_MULTIPLIER = 4.0f
+    const val EXTENDED_WIDTH_MULTIPLIER = 2.0f
     
     /**
      * Calculate the extended canvas width.
