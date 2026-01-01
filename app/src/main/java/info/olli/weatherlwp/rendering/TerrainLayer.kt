@@ -580,7 +580,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 sin(timeSec * baseFreq * 0.4f + tipPhase) * 0.3f
             val ambientFactor = swaySpeed * 0.4f
             val shadowWindFactor = ambientFactor + effectiveWind * 0.6f  // Match tree sway calculation
-            val shadowGustLean = gustPush * 0.15f
+            val shadowGustLean = gustPush * RenderConstants.GUST_LEAN_FACTOR
             val tipSway = tipWave * shadowWindFactor * maxAmplitude * 0.5f + shadowGustLean * totalHeight * 0.5f
             
             // Draw shadow as a skewed tree triangle flattened onto the ground
@@ -638,8 +638,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             
             // Gust push is one-directional (trees lean in wind direction then spring back)
             // The wave effect is already in gustPush via localGust
-            // Reduced to prevent excessive bending - gust is now only applied here, not in maxAmplitude
-            val gustLean = gustPush * 0.15f  // Direct offset in screen units (not multiplied by maxAmplitude)
+            // GUST_LEAN_FACTOR controls how much gusts bend trees
+            val gustLean = gustPush * RenderConstants.GUST_LEAN_FACTOR  // Direct offset in screen units
             
             // Sway increases with height squared (natural bending curve)
             // Include ambient sway even without wind (baseWave still oscillates)

@@ -157,6 +157,11 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
      * This approach extracts pitch and roll directly from the quaternion representation,
      * which works identically at ALL device rotations without remapping matrices.
      * The display rotation is still used to remap the final X/Y for screen coordinates.
+     * 
+     * IMPORTANT: Using 45° (PI/4) as the reference angle, not 90°.
+     * This means full parallax offset is reached at 45° tilt, allowing responsive
+     * movement even when holding the phone upright. Tilt beyond 45° still works
+     * (saturates at ±1.0).
      */
     private fun handleRotationVectorQuaternion(values: FloatArray, displayRotation: Int, dt: Float) {
         // Rotation vector provides quaternion components
@@ -181,11 +186,12 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         val sinRoll = 2.0f * (qw * qy - qz * qx)
         val roll = asin(sinRoll.coerceIn(-1f, 1f))
         
-        // Normalize to -1..1 range (max tilt = 90 degrees = PI/2)
-        // These are in device coordinates - pitch is forward/back, roll is left/right
+        // Normalize to -1..1 range using 45° (PI/4) as full-scale reference
+        // This makes parallax more responsive - 45° tilt = full offset
+        // Beyond 45° still works but saturates at ±1.0
         // NEGATE to match gravity fallback convention (tilt right -> scene moves left)
-        val rawTiltX = (-(roll) / (PI / 2)).toFloat().coerceIn(-1f, 1f)
-        val rawTiltY = (-(pitch) / (PI / 2)).toFloat().coerceIn(-1f, 1f)
+        val rawTiltX = (-(roll) / (PI / 4)).toFloat().coerceIn(-1f, 1f)
+        val rawTiltY = (-(pitch) / (PI / 4)).toFloat().coerceIn(-1f, 1f)
         
         // Apply display rotation remapping to convert device coords to screen coords
         remapTiltForDisplay(rawTiltX, rawTiltY, displayRotation)

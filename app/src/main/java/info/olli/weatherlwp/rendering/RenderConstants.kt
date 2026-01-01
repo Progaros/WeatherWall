@@ -165,18 +165,21 @@ object RenderConstants {
     // ============== Animation Speeds ==============
     
     /** Wind effect on cloud speed multiplier */
-    const val WIND_CLOUD_SPEED_MIN = 0.2f
-    const val WIND_CLOUD_SPEED_MAX = 8.0f   // Increased for more dramatic high wind
+    const val WIND_CLOUD_SPEED_MIN = 0.3f
+    const val WIND_CLOUD_SPEED_MAX = 12.0f  // Increased for dramatic high wind
     
     /** Tree sway animation parameters */
     const val TREE_SWAY_FREQUENCY = 0.6f   // Base frequency (slower, more natural)
-    const val TREE_SWAY_AMPLITUDE = 0.25f  // Increased for more visible sway at high wind
+    const val TREE_SWAY_AMPLITUDE = 0.35f  // Increased for more visible sway at high wind
+    
+    /** Gust effect multiplier for tree lean */
+    const val GUST_LEAN_FACTOR = 0.4f      // How much gusts bend trees (was 0.15f)
     
     /** Star twinkle animation */
     const val STAR_TWINKLE_SPEED = 0.001f
     
     /** Cloud movement speed multiplier (base delta-time scale) */
-    const val CLOUD_MOVEMENT_SCALE = 0.025f
+    const val CLOUD_MOVEMENT_SCALE = 0.06f  // Increased for faster cloud movement
     
     /** Lightning timing (milliseconds) */
     const val LIGHTNING_INTERVAL_MIN_MS = 1500L    // Minimum time between flashes (1.5s)

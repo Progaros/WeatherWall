@@ -251,26 +251,27 @@ class ParallaxScene(
                 }
             }
             
-            // Input sensitivity: slider 0-50 maps to 0-2 (more subtle range)
-            // User feedback: best feel around value 1-2
-            // Default 25 = 1.0x (centered, natural feel)
-            val sensitivityVal = prefs.getInt("pref_parallax_strength", 25).coerceIn(0, 50)
-            val rawStrength = (sensitivityVal / 25f).coerceIn(0f, 2f)  // 0->0, 25->1, 50->2
+            // Input sensitivity: slider 0-100 with QUADRATIC curve for dramatic response at max
+            // 0 = off, 50 = 2.5x (noticeable), 100 = 10x (extremely responsive)
+            // Quadratic: (val/100)^2 * 10 gives 0->0, 50->2.5, 100->10
+            val sensitivityVal = prefs.getInt("pref_parallax_strength", 50).coerceIn(0, 100)
+            val normalized = sensitivityVal / 100f
+            val rawStrength = normalized * normalized * 10f  // Quadratic: 50->2.5x, 100->10x
             parallaxStrength = if (parallaxEnabled) rawStrength else 0f
             
-            // Max offset slider: 5..200 px (default 80)
-            parallaxMaxOffsetPx = (prefs.getInt("pref_parallax_max_offset", 80)).toFloat().coerceIn(5f, 200f)
+            // Max offset slider: 5..400 px (default 150)
+            // Higher max allows extremely dramatic parallax at max settings
+            parallaxMaxOffsetPx = (prefs.getInt("pref_parallax_max_offset", 150)).toFloat().coerceIn(5f, 400f)
             
-            // Smoothing slider: map 1..100 -> 0.05f..0.50f (reduced range for responsiveness)
-            // Higher = more filtering = smoother but slower response
-            // Reduced upper bound from 0.9 to 0.5 to avoid double-smoothing with sensor filter
-            val smoothingVal = prefs.getInt("pref_parallax_smoothing", 40).coerceIn(1, 100)
-            val smoothingFactor = 0.05f + (smoothingVal / 100f) * 0.45f
+            // Smoothing slider: map 1..100 -> 0.02f..0.40f (wider range)
+            // 1 = nearly instant, 50 = moderate smoothing, 100 = floaty
+            val smoothingVal = prefs.getInt("pref_parallax_smoothing", 30).coerceIn(1, 100)
+            val smoothingFactor = 0.02f + (smoothingVal / 100f) * 0.38f
             
-            // Depth separation slider: map 0..100 -> 0f..2.0f (default 50 = full 3D effect)
-            // At max (100), gives 2.0x depth separation for dramatic window-like parallax
+            // Depth separation slider: map 0..100 -> 0f..4.0f (default 50 = 2x effect)
+            // At max (100), gives 4.0x depth separation for extreme 3D parallax
             val depthVal = prefs.getInt("pref_parallax_depth", 50).coerceIn(0, 100)
-            val depthSeparation = (depthVal / 100f) * 2.0f
+            val depthSeparation = (depthVal / 100f) * 4.0f
             
             // Perspective slider: map 0..100 -> 0f..1f
             // 0 = foreground moves most (head tilts, window stays)
