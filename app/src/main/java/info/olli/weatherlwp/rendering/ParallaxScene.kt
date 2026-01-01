@@ -106,23 +106,28 @@ class ParallaxScene(
             val state = simulationController.getState()
             
             // Check for manual spawn trigger from settings
-            // Use timestamp-based trigger to allow multiple scenes to respond
+            // Use timestamp-based trigger - extended window to 2000ms for reliability
+            // Both preview and live wallpaper will respond to this trigger
             val spawnTriggerTime = prefs.getLong("trigger_spawn_event_time", 0L)
-            if (spawnTriggerTime > 0 && System.currentTimeMillis() - spawnTriggerTime < 500) {
-                // Only clear if we're the first to respond (within 500ms window)
+            val timeSinceSpawnTrigger = System.currentTimeMillis() - spawnTriggerTime
+            if (spawnTriggerTime > 0 && timeSinceSpawnTrigger < 2000) {
+                // Clear immediately to prevent duplicate spawns
                 prefs.edit().putLong("trigger_spawn_event_time", 0L).apply()
                 randomEventLayer.debugSpawnEvent()
+                Log.d(TAG, "Manual spawn trigger received (delay: ${timeSinceSpawnTrigger}ms)")
             }
             
             // Check for specific event spawn trigger from individual toggles
             val specificEventTime = prefs.getLong("trigger_spawn_specific_event_time", 0L)
             val specificEvent = prefs.getString("trigger_spawn_specific_event", null)
-            if (specificEvent != null && specificEventTime > 0 && System.currentTimeMillis() - specificEventTime < 500) {
+            val timeSinceSpecificTrigger = System.currentTimeMillis() - specificEventTime
+            if (specificEvent != null && specificEventTime > 0 && timeSinceSpecificTrigger < 2000) {
                 prefs.edit()
                     .remove("trigger_spawn_specific_event")
                     .putLong("trigger_spawn_specific_event_time", 0L)
                     .apply()
                 randomEventLayer.spawnSpecificEvent(specificEvent)
+                Log.d(TAG, "Specific spawn trigger received: $specificEvent (delay: ${timeSinceSpecificTrigger}ms)")
             }
             
             // Update parallax physics (smoothing, center drift)

@@ -13,13 +13,39 @@
         app:title="@string/app_name"
         app:titleTextColor="@android:color/white" />
 
-    <!-- Live Preview Strip -->
+    <!-- Live Preview Strip with variable height -->
     <SurfaceView
         android:id="@+id/preview_surface"
         android:layout_width="match_parent"
         android:layout_height="180dp" />
 
-    <!-- Tab Layout -->
+    <!-- Draggable resize handle -->
+    <View
+        android:id="@+id/resize_handle"
+        android:layout_width="match_parent"
+        android:layout_height="24dp"
+        android:background="?attr/colorPrimaryVariant"
+        android:clickable="true"
+        android:focusable="true" />
+    
+    <!-- Handle visual indicator (centered line) -->
+    <View
+        android:id="@+id/handle_indicator"
+        android:layout_width="48dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="-14dp"
+        android:background="@drawable/handle_indicator"
+        android:elevation="4dp" />
+
+    <!-- ViewPager2 for tabbed settings (fills remaining space) -->
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/view_pager"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <!-- Tab Layout at bottom -->
     <com.google.android.material.tabs.TabLayout
         android:id="@+id/tab_layout"
         android:layout_width="match_parent"
@@ -30,12 +56,5 @@
         app:tabIndicatorColor="@android:color/white"
         app:tabMode="fixed"
         app:tabGravity="fill" />
-
-    <!-- ViewPager2 for tabbed settings -->
-    <androidx.viewpager2.widget.ViewPager2
-        android:id="@+id/view_pager"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1" />
 
 </LinearLayout>
