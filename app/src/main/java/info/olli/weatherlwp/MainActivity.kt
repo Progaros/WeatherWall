@@ -399,8 +399,8 @@ class MainActivity : AppCompatActivity() {
     
     override fun onResume() {
         super.onResume()
+        // ParallaxScene.loadPrefs() handles all layer settings including weather and seasonal
         previewScene?.loadPrefs()
-        loadPreviewEffects()
     }
     
     override fun onDestroy() {
