@@ -40,7 +40,7 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         val cx = x * width - extendedOffset
         val cy = groundY * height
         val unit = minOf(width, height)
-        val s = size * unit * 0.020f
+        val s = size * unit * 0.012f
         val flip = if (direction > 0) 1f else -1f
         
         canvas.save()

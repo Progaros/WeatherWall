@@ -31,6 +31,10 @@ class SimulationController(private val context: Context) {
     private var targetGust = 0f      // Target gust intensity to ramp towards
     private var smoothedGust = 0f    // Smoothed output for gradual transitions
     
+    // Smooth wind transitions (prevent jumping when weather data changes)
+    private var smoothedWindStrength = 0.5f
+    private var smoothedWindDirection = 0f
+    
     /**
      * Reload settings from preferences.
      */
@@ -72,6 +76,7 @@ class SimulationController(private val context: Context) {
         val currentMs = System.currentTimeMillis()
         val deltaMs = if (lastUpdateMs > 0) (currentMs - lastUpdateMs).coerceIn(0, 100) else 16L
         lastUpdateMs = currentMs
+        val deltaSec = deltaMs / 1000f
         
         val windGust = calculateWindGust(effectiveWind, deltaMs)
         
@@ -83,7 +88,11 @@ class SimulationController(private val context: Context) {
         val visibility = WeatherRepository.getNormalizedVisibility(context)
         val moonIllumination = WeatherRepository.getMoonIllumination(context)
         val moonPhase = extendedData.moonPhase / 360f  // Normalize to 0-1
-        val windDirection = extendedData.windDirection.toFloat()
+        val rawWindDirection = extendedData.windDirection.toFloat()
+        
+        // Smooth wind values to prevent tree jumping on weather updates
+        val smoothedWind = smoothWindStrength(effectiveWind, deltaSec)
+        val smoothedDir = smoothWindDirection(rawWindDirection, deltaSec)
         
         // Calculate effective precipitation intensity based on weather type and probability
         val precipIntensity = when (effectiveWeather) {
@@ -117,8 +126,8 @@ class SimulationController(private val context: Context) {
             pressure = extendedData.pressure,
             moonPhase = moonPhase.coerceIn(0f, 1f),
             moonIllumination = moonIllumination.coerceIn(0f, 1f),
-            windStrength = effectiveWind.coerceIn(0f, 1f),
-            windDirection = windDirection,
+            windStrength = smoothedWind.coerceIn(0f, 1f),
+            windDirection = smoothedDir,
             windGust = windGust,
             windMultiplier = settings.windMultiplier,
             treeSwaySpeed = settings.treeSwaySpeed,
@@ -195,6 +204,38 @@ class SimulationController(private val context: Context) {
             lastSmoothedTime = rawTime
             rawTime
         }
+    }
+    
+    /**
+     * Smooth wind strength to prevent tree jumps when weather data updates.
+     */
+    private fun smoothWindStrength(targetStrength: Float, deltaSec: Float): Float {
+        // Smooth approach: ~1.5 seconds to reach target
+        val smoothFactor = 0.7f * deltaSec
+        smoothedWindStrength += (targetStrength - smoothedWindStrength) * smoothFactor.coerceIn(0f, 1f)
+        return smoothedWindStrength
+    }
+    
+    /**
+     * Smooth wind direction, handling 0/360 wraparound properly.
+     */
+    private fun smoothWindDirection(targetDirection: Float, deltaSec: Float): Float {
+        // Calculate shortest angular distance (handle wraparound)
+        var delta = targetDirection - smoothedWindDirection
+        
+        // Normalize to -180..180
+        while (delta > 180f) delta -= 360f
+        while (delta < -180f) delta += 360f
+        
+        // Smooth approach: ~2 seconds to reach target direction
+        val smoothFactor = 0.5f * deltaSec
+        smoothedWindDirection += delta * smoothFactor.coerceIn(0f, 1f)
+        
+        // Normalize result to 0..360
+        while (smoothedWindDirection < 0f) smoothedWindDirection += 360f
+        while (smoothedWindDirection >= 360f) smoothedWindDirection -= 360f
+        
+        return smoothedWindDirection
     }
     
     /**

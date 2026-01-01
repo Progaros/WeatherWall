@@ -85,6 +85,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
     private var cloudCount = 10
     private var cloudStretch = 2.0f
     private var cloudOpacity = 0.4f
+    private var cloudSpeedMultiplier = 1.0f  // Controls cloud movement speed (0=frozen, 1=normal, 2=fast)
     private var fluffinessMultiplier = 1.0f  // Controls puffs per cloud (density of each cloud)
     private var cloudsEnabled = true
     private var randomSeed = 42
@@ -108,17 +109,18 @@ class CloudLayer(private val context: Context) : SceneLayer {
         const val FRONT_LAYER_DEPTH_MIN = 0.28f
         const val FRONT_LAYER_DEPTH_MAX = 0.35f
         
-        // Group size ranges - large enough to provide good coverage with fewer groups
-        const val GROUP_WIDTH_MIN = 0.30f
-        const val GROUP_WIDTH_MAX = 0.65f
-        const val GROUP_HEIGHT_MIN = 0.12f
-        const val GROUP_HEIGHT_MAX = 0.22f
+        // Group size ranges - larger groups for better sky coverage
+        // Each group spans a significant portion of the sky
+        const val GROUP_WIDTH_MIN = 0.40f
+        const val GROUP_WIDTH_MAX = 0.80f
+        const val GROUP_HEIGHT_MIN = 0.15f
+        const val GROUP_HEIGHT_MAX = 0.28f
         
         // Extra padding for blur effect to prevent edge cutoff (fraction of group size)
         const val BLUR_PADDING = 0.3f
         
-        // Max groups for performance
-        const val MAX_GROUPS = 30
+        // Max groups for performance (increased for better overcast coverage)
+        const val MAX_GROUPS = 40
     }
     
     init {
@@ -134,6 +136,12 @@ class CloudLayer(private val context: Context) : SceneLayer {
         // Cloud count is directly from weather - number of cloud groups on screen
         // fluffinessMultiplier only affects how many puffs each cloud has (set later in render)
         val targetGroups = cloudCount.coerceIn(0, MAX_GROUPS)
+        
+        // If no clouds requested (NONE density), return empty list
+        if (targetGroups == 0) {
+            cloudGroups = emptyList()
+            return
+        }
         
         val newGroups = ArrayList<CloudGroup>(targetGroups)
         val random = Random(randomSeed.toLong() + 4000)
@@ -331,6 +339,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val windSpeed = RenderConstants.WIND_CLOUD_SPEED_MIN + 
             state.windStrength * (RenderConstants.WIND_CLOUD_SPEED_MAX - RenderConstants.WIND_CLOUD_SPEED_MIN)
         
+        // Apply user speed multiplier on top of wind speed
+        val effectiveSpeed = windSpeed * cloudSpeedMultiplier
+        
         // Draw back layer first, then front layer
         for (isBack in listOf(true, false)) {
             for (group in currentGroups) {
@@ -341,8 +352,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
                 val py = parallaxCalculator.getOffsetYForDepth(group.depthFactor)
                 
                 // Calculate group position with time-based movement
-                val timeOffset = state.timeSeconds * group.speed * windSpeed
-                var groupX = group.initialX + timeOffset / extendedWidth * 0.1f
+                // Wind affects speed: low wind = slow drift, high wind = fast movement
+                val timeOffset = state.timeSeconds * group.speed * effectiveSpeed
+                var groupX = group.initialX + timeOffset / extendedWidth * 0.25f  // Increased for more visible movement
                 groupX = groupX % 1f
                 if (groupX < 0) groupX += 1f
                 
@@ -418,6 +430,10 @@ class CloudLayer(private val context: Context) : SceneLayer {
         // Cloud opacity setting: 10-100 -> 0.1-1.0
         val opacityVal = prefs.getInt("pref_cloud_opacity", 40)
         val newOpacity = opacityVal / 100f
+        
+        // Cloud speed setting: 0-100 -> 0.0-2.0 (50 = normal 1.0)
+        val speedVal = prefs.getInt("pref_cloud_speed", 50)
+        cloudSpeedMultiplier = speedVal / 50f  // 0=frozen, 50=normal, 100=2x speed
         
         // Fluffiness/density multiplier: 50-300 -> 0.5-3.0 (controls puffs per cloud)
         // Higher = more puffs per cloud = denser/fluffier individual clouds

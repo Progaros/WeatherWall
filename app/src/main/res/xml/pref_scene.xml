@@ -204,7 +204,7 @@
             android:key="pref_tree_segments"
             android:title="Tree Segments"
             android:summary="Tiers per tree (1=simple, 5=detailed)"
-            android:defaultValue="2"
+            android:defaultValue="1"
             android:max="5"
             app:min="1"
             app:showSeekBarValue="true"

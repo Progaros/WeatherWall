@@ -163,8 +163,8 @@ data class SimulationState(
      * - NONE: 0 clouds
      * - LIGHT: 1-2 very fine, nearly transparent clouds
      * - MEDIUM: 4-6 clouds, some sky visible
-     * - HEAVY: 10-15 clouds, significant coverage
-     * - OVERCAST: 20-25 clouds, full sky coverage with overlap
+     * - HEAVY: 12-18 clouds, significant coverage
+     * - OVERCAST: 30-40 clouds, full sky coverage with overlap
      * 
      * CloudLayer uses cloud groups (each group is one visual cloud blob).
      * Groups have internal puffs controlled by fluffiness setting.
@@ -173,17 +173,17 @@ data class SimulationState(
         CloudDensity.NONE -> 0
         CloudDensity.LIGHT -> 2         // 1-2 very fine clouds
         CloudDensity.MEDIUM -> 6        // A few clouds
-        CloudDensity.HEAVY -> 14        // Significant coverage
-        CloudDensity.OVERCAST -> 25     // Full sky coverage
+        CloudDensity.HEAVY -> 18        // Significant coverage
+        CloudDensity.OVERCAST -> 35     // Full sky coverage
         CloudDensity.AUTO -> when (weather) {
             WeatherType.CLEAR -> 1              // Maybe one wispy cloud
             WeatherType.PARTLY_CLOUDY -> 5      // A few clouds
-            WeatherType.CLOUDY -> 12            // Good coverage
-            WeatherType.OVERCAST -> 25          // Full coverage
-            WeatherType.RAIN, WeatherType.THUNDERSTORM -> 22  // Near full coverage
-            WeatherType.SNOW -> 15              // Moderate-heavy
-            WeatherType.HAIL -> 20              // Heavy
-            WeatherType.FOG -> 25               // Full coverage
+            WeatherType.CLOUDY -> 16            // Good coverage
+            WeatherType.OVERCAST -> 35          // Full coverage
+            WeatherType.RAIN, WeatherType.THUNDERSTORM -> 30  // Near full coverage
+            WeatherType.SNOW -> 20              // Moderate-heavy
+            WeatherType.HAIL -> 28              // Heavy
+            WeatherType.FOG -> 35               // Full coverage
         }
     }
     

@@ -39,23 +39,23 @@ class CloudLayerTest {
     }
     
     @Test
-    fun `maximum groups capped at 25 for performance`() {
-        val maxGroups = 25
+    fun `maximum groups capped at 40 for performance`() {
+        val maxGroups = 40
         val cloudCount = 200  // More than overcast
         val avgCloudsPerGroup = 9  // (6+12)/2
         
         val calculated = (cloudCount / avgCloudsPerGroup).coerceIn(2, maxGroups)
-        assertEquals("Max groups capped", 22, calculated)  // 200/9 = 22, capped at 25
+        assertEquals("Max groups capped", 22, calculated)  // 200/9 = 22, still below 40
     }
     
     @Test
-    fun `overcast 120 clouds should produce reasonable groups`() {
-        val overcastClouds = 120
-        val avgCloudsPerGroup = 9  // (6+12)/2
-        val maxGroups = 25
+    fun `overcast 35 clouds should produce reasonable groups`() {
+        val overcastClouds = 35
+        val maxGroups = 40
         
-        val groups = (overcastClouds / avgCloudsPerGroup).coerceIn(2, maxGroups)
-        assertTrue("Overcast produces sufficient groups", groups >= 10)
+        // Now cloud count IS the group count (each cloud = one group)
+        val groups = overcastClouds.coerceIn(2, maxGroups)
+        assertTrue("Overcast produces sufficient groups", groups >= 30)
     }
 
     // ============== Layer Property Tests ==============

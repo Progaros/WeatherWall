@@ -176,7 +176,8 @@ class MainActivity : AppCompatActivity() {
         // Register preference change listener for live updates
         prefs.registerOnSharedPreferenceChangeListener(prefListener)
         
-        previewSurface.setZOrderOnTop(true)
+        // Use setZOrderMediaOverlay instead of setZOrderOnTop to allow UI elements on top
+        previewSurface.setZOrderMediaOverlay(true)
         previewSurface.holder.setFormat(android.graphics.PixelFormat.TRANSPARENT)
         
         previewSurface.holder.addCallback(object : SurfaceHolder.Callback {

@@ -342,6 +342,17 @@
             app:showSeekBarValue="true"
             app:updatesContinuously="true"
             android:dependency="pref_clouds_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_cloud_speed"
+            android:title="Cloud Speed"
+            android:summary="Movement speed (0=frozen, 50=normal, 100=fast)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_clouds_enabled" />
     </PreferenceCategory>
 
     <!-- Random Events -->
