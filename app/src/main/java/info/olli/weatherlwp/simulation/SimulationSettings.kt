@@ -51,6 +51,10 @@ class SimulationSettings(context: Context) {
     var cloudShadowsEnabled: Boolean = true
         private set
     
+    // Moon phase (for simulation mode)
+    var moonPhase: Float = 0.5f  // 0-1: 0=new, 0.5=full, 1=new (cycle end)
+        private set
+    
     // Debug
     var debugEnabled: Boolean = false
         private set
@@ -115,6 +119,10 @@ class SimulationSettings(context: Context) {
         val shadowVal = prefs.getInt("pref_shadow_strength", 50)
         shadowStrength = shadowVal / 100f
         cloudShadowsEnabled = prefs.getBoolean("pref_cloud_shadows", true)
+        
+        // Moon phase - only used in simulation mode (0-100 -> 0.0-1.0)
+        val moonPhaseVal = prefs.getInt("pref_moon_phase", 50)
+        moonPhase = moonPhaseVal / 100f
         
         // Debug - also handle cloud and weather overrides from simulation mode
         if (debugEnabled) {

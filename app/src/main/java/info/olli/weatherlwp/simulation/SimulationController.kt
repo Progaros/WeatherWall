@@ -95,7 +95,12 @@ class SimulationController(private val context: Context) {
         val humidity = extendedData.humidity / 100f
         val visibility = WeatherRepository.getNormalizedVisibility(context)
         val moonIllumination = WeatherRepository.getMoonIllumination(context)
-        val moonPhase = extendedData.moonPhase / 360f  // Normalize to 0-1
+        // In debug/simulation mode, use manual moon phase; otherwise use weather data
+        val moonPhase = if (settings.debugEnabled) {
+            settings.moonPhase  // Already 0-1
+        } else {
+            extendedData.moonPhase / 360f  // Normalize to 0-1
+        }
         val rawWindDirection = extendedData.windDirection.toFloat()
         
         // Smooth wind values to prevent tree jumping on weather updates

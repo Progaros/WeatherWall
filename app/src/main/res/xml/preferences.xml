@@ -600,6 +600,17 @@
             android:entryValues="@array/season_values"
             android:defaultValue="auto"
             android:dependency="pref_debug_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_moon_phase"
+            android:title="Moon Phase"
+            android:summary="0=New, 50=Full, 100=New (cycle end)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_debug_enabled" />
     </PreferenceCategory>
 
     <!-- About -->
