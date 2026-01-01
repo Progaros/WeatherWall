@@ -159,6 +159,14 @@ class SimulationController(private val context: Context) {
         // Cap deltaSec to 100ms to prevent explosion after visibility changes
         val deltaSec = (deltaMs / 1000f).coerceIn(0f, 0.1f)
         
+        // No gusts in calm conditions - fixes "constant shaking" at low wind
+        if (baseWind < 0.15f) {
+            targetGust = 0f
+            smoothedGust = (smoothedGust - deltaSec * 0.5f).coerceAtLeast(0f)  // Decay quickly
+            gustIntensity = smoothedGust
+            return smoothedGust
+        }
+        
         // Decay target gust intensity (this is what we're ramping towards)
         targetGust = (targetGust - gustDecay * deltaSec).coerceIn(0f, 1f)
         
@@ -170,11 +178,11 @@ class SimulationController(private val context: Context) {
             val interval = minInterval + (Math.random() * (maxInterval - minInterval)).toLong()
             nextGustTime = currentMs + interval
             
-            // Gust intensity: stronger at higher base wind
-            // At low wind (0.2): small gusts 0.3-0.5
-            // At high wind (0.8): strong gusts 0.7-1.0
-            val minGust = 0.2f + baseWind * 0.5f
-            val maxGust = 0.4f + baseWind * 0.6f
+            // Gust intensity: proportional to base wind (no fixed floor)
+            // At low wind (0.2): small gusts 0.1-0.25
+            // At high wind (0.8): strong gusts 0.5-0.8
+            val minGust = baseWind * 0.5f
+            val maxGust = baseWind * 0.3f + baseWind * 0.7f
             targetGust = minGust + Math.random().toFloat() * (maxGust - minGust)
             
             // Decay rate: faster at higher wind (gusts are shorter but more frequent)

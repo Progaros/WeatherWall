@@ -322,9 +322,13 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val deltaSec = deltaTimeMs / 1000f
         
         // Update each cloud group's position
+        // Speed is in normalized units per second (0-1 = screen width)
+        // effectiveSpeed range: 0.2-8.0, group.speed ~1.0
+        // At max wind, cloud crosses screen in ~0.5-1 second
         for (group in currentGroups) {
             // Move cloud based on current speed (delta-based, not absolute time)
-            val movement = deltaSec * group.speed * effectiveSpeed * 0.001f
+            // 0.002f scales to reasonable drift speed (full screen in ~50-250 seconds at min-max wind)
+            val movement = deltaSec * group.speed * effectiveSpeed * 0.002f
             var newX = group.currentX + movement
             // Wrap position smoothly (0-1 range)
             while (newX > 1f) newX -= 1f
