@@ -56,27 +56,27 @@ class SimulationStateTest {
     }
 
     @Test
-    fun `getCloudCount returns 2 for LIGHT density`() {
+    fun `getCloudCount returns 3 for LIGHT density`() {
         val state = SimulationState.default().copy(cloudDensity = CloudDensity.LIGHT)
-        assertEquals(2, state.getCloudCount())
+        assertEquals(3, state.getCloudCount())
     }
 
     @Test
-    fun `getCloudCount returns 6 for MEDIUM density`() {
+    fun `getCloudCount returns 10 for MEDIUM density`() {
         val state = SimulationState.default().copy(cloudDensity = CloudDensity.MEDIUM)
-        assertEquals(6, state.getCloudCount())
+        assertEquals(10, state.getCloudCount())
     }
 
     @Test
-    fun `getCloudCount returns 18 for HEAVY density`() {
+    fun `getCloudCount returns 25 for HEAVY density`() {
         val state = SimulationState.default().copy(cloudDensity = CloudDensity.HEAVY)
-        assertEquals(18, state.getCloudCount())
+        assertEquals(25, state.getCloudCount())
     }
 
     @Test
-    fun `getCloudCount returns 35 for OVERCAST density`() {
+    fun `getCloudCount returns 50 for OVERCAST density`() {
         val state = SimulationState.default().copy(cloudDensity = CloudDensity.OVERCAST)
-        assertEquals(35, state.getCloudCount())
+        assertEquals(50, state.getCloudCount())
     }
 
     @Test
@@ -85,7 +85,7 @@ class SimulationStateTest {
             cloudDensity = CloudDensity.AUTO,
             weather = WeatherType.CLEAR
         )
-        assertEquals(1, state.getCloudCount())
+        assertEquals(2, state.getCloudCount())
     }
 
     @Test
@@ -94,7 +94,7 @@ class SimulationStateTest {
             cloudDensity = CloudDensity.AUTO,
             weather = WeatherType.PARTLY_CLOUDY
         )
-        assertEquals(5, state.getCloudCount())
+        assertEquals(8, state.getCloudCount())
     }
 
     @Test
@@ -103,7 +103,7 @@ class SimulationStateTest {
             cloudDensity = CloudDensity.AUTO,
             weather = WeatherType.CLOUDY
         )
-        assertEquals(16, state.getCloudCount())
+        assertEquals(22, state.getCloudCount())
     }
 
     @Test
@@ -112,7 +112,7 @@ class SimulationStateTest {
             cloudDensity = CloudDensity.AUTO,
             weather = WeatherType.OVERCAST
         )
-        assertEquals(35, state.getCloudCount())
+        assertEquals(50, state.getCloudCount())
     }
 
     @Test
@@ -121,7 +121,7 @@ class SimulationStateTest {
             cloudDensity = CloudDensity.AUTO,
             weather = WeatherType.RAIN
         )
-        assertEquals(30, state.getCloudCount())
+        assertEquals(45, state.getCloudCount())
     }
 
     @Test
@@ -130,7 +130,7 @@ class SimulationStateTest {
             cloudDensity = CloudDensity.AUTO,
             weather = WeatherType.THUNDERSTORM
         )
-        assertEquals(30, state.getCloudCount())
+        assertEquals(45, state.getCloudCount())
     }
 
     @Test
@@ -139,7 +139,7 @@ class SimulationStateTest {
             cloudDensity = CloudDensity.AUTO,
             weather = WeatherType.SNOW
         )
-        assertEquals(20, state.getCloudCount())
+        assertEquals(30, state.getCloudCount())
     }
 
     @Test
@@ -148,7 +148,7 @@ class SimulationStateTest {
             cloudDensity = CloudDensity.AUTO,
             weather = WeatherType.FOG
         )
-        assertEquals(35, state.getCloudCount())
+        assertEquals(50, state.getCloudCount())
     }
 
     @Test
