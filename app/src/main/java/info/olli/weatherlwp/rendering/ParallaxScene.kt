@@ -8,6 +8,7 @@ import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.parallax.ParallaxSensorManager
 import info.olli.weatherlwp.simulation.SimulationController
+import info.olli.weatherlwp.simulation.SimulationState
 import info.olli.weatherlwp.weather.WeatherRepository
 
 /**
