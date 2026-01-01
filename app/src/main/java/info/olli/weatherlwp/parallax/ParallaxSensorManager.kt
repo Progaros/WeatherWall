@@ -9,26 +9,28 @@ import android.util.Log
 import android.view.Surface
 import android.view.WindowManager
 import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.sqrt
+import kotlin.math.tanh
 
 /**
- * Manages sensor input for parallax effect using proper pitch/roll extraction.
+ * Manages sensor input for parallax effect using gravity-direction tilt extraction.
  * 
  * Uses TYPE_ROTATION_VECTOR (preferred) or TYPE_GAME_ROTATION_VECTOR for orientation.
  * Falls back to TYPE_GRAVITY if rotation vectors unavailable.
  * 
- * KEY FIX (from ai.md analysis):
- * Using gravity vector components directly saturates near ±1 when phone is upright,
- * making up/down parallax appear "locked". The solution is to:
- * 1. Convert rotation vector to rotation matrix
- * 2. Extract pitch/roll angles using getOrientation()
- * 3. Use angles with baseline calibration for responsive parallax at all viewing angles
+ * KEY FIXES (from ai.md analysis):
+ * 1. Auto-recalibrate when display rotation changes
+ * 2. Use per-axis deadzone instead of magnitude-based (avoids killing single-axis motion)
+ * 3. Use soft clamp (tanh) instead of hard clamp to avoid "stuck at edge" feel
+ * 4. Extract gravity direction from remapped rotation matrix (more stable than Euler angles)
  */
 class ParallaxSensorManager(context: Context) : SensorEventListener {
     companion object {
         private const val TAG = "ParallaxSensorManager"
         private const val FILTER_ALPHA = 0.4f
-        private const val FULL_TILT_DEGREES = 30f
+        private const val FULL_TILT_DEGREES = 45f  // Increased from 30 for more range
         private const val FULL_TILT_RADIANS = (FULL_TILT_DEGREES * PI / 180f).toFloat()
         private const val DEADZONE = 0.03f
         private const val CALIBRATION_SAMPLES = 10
@@ -50,7 +52,6 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     
     private val rotationMatrix = FloatArray(9)
     private val remappedMatrix = FloatArray(9)
-    private val orientationAngles = FloatArray(3)
 
     private var filteredX = 0f
     private var filteredY = 0f
@@ -61,6 +62,9 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     private var isCalibrated = false
     private var calibrationPitchSum = 0f
     private var calibrationRollSum = 0f
+    
+    // Track display rotation for auto-recalibration
+    private var lastDisplayRotation = Surface.ROTATION_0
     
     private var listener: Listener? = null
     private var isStarted = false
@@ -81,6 +85,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             calibrationPitchSum = 0f
             calibrationRollSum = 0f
             isCalibrated = false
+            lastDisplayRotation = getCurrentDisplayRotation()
             
             sensorManager.registerListener(this, activeSensor, SensorManager.SENSOR_DELAY_GAME)
             isStarted = true
@@ -101,13 +106,28 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         calibrationPitchSum = 0f
         calibrationRollSum = 0f
         isCalibrated = false
+        filteredX = 0f
+        filteredY = 0f
+        Log.d(TAG, "Recalibration triggered")
     }
     
     fun isRunning(): Boolean = isStarted
+    
+    @Suppress("DEPRECATION")
+    private fun getCurrentDisplayRotation(): Int {
+        return windowManager.defaultDisplay?.rotation ?: Surface.ROTATION_0
+    }
 
     override fun onSensorChanged(event: SensorEvent) {
-        @Suppress("DEPRECATION")
-        val displayRotation = windowManager.defaultDisplay?.rotation ?: Surface.ROTATION_0
+        val displayRotation = getCurrentDisplayRotation()
+        
+        // Auto-recalibrate if display rotation changed
+        if (displayRotation != lastDisplayRotation) {
+            Log.d(TAG, "Display rotation changed: $lastDisplayRotation -> $displayRotation, recalibrating")
+            lastDisplayRotation = displayRotation
+            recalibrate()
+            return  // Skip this sample, wait for fresh calibration
+        }
 
         when (event.sensor.type) {
             Sensor.TYPE_ROTATION_VECTOR, Sensor.TYPE_GAME_ROTATION_VECTOR -> {
@@ -129,31 +149,20 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             else -> Pair(SensorManager.AXIS_X, SensorManager.AXIS_Y)
         }
         SensorManager.remapCoordinateSystem(rotationMatrix, axisX, axisY, remappedMatrix)
-        SensorManager.getOrientation(remappedMatrix, orientationAngles)
         
-        val pitch = orientationAngles[1]
-        val roll = orientationAngles[2]
+        // Extract gravity direction from remapped rotation matrix
+        // Android rotation matrix is row-major 3x3. To get world-up (0,0,1) in device coords,
+        // we need the third COLUMN of the matrix: indices [2, 5, 8]
+        // Negating gives gravity direction (pointing down instead of up)
+        val gx = -remappedMatrix[2]
+        val gy = -remappedMatrix[5]
+        val gz = -remappedMatrix[8]
         
-        if (!isCalibrated) {
-            calibrationPitchSum += pitch
-            calibrationRollSum += roll
-            calibrationCount++
-            if (calibrationCount >= CALIBRATION_SAMPLES) {
-                baselinePitch = calibrationPitchSum / calibrationCount
-                baselineRoll = calibrationRollSum / calibrationCount
-                isCalibrated = true
-                Log.d(TAG, "Calibrated: pitch=${Math.toDegrees(baselinePitch.toDouble())}deg")
-            }
-            return
-        }
+        // Compute pitch/roll from gravity direction (more stable than Euler angles)
+        val roll = atan2(gx, gz)
+        val pitch = atan2(gy, gz)
         
-        val relativePitch = pitch - baselinePitch
-        val relativeRoll = roll - baselineRoll
-        
-        val targetX = (-relativeRoll / FULL_TILT_RADIANS).coerceIn(-1f, 1f)
-        val targetY = (-relativePitch / FULL_TILT_RADIANS).coerceIn(-1f, 1f)
-        
-        processTiltValues(targetX, targetY)
+        processOrientationAngles(pitch, roll)
     }
     
     private fun handleGravityVector(values: FloatArray, displayRotation: Int) {
@@ -170,9 +179,13 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         val norm = sqrt(gx * gx + gy * gy + gz * gz)
         if (norm < 0.1f) return
         
-        val roll = kotlin.math.atan2(gx, gz)
-        val pitch = kotlin.math.atan2(gy, gz)
+        val roll = atan2(gx, gz)
+        val pitch = atan2(gy, gz)
         
+        processOrientationAngles(pitch, roll)
+    }
+    
+    private fun processOrientationAngles(pitch: Float, roll: Float) {
         if (!isCalibrated) {
             calibrationPitchSum += pitch
             calibrationRollSum += roll
@@ -181,6 +194,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
                 baselinePitch = calibrationPitchSum / calibrationCount
                 baselineRoll = calibrationRollSum / calibrationCount
                 isCalibrated = true
+                Log.d(TAG, "Calibrated: pitch=${Math.toDegrees(baselinePitch.toDouble())}deg, roll=${Math.toDegrees(baselineRoll.toDouble())}deg")
             }
             return
         }
@@ -188,16 +202,23 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         val relativePitch = pitch - baselinePitch
         val relativeRoll = roll - baselineRoll
         
-        val targetX = (-relativeRoll / FULL_TILT_RADIANS).coerceIn(-1f, 1f)
-        val targetY = (-relativePitch / FULL_TILT_RADIANS).coerceIn(-1f, 1f)
+        // Use soft clamp (tanh) instead of hard coerceIn to avoid "stuck at edge" feel
+        // tanh approaches ±1 asymptotically, giving smooth response at all tilts
+        // With FULL_TILT_DEGREES=45 and no extra multiplier, we get a gentle curve
+        val normalizedX = -relativeRoll / FULL_TILT_RADIANS
+        val normalizedY = -relativePitch / FULL_TILT_RADIANS
+        
+        val targetX = tanh(normalizedX.toDouble()).toFloat()
+        val targetY = tanh(normalizedY.toDouble()).toFloat()
         
         processTiltValues(targetX, targetY)
     }
     
     private fun processTiltValues(targetX: Float, targetY: Float) {
-        val tiltMag = sqrt(targetX * targetX + targetY * targetY)
-        val scaledX = if (tiltMag > DEADZONE) targetX else 0f
-        val scaledY = if (tiltMag > DEADZONE) targetY else 0f
+        // Per-axis deadzone instead of magnitude-based
+        // This prevents killing single-axis motion when combined magnitude is small
+        val scaledX = if (abs(targetX) > DEADZONE) targetX else 0f
+        val scaledY = if (abs(targetY) > DEADZONE) targetY else 0f
         
         filteredX += FILTER_ALPHA * (scaledX - filteredX)
         filteredY += FILTER_ALPHA * (scaledY - filteredY)

@@ -1,7 +1,8 @@
 # WeatherWall
 
-[![Build Status](https://ci.olli.info/api/badges/4/status.svg)](https://ci.olli.info/repos/4)  
-[Download APK](https://git.olli.info/Oliver/WeatherWall/releases/latest)
+[![Build Status](https://ci.olli.info/api/badges/4/status.svg)](https://ci.olli.info/repos/4)
+
+📥 **[Download Latest APK](https://git.olli.info/Oliver/WeatherWall/releases/latest)**
 
 **Open-source, privacy-respecting, battery-friendly Android Live Wallpaper** with low-poly vector layers, weather effects, seasonal events, and optional 3D parallax.
 
@@ -14,8 +15,10 @@
 ### 🎨 Visual Effects
 - **Low-poly parallax scene** with layered mountains, hills, and pine trees
 - **Dynamic day/night cycle** with smooth sky gradients (dawn, day, dusk, night)
+- **Procedural moon phases** with accurate waxing/waning cycle
 - **Weather effects**: Rain, Snow, Lightning with particle systems
 - **Fog overlay** for atmospheric depth
+- **Cloud layers** with wind-driven movement and soft blur
 - **Seasonal events**: Christmas stars (Dec 15-26), New Year fireworks (Dec 27 - Jan 7)
 
 ### 🦅 Random Events
@@ -43,10 +46,13 @@ Animated wildlife and sky events appear randomly throughout the day:
 - All processing done locally on device
 
 ### ⚙️ Customization
-- Parallax strength, smoothing, and depth separation
+- Parallax strength, smoothing, return speed, and depth separation
+- Sun/moon arc height, celestial size, moon enable/disable
 - Tree density, spread, sparsity, and sway speed
+- Cloud speed, opacity, density, and stretch
 - Individual event toggles (enable/disable specific animals)
 - Mountain and hill count, height, roughness
+- Simulation mode for testing time, weather, wind, moon phase
 
 ## 📱 Screenshots
 
@@ -97,7 +103,7 @@ docker run --rm -v "$PWD":/workspace -w /workspace ghcr.io/cirruslabs/android-sd
 
 ## 🧪 Testing
 
-The project includes 71 unit tests covering all major features:
+The project includes 290+ unit tests covering all major features:
 
 ```bash
 # Run all tests locally
@@ -112,11 +118,13 @@ open app/build/reports/tests/testDebugUnitTest/index.html
 
 **Test Coverage:**
 - `ParallaxSceneTest` - Terrain baseline, parallax factors, color transitions
-- `ParallaxSensorManagerTest` - Accelerometer axis mapping, smoothing
+- `ParallaxSensorManagerTest` - Rotation matrix, orientation extraction
+- `ParallaxCalculatorTest` - Return speed, tilt thresholds
 - `DayNightCycleTest` - Time periods, sunset colors, manual time override
 - `WeatherRepositoryTest` - Data freshness, staleness detection
 - `SeasonalEventsTest` - Christmas/New Year detection, debug overrides
-- `CloudLayerTest` - Soft edges, density levels
+- `CloudLayerTest` - Soft edges, density levels, bitmap sizing
+- `SkyLayerTest` - Moon phases, celestial rendering
 - `TreeRenderingTest` - Placement, depth coloring, scaling
 - `HillsTerrainTest` - Layer ordering, parallax matching
 - `BuildConfigTest` - Version codes, surface lifecycle
@@ -132,13 +140,14 @@ app/src/main/java/info/olli/weatherlwp/
 ├── prefs/
 │   └── SettingsFragment.kt      # Preferences UI with event spawning
 ├── rendering/
-│   ├── CloudLayer.kt            # Animated cloud shapes
+│   ├── CloudLayer.kt            # Animated cloud shapes with caching
 │   ├── MountainLayer.kt         # Background mountain silhouettes
 │   ├── ParallaxScene.kt         # Main scene renderer and layer orchestration
 │   ├── RandomEventLayer.kt      # Wildlife and sky event management
 │   ├── RenderConstants.kt       # Shared rendering constants
+│   ├── SceneLayer.kt            # Layer interface for all renderers
 │   ├── SeasonalEvents.kt        # Christmas/New Year effects
-│   ├── SkyLayer.kt              # Gradient sky and sun/moon
+│   ├── SkyLayer.kt              # Gradient sky, sun/moon with phases
 │   ├── TerrainLayer.kt          # Hills and trees with wind animation
 │   ├── WeatherLayer.kt          # Rain/Snow/Lightning particles
 │   └── events/                  # Individual event implementations

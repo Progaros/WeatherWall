@@ -360,19 +360,20 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         eventsEnabled = prefs.getBoolean("pref_events_enabled", true)
         val chance = prefs.getInt("pref_event_frequency", 50)
-        // Use exponential scale for spawn chance
-        // At 0: 0.0001 (very rare)
-        // At 50: ~0.003 (moderate)
-        // At 100: 0.5 (extremely frequent - near constant spawning)
-        // Formula: base * e^(k * x) where k controls curve steepness
-        spawnChance = if (chance <= 0) {
-            0.0001f
-        } else {
-            val normalized = chance / 100f
-            // Exponential curve: 0.0001 * e^(8.5 * normalized)
-            // At 0: 0.0001, at 50: ~0.004, at 100: ~0.5
-            0.0001f * kotlin.math.exp(8.5f * normalized).toFloat()
-        }
+        // Use steep logarithmic-exponential scale for spawn chance per 500ms bucket
+        // At 0: effectively 0 (disabled)
+        // At 10: 0.0001 (extremely rare - one event per ~80 minutes)
+        // At 50: ~0.02 (moderate - one event per ~25 seconds)
+        // At 100: 0.8 (constant spawning - multiple per second capped by max 8)
+        spawnChance = when {
+            chance <= 0 -> 0f  // Disabled
+            chance <= 10 -> 0.00001f * chance  // Very low: 0.00001 to 0.0001
+            else -> {
+                // Steep exponential: 0.0001 at 10, ~0.02 at 50, 0.8 at 100
+                val normalized = (chance - 10) / 90f  // 0-1 range for 10-100
+                0.0001f * kotlin.math.pow(8000.0, normalized.toDouble()).toFloat()
+            }
+        }.coerceAtMost(0.9f)
         
         airplaneEnabled = prefs.getBoolean("pref_event_airplane", true)
         birdsEnabled = prefs.getBoolean("pref_event_birds", true)
