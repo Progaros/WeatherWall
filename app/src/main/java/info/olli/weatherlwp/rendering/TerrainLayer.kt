@@ -26,6 +26,8 @@ import kotlin.random.Random
  * - Reference aspect ratio
  * - Parallax depth range
  * - Base colors
+ * 
+ * Supports integration with RandomEventLayer to draw ground animals at correct depth.
  */
 class TerrainLayer(private val context: Context) : SceneLayer {
     private val hillPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
@@ -45,6 +47,22 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     // Extended canvas dimensions for parallax content
     private var extendedWidth = 0f
     private var extendedOffset = 0f  // Offset to center extended content
+    
+    // Callback for drawing ground events at specific depth levels
+    // Called during draw() between tree layers to integrate animals with proper depth
+    var groundEventDrawer: GroundEventDrawer? = null
+    
+    /**
+     * Callback interface for drawing ground events at specific depth levels.
+     */
+    interface GroundEventDrawer {
+        /**
+         * Draw ground events in the depth range [minDepth, maxDepth).
+         * @param minDepth Minimum depth factor (inclusive)
+         * @param maxDepth Maximum depth factor (exclusive)
+         */
+        fun drawInRange(minDepth: Float, maxDepth: Float)
+    }
     
     // Data structures (immutable after creation)
     private data class HillData(
@@ -364,9 +382,21 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk
         )
         
+        // Track previous hill depth for ground event integration
+        var previousHillDepth = -1f  // Start with very far background
+        
         // Draw Hills AND their Trees together, sorted by depth
         // This ensures trees on background hills are drawn before foreground hills
-        for (hill in currentHills) {
+        // Ground events (animals) are drawn between hill layers based on their depth
+        for ((index, hill) in currentHills.withIndex()) {
+            // Before drawing this hill, draw any ground events between previous and current depth
+            groundEventDrawer?.let { drawer ->
+                val nextDepth = hill.depthFactor
+                if (previousHillDepth < nextDepth) {
+                    drawer.drawInRange(previousHillDepth, nextDepth)
+                }
+            }
+            
             val px = parallaxCalculator.getOffsetXForDepth(hill.depthFactor)
             val py = parallaxCalculator.getOffsetYForDepth(hill.depthFactor)
             canvas.save()
@@ -403,7 +433,12 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 
                 canvas.restore()
             }
+            
+            previousHillDepth = hill.depthFactor
         }
+        
+        // Draw any remaining ground events in front of all hills
+        groundEventDrawer?.drawInRange(previousHillDepth, Float.MAX_VALUE)
     }
     
     private fun drawHill(canvas: Canvas, hill: HillData, hillColor: Int) {

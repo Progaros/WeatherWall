@@ -12,12 +12,20 @@ import kotlin.random.Random
 /**
  * Rabbit with bunny silhouette using local coordinate system.
  * Uses absolute time for deterministic position across preview/wallpaper.
+ * Depth is based on groundY - animals lower on screen are in front.
  */
 class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
+    override val layer = EventLayer.GROUND
+    
     private val startX = if (random.nextBoolean()) -0.05f else 1.05f
     private val direction = if (startX < 0.5f) 1f else -1f
     private val groundY = 0.85f + random.nextFloat() * 0.05f
     private val size = 0.5f + random.nextFloat() * 0.2f
+    
+    // Depth based on groundY: lower on screen = more foreground (higher depthFactor)
+    // groundY 0.85 -> depthFactor -0.25 (background)
+    // groundY 0.90 -> depthFactor 0.00 (foreground)
+    override val depthFactor: Float = -0.25f + (groundY - 0.85f) / 0.05f * 0.25f
     
     // Reduced speed: was 0.0001, now 0.00003 (~3x slower)
     private val avgSpeed = 0.00003f

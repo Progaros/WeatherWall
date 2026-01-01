@@ -29,10 +29,10 @@ class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
         2 -> Color.rgb(255, 240, 80)   // Yellow
         else -> Color.rgb(255, 180, 200) // Pink
     }
-    private val driftSpeedX = 0.05f + random.nextFloat() * 0.08f
-    private val driftSpeedY = 0.03f + random.nextFloat() * 0.04f
-    private val wobbleFreqX = 2.0f + random.nextFloat() * 1.5f
-    private val wobbleFreqY = 1.5f + random.nextFloat() * 1.0f
+    private val driftSpeedX = 0.015f + random.nextFloat() * 0.025f  // Slowed 3x
+    private val driftSpeedY = 0.01f + random.nextFloat() * 0.015f   // Slowed 3x
+    private val wobbleFreqX = 1.2f + random.nextFloat() * 0.8f     // Slower wobble
+    private val wobbleFreqY = 0.8f + random.nextFloat() * 0.6f     // Slower wobble
     private val wobbleAmpX = 0.03f + random.nextFloat() * 0.04f
     private val wobbleAmpY = 0.02f + random.nextFloat() * 0.03f
     private val direction = if (random.nextBoolean()) 1f else -1f

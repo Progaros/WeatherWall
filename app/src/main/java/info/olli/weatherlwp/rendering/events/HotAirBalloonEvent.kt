@@ -18,7 +18,7 @@ class HotAirBalloonEvent(random: Random, override val spawnTimeMs: Long = System
     override val layer = EventLayer.MID_SKY  // In front of mountains
     
     private val y = 0.12f + random.nextFloat() * 0.15f
-    private val speed = 0.00003f + random.nextFloat() * 0.00002f
+    private val speed = 0.000015f + random.nextFloat() * 0.00001f  // Slowed 2x - graceful drift
     override val durationMs: Long = (1.3f / speed).toLong()
     
     private val size = 8f + random.nextFloat() * 4f

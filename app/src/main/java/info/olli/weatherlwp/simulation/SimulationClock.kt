@@ -65,9 +65,21 @@ class SimulationClock {
     
     /**
      * Get simulation time in seconds for smoother animations.
+     * 
+     * IMPORTANT: This wraps within a 24-hour period (86400 seconds) to avoid
+     * floating-point precision issues with large numbers. Using epoch time directly
+     * (1.7+ billion seconds) causes sin() and other math operations to lose precision.
+     * 
+     * The wrap ensures:
+     * - Animations stay smooth (no jitter from float precision loss)
+     * - Time is still consistent across preview and live wallpaper
+     * - Positions reset every 24 hours (imperceptible for animations)
      */
     fun getTimeSeconds(): Float {
-        return getAbsoluteTimeMs() / 1000f
+        val absoluteMs = getAbsoluteTimeMs()
+        // Wrap to 24-hour period (86400 seconds = 86400000 ms)
+        val wrappedMs = absoluteMs % 86400000L
+        return wrappedMs / 1000f
     }
     
     /**

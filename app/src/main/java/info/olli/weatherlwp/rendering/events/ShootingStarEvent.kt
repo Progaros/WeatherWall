@@ -19,7 +19,7 @@ class ShootingStarEvent(random: Random, override val spawnTimeMs: Long = System.
     private val startX = 0.2f + random.nextFloat() * 0.6f
     private val startY = 0.05f + random.nextFloat() * 0.15f
     private val angle = 0.3f + random.nextFloat() * 0.4f
-    private val speed = 0.002f + random.nextFloat() * 0.001f
+    private val speed = 0.0005f + random.nextFloat() * 0.00025f  // Slowed 4x - more graceful streak
     private val length = 0.08f + random.nextFloat() * 0.06f
     override val durationMs: Long = ((1.0f + length) / speed).toLong()
     

@@ -70,9 +70,27 @@ class ParallaxScene(
         layers.add(randomEventLayer)  // Ground animals and sky events (behind trees)
         layers.add(terrainLayer) // Hills and Trees (foreground)
         
+        // Set up ground event drawer for proper depth integration
+        // This allows animals to appear behind/in front of trees based on their depth
+        terrainLayer.groundEventDrawer = object : TerrainLayer.GroundEventDrawer {
+            override fun drawInRange(minDepth: Float, maxDepth: Float) {
+                randomEventLayer.drawGroundEventsInRange(
+                    lastCanvas ?: return,
+                    lastState ?: return,
+                    parallaxCalculator,
+                    minDepth,
+                    maxDepth
+                )
+            }
+        }
+        
         sensor.setListener(this)
         loadPrefs()
     }
+    
+    // Temporary references for ground event drawer callback
+    private var lastCanvas: Canvas? = null
+    private var lastState: SimulationState? = null
 
     fun start() {
         sensor.start()
@@ -105,14 +123,19 @@ class ParallaxScene(
             // Get current simulation state (single source of truth)
             val state = simulationController.getState()
             
+            // Store for ground event drawer callback
+            lastCanvas = canvas
+            lastState = state
+            
             // Check for manual spawn trigger from settings
-            // Use timestamp-based trigger - extended window to 2000ms for reliability
+            // Use timestamp-based trigger - extended window to 10s for reliability when 
+            // switching from settings back to home screen (wallpaper may not be visible immediately)
             // Both preview and live wallpaper will respond to this trigger
             val spawnTriggerTime = prefs.getLong("trigger_spawn_event_time", 0L)
             val timeSinceSpawnTrigger = System.currentTimeMillis() - spawnTriggerTime
-            if (spawnTriggerTime > 0 && timeSinceSpawnTrigger < 2000) {
+            if (spawnTriggerTime > 0 && timeSinceSpawnTrigger < 10000) {
                 // Clear immediately to prevent duplicate spawns
-                prefs.edit().putLong("trigger_spawn_event_time", 0L).apply()
+                prefs.edit().putLong("trigger_spawn_event_time", 0L).commit()
                 randomEventLayer.debugSpawnEvent()
                 Log.d(TAG, "Manual spawn trigger received (delay: ${timeSinceSpawnTrigger}ms)")
             }
@@ -121,11 +144,11 @@ class ParallaxScene(
             val specificEventTime = prefs.getLong("trigger_spawn_specific_event_time", 0L)
             val specificEvent = prefs.getString("trigger_spawn_specific_event", null)
             val timeSinceSpecificTrigger = System.currentTimeMillis() - specificEventTime
-            if (specificEvent != null && specificEventTime > 0 && timeSinceSpecificTrigger < 2000) {
+            if (specificEvent != null && specificEventTime > 0 && timeSinceSpecificTrigger < 10000) {
                 prefs.edit()
                     .remove("trigger_spawn_specific_event")
                     .putLong("trigger_spawn_specific_event_time", 0L)
-                    .apply()
+                    .commit()
                 randomEventLayer.spawnSpecificEvent(specificEvent)
                 Log.d(TAG, "Specific spawn trigger received: $specificEvent (delay: ${timeSinceSpecificTrigger}ms)")
             }
@@ -146,11 +169,10 @@ class ParallaxScene(
             // 3. FAR SKY events (shooting stars, balloons, UFOs) - behind mountains
             // 4. Mountains
             // 5. MID SKY events (birds, planes, eagles) - in front of mountains
-            // 6. Terrain (hills + trees)
-            // 7. GROUND events (foxes, rabbits, etc.) - in front of terrain
+            // 6. Terrain (hills + trees + ground animals interleaved by depth)
             for (layer in layers) {
                 try {
-                    // Skip randomEventLayer in normal iteration - we draw it specially
+                    // Skip randomEventLayer in normal iteration - ground events drawn by terrain callback
                     if (layer === randomEventLayer) continue
                     
                     // Before drawing mountainLayer, draw far sky events
@@ -158,17 +180,15 @@ class ParallaxScene(
                         randomEventLayer.drawFarSkyEvents(canvas, state, parallaxCalculator)
                     }
                     
-                    layer.draw(canvas, state, parallaxCalculator)
-                    
                     // After drawing mountainLayer, draw mid sky events (birds, planes, eagles)
                     if (layer === mountainLayer) {
+                        layer.draw(canvas, state, parallaxCalculator)
                         randomEventLayer.drawMidSkyEvents(canvas, state, parallaxCalculator)
+                        continue  // Skip the layer.draw below since we already drew it
                     }
                     
-                    // After drawing terrainLayer, draw ground events (foxes, rabbits, etc.)
-                    if (layer === terrainLayer) {
-                        randomEventLayer.drawGroundEvents(canvas, state, parallaxCalculator)
-                    }
+                    // Terrain layer draws hills, trees, and ground animals interleaved by depth
+                    layer.draw(canvas, state, parallaxCalculator)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error drawing layer ${layer.javaClass.simpleName}", e)
                 }

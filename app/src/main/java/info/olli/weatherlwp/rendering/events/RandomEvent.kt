@@ -13,7 +13,7 @@ enum class EventLayer {
     FAR_SKY,
     /** Mid sky - drawn after mountains but before hills/trees (birds, planes, eagles) */
     MID_SKY,
-    /** Ground level - drawn after terrain (foxes, rabbits, butterflies, fireflies) */
+    /** Ground level - drawn interleaved with terrain based on depthFactor */
     GROUND
 }
 
@@ -31,6 +31,15 @@ interface RandomEvent {
      */
     val layer: EventLayer
         get() = EventLayer.GROUND
+    
+    /**
+     * Depth factor for ground events, determines draw order relative to trees.
+     * Range: -0.5 (far background) to +0.05 (near foreground)
+     * Default: 0f (middle ground)
+     * Only used for GROUND layer events.
+     */
+    val depthFactor: Float
+        get() = 0f
     
     /**
      * The absolute time (epoch ms) when this event was spawned.

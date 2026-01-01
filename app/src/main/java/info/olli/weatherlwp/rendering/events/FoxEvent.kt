@@ -13,13 +13,21 @@ import kotlin.random.Random
 /**
  * Fox with proper tail and ears using local coordinate system.
  * Uses absolute time for deterministic position across preview/wallpaper.
+ * Depth is based on groundY - animals lower on screen are in front.
  */
 class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
+    override val layer = EventLayer.GROUND
+    
     private val startX = if (random.nextBoolean()) -0.1f else 1.1f
     private val direction = if (startX < 0.5f) 1f else -1f
     private val groundY = 0.82f + random.nextFloat() * 0.06f
     private val size = 0.7f + random.nextFloat() * 0.3f
     private val path = Path()
+    
+    // Depth based on groundY: lower on screen = more foreground (higher depthFactor)
+    // groundY 0.82 -> depthFactor -0.35 (background)
+    // groundY 0.88 -> depthFactor -0.05 (foreground)
+    override val depthFactor: Float = -0.35f + (groundY - 0.82f) / 0.06f * 0.30f
     
     // Reduced speed: was 0.00008, now 0.000025 (~3x slower)
     private val speed = 0.000025f

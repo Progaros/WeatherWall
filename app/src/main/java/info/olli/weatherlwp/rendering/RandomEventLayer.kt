@@ -144,8 +144,8 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     }
     
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
-        // Default draw method draws ground events only (in front of terrain)
-        drawEventsByLayer(canvas, state, parallaxCalculator, EventLayer.GROUND)
+        // Default draw method draws all ground events (for backward compatibility)
+        drawGroundEvents(canvas, state, parallaxCalculator)
     }
     
     /**
@@ -165,11 +165,97 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     }
     
     /**
-     * Draw ground events (foxes, rabbits, butterflies, fireflies, owls).
-     * Call this AFTER drawing terrain/hills.
+     * Draw all ground events (legacy method).
      */
     fun drawGroundEvents(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         drawEventsByLayer(canvas, state, parallaxCalculator, EventLayer.GROUND)
+    }
+    
+    /**
+     * Draw ground events with depthFactor less than the given threshold.
+     * Used to draw background animals before drawing trees at that depth.
+     * @param maxDepth Events with depthFactor < maxDepth will be drawn
+     */
+    fun drawGroundEventsBeforeDepth(canvas: Canvas, state: SimulationState, 
+                                     parallaxCalculator: ParallaxCalculator, maxDepth: Float) {
+        if (width <= 0 || height <= 0 || !eventsEnabled) return
+        
+        val currentEvents = events
+        if (currentEvents.isEmpty()) return
+        
+        val ambientColor = RenderConstants.getAmbientColor(
+            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk
+        )
+        
+        for (event in currentEvents) {
+            if (event.layer == EventLayer.GROUND && event.depthFactor < maxDepth) {
+                try {
+                    event.draw(canvas, paint, strokePaint, parallaxCalculator, extendedWidth, height, 
+                        state.timeSeconds, ambientColor, extendedOffset)
+                } catch (e: Exception) {
+                    android.util.Log.e("RandomEventLayer", "Error drawing event ${event.javaClass.simpleName}", e)
+                }
+            }
+        }
+    }
+    
+    /**
+     * Draw ground events with depthFactor in the given range.
+     * Used to draw animals between tree layers.
+     * @param minDepth Events with depthFactor >= minDepth will be drawn
+     * @param maxDepth Events with depthFactor < maxDepth will be drawn
+     */
+    fun drawGroundEventsInRange(canvas: Canvas, state: SimulationState, 
+                                 parallaxCalculator: ParallaxCalculator, 
+                                 minDepth: Float, maxDepth: Float) {
+        if (width <= 0 || height <= 0 || !eventsEnabled) return
+        
+        val currentEvents = events
+        if (currentEvents.isEmpty()) return
+        
+        val ambientColor = RenderConstants.getAmbientColor(
+            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk
+        )
+        
+        for (event in currentEvents) {
+            if (event.layer == EventLayer.GROUND && 
+                event.depthFactor >= minDepth && event.depthFactor < maxDepth) {
+                try {
+                    event.draw(canvas, paint, strokePaint, parallaxCalculator, extendedWidth, height, 
+                        state.timeSeconds, ambientColor, extendedOffset)
+                } catch (e: Exception) {
+                    android.util.Log.e("RandomEventLayer", "Error drawing event ${event.javaClass.simpleName}", e)
+                }
+            }
+        }
+    }
+    
+    /**
+     * Draw ground events with depthFactor >= the given threshold.
+     * Used to draw foreground animals after all trees.
+     * @param minDepth Events with depthFactor >= minDepth will be drawn
+     */
+    fun drawGroundEventsAfterDepth(canvas: Canvas, state: SimulationState, 
+                                    parallaxCalculator: ParallaxCalculator, minDepth: Float) {
+        if (width <= 0 || height <= 0 || !eventsEnabled) return
+        
+        val currentEvents = events
+        if (currentEvents.isEmpty()) return
+        
+        val ambientColor = RenderConstants.getAmbientColor(
+            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk
+        )
+        
+        for (event in currentEvents) {
+            if (event.layer == EventLayer.GROUND && event.depthFactor >= minDepth) {
+                try {
+                    event.draw(canvas, paint, strokePaint, parallaxCalculator, extendedWidth, height, 
+                        state.timeSeconds, ambientColor, extendedOffset)
+                } catch (e: Exception) {
+                    android.util.Log.e("RandomEventLayer", "Error drawing event ${event.javaClass.simpleName}", e)
+                }
+            }
+        }
     }
     
     private fun drawEventsByLayer(canvas: Canvas, state: SimulationState, 
