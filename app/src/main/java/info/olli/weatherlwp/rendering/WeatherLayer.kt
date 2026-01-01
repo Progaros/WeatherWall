@@ -241,13 +241,28 @@ class WeatherLayer : SceneLayer {
     
     private fun renderLightningLegacy(canvas: Canvas, timeSeconds: Float) {
         drawStormClouds(canvas, timeSeconds)
-        lightningTimer++
-        if (lightningTimer > 90 + Random.nextInt(150)) {
-            lightningTimer = 0
+        
+        // Use frame-based timing for legacy API (approximate 60fps)
+        // Convert to ms-based internally
+        val frameDeltaMs = 16L  // ~60fps
+        lightningTimerMs += frameDeltaMs
+        
+        // Initialize next flash time if needed
+        if (lightningNextFlashMs <= 0L) {
+            lightningNextFlashMs = RenderConstants.LIGHTNING_INTERVAL_MIN_MS + 
+                Random.nextLong(RenderConstants.LIGHTNING_INTERVAL_RANGE_MS)
+        }
+        
+        if (!lightningFlash && lightningTimerMs >= lightningNextFlashMs) {
+            lightningTimerMs = 0L
+            lightningNextFlashMs = RenderConstants.LIGHTNING_INTERVAL_MIN_MS + 
+                Random.nextLong(RenderConstants.LIGHTNING_INTERVAL_RANGE_MS)
             lightningFlash = true
+            lightningFlashRemainingMs = RenderConstants.LIGHTNING_FLASH_DURATION_MS
             lightningX = screenWidth * 0.15f + Random.nextFloat() * screenWidth * 0.7f
             generateLightningBolt()
         }
+        
         if (lightningFlash) {
             flashPaint.color = Color.argb(100, 255, 255, 255)
             canvas.drawRect(0f, 0f, screenWidth.toFloat(), screenHeight.toFloat(), flashPaint)
@@ -258,7 +273,9 @@ class WeatherLayer : SceneLayer {
             lightningPaint.strokeWidth = 3f
             lightningPaint.color = Color.WHITE
             drawLightningBolt(canvas)
-            if (lightningTimer > 4) lightningFlash = false
+            
+            lightningFlashRemainingMs -= frameDeltaMs
+            if (lightningFlashRemainingMs <= 0L) lightningFlash = false
         }
     }
     
