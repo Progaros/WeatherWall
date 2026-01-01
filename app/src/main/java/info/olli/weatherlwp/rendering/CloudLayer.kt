@@ -345,8 +345,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
         // At calm weather, clouds cross screen in ~60-90 seconds
         for (group in currentGroups) {
             // Move cloud based on current speed with direction
-            // 0.025f scales to reasonable speed (full screen in ~8s at max, ~80s at min)
-            val movement = deltaSec * group.speed * effectiveSpeed * 0.025f * dirX
+            // CLOUD_MOVEMENT_SCALE scales to reasonable speed (full screen in ~8s at max, ~80s at min)
+            val movement = deltaSec * group.speed * effectiveSpeed * RenderConstants.CLOUD_MOVEMENT_SCALE * dirX
             var newX = group.currentX + movement
             // Wrap position smoothly (0-1 range)
             while (newX > 1f) newX -= 1f
@@ -359,8 +359,13 @@ class CloudLayer(private val context: Context) : SceneLayer {
         if (width <= 0 || height <= 0 || !cloudsEnabled) return
         
         // Cloud count comes directly from weather/simulation data
-        // fluffinessMultiplier only affects each cloud's internal density (number of puffs)
-        val targetCount = state.getCloudCount().coerceIn(0, MAX_GROUPS)
+        // Scale cloud count based on aspect ratio to maintain consistent density
+        // Taller screens (higher aspect ratio) need more clouds to avoid looking sparse
+        val aspectRatio = height / width
+        val aspectScale = (aspectRatio / 1.5f).coerceIn(0.8f, 1.5f)  // Normalize around typical phone ratio
+        val baseCount = state.getCloudCount()
+        val targetCount = (baseCount * aspectScale).toInt().coerceIn(0, MAX_GROUPS)
+        
         // Only regenerate if count changed significantly (by more than 3) to prevent jumping
         if (kotlin.math.abs(targetCount - cloudCount) > 3 || 
             (targetCount == 0 && cloudCount > 0) || 

@@ -175,6 +175,14 @@ object RenderConstants {
     /** Star twinkle animation */
     const val STAR_TWINKLE_SPEED = 0.001f
     
+    /** Cloud movement speed multiplier (base delta-time scale) */
+    const val CLOUD_MOVEMENT_SCALE = 0.025f
+    
+    /** Lightning timing (milliseconds) */
+    const val LIGHTNING_INTERVAL_MIN_MS = 1500L    // Minimum time between flashes (1.5s)
+    const val LIGHTNING_INTERVAL_RANGE_MS = 2500L  // Random range added (1.5-4.0s total)
+    const val LIGHTNING_FLASH_DURATION_MS = 70L    // Flash visibility duration
+    
     // ============== Terrain Generation Constants ==============
     
     /** Hill curve generation */

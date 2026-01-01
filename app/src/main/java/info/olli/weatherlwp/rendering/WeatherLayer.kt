@@ -95,10 +95,16 @@ class WeatherLayer : SceneLayer {
     private var screenWidth = 0
     private var screenHeight = 0
 
-    private var lightningTimer = 0
+    // Lightning timing (now ms-based instead of frame-based)
+    private var lightningTimerMs = 0L
+    private var lightningNextFlashMs = 0L  // Time until next flash
     private var lightningFlash = false
+    private var lightningFlashRemainingMs = 0L
     private var lightningX = 0f
     private var lightningPoints = FloatArray(20)
+    
+    // Store state for particle updates
+    private var cachedWindStrength = 0f
 
     private var currentEffect = EffectType.NONE
 
@@ -357,22 +363,14 @@ class WeatherLayer : SceneLayer {
         // Active particle count based on intensity (30% to 100% of pool)
         val activeCount = (rainParticles.size * (0.3f + intensity * 0.7f)).toInt()
         
-        // Wind affects horizontal drift
+        // Wind affects visual angle
         val windDrift = state.windStrength * 3f
         
+        // Draw only - physics moved to update()
         for (i in 0 until activeCount) {
             val p = rainParticles[i]
             rainPaint.alpha = p.alpha
             canvas.drawLine(p.x, p.y, p.x - 2f - windDrift, p.y + p.size, rainPaint)
-
-            // Speed increases with intensity
-            val speedMult = 0.7f + intensity * 0.6f
-            p.y += p.speed * speedMult
-            p.x -= (1f + windDrift) * speedMult // Wind-affected drift
-
-            if (p.y > screenHeight) {
-                resetRainParticle(p)
-            }
         }
     }
 
@@ -380,22 +378,11 @@ class WeatherLayer : SceneLayer {
         // Active particle count based on intensity (20% to 100% of pool)
         val activeCount = (snowParticles.size * (0.2f + intensity * 0.8f)).toInt()
         
-        // Wind affects horizontal drift
-        val windDrift = state.windStrength * 2f
-        
+        // Draw only - physics moved to update()
         for (i in 0 until activeCount) {
             val p = snowParticles[i]
             snowPaint.alpha = p.alpha
             canvas.drawCircle(p.x, p.y, p.size, snowPaint)
-
-            // Speed increases with intensity
-            val speedMult = 0.6f + intensity * 0.8f
-            p.y += p.speed * speedMult
-            p.x += kotlin.math.sin((p.y * 0.02f).toDouble()).toFloat() * 0.8f + windDrift * 0.5f
-
-            if (p.y > screenHeight) {
-                resetSnowParticle(p)
-            }
         }
     }
     
@@ -412,9 +399,7 @@ class WeatherLayer : SceneLayer {
         // Active particle count based on intensity (25% to 100% of pool)
         val activeCount = (hailParticles.size * (0.25f + intensity * 0.75f)).toInt()
         
-        // Wind affects horizontal drift (less than rain because hail is heavier)
-        val windDrift = state.windStrength * 1.5f
-        
+        // Draw only - physics moved to update()
         for (i in 0 until activeCount) {
             val p = hailParticles[i]
             hailPaint.alpha = p.alpha
@@ -432,16 +417,6 @@ class WeatherLayer : SceneLayer {
             hailPaint.alpha = (p.alpha * 0.5f).toInt()
             canvas.drawCircle(p.x - p.size * 0.3f, p.y - p.size * 0.4f, p.size * 0.3f, hailPaint)
             hailPaint.alpha = p.alpha
-
-            // Fast falling with slight wobble
-            val speedMult = 0.8f + intensity * 0.4f
-            p.y += p.speed * speedMult
-            // Slight horizontal wobble (less than snow)
-            p.x += kotlin.math.sin((p.y * 0.05f).toDouble()).toFloat() * 0.5f + windDrift * 0.3f
-
-            if (p.y > screenHeight) {
-                resetHailParticle(p)
-            }
         }
     }
 
@@ -449,16 +424,10 @@ class WeatherLayer : SceneLayer {
         // Draw dark storm clouds first
         drawStormClouds(canvas, state.timeSeconds)
         
-        lightningTimer++
-
-        // Random lightning flash every 90-240 frames (more frequent)
-        if (lightningTimer > 90 + Random.nextInt(150)) {
-            lightningTimer = 0
-            lightningFlash = true
-            lightningX = screenWidth * 0.15f + Random.nextFloat() * screenWidth * 0.7f
-            generateLightningBolt()
-        }
-
+        // Also render rain during thunderstorm
+        renderRain(canvas, state)
+        
+        // Lightning flash state is managed in update() - draw only here
         if (lightningFlash) {
             // Screen flash - brighter flash
             flashPaint.color = Color.argb(100, 255, 255, 255)
@@ -475,11 +444,6 @@ class WeatherLayer : SceneLayer {
             lightningPaint.strokeWidth = 3f
             lightningPaint.color = Color.WHITE
             drawLightningBolt(canvas)
-
-            // Flash duration
-            if (lightningTimer > 4) {
-                lightningFlash = false
-            }
         }
     }
     
@@ -603,7 +567,100 @@ class WeatherLayer : SceneLayer {
     }
 
     override fun update(state: SimulationState, deltaTimeMs: Long) {
-        // Animation handled in render for now
+        // Cache state values for particle updates
+        cachedWindStrength = state.windStrength
+        
+        // Update effect based on state
+        val effect = weatherToEffect(state.weather)
+        setEffect(effect)
+        
+        if (currentEffect == EffectType.NONE || screenWidth <= 0) return
+        
+        val deltaSec = deltaTimeMs / 1000f
+        
+        when (currentEffect) {
+            EffectType.RAIN -> updateRainParticles(deltaSec)
+            EffectType.SNOW -> updateSnowParticles(deltaSec)
+            EffectType.HAIL -> updateHailParticles(deltaSec)
+            EffectType.LIGHTNING -> {
+                updateRainParticles(deltaSec)  // Lightning includes rain
+                updateLightningTimer(deltaTimeMs)
+            }
+            EffectType.FOG -> {}  // Fog has no particles
+            EffectType.NONE -> {}
+        }
+    }
+    
+    private fun updateRainParticles(deltaSec: Float) {
+        val activeCount = (rainParticles.size * (0.3f + intensity * 0.7f)).toInt()
+        val windDrift = cachedWindStrength * 3f
+        val speedMult = 0.7f + intensity * 0.6f
+        // Scale to ~60fps equivalent (base speed assumed at 60fps)
+        val frameScale = deltaSec * 60f
+        
+        for (i in 0 until activeCount) {
+            val p = rainParticles[i]
+            p.y += p.speed * speedMult * frameScale
+            p.x -= (1f + windDrift) * speedMult * frameScale
+            if (p.y > screenHeight) resetRainParticle(p)
+        }
+    }
+    
+    private fun updateSnowParticles(deltaSec: Float) {
+        val activeCount = (snowParticles.size * (0.2f + intensity * 0.8f)).toInt()
+        val windDrift = cachedWindStrength * 2f
+        val speedMult = 0.6f + intensity * 0.8f
+        val frameScale = deltaSec * 60f
+        
+        for (i in 0 until activeCount) {
+            val p = snowParticles[i]
+            p.y += p.speed * speedMult * frameScale
+            p.x += kotlin.math.sin((p.y * 0.02f).toDouble()).toFloat() * 0.8f * frameScale + windDrift * 0.5f * frameScale
+            if (p.y > screenHeight) resetSnowParticle(p)
+        }
+    }
+    
+    private fun updateHailParticles(deltaSec: Float) {
+        val activeCount = (hailParticles.size * (0.25f + intensity * 0.75f)).toInt()
+        val windDrift = cachedWindStrength * 1.5f
+        val speedMult = 0.8f + intensity * 0.4f
+        val frameScale = deltaSec * 60f
+        
+        for (i in 0 until activeCount) {
+            val p = hailParticles[i]
+            p.y += p.speed * speedMult * frameScale
+            p.x += kotlin.math.sin((p.y * 0.05f).toDouble()).toFloat() * 0.5f * frameScale + windDrift * 0.3f * frameScale
+            if (p.y > screenHeight) resetHailParticle(p)
+        }
+    }
+    
+    private fun updateLightningTimer(deltaTimeMs: Long) {
+        // Initialize next flash time if needed
+        if (lightningNextFlashMs <= 0L) {
+            lightningNextFlashMs = RenderConstants.LIGHTNING_INTERVAL_MIN_MS + 
+                Random.nextLong(RenderConstants.LIGHTNING_INTERVAL_RANGE_MS)
+        }
+        
+        lightningTimerMs += deltaTimeMs
+        
+        // Check if it's time for a flash
+        if (!lightningFlash && lightningTimerMs >= lightningNextFlashMs) {
+            lightningFlash = true
+            lightningFlashRemainingMs = RenderConstants.LIGHTNING_FLASH_DURATION_MS
+            lightningTimerMs = 0L
+            lightningNextFlashMs = RenderConstants.LIGHTNING_INTERVAL_MIN_MS + 
+                Random.nextLong(RenderConstants.LIGHTNING_INTERVAL_RANGE_MS)
+            lightningX = screenWidth * 0.15f + Random.nextFloat() * screenWidth * 0.7f
+            generateLightningBolt()
+        }
+        
+        // Update flash duration
+        if (lightningFlash) {
+            lightningFlashRemainingMs -= deltaTimeMs
+            if (lightningFlashRemainingMs <= 0L) {
+                lightningFlash = false
+            }
+        }
     }
 
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
