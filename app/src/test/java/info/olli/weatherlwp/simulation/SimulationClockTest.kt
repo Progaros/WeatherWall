@@ -148,6 +148,14 @@ class SimulationClockTest {
         val timeSeconds = clock.getTimeSeconds()
         assertTrue(timeSeconds > 0)
     }
+    
+    @Test
+    fun `getTimeSeconds wraps within 24 hours`() {
+        val timeSeconds = clock.getTimeSeconds()
+        // Time should be wrapped to within 24 hours (86400 seconds)
+        assertTrue("Time seconds should be < 86400", timeSeconds < 86400f)
+        assertTrue("Time seconds should be >= 0", timeSeconds >= 0f)
+    }
 
     @Test
     fun `getAbsoluteTimeMs returns positive large value`() {
@@ -160,15 +168,15 @@ class SimulationClockTest {
     }
 
     @Test
-    fun `time multiplier affects time seconds calculation`() {
-        // With default multiplier (1.0), get initial time
-        val time1 = clock.getTimeSeconds()
+    fun `time multiplier affects absolute time calculation`() {
+        // With default multiplier (1.0), get initial absolute time
+        val time1 = clock.getAbsoluteTimeMs()
         
         // Change multiplier to 2x
         clock.setTimeMultiplier(2.0f)
-        val time2 = clock.getTimeSeconds()
+        val time2 = clock.getAbsoluteTimeMs()
         
-        // With 2x multiplier, the seconds value should be larger
+        // With 2x multiplier, the absolute time should be larger
         // (since it multiplies the current time)
         assertTrue("Time with 2x multiplier should be larger", time2 > time1)
     }
