@@ -15,16 +15,17 @@ import kotlin.math.sqrt
 import kotlin.math.tanh
 
 /**
- * Manages sensor input for parallax effect using gravity-direction tilt extraction.
+ * Manages sensor input for parallax effect.
  * 
  * Uses TYPE_ROTATION_VECTOR (preferred) or TYPE_GAME_ROTATION_VECTOR for orientation.
  * Falls back to TYPE_GRAVITY if rotation vectors unavailable.
  * 
- * KEY FIXES (from ai.md analysis):
- * 1. Auto-recalibrate when display rotation changes
- * 2. Use per-axis deadzone instead of magnitude-based (avoids killing single-axis motion)
- * 3. Use soft clamp (tanh) instead of hard clamp to avoid "stuck at edge" feel
- * 4. Extract gravity direction from remapped rotation matrix (more stable than Euler angles)
+ * KEY IMPLEMENTATION:
+ * 1. Remap coordinate system based on display rotation (portrait/landscape)
+ * 2. Use SensorManager.getOrientation() after remapping for proper pitch/roll
+ * 3. Auto-recalibrate when display rotation changes
+ * 4. Use per-axis deadzone instead of magnitude-based (avoids killing single-axis motion)
+ * 5. Use soft clamp (tanh) instead of hard clamp to avoid "stuck at edge" feel
  */
 class ParallaxSensorManager(context: Context) : SensorEventListener {
     companion object {
@@ -52,6 +53,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     
     private val rotationMatrix = FloatArray(9)
     private val remappedMatrix = FloatArray(9)
+    private val orientationAngles = FloatArray(3)  // azimuth, pitch, roll
 
     private var filteredX = 0f
     private var filteredY = 0f
@@ -142,6 +144,8 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     private fun handleRotationVector(values: FloatArray, displayRotation: Int) {
         SensorManager.getRotationMatrixFromVector(rotationMatrix, values)
         
+        // Remap coordinate system based on display rotation
+        // This ensures sensor data matches what the user sees on screen
         val (axisX, axisY) = when (displayRotation) {
             Surface.ROTATION_90 -> Pair(SensorManager.AXIS_Y, SensorManager.AXIS_MINUS_X)
             Surface.ROTATION_180 -> Pair(SensorManager.AXIS_MINUS_X, SensorManager.AXIS_MINUS_Y)
@@ -150,17 +154,15 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         }
         SensorManager.remapCoordinateSystem(rotationMatrix, axisX, axisY, remappedMatrix)
         
-        // Extract gravity direction from remapped rotation matrix
-        // Android rotation matrix is row-major 3x3. To get world-up (0,0,1) in device coords,
-        // we need the third COLUMN of the matrix: indices [2, 5, 8]
-        // Negating gives gravity direction (pointing down instead of up)
-        val gx = -remappedMatrix[2]
-        val gy = -remappedMatrix[5]
-        val gz = -remappedMatrix[8]
+        // Use Android's getOrientation() for proper pitch/roll extraction
+        // This is the recommended approach after remapCoordinateSystem()
+        // orientationAngles[0] = azimuth (rotation around Z axis)
+        // orientationAngles[1] = pitch (rotation around X axis, -π to π)
+        // orientationAngles[2] = roll (rotation around Y axis, -π/2 to π/2)
+        SensorManager.getOrientation(remappedMatrix, orientationAngles)
         
-        // Compute pitch/roll from gravity direction (more stable than Euler angles)
-        val roll = atan2(gx, gz)
-        val pitch = atan2(gy, gz)
+        val pitch = orientationAngles[1]  // Forward/backward tilt → Y parallax
+        val roll = orientationAngles[2]   // Left/right tilt → X parallax
         
         processOrientationAngles(pitch, roll)
     }

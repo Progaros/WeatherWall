@@ -610,7 +610,26 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             canvas.restore()
         }
         
-        // Draw tree segments from bottom to top
+        // Draw tree segments from bottom to top with wind-based rotation
+        // Calculate overall tree lean angle based on wind and gusts
+        val ambientFactor = swaySpeed * 0.4f
+        val windFactor = ambientFactor + effectiveWind * 0.6f
+        
+        // Primary wave for tree rotation
+        val treeWave = sin(timeSec * baseFreq + spatialPhase) * 0.5f +
+            sin(timeSec * baseFreq * 0.4f + spatialPhase) * 0.3f
+        
+        // Calculate rotation angle in degrees
+        // At max wind (windFactor=1.0), trees lean up to 15 degrees
+        // Gust push adds additional directional lean
+        val baseRotationDeg = treeWave * windFactor * 12f  // oscillating rotation
+        val gustRotationDeg = gustPush * RenderConstants.GUST_LEAN_FACTOR * 8f  // directional gust lean
+        val totalRotationDeg = (baseRotationDeg + gustRotationDeg).coerceIn(-25f, 25f)
+        
+        // Apply rotation transform around tree base
+        canvas.save()
+        canvas.rotate(totalRotationDeg, x, groundY)
+        
         for (seg in 0 until treeSegments) {
             val segBaseY = groundY - seg * segmentHeight * 0.7f
             val segTipY = segBaseY - segmentHeight
@@ -628,36 +647,27 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             val tipPhase = spatialPhase + tipHeightRatio * 0.4f
             
             // Multi-frequency oscillation for organic feel
-            // Primary wave + secondary harmonic + slow drift
-            val baseWave = sin(timeSec * baseFreq + basePhase) * 0.5f + 
-                sin(timeSec * baseFreq * 0.4f + basePhase) * 0.3f +
-                sin(timeSec * baseFreq * 2.5f + basePhase) * 0.2f
-            val tipWave = sin(timeSec * baseFreq + tipPhase) * 0.5f +
-                sin(timeSec * baseFreq * 0.4f + tipPhase) * 0.3f +
-                sin(timeSec * baseFreq * 2.5f + tipPhase) * 0.2f
+            // This creates additional curve deformation within the rotated tree
+            val baseWave = sin(timeSec * baseFreq + basePhase) * 0.3f + 
+                sin(timeSec * baseFreq * 2.5f + basePhase) * 0.15f
+            val tipWave = sin(timeSec * baseFreq + tipPhase) * 0.3f +
+                sin(timeSec * baseFreq * 2.5f + tipPhase) * 0.15f
             
-            // Gust push is one-directional (trees lean in wind direction then spring back)
-            // The wave effect is already in gustPush via localGust
-            // GUST_LEAN_FACTOR controls how much gusts bend trees
-            val gustLean = gustPush * RenderConstants.GUST_LEAN_FACTOR  // Direct offset in screen units
-            
-            // Sway increases with height squared (natural bending curve)
-            // Include ambient sway even without wind (baseWave still oscillates)
-            // swaySpeed directly affects the ambient movement factor
-            // effectiveWind adds wind-driven sway on top of ambient
-            val ambientFactor = swaySpeed * 0.4f  // Scale ambient movement by sway speed
-            val windFactor = ambientFactor + effectiveWind * 0.6f  // Wind significantly increases sway
-            val baseSway = baseWave * windFactor * maxAmplitude * baseHeightRatio * baseHeightRatio + gustLean * totalHeight * baseHeightRatio * baseHeightRatio
-            val tipSway = tipWave * windFactor * maxAmplitude * tipHeightRatio * tipHeightRatio + gustLean * totalHeight * tipHeightRatio * tipHeightRatio
+            // Additional local sway within the rotated frame (creates curve)
+            // Much smaller since main rotation is already applied
+            val localBaseSway = baseWave * windFactor * maxAmplitude * baseHeightRatio * 0.3f
+            val localTipSway = tipWave * windFactor * maxAmplitude * tipHeightRatio * tipHeightRatio * 0.3f
             
             treePath.reset()
-            treePath.moveTo(x + tipSway, segTipY)
-            treePath.lineTo(x - segWidth + baseSway, segBaseY)
-            treePath.lineTo(x + segWidth + baseSway, segBaseY)
+            treePath.moveTo(x + localTipSway, segTipY)
+            treePath.lineTo(x - segWidth + localBaseSway, segBaseY)
+            treePath.lineTo(x + segWidth + localBaseSway, segBaseY)
             treePath.close()
             
             canvas.drawPath(treePath, treePaint)
         }
+        
+        canvas.restore()
     }
 
     override fun reloadSettings() {

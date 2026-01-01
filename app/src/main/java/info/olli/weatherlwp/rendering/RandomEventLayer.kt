@@ -9,6 +9,7 @@ import info.olli.weatherlwp.rendering.events.*
 import info.olli.weatherlwp.simulation.CloudDensity
 import info.olli.weatherlwp.simulation.SimulationState
 import info.olli.weatherlwp.weather.WeatherType
+import kotlin.math.pow
 import kotlin.random.Random
 
 /**
@@ -371,7 +372,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
             else -> {
                 // Steep exponential: 0.0001 at 10, ~0.02 at 50, 0.8 at 100
                 val normalized = (chance - 10) / 90f  // 0-1 range for 10-100
-                0.0001f * kotlin.math.pow(8000.0, normalized.toDouble()).toFloat()
+                0.0001f * (8000.0.pow(normalized.toDouble())).toFloat()
             }
         }.coerceAtMost(0.9f)
         

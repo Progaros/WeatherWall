@@ -4,7 +4,11 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RadialGradient
+import android.graphics.Shader
 import android.util.Log
 import androidx.preference.PreferenceManager
 import java.util.Calendar
@@ -21,8 +25,13 @@ class SeasonalEvents(private val context: Context? = null) {
 
     enum class Season {
         NONE,
-        CHRISTMAS,     // Dec 15-26
-        NEW_YEAR       // Dec 27 - Jan 7
+        CHRISTMAS,      // Dec 15-26
+        NEW_YEAR,       // Dec 27 - Jan 7
+        CN_NEW_YEAR,    // Chinese New Year (late Jan - mid Feb, varies)
+        ST_PATRICKS,    // St. Patrick's Day (Mar 14-18)
+        SPRING_BLOOM,   // Spring (Mar 20 - May 31, excluding St. Patrick's)
+        AUTUMN,         // Fall (Sep 22 - Nov 30)
+        WINTER_SNOW     // Winter snow (Dec 1-14, then Jan 8 - Feb 28)
     }
 
     // Christmas star (Bethlehem star with trail/Schweif)
@@ -176,6 +185,11 @@ class SeasonalEvents(private val context: Context? = null) {
                     when (debugSeason) {
                         "christmas" -> return Season.CHRISTMAS
                         "newyear" -> return Season.NEW_YEAR
+                        "cn_newyear" -> return Season.CN_NEW_YEAR
+                        "st_patricks" -> return Season.ST_PATRICKS
+                        "spring" -> return Season.SPRING_BLOOM
+                        "autumn" -> return Season.AUTUMN
+                        "winter_snow" -> return Season.WINTER_SNOW
                         "none" -> return Season.NONE
                     }
                 }
@@ -185,13 +199,26 @@ class SeasonalEvents(private val context: Context? = null) {
         }
 
         val cal = Calendar.getInstance()
-        val month = cal.get(Calendar.MONTH) // 0-indexed
+        val month = cal.get(Calendar.MONTH) // 0-indexed (0=Jan, 11=Dec)
         val day = cal.get(Calendar.DAY_OF_MONTH)
 
         return when {
-            month == 11 && day >= 15 && day <= 26 -> Season.CHRISTMAS
+            // Christmas: Dec 15-26
+            month == 11 && day in 15..26 -> Season.CHRISTMAS
+            // New Year: Dec 27 - Jan 7
             month == 11 && day >= 27 -> Season.NEW_YEAR
             month == 0 && day <= 7 -> Season.NEW_YEAR
+            // Chinese New Year: Late Jan - Mid Feb (simplified: Jan 20 - Feb 15)
+            (month == 0 && day >= 20) || (month == 1 && day <= 15) -> Season.CN_NEW_YEAR
+            // St. Patrick's Day: Mar 14-18
+            month == 2 && day in 14..18 -> Season.ST_PATRICKS
+            // Spring Bloom: Mar 20 - May 31 (after St. Patrick's)
+            (month == 2 && day >= 20) || month == 3 || (month == 4 && day <= 31) -> Season.SPRING_BLOOM
+            // Autumn: Sep 22 - Nov 30
+            (month == 8 && day >= 22) || month == 9 || month == 10 -> Season.AUTUMN
+            // Winter Snow: Dec 1-14 and Jan 8 - Feb 28 (outside other winter events)
+            (month == 11 && day < 15) -> Season.WINTER_SNOW
+            (month == 0 && day >= 8) || (month == 1 && day >= 16) -> Season.WINTER_SNOW
             else -> Season.NONE
         }
     }
@@ -219,6 +246,11 @@ class SeasonalEvents(private val context: Context? = null) {
             when (season) {
                 Season.CHRISTMAS -> renderChristmasStars(canvas)
                 Season.NEW_YEAR -> renderNewYearFireworks(canvas)
+                Season.CN_NEW_YEAR -> renderChineseNewYear(canvas)
+                Season.ST_PATRICKS -> renderStPatricksDay(canvas)
+                Season.SPRING_BLOOM -> renderSpringBloom(canvas)
+                Season.AUTUMN -> renderAutumn(canvas)
+                Season.WINTER_SNOW -> renderWinterSnow(canvas)
                 Season.NONE -> {}
             }
         } catch (e: Exception) {
@@ -295,62 +327,132 @@ class SeasonalEvents(private val context: Context? = null) {
         // Apply size multiplier
         val effectiveSize = star.size * starSizeMultiplier
         
-        // Trail/Schweif - diagonal line going down-left from the star
-        val trailAngle = Math.toRadians(225.0)  // Down-left direction
-        val trailLength = effectiveSize * 6f * trailLengthMultiplier
+        // Twinkle factor for the whole star
+        val twinkleFactor = 0.85f + 0.15f * kotlin.math.sin(Math.toRadians(star.twinkle.toDouble())).toFloat()
+        
+        // Trail/Schweif - gradient path going down-left from the star
+        val trailAngle = Math.toRadians(225.0)
+        val trailLength = effectiveSize * 7f * trailLengthMultiplier
         
         // Only render trail if length > 0
         if (trailLengthMultiplier > 0.01f) {
-            for (i in trailParticles.indices) {
-                val t = i.toFloat() / trailParticles.size
-                val particle = trailParticles[i]
-                
-                // Position along the trail
-                val dist = t * trailLength
-                particle.x = star.x + (dist * kotlin.math.cos(trailAngle)).toFloat()
-                particle.y = star.y + (dist * kotlin.math.sin(trailAngle)).toFloat()
-                
-                // Twinkle effect on trail
-                val twinkleFactor = 0.8f + 0.2f * kotlin.math.sin(star.twinkle * 0.1 + t * 3.14159).toFloat()
-                val alpha = (particle.alpha * twinkleFactor).toInt().coerceIn(30, 255)
-                
-                trailPaint.alpha = alpha
-                canvas.drawCircle(particle.x, particle.y, particle.size * twinkleFactor * starSizeMultiplier, trailPaint)
-            }
+            // Smooth gradient trail using LinearGradient instead of discrete circles
+            val trailEndX = star.x + (trailLength * kotlin.math.cos(trailAngle)).toFloat()
+            val trailEndY = star.y + (trailLength * kotlin.math.sin(trailAngle)).toFloat()
+            
+            // Create a tapered trail path (wider near star, narrower at end)
+            val perpAngle = trailAngle + Math.PI / 2
+            val startWidth = effectiveSize * 0.35f
+            val endWidth = effectiveSize * 0.05f
+            
+            val path = Path()
+            // Starting edge (near star) - wider
+            path.moveTo(
+                star.x + (startWidth * kotlin.math.cos(perpAngle)).toFloat(),
+                star.y + (startWidth * kotlin.math.sin(perpAngle)).toFloat()
+            )
+            path.lineTo(
+                star.x - (startWidth * kotlin.math.cos(perpAngle)).toFloat(),
+                star.y - (startWidth * kotlin.math.sin(perpAngle)).toFloat()
+            )
+            // End edge (far from star) - narrower
+            path.lineTo(
+                trailEndX - (endWidth * kotlin.math.cos(perpAngle)).toFloat(),
+                trailEndY - (endWidth * kotlin.math.sin(perpAngle)).toFloat()
+            )
+            path.lineTo(
+                trailEndX + (endWidth * kotlin.math.cos(perpAngle)).toFloat(),
+                trailEndY + (endWidth * kotlin.math.sin(perpAngle)).toFloat()
+            )
+            path.close()
+            
+            // Linear gradient from star (bright gold) to end (transparent)
+            val goldColor = Color.parseColor("#FFFFD700")
+            trailPaint.shader = LinearGradient(
+                star.x, star.y, trailEndX, trailEndY,
+                intArrayOf(
+                    Color.argb((220 * twinkleFactor).toInt(), 255, 215, 0),
+                    Color.argb((120 * twinkleFactor).toInt(), 255, 215, 0),
+                    Color.argb(0, 255, 215, 0)
+                ),
+                floatArrayOf(0f, 0.4f, 1f),
+                Shader.TileMode.CLAMP
+            )
+            trailPaint.alpha = 255
+            canvas.drawPath(path, trailPaint)
+            trailPaint.shader = null
         }
         
-        // Main star - large with twinkle
-        val starAlpha = (200 + 55 * kotlin.math.sin(Math.toRadians(star.twinkle.toDouble()))).toInt()
-            .coerceIn(180, 255)
-        christmasStarPaint.alpha = starAlpha
+        // Outer soft glow - radial gradient
+        val glowRadius = effectiveSize * 2.5f * twinkleFactor
+        christmasStarPaint.shader = RadialGradient(
+            star.x, star.y, glowRadius,
+            intArrayOf(
+                Color.argb(80, 255, 230, 150),
+                Color.argb(40, 255, 215, 0),
+                Color.argb(0, 255, 215, 0)
+            ),
+            floatArrayOf(0f, 0.4f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawCircle(star.x, star.y, glowRadius, christmasStarPaint)
+        christmasStarPaint.shader = null
         
-        // Draw star as overlapping shapes for a "star burst" effect
-        // Central bright circle
-        canvas.drawCircle(star.x, star.y, effectiveSize * 0.4f, christmasStarPaint)
+        // 8-point star rays as filled triangles with alpha falloff
+        val primaryRayLength = effectiveSize * 1.6f * twinkleFactor
+        val secondaryRayLength = effectiveSize * 0.9f * twinkleFactor
+        val rayBaseWidth = effectiveSize * 0.12f
         
-        // 4-point star rays
-        val rayLength = effectiveSize * 1.2f
-        val rayWidth = effectiveSize * 0.15f
-        for (angle in listOf(0.0, 90.0, 45.0, 135.0)) {
+        val rayPath = Path()
+        for ((index, angle) in listOf(0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0).withIndex()) {
+            val isPrimary = index % 2 == 0  // 0, 90, 180, 270 are primary
+            val rayLen = if (isPrimary) primaryRayLength else secondaryRayLength
             val rad = Math.toRadians(angle)
-            val cos = kotlin.math.cos(rad).toFloat()
-            val sin = kotlin.math.sin(rad).toFloat()
+            val perpRad = rad + Math.PI / 2
             
-            // Draw ray as a thin line
-            val startX = star.x - rayLength * cos
-            val startY = star.y - rayLength * sin
-            val endX = star.x + rayLength * cos
-            val endY = star.y + rayLength * sin
+            val tipX = star.x + (rayLen * kotlin.math.cos(rad)).toFloat()
+            val tipY = star.y + (rayLen * kotlin.math.sin(rad)).toFloat()
             
-            christmasStarPaint.strokeWidth = if (angle == 0.0 || angle == 90.0) rayWidth else rayWidth * 0.7f
-            christmasStarPaint.style = Paint.Style.STROKE
-            canvas.drawLine(startX, startY, endX, endY, christmasStarPaint)
+            val baseOffset = rayBaseWidth * (if (isPrimary) 1f else 0.7f)
+            val baseX1 = star.x + (baseOffset * kotlin.math.cos(perpRad)).toFloat()
+            val baseY1 = star.y + (baseOffset * kotlin.math.sin(perpRad)).toFloat()
+            val baseX2 = star.x - (baseOffset * kotlin.math.cos(perpRad)).toFloat()
+            val baseY2 = star.y - (baseOffset * kotlin.math.sin(perpRad)).toFloat()
+            
+            rayPath.moveTo(baseX1, baseY1)
+            rayPath.lineTo(tipX, tipY)
+            rayPath.lineTo(baseX2, baseY2)
+            rayPath.close()
         }
-        christmasStarPaint.style = Paint.Style.FILL
         
-        // Outer glow
-        christmasStarPaint.alpha = (starAlpha * 0.3f).toInt()
-        canvas.drawCircle(star.x, star.y, star.size * 0.8f, christmasStarPaint)
+        // Fill rays with gradient from center
+        christmasStarPaint.shader = RadialGradient(
+            star.x, star.y, primaryRayLength,
+            intArrayOf(
+                Color.argb(255, 255, 255, 240),
+                Color.argb(220, 255, 220, 100),
+                Color.argb(150, 255, 200, 50)
+            ),
+            floatArrayOf(0f, 0.3f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawPath(rayPath, christmasStarPaint)
+        christmasStarPaint.shader = null
+        
+        // Bright central core with radial gradient
+        val coreRadius = effectiveSize * 0.5f * twinkleFactor
+        christmasStarPaint.shader = RadialGradient(
+            star.x, star.y, coreRadius,
+            intArrayOf(
+                Color.argb(255, 255, 255, 255),
+                Color.argb(255, 255, 240, 200),
+                Color.argb(200, 255, 215, 0)
+            ),
+            floatArrayOf(0f, 0.5f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawCircle(star.x, star.y, coreRadius, christmasStarPaint)
+        christmasStarPaint.shader = null
     }
 
     private fun renderNewYearFireworks(canvas: Canvas) {
@@ -516,6 +618,307 @@ class SeasonalEvents(private val context: Context? = null) {
                 
                 particleCount++
             }
+        }
+    }
+    
+    // ========== ST. PATRICK'S DAY ==========
+    
+    private val rainbowColors = intArrayOf(
+        Color.rgb(255, 0, 0),      // Red
+        Color.rgb(255, 127, 0),    // Orange  
+        Color.rgb(255, 255, 0),    // Yellow
+        Color.rgb(0, 255, 0),      // Green
+        Color.rgb(0, 0, 255),      // Blue
+        Color.rgb(75, 0, 130),     // Indigo
+        Color.rgb(148, 0, 211)     // Violet
+    )
+    
+    private var rainbowPhase = 0f
+    
+    private fun renderStPatricksDay(canvas: Canvas) {
+        rainbowPhase += 0.02f
+        
+        val centerX = screenWidth * 0.3f
+        val baseY = screenHeight * 0.6f
+        val arcRadius = screenWidth * 0.35f
+        
+        // Draw rainbow arc with gradient bands
+        for (i in rainbowColors.indices.reversed()) {
+            val bandWidth = arcRadius * 0.08f
+            val bandRadius = arcRadius - i * bandWidth
+            
+            // Shimmer effect
+            val shimmer = (kotlin.math.sin(rainbowPhase + i * 0.5f) * 0.15f + 0.85f).toFloat()
+            
+            starPaint.color = Color.argb(
+                (180 * shimmer).toInt(),
+                Color.red(rainbowColors[i]),
+                Color.green(rainbowColors[i]),
+                Color.blue(rainbowColors[i])
+            )
+            starPaint.style = Paint.Style.STROKE
+            starPaint.strokeWidth = bandWidth
+            
+            // Draw arc from left ground to right ground
+            canvas.drawArc(
+                centerX - bandRadius,
+                baseY - bandRadius,
+                centerX + bandRadius,
+                baseY + bandRadius,
+                180f, 180f, false, starPaint
+            )
+        }
+        starPaint.style = Paint.Style.FILL
+        
+        // Add some sparkles at the rainbow ends
+        val sparkleCount = 5
+        for (i in 0 until sparkleCount) {
+            val sparklePhase = rainbowPhase * 3f + i * 1.2f
+            val alpha = ((kotlin.math.sin(sparklePhase) + 1f) * 0.5f * 200).toInt()
+            starPaint.color = Color.argb(alpha, 255, 215, 0)  // Gold sparkles
+            
+            // Left end sparkle
+            val leftX = centerX - arcRadius + (Random(i.toLong()).nextFloat() - 0.5f) * 20f
+            val leftY = baseY + (Random(i.toLong() + 100).nextFloat() - 0.5f) * 20f
+            canvas.drawCircle(leftX, leftY, 3f + Random(i.toLong()).nextFloat() * 4f, starPaint)
+            
+            // Right end sparkle
+            val rightX = centerX + arcRadius + (Random(i.toLong() + 50).nextFloat() - 0.5f) * 20f
+            val rightY = baseY + (Random(i.toLong() + 150).nextFloat() - 0.5f) * 20f
+            canvas.drawCircle(rightX, rightY, 3f + Random(i.toLong() + 50).nextFloat() * 4f, starPaint)
+        }
+    }
+    
+    // ========== CHINESE NEW YEAR ==========
+    
+    private var dragonPhase = 0f
+    private val dragonColors = intArrayOf(
+        Color.rgb(200, 30, 30),    // Red
+        Color.rgb(255, 200, 50)    // Gold
+    )
+    
+    private fun renderChineseNewYear(canvas: Canvas) {
+        dragonPhase += 0.03f
+        
+        // Render New Year fireworks as base
+        renderNewYearFireworks(canvas)
+        
+        // Add simple dragon silhouette moving across screen
+        val dragonX = (dragonPhase * 50f) % (screenWidth + 200f) - 100f
+        val dragonY = screenHeight * 0.2f + kotlin.math.sin(dragonPhase * 2f).toFloat() * 30f
+        
+        // Dragon body segments
+        val segmentCount = 8
+        val segmentSize = 15f
+        
+        for (i in 0 until segmentCount) {
+            val segPhase = dragonPhase - i * 0.3f
+            val segX = dragonX - i * segmentSize * 1.2f
+            val segY = dragonY + kotlin.math.sin(segPhase * 3f).toFloat() * 15f
+            
+            // Alternate colors
+            starPaint.color = if (i % 2 == 0) dragonColors[0] else dragonColors[1]
+            canvas.drawCircle(segX, segY, segmentSize - i * 0.5f, starPaint)
+        }
+        
+        // Dragon head (larger)
+        starPaint.color = dragonColors[0]
+        canvas.drawCircle(dragonX, dragonY, segmentSize * 1.5f, starPaint)
+        
+        // Eyes
+        starPaint.color = Color.WHITE
+        canvas.drawCircle(dragonX + 5f, dragonY - 5f, 4f, starPaint)
+        starPaint.color = Color.BLACK
+        canvas.drawCircle(dragonX + 6f, dragonY - 5f, 2f, starPaint)
+    }
+    
+    // ========== SPRING BLOOM ==========
+    
+    private data class Petal(
+        var x: Float = 0f,
+        var y: Float = 0f,
+        var size: Float = 0f,
+        var rotation: Float = 0f,
+        var speed: Float = 0f,
+        var drift: Float = 0f,
+        var color: Int = 0
+    )
+    
+    private val petals = Array(30) { Petal() }
+    private var petalsInitialized = false
+    
+    private val petalColors = intArrayOf(
+        Color.rgb(255, 182, 193),  // Light pink
+        Color.rgb(255, 192, 203),  // Pink
+        Color.rgb(255, 228, 225),  // Misty rose
+        Color.rgb(255, 240, 245),  // Lavender blush
+        Color.rgb(255, 255, 255)   // White
+    )
+    
+    private fun renderSpringBloom(canvas: Canvas) {
+        if (!petalsInitialized) {
+            initPetals()
+            petalsInitialized = true
+        }
+        
+        for (petal in petals) {
+            // Update position
+            petal.y += petal.speed
+            petal.x += kotlin.math.sin(petal.y * 0.01f + petal.drift).toFloat() * 1.5f
+            petal.rotation += 2f
+            
+            // Reset if off screen
+            if (petal.y > screenHeight + 20f) {
+                petal.y = -20f
+                petal.x = Random.nextFloat() * screenWidth
+            }
+            
+            // Draw petal (oval with rotation)
+            canvas.save()
+            canvas.translate(petal.x, petal.y)
+            canvas.rotate(petal.rotation)
+            
+            starPaint.color = petal.color
+            canvas.drawOval(-petal.size, -petal.size * 0.5f, petal.size, petal.size * 0.5f, starPaint)
+            
+            canvas.restore()
+        }
+    }
+    
+    private fun initPetals() {
+        for (petal in petals) {
+            petal.x = Random.nextFloat() * screenWidth
+            petal.y = Random.nextFloat() * screenHeight
+            petal.size = 4f + Random.nextFloat() * 6f
+            petal.rotation = Random.nextFloat() * 360f
+            petal.speed = 0.8f + Random.nextFloat() * 1.2f
+            petal.drift = Random.nextFloat() * 6.28f
+            petal.color = petalColors[Random.nextInt(petalColors.size)]
+        }
+    }
+    
+    // ========== AUTUMN ==========
+    
+    private data class Leaf(
+        var x: Float = 0f,
+        var y: Float = 0f,
+        var size: Float = 0f,
+        var rotation: Float = 0f,
+        var rotSpeed: Float = 0f,
+        var fallSpeed: Float = 0f,
+        var drift: Float = 0f,
+        var color: Int = 0
+    )
+    
+    private val leaves = Array(25) { Leaf() }
+    private var leavesInitialized = false
+    
+    private val leafColors = intArrayOf(
+        Color.rgb(255, 140, 0),    // Dark orange
+        Color.rgb(255, 69, 0),     // Red-orange
+        Color.rgb(178, 34, 34),    // Firebrick
+        Color.rgb(255, 215, 0),    // Gold
+        Color.rgb(139, 69, 19)     // Saddle brown
+    )
+    
+    private fun renderAutumn(canvas: Canvas) {
+        if (!leavesInitialized) {
+            initLeaves()
+            leavesInitialized = true
+        }
+        
+        for (leaf in leaves) {
+            // Update position with gentle falling motion
+            leaf.y += leaf.fallSpeed
+            leaf.x += kotlin.math.sin(leaf.y * 0.008f + leaf.drift).toFloat() * 2f
+            leaf.rotation += leaf.rotSpeed
+            
+            // Reset if off screen
+            if (leaf.y > screenHeight + 30f) {
+                leaf.y = -30f
+                leaf.x = Random.nextFloat() * screenWidth
+            }
+            
+            // Draw maple-leaf-like shape
+            canvas.save()
+            canvas.translate(leaf.x, leaf.y)
+            canvas.rotate(leaf.rotation)
+            
+            starPaint.color = leaf.color
+            
+            // Simple leaf: pointed oval with stem
+            val path = Path()
+            val s = leaf.size
+            path.moveTo(0f, -s)        // Top point
+            path.quadTo(s * 0.7f, -s * 0.3f, s * 0.5f, s * 0.3f)
+            path.quadTo(s * 0.2f, s * 0.8f, 0f, s)  // Bottom
+            path.quadTo(-s * 0.2f, s * 0.8f, -s * 0.5f, s * 0.3f)
+            path.quadTo(-s * 0.7f, -s * 0.3f, 0f, -s)
+            path.close()
+            canvas.drawPath(path, starPaint)
+            
+            canvas.restore()
+        }
+    }
+    
+    private fun initLeaves() {
+        for (leaf in leaves) {
+            leaf.x = Random.nextFloat() * screenWidth
+            leaf.y = Random.nextFloat() * screenHeight
+            leaf.size = 8f + Random.nextFloat() * 8f
+            leaf.rotation = Random.nextFloat() * 360f
+            leaf.rotSpeed = (Random.nextFloat() - 0.5f) * 4f
+            leaf.fallSpeed = 0.5f + Random.nextFloat() * 1f
+            leaf.drift = Random.nextFloat() * 6.28f
+            leaf.color = leafColors[Random.nextInt(leafColors.size)]
+        }
+    }
+    
+    // ========== WINTER SNOW ==========
+    
+    private data class Snowflake(
+        var x: Float = 0f,
+        var y: Float = 0f,
+        var size: Float = 0f,
+        var speed: Float = 0f,
+        var drift: Float = 0f,
+        var alpha: Int = 255
+    )
+    
+    private val snowflakes = Array(40) { Snowflake() }
+    private var snowInitialized = false
+    
+    private fun renderWinterSnow(canvas: Canvas) {
+        if (!snowInitialized) {
+            initSnowflakes()
+            snowInitialized = true
+        }
+        
+        for (flake in snowflakes) {
+            // Update position
+            flake.y += flake.speed
+            flake.x += kotlin.math.sin(flake.y * 0.01f + flake.drift).toFloat() * 0.8f
+            
+            // Reset if off screen
+            if (flake.y > screenHeight + 10f) {
+                flake.y = -10f
+                flake.x = Random.nextFloat() * screenWidth
+            }
+            
+            // Draw snowflake (simple circle with transparency)
+            starPaint.color = Color.argb(flake.alpha, 255, 255, 255)
+            canvas.drawCircle(flake.x, flake.y, flake.size, starPaint)
+        }
+    }
+    
+    private fun initSnowflakes() {
+        for (flake in snowflakes) {
+            flake.x = Random.nextFloat() * screenWidth
+            flake.y = Random.nextFloat() * screenHeight
+            flake.size = 2f + Random.nextFloat() * 4f
+            flake.speed = 0.6f + Random.nextFloat() * 1.2f
+            flake.drift = Random.nextFloat() * 6.28f
+            flake.alpha = 150 + Random.nextInt(105)
         }
     }
 }

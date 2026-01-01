@@ -11,17 +11,26 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Hot Air Balloon - Day only, slow drift in far background.
- * Uses absolute time for deterministic position across preview/wallpaper.
+ * Hot Air Balloon - Day only, slow drift at varying distances.
+ * Distance affects size, speed, and parallax for depth perception.
  */
 class HotAirBalloonEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
-    override val layer = EventLayer.MID_SKY  // In front of mountains
+    override val layer = EventLayer.MID_SKY
     
-    private val y = 0.12f + random.nextFloat() * 0.15f
-    private val speed = 0.000015f + random.nextFloat() * 0.00001f  // Slowed 2x - graceful drift
-    override val durationMs: Long = (1.3f / speed).toLong()
+    // Random distance: 0.3-1.0 (balloons can be fairly close or far)
+    private val distance = 0.3f + random.nextFloat() * 0.7f
     
-    private val baseSize = 8f + random.nextFloat() * 4f  // Renamed: will be scaled by height
+    // Size scales inversely with distance
+    private val sizeScale = 1.0f - distance * 0.6f  // 0.4-1.0 based on distance
+    
+    // Far balloons are higher in the sky
+    private val y = 0.08f + random.nextFloat() * 0.12f + distance * 0.08f
+    
+    // Speed scales with distance (far = slower perceived movement)
+    private val baseSpeed = 0.000025f - distance * 0.000015f
+    private val speed = baseSpeed + random.nextFloat() * 0.000008f
+    override val durationMs: Long = (1.4f / speed).toLong()
+    
     private val path = Path()
     private val color = when (random.nextInt(5)) {
         0 -> Color.rgb(220, 80, 80)
@@ -37,56 +46,67 @@ class HotAirBalloonEvent(random: Random, override val spawnTimeMs: Long = System
     }
     private val bobPhase = random.nextFloat() * 6.28f
     
+    // Parallax depth based on distance
+    private val parallaxDepth = 0.15f + distance * 0.20f
+    
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long) {
-        // Scale size to 1% of height
-        val unit = height * 0.01f
-        val size = baseSize * unit
+        // Scale: 0.4-0.8% of height based on distance (was 1%)
+        val unit = height * 0.005f * sizeScale
+        val size = unit * 6f
         
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val progress = -0.1f + speed * elapsedMs
         
-        val px = parallaxCalculator.getOffsetXForDepth(0.25f)  // Between mountains and clouds
-        val py = parallaxCalculator.getOffsetYForDepth(0.25f)
+        val px = parallaxCalculator.getOffsetXForDepth(parallaxDepth)
+        val py = parallaxCalculator.getOffsetYForDepth(parallaxDepth)
         canvas.save()
         canvas.translate(px, py)
         
-        val currentX = progress * 1.2f * width - extendedOffset
-        val bobOffset = sin(timeSeconds * 0.4f + bobPhase) * size * 0.15f
+        val currentX = progress * 1.3f * width - extendedOffset
+        // Less bobbing for distant balloons
+        val bobIntensity = sizeScale * 0.15f
+        val bobOffset = sin(timeSeconds * 0.4f + bobPhase) * size * bobIntensity
         val currentY = y * height + bobOffset
         
-        val balloonHeight = size * 2.5f
-        val balloonWidth = size * 1.8f
+        val balloonHeight = size * 2.2f
+        val balloonWidth = size * 1.5f
         
+        // Balloon envelope (teardrop shape)
         paint.color = RenderConstants.blendWithAmbient(color, ambientColor, 0.3f)
         path.reset()
         path.moveTo(currentX, currentY - balloonHeight)
         path.cubicTo(
-            currentX + balloonWidth, currentY - balloonHeight * 0.8f,
-            currentX + balloonWidth * 0.8f, currentY,
-            currentX, currentY + size * 0.3f
+            currentX + balloonWidth, currentY - balloonHeight * 0.75f,
+            currentX + balloonWidth * 0.7f, currentY,
+            currentX, currentY + size * 0.25f
         )
         path.cubicTo(
-            currentX - balloonWidth * 0.8f, currentY,
-            currentX - balloonWidth, currentY - balloonHeight * 0.8f,
+            currentX - balloonWidth * 0.7f, currentY,
+            currentX - balloonWidth, currentY - balloonHeight * 0.75f,
             currentX, currentY - balloonHeight
         )
         canvas.drawPath(path, paint)
         
+        // Horizontal stripe
         paint.color = RenderConstants.blendWithAmbient(stripeColor, ambientColor, 0.3f)
-        canvas.drawRect(currentX - balloonWidth * 0.7f, currentY - balloonHeight * 0.5f,
-            currentX + balloonWidth * 0.7f, currentY - balloonHeight * 0.35f, paint)
+        canvas.drawRect(currentX - balloonWidth * 0.6f, currentY - balloonHeight * 0.45f,
+            currentX + balloonWidth * 0.6f, currentY - balloonHeight * 0.32f, paint)
         
+        // Basket
         paint.color = RenderConstants.blendWithAmbient(Color.rgb(139, 90, 43), ambientColor, 0.3f)
-        val basketY = currentY + size * 0.5f
-        canvas.drawRect(currentX - size * 0.4f, basketY,
-            currentX + size * 0.4f, basketY + size * 0.5f, paint)
+        val basketY = currentY + size * 0.45f
+        canvas.drawRect(currentX - size * 0.3f, basketY,
+            currentX + size * 0.3f, basketY + size * 0.4f, paint)
         
-        strokePaint.color = paint.color
-        strokePaint.strokeWidth = 1f
-        canvas.drawLine(currentX - size * 0.35f, basketY, currentX - size * 0.3f, currentY + size * 0.3f, strokePaint)
-        canvas.drawLine(currentX + size * 0.35f, basketY, currentX + size * 0.3f, currentY + size * 0.3f, strokePaint)
+        // Ropes (only for closer balloons)
+        if (distance < 0.7f) {
+            strokePaint.color = paint.color
+            strokePaint.strokeWidth = (2f - distance).coerceAtLeast(0.5f)
+            canvas.drawLine(currentX - size * 0.25f, basketY, currentX - size * 0.2f, currentY + size * 0.25f, strokePaint)
+            canvas.drawLine(currentX + size * 0.25f, basketY, currentX + size * 0.2f, currentY + size * 0.25f, strokePaint)
+        }
         
         canvas.restore()
     }

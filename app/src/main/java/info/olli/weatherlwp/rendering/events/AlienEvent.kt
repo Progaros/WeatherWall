@@ -39,8 +39,8 @@ class AlienEvent(random: Random, override val spawnTimeMs: Long = System.current
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long) {
-        // Scale size to 1% of height
-        val unit = height * 0.01f
+        // Scale size to 0.5% of height (was 1% - reduced by half)
+        val unit = height * 0.005f
         val size = baseSize * unit
         
         val elapsedMs = absoluteTimeMs - spawnTimeMs
