@@ -45,7 +45,6 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     
     private var eventsEnabled = true
     private var spawnChance = 0.001f
-    private var lastSpawnCheck = 0L
     
     // Individual event toggles
     private var airplaneEnabled = true
@@ -85,35 +84,35 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
             }
         }
         
-        // Spawn new events with improved randomness
-        // Use a combination of absoluteTimeMs for synchronization and actual randomness for variety
-        lastSpawnCheck += deltaTimeMs
-        if (lastSpawnCheck > 500) {  // Check every 500ms for spawn opportunity
-            lastSpawnCheck = 0
+        // Spawn new events using time-bucket based determinism
+        // Each 500ms time bucket has a deterministic spawn decision
+        // Both preview and wallpaper checking the same bucket will get the same result
+        val currentBucket = state.absoluteTimeMs / 500
+        if (currentBucket != lastSpawnBucket) {
+            lastSpawnBucket = currentBucket
             
-            // Each instance independently decides whether to spawn
-            // Use instance-based random with unique seed per layer instance
-            val spawnRandom = Random(System.nanoTime())
+            // Use the time bucket as seed - all instances get same random sequence
+            val spawnSeed = currentBucket + baseSeed
+            val spawnRandom = Random(spawnSeed)
             
             // Spawn chance is checked per 500ms interval
-            // At default (spawnChance ~0.001), effective chance per check = spawnChance * 50 = 5%
-            // Increased multiplier for more frequent spawns
             val effectiveChance = spawnChance * 50f
             
             if (spawnRandom.nextFloat() < effectiveChance && currentEvents.size < 8) {
-                // Use current time for event creation - each instance creates its own events
-                val eventRandom = Random(System.nanoTime())
-                spawnRandomEvent(state, currentEvents, eventRandom)
+                // Use bucket + offset as seed for event creation (deterministic)
+                val eventRandom = Random(spawnSeed + 12345)
+                val spawnTime = currentBucket * 500  // Aligned spawn time for position sync
+                spawnRandomEvent(state, currentEvents, eventRandom, spawnTime)
             }
         }
         
         events = currentEvents.toList()
     }
     
-    private fun spawnRandomEvent(state: SimulationState, currentEvents: MutableList<RandomEvent>, random: Random) {
+    private var lastSpawnBucket = 0L
+    
+    private fun spawnRandomEvent(state: SimulationState, currentEvents: MutableList<RandomEvent>, random: Random, spawnTime: Long) {
         val availableEvents = mutableListOf<() -> RandomEvent?>()
-        // Use System.currentTimeMillis() for consistent spawn time across preview and live
-        val spawnTime = System.currentTimeMillis()
         
         // Day events
         if (airplaneEnabled && !state.isNight) availableEvents.add { AirplaneEvent(random, spawnTime) }

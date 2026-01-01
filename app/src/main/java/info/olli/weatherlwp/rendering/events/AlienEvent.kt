@@ -21,7 +21,7 @@ class AlienEvent(random: Random, override val spawnTimeMs: Long = System.current
     private val startX = if (random.nextBoolean()) -0.1f else 1.1f
     private val direction = if (startX < 0.5f) 1f else -1f
     private val startY = 0.1f + random.nextFloat() * 0.15f
-    private val speed = 0.0004f + random.nextFloat() * 0.0003f
+    private val speed = 0.00012f + random.nextFloat() * 0.0001f  // Slower UFO drift
     override val durationMs: Long = (1.25f / speed).toLong()
     
     private val size = 12f + random.nextFloat() * 6f

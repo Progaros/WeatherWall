@@ -17,7 +17,7 @@ class AirplaneEvent(random: Random, override val spawnTimeMs: Long = System.curr
     override val layer = EventLayer.MID_SKY  // In front of mountains, between clouds and terrain
     
     // Reduced speed: was 0.00015-0.00025, now 0.00005-0.00008 (~3x slower)
-    private val speed = 0.00005f + random.nextFloat() * 0.00003f
+    private val speed = 0.000025f + random.nextFloat() * 0.000015f  // Slow distant plane
     override val durationMs: Long = (1.3f / speed).toLong()
     
     private val y = 0.08f + random.nextFloat() * 0.15f

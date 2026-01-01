@@ -20,7 +20,7 @@ class BirdFlockEvent(random: Random, override val spawnTimeMs: Long = System.cur
     private val birds = List(3 + random.nextInt(5)) { Bird(random) }
     private val baseY = 0.15f + random.nextFloat() * 0.25f
     // Reduced speed significantly: was 0.0003-0.0005, now 0.00006-0.00012 (5x slower)
-    private val speed = 0.00006f + random.nextFloat() * 0.00006f
+    private val speed = 0.00003f + random.nextFloat() * 0.00003f  // Slower bird movement
     override val durationMs: Long = (1.35f / speed).toLong()
     
     private val path = Path()
