@@ -38,8 +38,8 @@ class AlienEvent(random: Random, override val spawnTimeMs: Long = System.current
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
-                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
-        val elapsedMs = System.currentTimeMillis() - spawnTimeMs
+                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long) {
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
         val x = startX + direction * speed * elapsedMs
         val wobblePhase = initialWobblePhase + elapsedMs * 0.005f
         val hoverPhase = initialHoverPhase + elapsedMs * 0.003f

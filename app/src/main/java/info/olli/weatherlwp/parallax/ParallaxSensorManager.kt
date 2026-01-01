@@ -42,11 +42,12 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         private const val TAG = "ParallaxSensorManager"
         
         // Low-pass filter alpha (0..1, smaller = smoother but slower response)
-        // Increased from 0.18 to 0.35 for faster parallax response with less lag
-        private const val FILTER_ALPHA = 0.35f
+        // Increased to 0.5 for more responsive parallax - single stage of smoothing
+        private const val FILTER_ALPHA = 0.5f
         
         // Deadzone threshold for flat device (prevents noise when tilt is tiny)
-        private const val DEADZONE = 0.06f
+        // Reduced from 0.06 to 0.02 (~1.8°) for better sensitivity to small movements
+        private const val DEADZONE = 0.02f
     }
     
     // Pre-allocated fields to avoid Pair/Triple allocations in hot path

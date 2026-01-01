@@ -31,9 +31,9 @@ class AirplaneEvent(random: Random, override val spawnTimeMs: Long = System.curr
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
-                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
+                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long) {
         // Calculate progress from absolute time
-        val elapsedMs = System.currentTimeMillis() - spawnTimeMs
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
         val progress = (elapsedMs * speed).coerceIn(-0.1f, 1.3f)
         
         val px = parallaxCalculator.getOffsetXForDepth(0.1f)

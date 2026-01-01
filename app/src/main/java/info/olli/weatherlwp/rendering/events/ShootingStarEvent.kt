@@ -30,8 +30,8 @@ class ShootingStarEvent(random: Random, override val spawnTimeMs: Long = System.
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
-                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
-        val elapsedMs = System.currentTimeMillis() - spawnTimeMs
+                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long) {
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
         val progress = speed * elapsedMs
         
         val px = parallaxCalculator.getOffsetXForDepth(0.05f)

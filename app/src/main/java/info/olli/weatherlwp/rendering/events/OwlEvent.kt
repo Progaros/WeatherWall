@@ -43,9 +43,9 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
     override fun draw(
         canvas: Canvas, paint: Paint, strokePaint: Paint,
         parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
-        timeSeconds: Float, ambientColor: Int, extendedOffset: Float
+        timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long
     ) {
-        val elapsedMs = System.currentTimeMillis() - spawnTimeMs
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
         val localTime = elapsedMs * 0.001f
         val progress = -0.15f + speed * elapsedMs
         

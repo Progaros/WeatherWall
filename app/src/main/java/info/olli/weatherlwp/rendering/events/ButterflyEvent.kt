@@ -41,8 +41,8 @@ class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
-                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
-        val elapsedMs = System.currentTimeMillis() - spawnTimeMs
+                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long) {
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
         val t = elapsedMs / 1000f
         
         // Calculate position from elapsed time

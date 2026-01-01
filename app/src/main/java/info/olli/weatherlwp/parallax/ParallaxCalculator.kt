@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicReference
 class ParallaxCalculator {
     companion object {
         /** How fast position approaches target (per frame, 0-1) - increased for faster response */
-        private const val POSITION_LERP_RATE = 0.35f
+        private const val POSITION_LERP_RATE = 0.5f
     }
     
     // Tilt holder for atomic operations (lock-free)
@@ -41,7 +41,8 @@ class ParallaxCalculator {
     // User-configurable settings
     var strength = 1.0f                 // Sensitivity multiplier
     var maxOffsetPx = 80f               // Maximum offset in any direction
-    var smoothing = 0.4f                // Position smoothing factor (higher = smoother but slower)
+    var smoothing = 0.2f                // Position smoothing factor (higher = smoother but slower)
+                                        // Reduced from 0.4 since sensor already has smoothing
     var depthSeparation = 1.0f          // How much depth affects movement (1.0 = full effect)
     
     /**

@@ -36,8 +36,8 @@ class FireflyEvent(random: Random, override val spawnTimeMs: Long = System.curre
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
-                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float) {
-        val elapsedMs = System.currentTimeMillis() - spawnTimeMs
+                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long) {
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
         
         // Use foreground depth for parallax (matches front hills where fireflies float)
         val px = parallaxCalculator.getOffsetXForDepth(depthFactor)

@@ -15,10 +15,7 @@ import androidx.preference.PreferenceManager
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import androidx.viewpager2.widget.ViewPager2
 import info.olli.weatherlwp.rendering.ParallaxScene
-import info.olli.weatherlwp.rendering.SeasonalEvents
-import info.olli.weatherlwp.rendering.WeatherLayer
 import info.olli.weatherlwp.weather.WeatherRepository
-import info.olli.weatherlwp.weather.WeatherType
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayoutMediator
@@ -35,7 +32,8 @@ import android.widget.FrameLayout
 class MainActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "MainActivity"
-        private const val TARGET_FPS = 20
+        // Match wallpaper FPS (30) for consistent parallax preview
+        private const val TARGET_FPS = 30
         private const val FRAME_TIME_MS = 1000L / TARGET_FPS
         private const val PREF_RELOAD_THROTTLE_MS = 100L  // Max 10 reloads per second
         
@@ -47,8 +45,8 @@ class MainActivity : AppCompatActivity() {
     }
     
     private var previewScene: ParallaxScene? = null
-    private var weatherLayer: WeatherLayer? = null
-    private var seasonalEvents: SeasonalEvents? = null
+    // NOTE: WeatherLayer and SeasonalEvents are handled internally by ParallaxScene
+    // No separate instances needed here
     
     // Preview resize tracking
     private var previewHeightPx = 0
@@ -94,49 +92,8 @@ class MainActivity : AppCompatActivity() {
     
     private fun doPreferenceReload() {
         lastPrefReloadTime = SystemClock.elapsedRealtime()
+        // ParallaxScene.loadPrefs() handles all layer settings including weather and seasonal
         previewScene?.loadPrefs()
-        seasonalEvents?.loadSettings()
-        loadPreviewEffects()
-    }
-    
-    private fun loadPreviewEffects() {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        val debugEnabled = prefs.getBoolean("pref_debug_enabled", false)
-        val useBreezy = prefs.getBoolean("pref_use_breezy_weather", true)
-        val weatherSetting = prefs.getString("pref_weather_type", "auto") ?: "auto"
-        
-        // Determine effective weather type
-        val effectiveWeather = when {
-            debugEnabled && weatherSetting != "auto" -> {
-                when (weatherSetting) {
-                    "rain" -> WeatherLayer.WeatherType.RAIN
-                    "snow" -> WeatherLayer.WeatherType.SNOW
-                    "lightning" -> WeatherLayer.WeatherType.LIGHTNING
-                    "fog" -> WeatherLayer.WeatherType.FOG
-                    else -> WeatherLayer.WeatherType.NONE
-                }
-            }
-            weatherSetting == "auto" && useBreezy -> {
-                val breezyType = WeatherRepository.getWeatherType(this)
-                when (breezyType) {
-                    WeatherType.RAIN -> WeatherLayer.WeatherType.RAIN
-                    WeatherType.SNOW -> WeatherLayer.WeatherType.SNOW
-                    WeatherType.THUNDERSTORM -> WeatherLayer.WeatherType.LIGHTNING
-                    WeatherType.FOG -> WeatherLayer.WeatherType.FOG
-                    else -> WeatherLayer.WeatherType.NONE
-                }
-            }
-            else -> {
-                when (weatherSetting) {
-                    "rain" -> WeatherLayer.WeatherType.RAIN
-                    "snow" -> WeatherLayer.WeatherType.SNOW
-                    "lightning" -> WeatherLayer.WeatherType.LIGHTNING
-                    "fog" -> WeatherLayer.WeatherType.FOG
-                    else -> WeatherLayer.WeatherType.NONE
-                }
-            }
-        }
-        weatherLayer?.setWeather(effectiveWeather)
     }
     
     // FPS tracking for debugging
@@ -160,9 +117,8 @@ class MainActivity : AppCompatActivity() {
         // Setup live preview
         val previewSurface = findViewById<SurfaceView>(R.id.preview_surface)
         val previewContainer = findViewById<FrameLayout>(R.id.preview_container)
+        // ParallaxScene handles all rendering including weather and seasonal internally
         previewScene = ParallaxScene(this, sensorManager, weatherRepo)
-        weatherLayer = WeatherLayer()
-        seasonalEvents = SeasonalEvents(this)
         
         // Load saved preview height or use default
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
@@ -368,14 +324,9 @@ class MainActivity : AppCompatActivity() {
                     canvas.drawColor(Color.BLACK)
                     
                     // Render scene with real delta time for accurate physics
+                    // ParallaxScene internally handles weather and seasonal layers,
+                    // so we only call scene.render() - no separate weather/seasonal calls needed
                     previewScene?.render(canvas, deltaTimeMs)
-                    
-                    // Render weather effects (rain, snow, lightning)
-                    val prefs = PreferenceManager.getDefaultSharedPreferences(this@MainActivity)
-                    val weatherEnabled = prefs.getBoolean("pref_weather_enabled", true)
-                    val seasonalEnabled = prefs.getBoolean("pref_seasonal_enabled", true)
-                    weatherLayer?.render(canvas, weatherEnabled)
-                    seasonalEvents?.render(canvas, seasonalEnabled)
                     
                     frameCount++
                     
