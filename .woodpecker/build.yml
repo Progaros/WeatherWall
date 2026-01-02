@@ -101,5 +101,5 @@ steps:
         
         echo "Release v$VERSION published successfully!"
     when:
-      - event: push
-        branch: main, develop
+      event: push
+      branch: [main, develop]
