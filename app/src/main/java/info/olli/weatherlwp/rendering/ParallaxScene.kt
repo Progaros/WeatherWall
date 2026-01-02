@@ -187,9 +187,11 @@ class ParallaxScene(
                     // Skip randomEventLayer in normal iteration - ground events drawn by terrain callback
                     if (layer === randomEventLayer) continue
                     
-                    // Before drawing mountainLayer, draw far sky events
+                    // Before drawing mountainLayer, draw far sky events and behind-mountain seasonal effects
                     if (layer === mountainLayer) {
                         randomEventLayer.drawFarSkyEvents(canvas, state, parallaxCalculator)
+                        // Draw seasonal background elements that should appear behind mountains (e.g. rainbow)
+                        seasonalEvents.renderBehindMountains(canvas, seasonalEnabled)
                     }
                     
                     // After drawing mountainLayer, draw mid sky events (birds, planes, eagles)

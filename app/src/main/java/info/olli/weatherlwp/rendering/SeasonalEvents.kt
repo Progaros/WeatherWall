@@ -244,11 +244,40 @@ class SeasonalEvents(private val context: Context? = null) {
                 Season.CHRISTMAS -> renderChristmasStars(canvas)
                 Season.NEW_YEAR -> renderNewYearFireworks(canvas)
                 Season.CN_NEW_YEAR -> renderChineseNewYear(canvas)
-                Season.ST_PATRICKS -> renderStPatricksDay(canvas)
+                // ST_PATRICKS (rainbow) is drawn behind mountains via renderBehindMountains()
+                Season.ST_PATRICKS -> {}  // handled elsewhere
                 Season.NONE -> {}
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error rendering seasonal events", e)
+        }
+    }
+
+    /**
+     * Render elements that belong behind the terrain/mountains (e.g. St. Patrick's rainbow).
+     * This is called from the scene renderer just before MountainLayer is drawn.
+     */
+    fun renderBehindMountains(canvas: Canvas, enabled: Boolean) {
+        if (!enabled) return
+        try {
+            // Ensure settings are loaded and screen size is initialized
+            val now = System.currentTimeMillis()
+            if (now - lastSettingsLoad > SETTINGS_RELOAD_INTERVAL_MS) {
+                loadSettings()
+            }
+            val season = getCurrentSeason()
+            if (season == Season.NONE) return
+            if (!initialized || screenWidth != canvas.width || screenHeight != canvas.height) {
+                screenWidth = canvas.width
+                screenHeight = canvas.height
+                initParticles()
+                initialized = true
+            }
+            if (season == Season.ST_PATRICKS) {
+                renderStPatricksDay(canvas)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error rendering behind-mountain seasonal events", e)
         }
     }
 

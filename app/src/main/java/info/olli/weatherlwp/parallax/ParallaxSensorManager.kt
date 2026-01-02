@@ -67,6 +67,9 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     // Pose gain: reduces sensitivity when near vertical (gimbal-lock region)
     // 1.0 = flat (stable), 0.0 = vertical (unstable)
     private var poseGain = 1f
+
+    // Track whether the screen is facing down (used to conditionally flip Y)
+    private var isScreenDown = false
     
     // Track display rotation for reset on rotation change
     private var lastDisplayRotation = Surface.ROTATION_0
@@ -170,46 +173,50 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         val pitch = orientationAngles[1]  // Forward/backward tilt → Y parallax
         val roll = orientationAngles[2]   // Left/right tilt → X parallax
         
-        // Calculate pose gain from rotation matrix: remappedMatrix[8] is the Z component
-        // of the device's Z-axis in world space. When phone is flat, |Z[8]| ≈ 1.
-        // When phone is vertical (screen facing user), |Z[8]| ≈ 0.
-        val zComponent = abs(remappedMatrix[8])
+        // remappedMatrix[8] is the Z component of the device's Z-axis in world space.
+        // When phone is flat, |Z[8]| ≈ 1. When phone is vertical (screen-facing), |Z[8]| ≈ 0.
+        // Keep the sign to detect screen-up vs screen-down, but use absolute for poseGain.
+        val zCompRaw = remappedMatrix[8]
+        isScreenDown = zCompRaw < 0f
+        val zComponent = abs(zCompRaw)
         poseGain = (zComponent / 0.3f).coerceIn(0f, 1f)  // Fade sensitivity below 0.3
         
         processOrientationAngles(pitch, roll)
     }
     
     private fun handleGravityVector(values: FloatArray, displayRotation: Int) {
-        var gx = values[0]
-        var gy = values[1]
+        // Gravity/accelerometer sensors report values in the DEVICE coordinate system
+        // (X right, Y up, Z out of screen in default orientation). We must remap them
+        // based on displayRotation so the user sees consistent behavior in any rotation.
+        val (gx, gy) = when (displayRotation) {
+            Surface.ROTATION_90 -> Pair(values[1], -values[0])
+            Surface.ROTATION_180 -> Pair(-values[0], -values[1])
+            Surface.ROTATION_270 -> Pair(-values[1], values[0])
+            else -> Pair(values[0], values[1])
+        }
         val gz = values[2]
-        
-        // NOTE: No display rotation remapping for gravity
-        // Gravity is world-space (always points down) - work in world coordinates directly
-        // This matches the world-space output from handleRotationVector's getOrientation()
-        // and prevents double transformation that causes axis inversions
         
         val norm = sqrt(gx * gx + gy * gy + gz * gz)
         if (norm < 0.1f) return
         
         // Normalize for numerical stability
         val inv = 1f / norm
-        gx *= inv
-        gy *= inv
+        val gxn = gx * inv
+        val gyn = gy * inv
         val gzn = gz * inv
         
-        // Calculate pose gain: |gzn| is large when phone is flat, small when vertical
-        // When phone is near vertical, Euler angle extraction becomes unstable (gimbal lock)
-        // Reduce sensitivity to prevent jitter in that region
+        // gzn is the normalized Z gravity component. Keep its sign to detect screen-up/down,
+        // but use absolute for poseGain to reduce sensitivity near vertical.
+        isScreenDown = gzn > 0f
         poseGain = (abs(gzn) / 0.3f).coerceIn(0f, 1f)  // Fade sensitivity below |gz| = 0.3
         
         // Correct formulas for pitch/roll from gravity:
         // When solving for angle about axis A, exclude A-component from denominator
         // Pitch = rotation about X axis → uses (Y,Z), denominator uses (X,Z) magnitude
-        val pitch = atan2(-gy, sqrt(gx * gx + gzn * gzn))   // [-π/2, +π/2]
+        val pitch = atan2(-gyn, sqrt(gxn * gxn + gzn * gzn))   // [-π/2, +π/2]
         
         // Roll = rotation about Y axis → uses (X,Z), denominator uses (Y,Z) magnitude  
-        val roll = atan2(gx, sqrt(gy * gy + gzn * gzn))     // [-π/2, +π/2]
+        val roll = atan2(gxn, sqrt(gyn * gyn + gzn * gzn))     // [-π/2, +π/2]
         
         processOrientationAngles(pitch, roll)
     }
@@ -275,8 +282,11 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         filteredX += FILTER_ALPHA * (scaledX - filteredX)
         filteredY += FILTER_ALPHA * (scaledY - filteredY)
 
-        // Flip vertical axis: invert Y so up/down is reversed for consumers
-        listener?.onTiltChanged(filteredX, -filteredY)
+        // Conditionally flip vertical axis depending on whether the screen is down.
+        // For screen-up we invert Y for consumers; when screen-down the pitch sign
+        // relationship flips, so cancel the inversion.
+        val outY = if (isScreenDown) filteredY else -filteredY
+        listener?.onTiltChanged(filteredX, outY)
     }
 
     override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) = Unit
