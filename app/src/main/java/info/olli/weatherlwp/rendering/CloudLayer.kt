@@ -558,7 +558,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
                     val ny = y * frequency / size * 4
                     // Simple smoothed random (not true Perlin but fast)
                     val noise = kotlin.math.sin(nx * 12.9898 + ny * 78.233).toFloat()
-                    value += ((noise * 43758.5453).mod(1f)) * amplitude
+                    value += ((noise * 43758.5453f).mod(1f)) * amplitude
                     amplitude *= 0.5f
                     frequency *= 2f
                 }

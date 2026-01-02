@@ -129,17 +129,17 @@ class SimulationClock {
      */
     fun isDawn(): Boolean {
         val hour = getTimeOfDayHours()
-        // Dawn window: from 30 min before sunrise to 1 hour after
-        return hour >= (sunriseHour - 0.5f) && hour < (sunriseHour + 1.0f)
+        // Dawn window: from sunrise to 1.5 hours after (e.g., 6:00-7:30 with default sunrise=6)
+        return hour >= sunriseHour && hour < (sunriseHour + 1.5f)
     }
     
     /**
-     * Check if it's dusk (sunset transition, ~2 hours before sunset to just after).
+     * Check if it's dusk (sunset transition, ~3 hours before sunset).
      */
     fun isDusk(): Boolean {
         val hour = getTimeOfDayHours()
-        // Dusk window: from 2 hours before sunset to 30 min after
-        return hour >= (sunsetHour - 2.0f) && hour < (sunsetHour + 0.5f)
+        // Dusk window: from 3 hours before sunset to sunset (e.g., 17:00-20:00 with default sunset=20)
+        return hour >= (sunsetHour - 3.0f) && hour < sunsetHour
     }
     
     /**

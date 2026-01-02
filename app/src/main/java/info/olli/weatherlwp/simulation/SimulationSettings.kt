@@ -58,8 +58,6 @@ class SimulationSettings(context: Context) {
     // Debug
     var debugEnabled: Boolean = false
         private set
-    var debugTimeOverride: String? = null
-        private set
     var debugWeatherOverride: String? = null
         private set
     
@@ -142,27 +140,15 @@ class SimulationSettings(context: Context) {
                     else -> cloudDensity
                 }
             }
-            
-            debugTimeOverride = prefs.getString("pref_debug_time", null)
         } else {
-            debugTimeOverride = null
             debugWeatherOverride = null
         }
     }
     
     /**
-     * Get effective time in minutes, considering debug overrides.
+     * Get effective time in minutes.
      */
     fun getEffectiveTimeMinutes(): Int {
-        if (debugEnabled && debugTimeOverride != null) {
-            return when (debugTimeOverride) {
-                "night" -> 0
-                "dawn" -> 6 * 60
-                "day" -> 12 * 60
-                "dusk" -> 19 * 60
-                else -> manualTimeMinutes
-            }
-        }
         return manualTimeMinutes
     }
     

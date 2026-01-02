@@ -45,6 +45,24 @@ Animated wildlife and sky events appear randomly throughout the day:
 - Optional Breezy Weather integration for real weather data
 - All processing done locally on device
 
+### ☀️ Breezy Weather Integration
+WeatherWall can receive real-time weather data from [Breezy Weather](https://github.com/breezy-weather/breezy-weather) (privacy-friendly weather app):
+
+**Supported data:**
+- **Sunrise/sunset times** - Accurate dawn and dusk transitions based on your location
+- **Weather conditions** - Rain, snow, thunderstorm, fog, clouds affect visual effects
+- **Wind speed & direction** - Drives cloud movement and tree sway
+- **Cloud cover** - Adjusts cloud layer density
+- **Moon phase & times** - Accurate lunar cycle display
+
+**Setup:**
+1. Install Breezy Weather from F-Droid or GitHub
+2. Open Breezy Weather → Settings → External Modules
+3. Enable "Send Gadgetbridge data" → "Broadcast to all"
+4. Weather data will be received automatically
+
+Without Breezy Weather, sensible defaults are used (sunrise 6:00, sunset 20:00).
+
 ### ⚙️ Customization
 - Parallax strength, smoothing, return speed, and depth separation
 - Sun/moon arc height, celestial size, moon enable/disable
