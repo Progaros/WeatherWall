@@ -14,6 +14,7 @@ class ParallaxCalculatorTest {
     fun testUpdateFromSensor() {
         val calculator = ParallaxCalculator()
         calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 0f  // Use legacy pixel mode
         calculator.maxOffsetPx = 100f
         calculator.setCanvasSize(1080f, 1920f)  // Reference height for scale=1.0
         
@@ -34,6 +35,7 @@ class ParallaxCalculatorTest {
     fun testPositionFollowsTilt() {
         val calculator = ParallaxCalculator()
         calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 0f  // Use legacy pixel mode
         calculator.maxOffsetPx = 100f
         calculator.setCanvasSize(1080f, 1920f)  // Reference height for scale=1.0
         
@@ -59,6 +61,7 @@ class ParallaxCalculatorTest {
     fun testDepthScaling() {
         val calculator = ParallaxCalculator()
         calculator.depthSeparation = 1.0f  // Max separation for clear test
+        calculator.maxOffsetPercent = 0f  // Use legacy pixel mode
         calculator.maxOffsetPx = 100f
         calculator.setCanvasSize(1080f, 1920f)  // Reference height for scale=1.0
         
@@ -80,6 +83,7 @@ class ParallaxCalculatorTest {
     fun testCanvasSizeScaling() {
         val calculator = ParallaxCalculator()
         calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 0f  // Use legacy pixel mode
         calculator.maxOffsetPx = 100f
         
         // Test with half-height canvas (like preview)
@@ -93,6 +97,7 @@ class ParallaxCalculatorTest {
         // Reset
         val calculator2 = ParallaxCalculator()
         calculator2.strength = 1.0f
+        calculator2.maxOffsetPercent = 0f  // Use legacy pixel mode
         calculator2.maxOffsetPx = 100f
         
         // Test with full-height canvas
@@ -111,6 +116,8 @@ class ParallaxCalculatorTest {
     fun testInvertX() {
         val calculator = ParallaxCalculator()
         calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 0f  // Use legacy pixel mode
+        calculator.maxOffsetPercent = 0f  // Use legacy pixel mode
         calculator.maxOffsetPx = 100f
         calculator.setCanvasSize(1080f, 1920f)
         calculator.invertX = false
@@ -123,6 +130,7 @@ class ParallaxCalculatorTest {
         // With inversion
         val calculator2 = ParallaxCalculator()
         calculator2.strength = 1.0f
+        calculator2.maxOffsetPercent = 0f  // Use legacy pixel mode
         calculator2.maxOffsetPx = 100f
         calculator2.setCanvasSize(1080f, 1920f)
         calculator2.invertX = true
@@ -141,6 +149,7 @@ class ParallaxCalculatorTest {
     fun testInvertY() {
         val calculator = ParallaxCalculator()
         calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 0f  // Use legacy pixel mode
         calculator.maxOffsetPx = 100f
         calculator.setCanvasSize(1080f, 1920f)
         calculator.invertY = false
@@ -153,6 +162,7 @@ class ParallaxCalculatorTest {
         // With inversion
         val calculator2 = ParallaxCalculator()
         calculator2.strength = 1.0f
+        calculator2.maxOffsetPercent = 0f  // Use legacy pixel mode
         calculator2.maxOffsetPx = 100f
         calculator2.setCanvasSize(1080f, 1920f)
         calculator2.invertY = true
@@ -171,6 +181,7 @@ class ParallaxCalculatorTest {
     fun testAspectRatioCompensation() {
         val calculator = ParallaxCalculator()
         calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 0f  // Use legacy pixel mode
         calculator.maxOffsetPx = 100f
         calculator.setCanvasSize(1080f, 1920f)
         calculator.aspectRatioCompensation = 1.0f  // 1:1 ratio
@@ -187,6 +198,7 @@ class ParallaxCalculatorTest {
         // With 1.5x horizontal aspect ratio
         val calculator2 = ParallaxCalculator()
         calculator2.strength = 1.0f
+        calculator2.maxOffsetPercent = 0f  // Use legacy pixel mode
         calculator2.maxOffsetPx = 100f
         calculator2.setCanvasSize(1080f, 1920f)
         calculator2.aspectRatioCompensation = 1.5f  // 50% more horizontal
