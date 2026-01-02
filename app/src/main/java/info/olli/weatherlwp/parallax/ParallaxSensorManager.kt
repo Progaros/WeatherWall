@@ -257,8 +257,12 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             lastShakeTime = 0L
             lastShakeCountTime = 0L
             
-            // Use SENSOR_DELAY_FASTEST for gyroscope (reference default) and rotation vector
-            val sensorRate = SensorManager.SENSOR_DELAY_FASTEST
+            // Use SENSOR_DELAY_GAME for gyroscope (stable rate ~50Hz) to prevent flooding
+            // Use SENSOR_DELAY_FASTEST for rotation vector (more tolerant of high rates)
+            val sensorRate = if (parallaxMode == ParallaxMode.GYROSCOPE) 
+                SensorManager.SENSOR_DELAY_GAME
+            else 
+                SensorManager.SENSOR_DELAY_FASTEST
             val okActive = sensorManager.registerListener(this, activeSensor, sensorRate)
             Log.d(TAG, "Active sensor registered=$okActive type=${activeSensor?.type} name=${activeSensor?.name}")
             
