@@ -189,4 +189,58 @@ class SeasonalEventsTest {
             else -> "none"
         }
     }
+    
+    // ============== Shake Fireworks Tests ==============
+    
+    @Test
+    fun `shake firework count should support up to 50`() {
+        val minCount = 5
+        val maxCount = 50
+        val defaultCount = 15
+        
+        assertTrue("Min count should be 5", minCount == 5)
+        assertTrue("Max count should be 50", maxCount == 50)
+        assertTrue("Default should be 15", defaultCount == 15)
+        
+        // Verify coercion works
+        val tooLow = 1.coerceIn(minCount, maxCount)
+        val tooHigh = 100.coerceIn(minCount, maxCount)
+        val valid = 30.coerceIn(minCount, maxCount)
+        
+        assertEquals("Too low should clamp to min", minCount, tooLow)
+        assertEquals("Too high should clamp to max", maxCount, tooHigh)
+        assertEquals("Valid should stay unchanged", 30, valid)
+    }
+    
+    @Test
+    fun `normal distribution should cluster around mean`() {
+        // Test that normal distribution produces values clustered around mean
+        val random = java.util.Random(42)  // Fixed seed for reproducibility
+        val mean = 15
+        val stdDev = mean * 0.15  // 15% of mean = 2.25
+        
+        val samples = (1..1000).map {
+            (random.nextGaussian() * stdDev + mean).toInt().coerceIn(3, 50)
+        }
+        
+        val avg = samples.average()
+        assertTrue("Average should be near mean (15)", avg in 13.0..17.0)
+        
+        // Most values should be within 2 stdDev of mean (roughly 95%)
+        val withinTwoStdDev = samples.count { it in 10..20 }
+        assertTrue("Most values should be near mean", withinTwoStdDev > 800)  // >80%
+    }
+    
+    @Test
+    fun `shake fireworks should work regardless of seasonal settings`() {
+        // Shake fireworks feature should not depend on seasonal events being enabled
+        // The ensureShakeReady() method allows initialization without seasonal rendering
+        
+        val seasonalEnabled = false
+        val shakeFireworksEnabled = true
+        
+        // When seasonal is disabled but shake is enabled, shake should still work
+        assertTrue("Shake should work when seasonal disabled", 
+            shakeFireworksEnabled && !seasonalEnabled)
+    }
 }

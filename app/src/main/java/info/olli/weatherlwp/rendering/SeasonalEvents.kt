@@ -14,6 +14,9 @@ import androidx.preference.PreferenceManager
 import java.util.Calendar
 import kotlin.random.Random
 
+// Java Random is used for nextGaussian() (normal distribution)
+private val gaussianRandom = java.util.Random()
+
 /**
  * Seasonal event effects: Christmas star with trail and New Year fireworks.
  * Active during December 15 - January 7, or when debug override is set.
@@ -185,7 +188,7 @@ class SeasonalEvents(private val context: Context? = null) {
             
             // Shake-to-fireworks settings
             shakeFireworksEnabled = it.getBoolean("pref_shake_fireworks_enabled", true)
-            shakeFireworksCount = it.getInt("pref_shake_fireworks_count", 12).coerceIn(5, 20)
+            shakeFireworksCount = it.getInt("pref_shake_fireworks_count", 15).coerceIn(5, 50)
         }
         lastSettingsLoad = System.currentTimeMillis()
     }
@@ -196,19 +199,57 @@ class SeasonalEvents(private val context: Context? = null) {
     fun isShakeFireworksEnabled(): Boolean = shakeFireworksEnabled
     
     /**
+     * Ensure shake fireworks can work even when seasonal events are disabled.
+     * Initializes screen dimensions if needed.
+     */
+    private fun ensureInitializedForShake(width: Int, height: Int) {
+        if (!initialized || screenWidth != width || screenHeight != height) {
+            screenWidth = width
+            screenHeight = height
+            heightScale = screenHeight / REFERENCE_HEIGHT
+            initParticles()
+            initialized = true
+        }
+    }
+    
+    /**
      * Trigger fireworks on shake gesture.
      * Launches multiple rockets in quick succession for a burst effect.
+     * Uses a normal distribution around the target count for variety.
+     * Works regardless of seasonal settings being enabled.
      */
     fun triggerShakeFireworks() {
         if (!shakeFireworksEnabled) return
-        if (!initialized) return
         
-        Log.d(TAG, "Triggering shake fireworks: $shakeFireworksCount rockets")
+        // Ensure initialization even if seasonal events are disabled
+        // This allows shake fireworks to work year-round
+        if (!initialized) {
+            Log.d(TAG, "Shake triggered but not initialized - waiting for next frame")
+            return
+        }
+        
+        // Use normal distribution for variety in firework count
+        // Mean = shakeFireworksCount, stdDev = 15% of count
+        val stdDev = shakeFireworksCount * 0.15
+        val normalValue = gaussianRandom.nextGaussian() * stdDev + shakeFireworksCount
+        val actualCount = normalValue.toInt().coerceIn(3, 50)
+        
+        Log.d(TAG, "Triggering shake fireworks: $actualCount rockets (target: $shakeFireworksCount)")
         
         // Launch multiple rockets with slight random timing variation
         // We'll stagger them slightly by adjusting their initial Y positions
-        for (i in 0 until shakeFireworksCount.coerceAtMost(rockets.size * 3)) {
+        for (i in 0 until actualCount.coerceAtMost(rockets.size * 3)) {
             launchRocket()
+        }
+    }
+    
+    /**
+     * Initialize for shake fireworks if not already done.
+     * Called from ParallaxScene to ensure shake works even without seasonal rendering.
+     */
+    fun ensureShakeReady(width: Int, height: Int) {
+        if (shakeFireworksEnabled && !initialized) {
+            ensureInitializedForShake(width, height)
         }
     }
 

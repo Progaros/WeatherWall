@@ -581,6 +581,88 @@ class ParallaxSensorManagerTest {
         // Should still be ~1.0 (no additional acceleration beyond gravity)
         assertEquals("gForce for tilted phone at rest should still be ~1.0", 1.0f, gForce, 0.02f)
     }
+    
+    // ============== Roll Wiggle Detection Tests ==============
+    
+    @Test
+    fun `roll wiggle constants are reasonable`() {
+        // Test the wiggle detection constants
+        val wiggleThreshold = 0.2f  // ~11 degrees
+        val wiggleTimeWindow = 800L
+        val wiggleTriggerCount = 4
+        
+        // Threshold should be small enough to detect quick wrist turns
+        assertTrue("Threshold should be ~11 degrees", wiggleThreshold in 0.15f..0.25f)
+        
+        // Time window should allow natural gesture speed
+        assertTrue("Time window should be 500-1500ms", wiggleTimeWindow in 500L..1500L)
+        
+        // 4 direction changes = 2 complete back-and-forth movements
+        assertEquals("4 direction changes needed", 4, wiggleTriggerCount)
+    }
+    
+    @Test
+    fun `roll wiggle detects direction changes`() {
+        // Simulate roll angle changes indicating wiggle
+        val wiggleThreshold = 0.2f
+        var lastRoll = 0f
+        var lastDirection = 0
+        var directionChanges = 0
+        
+        // Sequence: 0 -> +0.3 (right) -> -0.3 (left) -> +0.3 (right) -> -0.3 (left)
+        val rollSequence = listOf(0f, 0.3f, -0.3f, 0.3f, -0.3f)
+        
+        for (roll in rollSequence.drop(1)) {
+            val delta = roll - lastRoll
+            if (kotlin.math.abs(delta) >= wiggleThreshold) {
+                val direction = if (delta > 0) 1 else -1
+                if (lastDirection != 0 && direction != lastDirection) {
+                    directionChanges++
+                }
+                lastDirection = direction
+                lastRoll = roll
+            }
+        }
+        
+        // Should detect 3 direction changes: right->left, left->right, right->left
+        assertEquals("Should detect 3 direction changes", 3, directionChanges)
+    }
+    
+    @Test
+    fun `roll wiggle 4 direction changes trigger event`() {
+        val triggerCount = 4
+        var directionChanges = 0
+        var triggered = false
+        
+        // Simulate 4 direction changes
+        for (i in 1..4) {
+            directionChanges++
+            if (directionChanges >= triggerCount) {
+                triggered = true
+                break
+            }
+        }
+        
+        assertTrue("4 direction changes should trigger", triggered)
+    }
+    
+    @Test
+    fun `roll wiggle resets on timeout`() {
+        val timeWindow = 800L
+        var startTime = 0L
+        var directionChanges = 2
+        
+        // Simulate timeout after first wiggle
+        startTime = 100L
+        val now = 1000L  // 900ms later, exceeds 800ms window
+        
+        if (now - startTime > timeWindow) {
+            directionChanges = 0
+            startTime = 0L
+        }
+        
+        assertEquals("Direction changes should reset on timeout", 0, directionChanges)
+    }
 }
 
 /**

@@ -45,6 +45,12 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         private const val SHAKE_COUNT_RESET_TIME_MS = 3000L  // Reset count if no shakes for this long
         private const val SHAKE_TRIGGER_COUNT = 3          // Number of shakes to trigger event
         private const val SHAKE_COOLDOWN_MS = 1000L        // Cooldown after triggering shake event
+        
+        // Roll wiggle detection (quick wrist turns around arm axis)
+        // This is an alternative trigger for shake - fast roll direction changes
+        private const val WIGGLE_ROLL_THRESHOLD_RAD = 0.2f  // Minimum roll angle change (~11 degrees)
+        private const val WIGGLE_TIME_WINDOW_MS = 800L     // Time window to detect wiggles
+        private const val WIGGLE_TRIGGER_COUNT = 4         // Direction changes to trigger (4 = 2 back-and-forth)
     }
     
     interface Listener {
@@ -136,6 +142,12 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     private var shakeTimestamp = 0L  // Last shake detection time
     private var shakeCount = 0
     private var lastShakeTime = 0L   // Last triggered shake event time (for cooldown)
+    
+    // Roll wiggle detection state - detects quick wrist turns
+    private var lastRollAngle = 0f
+    private var rollDirectionChanges = 0
+    private var lastRollDirection = 0  // -1=left, 0=none, 1=right
+    private var rollWiggleStartTime = 0L
 
     fun setListener(l: Listener) { listener = l }
     
@@ -441,6 +453,61 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         }
     }
     
+    /**
+     * Detect roll wiggle gesture - quick wrist turns around the arm axis.
+     * This is an alternative to shake for users who prefer a more subtle gesture.
+     * 
+     * Detects rapid direction changes in roll angle (left-right turns).
+     * 4 direction changes (2 complete back-and-forth movements) trigger the event.
+     */
+    private fun detectRollWiggle(currentRoll: Float) {
+        val now = System.currentTimeMillis()
+        
+        // Check cooldown after a successful shake trigger (shared with shake)
+        if (now - lastShakeTime < SHAKE_COOLDOWN_MS) return
+        
+        val rollDelta = currentRoll - lastRollAngle
+        
+        // Only process if roll changed enough to be intentional
+        if (abs(rollDelta) < WIGGLE_ROLL_THRESHOLD_RAD) return
+        
+        // Determine direction: positive = right, negative = left
+        val direction = if (rollDelta > 0) 1 else -1
+        
+        // Check if direction changed from last movement
+        if (lastRollDirection != 0 && direction != lastRollDirection) {
+            // Direction changed! This is a wiggle
+            rollDirectionChanges++
+            Log.d(TAG, "Roll wiggle direction change=$rollDirectionChanges, delta=${"%.2f".format(rollDelta)}")
+        }
+        
+        lastRollDirection = direction
+        lastRollAngle = currentRoll
+        
+        // Reset if too much time passed since first wiggle
+        if (rollDirectionChanges > 0 && rollWiggleStartTime > 0 && 
+            now - rollWiggleStartTime > WIGGLE_TIME_WINDOW_MS) {
+            rollDirectionChanges = 0
+            rollWiggleStartTime = 0L
+            Log.d(TAG, "Roll wiggle reset - timeout")
+        }
+        
+        // Start timing on first direction change
+        if (rollDirectionChanges == 1 && rollWiggleStartTime == 0L) {
+            rollWiggleStartTime = now
+        }
+        
+        // Trigger shake event on enough direction changes
+        if (rollDirectionChanges >= WIGGLE_TRIGGER_COUNT) {
+            rollDirectionChanges = 0
+            rollWiggleStartTime = 0L
+            lastRollDirection = 0
+            lastShakeTime = now  // Use shared cooldown
+            Log.d(TAG, "Roll wiggle gesture detected! Triggering listener")
+            shakeListener?.onShake()
+        }
+    }
+    
     private fun handleRotationVector(values: FloatArray, displayRotation: Int) {
         SensorManager.getRotationMatrixFromVector(rotationMatrix, values)
         
@@ -536,8 +603,14 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             // First sample: just set reference, don't move yet
             prevPitch = pitch
             prevRoll = roll
+            lastRollAngle = roll  // Initialize roll wiggle detection
             isFirstSample = false
             return
+        }
+        
+        // Detect roll wiggle (quick wrist turns) for shake alternative
+        if (shakeEnabled) {
+            detectRollWiggle(roll)
         }
         
         // Calculate motion since last frame

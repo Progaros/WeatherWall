@@ -160,6 +160,9 @@ class ParallaxScene(
                 parallaxCalculator.setCanvasSize(w, h)
             }
             
+            // Ensure shake fireworks can work even if seasonal events are disabled
+            seasonalEvents.ensureShakeReady(canvas.width, canvas.height)
+            
             // Get current simulation state (single source of truth)
             val state = simulationController.getState()
             
