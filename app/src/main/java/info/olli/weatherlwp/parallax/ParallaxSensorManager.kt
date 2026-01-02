@@ -44,6 +44,10 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         private const val SHAKE_COUNT_THRESHOLD = 3       // Number of acceleration spikes for trigger
         private const val SHAKE_COOLDOWN_MS = 1000L       // Cooldown after triggering shake event
         private const val SHAKE_SLOP_MS = 100L            // Minimum time between shake counts
+        
+        // If no linear-accel event for this long, fall back to accelerometer
+        // 1000ms is safer than 500ms to avoid false fallback during power-saving modes
+        private const val LINEAR_ACCEL_TIMEOUT_MS = 1000L
     }
     
     interface Listener {
@@ -142,12 +146,6 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     private var shakeCount = 0
     private var shakeWindowStartTime = 0L
     private var lastShakeCountTime = 0L
-    
-    companion object LinearAccelTimeout {
-        // If no linear-accel event for this long, fall back to accelerometer
-        // 1000ms is safer than 500ms to avoid false fallback during power-saving modes
-        private const val LINEAR_ACCEL_TIMEOUT_MS = 1000L
-    }
 
     fun setListener(l: Listener) { listener = l }
     
