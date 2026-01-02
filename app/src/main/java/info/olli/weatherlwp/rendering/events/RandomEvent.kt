@@ -26,6 +26,25 @@ enum class EventLayer {
 typealias HillHeightProvider = (xRatio: Float, depthFactor: Float) -> Float
 
 /**
+ * Info about a hill position, including both Y and the actual hill's depthFactor.
+ * Used to ensure ground events are drawn at the correct depth layer.
+ */
+data class HillInfo(
+    /** Y position as ratio of screen height (0.0=top, 1.0=bottom) */
+    val yRatio: Float,
+    /** The actual hill's depthFactor (for correct draw ordering) */
+    val actualDepthFactor: Float
+)
+
+/**
+ * Function type for getting full hill info (Y position and actual depth factor).
+ * @param xRatio X position as ratio of extended width (0.0 to 1.0)
+ * @param requestedDepthFactor Approximate depth to find closest hill for
+ * @return HillInfo with Y position and actual hill depthFactor
+ */
+typealias HillInfoProvider = (xRatio: Float, requestedDepthFactor: Float) -> HillInfo
+
+/**
  * Base interface for random events.
  * 
  * Events are synchronized across preview and wallpaper by using absolute time
@@ -75,6 +94,17 @@ interface RandomEvent {
      */
     fun getProgress(absoluteTimeMs: Long): Float {
         return (absoluteTimeMs - spawnTimeMs) / durationMs.toFloat()
+    }
+    
+    /**
+     * Get the current Y position ratio of this event for Y-based draw ordering.
+     * Only applicable for GROUND layer events.
+     * @param absoluteTimeMs Current time for position calculation
+     * @param hillHeightProvider Function to get hill Y at given X and depth
+     * @return Y position as ratio of screen height (0.0=top, 1.0=bottom)
+     */
+    fun getCurrentYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+        return 0.85f  // Default fallback - subclasses should override
     }
 
     /**

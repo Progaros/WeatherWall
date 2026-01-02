@@ -134,18 +134,36 @@ class AlienEvent(random: Random, override val spawnTimeMs: Long = System.current
         paint.color = Color.argb(100, 255, 255, 255)
         canvas.drawOval(-size * 0.3f, -size * 0.55f, size * 0.1f, -size * 0.25f, paint)
         
-        // Bottom light beam (occasional)
+        // Bottom light beam (occasional) - with fade at bottom
         val beamIntensity = sin(lightPhase * 0.5f)
         if (beamIntensity > 0.3f) {
             val beamAlpha = ((beamIntensity - 0.3f) / 0.7f * 80).toInt()
-            paint.color = Color.argb(beamAlpha, 200, 255, 200)
+            
+            // Create a vertical gradient that fades out at the bottom
+            val beamStartY = size * 0.4f
+            val beamEndY = height * 0.5f
+            val beamGradient = android.graphics.LinearGradient(
+                0f, beamStartY,
+                0f, beamEndY,
+                intArrayOf(
+                    Color.argb(beamAlpha, 200, 255, 200),      // Full color at top
+                    Color.argb(beamAlpha / 2, 200, 255, 200),  // Half alpha in middle
+                    Color.argb(0, 200, 255, 200)               // Transparent at bottom
+                ),
+                floatArrayOf(0f, 0.5f, 1f),
+                android.graphics.Shader.TileMode.CLAMP
+            )
+            paint.shader = beamGradient
+            
             path.reset()
-            path.moveTo(-size * 0.3f, size * 0.4f)
-            path.lineTo(-size * 1.5f, height * 0.5f)
-            path.lineTo(size * 1.5f, height * 0.5f)
-            path.lineTo(size * 0.3f, size * 0.4f)
+            path.moveTo(-size * 0.3f, beamStartY)
+            path.lineTo(-size * 1.5f, beamEndY)
+            path.lineTo(size * 1.5f, beamEndY)
+            path.lineTo(size * 0.3f, beamStartY)
             path.close()
             canvas.drawPath(path, paint)
+            
+            paint.shader = null
         }
         
         canvas.restore()

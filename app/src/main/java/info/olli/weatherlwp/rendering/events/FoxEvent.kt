@@ -15,26 +15,44 @@ import kotlin.random.Random
  * Uses absolute time for deterministic position across preview/wallpaper.
  * Depth is based on groundY - animals lower on screen are in front.
  * Now follows hill contour using hillHeightProvider.
+ * 
+ * DEPTH SYSTEM: Uses discrete foreground hill depths (last 60% of hill range) to ensure
+ * the fox is drawn at the correct layer relative to trees. The depthFactor is chosen from
+ * values that will match actual hill depthFactors when getHillYAtPosition snaps to closest hill.
  */
 class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
     override val layer = EventLayer.GROUND
     
     private val startX = if (random.nextBoolean()) -0.1f else 1.1f
     private val direction = if (startX < 0.5f) 1f else -1f
-    // Base ground Y when no hill data available
-    private val fallbackGroundY = 0.82f + random.nextFloat() * 0.06f
     private val size = 0.7f + random.nextFloat() * 0.3f
     private val path = Path()
     // Random vertical offset from hill surface (-2% to +1% of screen height)
     private val groundOffset = -0.02f + random.nextFloat() * 0.03f
     
-    // Depth based on initial groundY: lower on screen = more foreground (higher depthFactor)
-    // Using normalized range matching hills: PARALLAX_HILLS_MIN (0.50) to PARALLAX_HILLS_MAX (0.80)
-    override val depthFactor: Float = 0.50f + (fallbackGroundY - 0.82f) / 0.06f * 0.30f
+    // Choose a foreground depth (last 60% of hill range: 0.62 to 0.80)
+    // This ensures the fox walks on visible foreground hills, not hidden in the background
+    // The exact depthFactor will be matched to the closest hill by hillHeightProvider
+    private val normalizedDepth = 0.4f + random.nextFloat() * 0.6f  // 0.4 to 1.0
+    override val depthFactor: Float = RenderConstants.PARALLAX_HILLS_MIN + 
+        normalizedDepth * (RenderConstants.PARALLAX_HILLS_MAX - RenderConstants.PARALLAX_HILLS_MIN)
+    
+    // Fallback ground Y based on depth (used when no hill data available)
+    private val fallbackGroundY = 0.78f + normalizedDepth * 0.10f  // 0.78 to 0.88
     
     // Reduced speed: was 0.00008, now 0.000025 (~3x slower)
     private val speed = 0.000025f
     override val durationMs: Long = (1.25f / speed).toLong()
+    
+    /**
+     * Get current Y position for Y-based draw ordering with trees.
+     */
+    override fun getCurrentYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
+        val x = startX + direction * speed * elapsedMs
+        val hillY = hillHeightProvider?.invoke(x, depthFactor) ?: fallbackGroundY
+        return hillY + groundOffset
+    }
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,

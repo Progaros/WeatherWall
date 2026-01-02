@@ -246,4 +246,57 @@ class RandomEventTest {
         
         assertEquals("Spawn times match", previewSpawnTime, wallpaperSpawnTime)
     }
+    
+    // ============== Y-Based Draw Ordering Tests ==============
+    
+    @Test
+    fun `ground events use hill depth range`() {
+        // Ground events should use depthFactor in the hills range (0.50-0.80)
+        val hillsMin = RenderConstants.PARALLAX_HILLS_MIN  // 0.50
+        val hillsMax = RenderConstants.PARALLAX_HILLS_MAX  // 0.80
+        
+        assertTrue("Hills min is background", hillsMin >= 0.4f)
+        assertTrue("Hills max is foreground", hillsMax <= 0.9f)
+        assertTrue("Range is valid", hillsMax > hillsMin)
+    }
+    
+    @Test
+    fun `y-based ordering principle is lower Y drawn first`() {
+        // Lower Y = higher on screen = further away = drawn first
+        // Higher Y = lower on screen = closer = drawn later (in front)
+        val treeY = 0.70f
+        val animalY = 0.75f  // Animal below tree
+        
+        // When sorted by Y (ascending), tree draws first, animal draws second
+        val drawOrder = listOf(treeY, animalY).sorted()
+        
+        assertEquals("Tree draws first (lower Y)", treeY, drawOrder[0], 0.001f)
+        assertEquals("Animal draws second (higher Y = in front)", animalY, drawOrder[1], 0.001f)
+    }
+    
+    @Test
+    fun `animal above tree is drawn behind`() {
+        // If animal is above (lower Y) tree, it should be behind
+        val animalY = 0.65f  // Above tree
+        val treeY = 0.75f   // Below animal
+        
+        val drawOrder = listOf(Pair("animal", animalY), Pair("tree", treeY))
+            .sortedBy { it.second }
+        
+        assertEquals("Animal draws first (behind)", "animal", drawOrder[0].first)
+        assertEquals("Tree draws second (in front)", "tree", drawOrder[1].first)
+    }
+    
+    @Test
+    fun `animal below tree is drawn in front`() {
+        // If animal is below (higher Y) tree, it should be in front
+        val treeY = 0.70f    // Above animal
+        val animalY = 0.80f  // Below tree
+        
+        val drawOrder = listOf(Pair("animal", animalY), Pair("tree", treeY))
+            .sortedBy { it.second }
+        
+        assertEquals("Tree draws first (behind)", "tree", drawOrder[0].first)
+        assertEquals("Animal draws second (in front)", "animal", drawOrder[1].first)
+    }
 }

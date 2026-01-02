@@ -707,6 +707,17 @@ class SeasonalEvents(private val context: Context? = null) {
         val startAngle = 180f
         val sweepAngle = 180f
         
+        // Create a vertical fade shader (fade out toward bottom)
+        val fadeHeight = arcRadius * 0.6f  // How much of bottom portion fades
+        val fadeTop = baseY - fadeHeight
+        val fadeShader = android.graphics.LinearGradient(
+            centerX, fadeTop,
+            centerX, baseY + arcRadius * 0.1f,  // Extend slightly below to ensure bottom fades
+            intArrayOf(Color.WHITE, Color.WHITE, Color.TRANSPARENT),
+            floatArrayOf(0f, 0.5f, 1f),
+            android.graphics.Shader.TileMode.CLAMP
+        )
+        
         // Draw rainbow arc bands from outer (red) to inner (violet)
         for (i in rainbowColors.indices.reversed()) {
             val bandWidth = arcRadius * 0.055f
@@ -727,7 +738,7 @@ class SeasonalEvents(private val context: Context? = null) {
             // SweepGradient with fade at edges (positions 0.0=3 o'clock, going counter-clockwise)
             // For 180° arc starting at 180° (9 o'clock), we need fade at 180° and 360°
             // Map: 0.0=0°, 0.25=90°, 0.5=180° (start), 0.75=270° (top), 1.0=360° (end)
-            val gradient = android.graphics.SweepGradient(
+            val sweepGradient = android.graphics.SweepGradient(
                 centerX, baseY,
                 intArrayOf(
                     transparentColor,   // 0° (right) - not visible
@@ -741,8 +752,15 @@ class SeasonalEvents(private val context: Context? = null) {
                 floatArrayOf(0f, 0.47f, 0.54f, 0.75f, 0.96f, 0.995f, 1f)
             )
             
+            // Combine sweep gradient with vertical fade using ComposeShader
+            val compositeShader = android.graphics.ComposeShader(
+                sweepGradient, 
+                fadeShader,
+                android.graphics.PorterDuff.Mode.DST_IN
+            )
+            
             rainbowBandPaint.strokeWidth = bandWidth
-            rainbowBandPaint.shader = gradient
+            rainbowBandPaint.shader = compositeShader
             
             // Draw full semi-circle arc (180° sweep from 180°)
             canvas.drawArc(

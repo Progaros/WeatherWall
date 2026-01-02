@@ -62,6 +62,13 @@ class TerrainLayer(private val context: Context) : SceneLayer {
          * @param maxDepth Maximum depth factor (exclusive)
          */
         fun drawInRange(minDepth: Float, maxDepth: Float)
+        
+        /**
+         * Get ground events in the depth range [minDepth, maxDepth) with their current Y positions.
+         * Used for Y-based sorting with trees.
+         * @return List of pairs (event Y ratio, draw lambda)
+         */
+        fun getEventsInRange(minDepth: Float, maxDepth: Float): List<Pair<Float, () -> Unit>> = emptyList()
     }
     
     // Data structures (immutable after creation)
@@ -516,22 +523,34 @@ class TerrainLayer(private val context: Context) : SceneLayer {
      * @return Y position as ratio of screen height (0.0=top, 1.0=bottom)
      */
     fun getHillYAtPosition(xRatio: Float, depthFactor: Float): Float {
+        return getHillInfoAtPosition(xRatio, depthFactor).first
+    }
+    
+    /**
+     * Get full hill info (Y position and actual depthFactor) at given X ratio.
+     * Finds the closest hill to the requested depth factor.
+     * @param xRatio X position as ratio of extended width (0.0 to 1.0)
+     * @param requestedDepthFactor Approximate depth to find closest hill for
+     * @return Pair of (Y ratio, actual hill depthFactor)
+     */
+    fun getHillInfoAtPosition(xRatio: Float, requestedDepthFactor: Float): Pair<Float, Float> {
         val currentHills = hills
-        if (currentHills.isEmpty()) return 0.85f  // Default ground level
+        if (currentHills.isEmpty()) return Pair(0.85f, requestedDepthFactor)  // Default ground level
         
         // Find the hill closest to the requested depth factor
         var closestHill: HillData? = null
         var closestDistance = Float.MAX_VALUE
         
         for (hill in currentHills) {
-            val distance = kotlin.math.abs(hill.depthFactor - depthFactor)
+            val distance = kotlin.math.abs(hill.depthFactor - requestedDepthFactor)
             if (distance < closestDistance) {
                 closestDistance = distance
                 closestHill = hill
             }
         }
         
-        return closestHill?.let { getHillY(xRatio, it) } ?: 0.85f
+        return closestHill?.let { Pair(getHillY(xRatio, it), it.depthFactor) } 
+            ?: Pair(0.85f, requestedDepthFactor)
     }
 
     override fun resize(w: Float, h: Float) {
@@ -562,8 +581,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         // Draw Hills AND their Trees together, sorted by depth
         // This ensures trees on background hills are drawn before foreground hills
-        // Ground events (animals) are drawn AFTER the hill+trees of each layer
-        // This puts animals behind trees of their own depth layer (they walk on hills, not in front of trees)
+        // Within each hill layer: sort trees and animals by Y position (top to bottom = far to near)
+        // Elements lower on screen (higher Y) are drawn later (appear in front)
         for ((index, hill) in currentHills.withIndex()) {
             // Draw this hill layer
             val px = parallaxCalculator.getOffsetXForDepth(hill.depthFactor)
@@ -581,37 +600,48 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             
             canvas.restore()
             
-            // Draw trees belonging to this hill (same depthFactor) AFTER the hill
-            // Use pre-grouped map (O(1) lookup) instead of per-frame filter (O(n))
+            // Get trees and animals for this depth range
+            val nextDepth = currentHills.getOrNull(index + 1)?.depthFactor ?: Float.MAX_VALUE
             val hillTrees = currentTreesByDepth[hill.depthFactor] ?: emptyList()
+            
+            // Collect all drawables (trees + animals) with their Y positions for Y-based sorting
+            val drawables = mutableListOf<Pair<Float, () -> Unit>>()
+            
+            // Add trees as drawables
             for (tree in hillTrees) {
-                val treePx = parallaxCalculator.getOffsetXForDepth(tree.depthFactor)
-                val treePy = parallaxCalculator.getOffsetYForDepth(tree.depthFactor)
-                canvas.save()
-                canvas.translate(treePx, treePy)
-                
-                // Trees in foreground get less tint, background trees get more
-                val normalizedDepth = ((tree.depthFactor - RenderConstants.PARALLAX_HILLS_MIN) / 
-                    (RenderConstants.PARALLAX_HILLS_MAX - RenderConstants.PARALLAX_HILLS_MIN)).coerceIn(0f, 1f)
-                
-                // During day, minimize ambient tinting to preserve green color
-                val timeMultiplier = if (!state.isNight && !state.isDawn && !state.isDusk) {
-                    0.15f  // Minimal tinting during day
-                } else {
-                    1.0f   // Full tinting at night/dawn/dusk
-                }
-                val treeBlendAmount = RenderConstants.applyAmbientTint(tree.dayColor, ambientColor, normalizedDepth) * timeMultiplier
-                treePaint.color = RenderConstants.blendWithAmbient(tree.dayColor, ambientColor, treeBlendAmount)
-                drawTree(canvas, tree, state)
-                
-                canvas.restore()
+                drawables.add(Pair(tree.yRatio) {
+                    val treePx = parallaxCalculator.getOffsetXForDepth(tree.depthFactor)
+                    val treePy = parallaxCalculator.getOffsetYForDepth(tree.depthFactor)
+                    canvas.save()
+                    canvas.translate(treePx, treePy)
+                    
+                    val normalizedDepth = ((tree.depthFactor - RenderConstants.PARALLAX_HILLS_MIN) / 
+                        (RenderConstants.PARALLAX_HILLS_MAX - RenderConstants.PARALLAX_HILLS_MIN)).coerceIn(0f, 1f)
+                    
+                    val timeMultiplier = if (!state.isNight && !state.isDawn && !state.isDusk) {
+                        0.15f
+                    } else {
+                        1.0f
+                    }
+                    val treeBlendAmount = RenderConstants.applyAmbientTint(tree.dayColor, ambientColor, normalizedDepth) * timeMultiplier
+                    treePaint.color = RenderConstants.blendWithAmbient(tree.dayColor, ambientColor, treeBlendAmount)
+                    drawTree(canvas, tree, state)
+                    
+                    canvas.restore()
+                })
             }
             
-            // Draw ground events AFTER the hill and its trees
-            // Animals walk on the ground behind trees, not in front of them
+            // Add animals as drawables (if event drawer supports it)
             groundEventDrawer?.let { drawer ->
-                val nextDepth = currentHills.getOrNull(index + 1)?.depthFactor ?: Float.MAX_VALUE
-                drawer.drawInRange(hill.depthFactor, nextDepth)
+                drawables.addAll(drawer.getEventsInRange(hill.depthFactor, nextDepth))
+            }
+            
+            // Sort by Y (lower Y = further away, drawn first; higher Y = closer, drawn last)
+            drawables.sortBy { it.first }
+            
+            // Draw all elements in Y-sorted order
+            for ((_, drawFunc) in drawables) {
+                drawFunc()
             }
         }
     }

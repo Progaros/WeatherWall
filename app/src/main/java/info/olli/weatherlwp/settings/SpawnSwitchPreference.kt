@@ -44,10 +44,14 @@ class SpawnSwitchPreference @JvmOverloads constructor(
         // Ensure switch is properly bound and clickable
         val switchWidget = holder.findViewById(android.R.id.switch_widget) as? SwitchCompat
         switchWidget?.apply {
+            // Remove listener BEFORE setting checked state to avoid triggering
+            // notifyItemChanged during RecyclerView layout (causes IllegalStateException)
+            setOnCheckedChangeListener(null)
+            
             // Sync with preference state
             isChecked = this@SpawnSwitchPreference.isChecked
             
-            // Handle direct switch clicks
+            // Now add the listener back
             setOnCheckedChangeListener { _, isChecked ->
                 if (callChangeListener(isChecked)) {
                     this@SpawnSwitchPreference.isChecked = isChecked

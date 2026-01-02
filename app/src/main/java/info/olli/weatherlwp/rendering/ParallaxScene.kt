@@ -77,12 +77,22 @@ class ParallaxScene(
         layers.add(terrainLayer) // Hills and Trees (foreground)
         
         // Set up ground event drawer for proper depth integration
-        // This allows animals to appear behind/in front of trees based on their depth
+        // This allows animals to appear behind/in front of trees based on their Y position
         terrainLayer.groundEventDrawer = object : TerrainLayer.GroundEventDrawer {
             override fun drawInRange(minDepth: Float, maxDepth: Float) {
                 randomEventLayer.drawGroundEventsInRange(
                     lastCanvas ?: return,
                     lastState ?: return,
+                    parallaxCalculator,
+                    minDepth,
+                    maxDepth
+                )
+            }
+            
+            override fun getEventsInRange(minDepth: Float, maxDepth: Float): List<Pair<Float, () -> Unit>> {
+                return randomEventLayer.getGroundEventsInRangeWithY(
+                    lastCanvas ?: return emptyList(),
+                    lastState ?: return emptyList(),
                     parallaxCalculator,
                     minDepth,
                     maxDepth

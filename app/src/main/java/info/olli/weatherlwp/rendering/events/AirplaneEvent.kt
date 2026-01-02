@@ -94,21 +94,23 @@ class AirplaneEvent(random: Random, override val spawnTimeMs: Long = System.curr
         path.close()
         canvas.drawPath(path, paint)
         
-        // Wings (swept back, tapered)
+        // Wings (swept back, tapered) - realistic jet wing shape
+        // Leading edge sweeps back, trailing edge nearly straight
+        // Top wing
         path.reset()
-        path.moveTo(currentX - size * 1.0f, currentY)  // Wing root front
-        path.lineTo(currentX - size * 0.5f, currentY - size * 0.8f)  // Wing tip
-        path.lineTo(currentX - size * 1.8f, currentY - size * 0.5f)  // Wing trailing edge
-        path.lineTo(currentX - size * 1.8f, currentY)  // Back to root
+        path.moveTo(currentX - size * 1.0f, currentY - size * 0.08f)  // Wing root leading edge
+        path.lineTo(currentX - size * 1.8f, currentY - size * 0.7f)  // Wing tip (swept BACK)
+        path.lineTo(currentX - size * 2.2f, currentY - size * 0.55f) // Trailing edge tip
+        path.lineTo(currentX - size * 1.8f, currentY)  // Trailing edge root
         path.close()
         canvas.drawPath(path, paint)
         
-        // Bottom wing (perspective)
+        // Bottom wing (perspective - slightly smaller/angled)
         path.reset()
-        path.moveTo(currentX - size * 1.0f, currentY)
-        path.lineTo(currentX - size * 0.5f, currentY + size * 0.7f)
-        path.lineTo(currentX - size * 1.8f, currentY + size * 0.4f)
-        path.lineTo(currentX - size * 1.8f, currentY)
+        path.moveTo(currentX - size * 1.0f, currentY + size * 0.08f)  // Wing root
+        path.lineTo(currentX - size * 1.7f, currentY + size * 0.6f)  // Wing tip (swept back)
+        path.lineTo(currentX - size * 2.1f, currentY + size * 0.45f) // Trailing edge tip
+        path.lineTo(currentX - size * 1.8f, currentY)  // Trailing edge root
         path.close()
         canvas.drawPath(path, paint)
         

@@ -76,6 +76,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     private val gravitySensor = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY)
     private val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     private val gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+    private val linearAccelerationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
     
     // Active sensor depends on mode
     private var activeSensor: Sensor? = rotationVector ?: gameRotationVector ?: gravitySensor ?: accelerometer
@@ -98,6 +99,9 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     // Accumulated parallax offset (integrates delta motion)
     private var accumulatedX = 0f
     private var accumulatedY = 0f
+    
+    // Gravity estimation for accelerometer fallback (when linear acceleration sensor unavailable)
+    private val gravityEstimate = FloatArray(3) { 0f }
     private val DECAY_RATE = 0.995f  // Slowly decay back to center
     
     // Pose gain: reduces sensitivity when near vertical (gimbal-lock region)
@@ -210,8 +214,13 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             sensorManager.registerListener(this, activeSensor, sensorRate)
             
             // Also register accelerometer for shake detection if not already the active sensor
-            if (shakeEnabled && accelerometer != null && accelerometer != activeSensor) {
-                sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME)
+            // Prefer LINEAR_ACCELERATION (gravity removed) for better shake detection
+            if (shakeEnabled) {
+                if (linearAccelerationSensor != null) {
+                    sensorManager.registerListener(this, linearAccelerationSensor, SensorManager.SENSOR_DELAY_GAME)
+                } else if (accelerometer != null && accelerometer != activeSensor) {
+                    sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME)
+                }
             }
             
             isStarted = true
@@ -241,6 +250,10 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         avgRoll.reset()
         filteredX = 0f
         filteredY = 0f
+        // Reset gravity estimate for accelerometer shake fallback
+        gravityEstimate[0] = 0f
+        gravityEstimate[1] = 0f
+        gravityEstimate[2] = 9.81f  // Initialize with expected gravity on Z
         Log.d(TAG, "Recalibration triggered (delta reset)")
     }
     
@@ -263,11 +276,16 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
                 return  // Skip this sample, wait for fresh calibration
             }
             
-            // Process shake detection from accelerometer
-            if (event.sensor.type == Sensor.TYPE_ACCELEROMETER && shakeEnabled) {
-                detectShake(event.values)
+            // Process shake detection - prefer LINEAR_ACCELERATION (gravity removed)
+            if (event.sensor.type == Sensor.TYPE_LINEAR_ACCELERATION && shakeEnabled) {
+                detectShakeFromLinearAccel(event.values)
+                return  // LINEAR_ACCELERATION is only for shake, not parallax
+            }
+            
+            // Fallback: process shake from accelerometer if LINEAR_ACCELERATION unavailable
+            if (event.sensor.type == Sensor.TYPE_ACCELEROMETER && shakeEnabled && linearAccelerationSensor == null) {
+                detectShakeFromAccelerometer(event.values)
                 // Only use accelerometer for parallax if it's the active sensor (fallback)
-                // Otherwise, return early to avoid jitter from raw accelerometer data
                 if (activeSensor?.type != Sensor.TYPE_ACCELEROMETER) {
                     return
                 }
@@ -294,26 +312,31 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     }
     
     /**
-     * Handle gyroscope sensor data.
-     * - 3-sample averaging only (no deadzone, no decay)
-     * - Formula: angle += avgRate * deltaTime * 1e-8 * 6.0 * DEG_TO_RAD
-     * - Clamp to ±18° (0.31415927 rad)
-     * - No additional filtering
+     * Handle gyroscope sensor data (reference app approach).
+     * 
+     * Reference app analysis (RotationManager.java + ForestRenderer.java):
+     * - values[0] = X-axis rotation rate (pitch - tilting forward/back)
+     * - values[1] = Y-axis rotation rate (roll - tilting left/right)
+     * - values[2] = Z-axis rotation rate (yaw - twisting)
+     * 
+     * Reference output for ROTATION_0:
+     * - tiltX = -values[1] (roll) - tilting left makes scene shift right
+     * - tiltY = values[0] (pitch) - tilting forward makes scene shift down
+     * 
+     * Uses 3-sample averaging, formula: angle += avgRate * deltaTimeNanos * 1e-8 * 6 * DEG_TO_RAD
+     * Clamps to ±18° (0.31415927 rad)
      */
     private fun handleGyroscope(values: FloatArray, displayRotation: Int) {
-        // Gyroscope reports angular velocity in rad/s around device axes
-        //  mapping: values[0]=yaw, values[1]=pitch, values[2]=roll
-        
-        // Remap based on display rotation (matching ForestRenderer lines 580-595)
-        val (yawRate, pitchRate, rollRate) = when (displayRotation) {
-            Surface.ROTATION_90 -> Triple(values[0], -values[1], values[2])
-            Surface.ROTATION_180 -> Triple(-values[0], -values[1], values[2])
-            Surface.ROTATION_270 -> Triple(-values[0], values[1], values[2])
-            else -> Triple(values[0], values[1], values[2])
+        // Remap gyroscope values based on display rotation
+        // Reference app ForestRenderer remaps for landscape modes
+        val (pitchRate, rollRate) = when (displayRotation) {
+            Surface.ROTATION_90 -> Pair(-values[1], values[0])
+            Surface.ROTATION_180 -> Pair(-values[0], -values[1])
+            Surface.ROTATION_270 -> Pair(values[1], -values[0])
+            else -> Pair(values[0], values[1])  // ROTATION_0
         }
         
-        // Add to averagers for smoothing
-        avgYaw.add(yawRate)
+        // Add to averagers for smoothing (3-sample average like reference)
         avgPitch.add(pitchRate)
         avgRoll.add(rollRate)
         
@@ -322,36 +345,99 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         val deltaTimeNanos = currentTime - lastGyroTime
         lastGyroTime = currentTime
         
-        // Skip first sample (no previous time)
-        if (deltaTimeNanos <= 0 || deltaTimeNanos > 100_000_000L) {  // >100ms = stale
+        // Skip first sample or stale data
+        if (deltaTimeNanos <= 0 || deltaTimeNanos > 100_000_000L) {
             return
         }
         
-        // formula: f = deltaTimeNanos * 1e-8 * 6.0 * 0.017453292
-        // = deltaTimeSec * 10 * 6.0 * DEG_TO_RAD
-        // = deltaTimeSec * 1.0472
+        // Reference formula: f = deltaTimeNanos * 1e-8 * 6.0 * DEG_TO_RAD
         val f = deltaTimeNanos * 1e-8f * 6.0f * 0.017453292f
         
-        // Accumulate: angle = clamp(angle + avgRate * f, ±0.31415927)
-        gyroYaw = (gyroYaw + avgYaw.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
+        // Accumulate averaged angular velocity into angle
         gyroPitch = (gyroPitch + avgPitch.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
         gyroRoll = (gyroRoll + avgRoll.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
         
-        // Output tilt: -lastPitch and lastYaw for ROTATION_0
-        // Layer.setTilt uses tan(angle) * tiltValue for perspective, but we normalize to -1..1
-        // tan(18°) ≈ 0.325, so we can use direct ratio for small angles
-        val tiltX = (gyroRoll / MAX_TILT_RAD).coerceIn(-1f, 1f)   // Roll affects X
-        val tiltY = (-gyroPitch / MAX_TILT_RAD).coerceIn(-1f, 1f) // Pitch affects Y (negated)
+        // Output tilt matching reference app's setTilt(f2, f) = setTilt(-roll, pitch)
+        // tiltX = -roll (Y-axis rotation), tiltY = pitch (X-axis rotation)
+        val tiltX = (-gyroRoll / MAX_TILT_RAD).coerceIn(-1f, 1f)
+        val tiltY = (gyroPitch / MAX_TILT_RAD).coerceIn(-1f, 1f)
         
-        // Direct output - no additional filtering
+        // Direct output - no additional filtering (reference only uses averaging)
         listener?.onTiltChanged(tiltX, tiltY)
     }
     
     /**
-     * Detect shake gestures from accelerometer data.
-     * Uses simple acceleration magnitude detection - counts spikes above threshold.
-     * Triggers ShakeListener.onShake() when 3 quick shakes are detected within the time window.
+     * Detect shake from LINEAR_ACCELERATION sensor (preferred).
+     * This sensor provides acceleration with gravity already removed.
      */
+    private fun detectShakeFromLinearAccel(values: FloatArray) {
+        val magnitude = sqrt(values[0] * values[0] + values[1] * values[1] + values[2] * values[2])
+        processShakeMagnitude(magnitude)
+    }
+    
+    /**
+     * Detect shake from raw accelerometer (fallback when LINEAR_ACCELERATION unavailable).
+     * Uses per-axis low-pass filter to estimate and remove gravity.
+     */
+    private fun detectShakeFromAccelerometer(values: FloatArray) {
+        // Low-pass filter to estimate gravity (alpha=0.8 as per Android docs)
+        val alpha = 0.8f
+        gravityEstimate[0] = alpha * gravityEstimate[0] + (1 - alpha) * values[0]
+        gravityEstimate[1] = alpha * gravityEstimate[1] + (1 - alpha) * values[1]
+        gravityEstimate[2] = alpha * gravityEstimate[2] + (1 - alpha) * values[2]
+        
+        // High-pass filter: remove gravity to get linear acceleration
+        val linearX = values[0] - gravityEstimate[0]
+        val linearY = values[1] - gravityEstimate[1]
+        val linearZ = values[2] - gravityEstimate[2]
+        
+        val magnitude = sqrt(linearX * linearX + linearY * linearY + linearZ * linearZ)
+        processShakeMagnitude(magnitude)
+    }
+    
+    /**
+     * Process shake detection from linear acceleration magnitude.
+     * Counts spikes above threshold and triggers ShakeListener.onShake() 
+     * when 3 quick shakes are detected within the time window.
+     */
+    private fun processShakeMagnitude(magnitude: Float) {
+        val currentTime = System.currentTimeMillis()
+        
+        // Check cooldown after a successful shake
+        if (currentTime - lastShakeTime < SHAKE_COOLDOWN_MS) {
+            return
+        }
+        
+        // Check if this is a significant shake (threshold is already for linear accel)
+        if (magnitude > shakeThreshold) {
+            // Prevent counting the same shake motion multiple times
+            if (currentTime - lastShakeCountTime > SHAKE_SLOP_MS) {
+                // Reset window if too much time has passed
+                if (currentTime - shakeWindowStartTime > SHAKE_TIME_WINDOW_MS) {
+                    shakeCount = 0
+                    shakeWindowStartTime = currentTime
+                }
+                
+                shakeCount++
+                lastShakeCountTime = currentTime
+                Log.d(TAG, "Shake count: $shakeCount (magnitude=${"%.2f".format(magnitude)}, threshold=${"%.2f".format(shakeThreshold)})")
+                
+                if (shakeCount >= SHAKE_COUNT_THRESHOLD) {
+                    // Shake detected! Trigger listener and reset
+                    Log.d(TAG, "Shake gesture detected! Triggering listener")
+                    lastShakeTime = currentTime
+                    shakeCount = 0
+                    shakeListener?.onShake()
+                }
+            }
+        }
+    }
+    
+    /**
+     * Legacy shake detection - kept for compatibility but not used.
+     * @deprecated Use detectShakeFromLinearAccel or detectShakeFromAccelerometer instead.
+     */
+    @Suppress("unused")
     private fun detectShake(values: FloatArray) {
         val currentTime = System.currentTimeMillis()
         

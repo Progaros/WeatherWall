@@ -255,6 +255,46 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     }
     
     /**
+     * Get ground events in range with their Y positions for Y-based sorting with trees.
+     * Returns list of (yRatio, drawLambda) pairs.
+     */
+    fun getGroundEventsInRangeWithY(canvas: Canvas, state: SimulationState, 
+                                      parallaxCalculator: ParallaxCalculator,
+                                      minDepth: Float, maxDepth: Float): List<Pair<Float, () -> Unit>> {
+        if (width <= 0 || height <= 0 || !eventsEnabled) return emptyList()
+        
+        val currentEvents = events
+        if (currentEvents.isEmpty()) return emptyList()
+        
+        val ambientColor = RenderConstants.getAmbientColor(
+            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk
+        )
+        
+        val result = mutableListOf<Pair<Float, () -> Unit>>()
+        
+        for (event in currentEvents) {
+            if (event.layer == EventLayer.GROUND && 
+                event.depthFactor >= minDepth && event.depthFactor < maxDepth) {
+                // Calculate the event's Y position using the same logic as draw()
+                val elapsedMs = state.absoluteTimeMs - event.spawnTimeMs
+                val eventY = event.getCurrentYRatio(state.absoluteTimeMs, hillHeightProvider)
+                
+                result.add(Pair(eventY) {
+                    try {
+                        event.draw(canvas, paint, strokePaint, parallaxCalculator, extendedWidth, height, 
+                            state.timeSeconds, ambientColor, extendedOffset, state.absoluteTimeMs,
+                            hillHeightProvider)
+                    } catch (e: Exception) {
+                        android.util.Log.e("RandomEventLayer", "Error drawing event ${event.javaClass.simpleName}", e)
+                    }
+                })
+            }
+        }
+        
+        return result
+    }
+    
+    /**
      * Draw ground events with depthFactor >= the given threshold.
      * Used to draw foreground animals after all trees.
      * @param minDepth Events with depthFactor >= minDepth will be drawn
