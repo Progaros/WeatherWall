@@ -229,7 +229,18 @@
         <SeekBarPreference
             android:key="pref_spring_flower_density"
             android:title="Flower Density"
-            android:summary="Number of flowers per hill (0=few, 100=many)"
+            android:summary="Total flowers across all hills (0=few, 1000=many)"
+            android:defaultValue="500"
+            android:max="1000"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_spring_flowers" />
+
+        <SeekBarPreference
+            android:key="pref_spring_flower_spread"
+            android:title="Flower Spread"
+            android:summary="How far down hills flowers spread (0=on line, 100=full)"
             android:defaultValue="50"
             android:max="100"
             app:min="0"

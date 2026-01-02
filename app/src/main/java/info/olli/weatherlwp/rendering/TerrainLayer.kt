@@ -107,7 +107,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     // Seasonal settings
     private var terrainSeasonOverride = "auto"  // "auto", "spring", "summer", "autumn", "winter"
     private var springFlowersEnabled = true
-    private var springFlowerDensity = 50  // 0-100
+    private var springFlowerDensity = 500  // 0-1000
+    private var springFlowerSpread = 0.5f  // 0-1, how far down from hill line (like trees)
     private var autumnGrassEnabled = true
     private var autumnGrassIntensity = 50  // 0-100 how brown the grass is
     private var winterSnowEnabled = true
@@ -306,17 +307,22 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 Color.rgb(255, 255, 255)   // White
             )
             val newFlowers = mutableMapOf<Int, List<FlowerData>>()
-            // Scale: density 100 should give ~1000 total flowers across all hills
+            // Scale: density 1000 gives ~1000 total flowers across all hills
             // With ~8 hills, that's ~125 per hill at max
-            // Formula: (density * 1.25) gives 0-125 range, minimum 5
-            val flowersPerHill = ((springFlowerDensity * 1.25f).toInt()).coerceIn(5, 150)
+            // Formula: density / 8 gives even distribution across hills
+            val flowersPerHill = (springFlowerDensity / 8).coerceIn(5, 200)
             
-            for ((index, _) in currentHills.withIndex()) {
+            for ((index, hill) in currentHills.withIndex()) {
                 val hillFlowers = mutableListOf<FlowerData>()
                 for (f in 0 until flowersPerHill) {
+                    val xRatio = random.nextFloat()
+                    // Flower spread: how far down from hill line flowers can appear
+                    // Similar to tree spread logic
+                    val maxVerticalOffset = springFlowerSpread * 0.12f  // Max 12% of height below hill line
+                    val verticalOffset = random.nextFloat() * maxVerticalOffset * height
                     hillFlowers.add(FlowerData(
-                        xRatio = random.nextFloat(),
-                        yOffset = random.nextFloat() * 3f,  // Small offset below hill line
+                        xRatio = xRatio,
+                        yOffset = verticalOffset,  // Spread below hill line
                         color = flowerColors[random.nextInt(flowerColors.size)],
                         size = 2f + random.nextFloat() * 3f
                     ))
@@ -619,12 +625,12 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             // Winter: white snow at top, transitioning to hill color, then darker at bottom
             // Snow coverage determines how far down the white extends
             val snowDepth = (winterSnowCoverage / 100f).coerceIn(0.1f, 0.6f)  // 10-60% of hill
-            val snowColor = Color.argb(220, 255, 255, 255)  // Slightly translucent white
-            val snowTransition = Color.argb(180, 
+            val snowColor = Color.rgb(255, 255, 255)  // Fully opaque white
+            val snowTransition = Color.rgb(
                 (Color.red(hillColor) + 255) / 2,
                 (Color.green(hillColor) + 255) / 2, 
                 (Color.blue(hillColor) + 255) / 2
-            )  // Blend of white and hill color
+            )  // Blend of white and hill color (fully opaque)
             
             LinearGradient(
                 0f, minY,           // Start: top of hill
@@ -908,7 +914,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // Seasonal terrain settings
         terrainSeasonOverride = prefs.getString("pref_terrain_season", "auto") ?: "auto"
         springFlowersEnabled = prefs.getBoolean("pref_spring_flowers", true)
-        springFlowerDensity = prefs.getInt("pref_spring_flower_density", 50)
+        springFlowerDensity = prefs.getInt("pref_spring_flower_density", 500)
+        springFlowerSpread = prefs.getInt("pref_spring_flower_spread", 50) / 100f
         autumnGrassEnabled = prefs.getBoolean("pref_autumn_grass", true)
         autumnGrassIntensity = prefs.getInt("pref_autumn_grass_intensity", 50)
         winterSnowEnabled = prefs.getBoolean("pref_winter_snow_hills", true)

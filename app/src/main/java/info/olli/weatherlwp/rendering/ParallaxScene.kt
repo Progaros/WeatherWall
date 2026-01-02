@@ -60,9 +60,9 @@ class ParallaxScene(
     private var width = 0f
     private var height = 0f
     
-    // Settings
-    private var parallaxStrength = 1.0f
-    private var parallaxMaxOffsetPx = 40f
+    // Settings - defaults match preference defaults
+    private var parallaxStrength = 2.5f  // (50/100)^2 * 10 = 2.5 (pref_parallax_strength=50)
+    private var parallaxMaxOffsetPx = 150f  // pref_parallax_max_offset=150
     private var weatherEnabled = true
     private var seasonalEnabled = true
     
@@ -90,8 +90,9 @@ class ParallaxScene(
             }
         }
         
-        sensor.setListener(this)
+        // Load settings BEFORE enabling sensor to ensure correct initial strength
         loadPrefs()
+        sensor.setListener(this)
     }
     
     // Temporary references for ground event drawer callback

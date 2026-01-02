@@ -41,12 +41,12 @@ class ParallaxCalculator {
     private var targetX = 0f
     private var targetY = 0f
     
-    // User-configurable settings
-    var strength = 1.0f                 // Sensitivity multiplier
-    var maxOffsetPx = 80f               // Maximum offset in any direction
-    var smoothing = 0.2f                // Position smoothing factor (higher = smoother but slower)
-                                        // Reduced from 0.4 since sensor already has smoothing
-    var depthSeparation = 1.0f          // How much depth affects movement (1.0 = full effect)
+    // User-configurable settings - defaults match preference defaults
+    // These are overwritten by loadPrefs() but provide sane defaults before settings load
+    var strength = 2.5f                 // Default: (50/100)^2 * 10 = 2.5 (pref_parallax_strength=50)
+    var maxOffsetPx = 150f              // Default: pref_parallax_max_offset=150
+    var smoothing = 0.134f              // Default: 0.02 + (30/100)*0.38 (pref_parallax_smoothing=30)
+    var depthSeparation = 2.0f          // Default: (50/100)*4.0 = 2.0 (pref_parallax_depth=50)
     
     /**
      * Return speed: how fast position drifts back to center when tilt is zero.

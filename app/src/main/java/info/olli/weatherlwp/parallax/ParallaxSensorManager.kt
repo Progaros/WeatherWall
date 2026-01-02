@@ -31,6 +31,12 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         private const val FILTER_ALPHA = 0.4f
         private const val FULL_TILT_RADIANS = (45f * PI / 180f).toFloat()
         private const val DEADZONE = 0.03f
+        
+        // Hysteresis thresholds for isScreenDown to prevent flip-flopping at vertical
+        // When |z| is small (near vertical), we freeze the current state
+        private const val SCREEN_DOWN_ON = -0.25f   // Enter "screen down" when z drops below this
+        private const val SCREEN_DOWN_OFF = 0.25f   // Leave "screen down" when z rises above this
+        private const val SCREEN_FLIP_FREEZE = 0.08f // Don't change state when |z| is this small
     }
     
     interface Listener {
@@ -94,7 +100,9 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             accumulatedY = 0f
             lastDisplayRotation = getCurrentDisplayRotation()
             
-            sensorManager.registerListener(this, activeSensor, SensorManager.SENSOR_DELAY_GAME)
+            // Use SENSOR_DELAY_FASTEST for smoothest parallax (matches 60 FPS target)
+            // This gives ~5-10ms updates on most devices
+            sensorManager.registerListener(this, activeSensor, SensorManager.SENSOR_DELAY_FASTEST)
             isStarted = true
             Log.d(TAG, "Sensor started with delta-based motion detection")
         }
@@ -175,9 +183,9 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         
         // remappedMatrix[8] is the Z component of the device's Z-axis in world space.
         // When phone is flat, |Z[8]| ≈ 1. When phone is vertical (screen-facing), |Z[8]| ≈ 0.
-        // Keep the sign to detect screen-up vs screen-down, but use absolute for poseGain.
+        // Use hysteresis to prevent flip-flopping near vertical (gimbal lock region)
         val zCompRaw = remappedMatrix[8]
-        isScreenDown = zCompRaw < 0f
+        updateScreenDownState(zCompRaw)
         val zComponent = abs(zCompRaw)
         poseGain = (zComponent / 0.3f).coerceIn(0f, 1f)  // Fade sensitivity below 0.3
         
@@ -205,9 +213,9 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         val gyn = gy * inv
         val gzn = gz * inv
         
-        // gzn is the normalized Z gravity component. Keep its sign to detect screen-up/down,
-        // but use absolute for poseGain to reduce sensitivity near vertical.
-        isScreenDown = gzn > 0f
+        // gzn is the normalized Z gravity component. Use hysteresis to prevent flip-flopping
+        // at vertical, then use absolute for poseGain to reduce sensitivity near vertical.
+        updateScreenDownState(-gzn)  // Negate because gravity Z sign is opposite to rotation matrix Z
         poseGain = (abs(gzn) / 0.3f).coerceIn(0f, 1f)  // Fade sensitivity below |gz| = 0.3
         
         // Correct formulas for pitch/roll from gravity:
@@ -219,6 +227,22 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         val roll = atan2(gxn, sqrt(gyn * gyn + gzn * gzn))     // [-π/2, +π/2]
         
         processOrientationAngles(pitch, roll)
+    }
+    
+    /**
+     * Updates isScreenDown state with hysteresis to prevent flip-flopping near vertical.
+     * @param z The Z component (positive = screen up, negative = screen down)
+     */
+    private fun updateScreenDownState(z: Float) {
+        // Only change state when |z| is outside the freeze zone (prevents thrashing at vertical)
+        if (abs(z) > SCREEN_FLIP_FREEZE) {
+            if (!isScreenDown && z < SCREEN_DOWN_ON) {
+                isScreenDown = true
+            } else if (isScreenDown && z > SCREEN_DOWN_OFF) {
+                isScreenDown = false
+            }
+        }
+        // else: keep previous isScreenDown (frozen in ambiguous region)
     }
     
     private fun processOrientationAngles(pitch: Float, roll: Float) {
