@@ -166,9 +166,41 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
      * @param sensitivity 0.0 to 1.0 where higher = more sensitive (requires less force)
      */
     fun setShakeSettings(enabled: Boolean, sensitivity: Float = 0.5f) {
+        val wasEnabled = shakeEnabled
         shakeEnabled = enabled
         // Map sensitivity 0-1 to threshold range: 5.0 (low sensitivity) to 1.5 (high sensitivity)
         shakeThreshold = 5.0f - (sensitivity.coerceIn(0f, 1f) * 3.5f)
+        
+        // If manager is already started, re-register shake sensors to handle runtime toggle
+        if (isStarted) {
+            // Unregister any previous shake sensor registrations
+            linearAccelerationSensor?.let { sensorManager.unregisterListener(this, it) }
+            accelerometer?.let { if (it != activeSensor) sensorManager.unregisterListener(this, it) }
+            
+            // Re-register if shake is now enabled
+            registerShakeSensors()
+            
+            Log.d(TAG, "Shake settings updated at runtime: enabled=$enabled, threshold=${"%.2f".format(shakeThreshold)}")
+        }
+    }
+    
+    /**
+     * Register shake detection sensors.
+     * Call this when starting or when shake settings change at runtime.
+     */
+    private fun registerShakeSensors() {
+        if (!shakeEnabled) return
+        
+        val okLinear = if (linearAccelerationSensor != null) {
+            sensorManager.registerListener(this, linearAccelerationSensor, SensorManager.SENSOR_DELAY_GAME)
+        } else false
+        
+        val okAccel = if (accelerometer != null && accelerometer != activeSensor) {
+            sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME)
+        } else false
+        
+        Log.d(TAG, "Shake sensors registered: linearAccel=$okLinear (available=${linearAccelerationSensor != null}), " +
+                   "accel=$okAccel (available=${accelerometer != null}, isActive=${accelerometer == activeSensor})")
     }
 
     fun start() {
@@ -211,20 +243,14 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
                 SensorManager.SENSOR_DELAY_GAME
             else 
                 SensorManager.SENSOR_DELAY_FASTEST
-            sensorManager.registerListener(this, activeSensor, sensorRate)
+            val okActive = sensorManager.registerListener(this, activeSensor, sensorRate)
+            Log.d(TAG, "Active sensor registered=$okActive type=${activeSensor?.type} name=${activeSensor?.name}")
             
-            // Also register accelerometer for shake detection if not already the active sensor
-            // Prefer LINEAR_ACCELERATION (gravity removed) for better shake detection
-            if (shakeEnabled) {
-                if (linearAccelerationSensor != null) {
-                    sensorManager.registerListener(this, linearAccelerationSensor, SensorManager.SENSOR_DELAY_GAME)
-                } else if (accelerometer != null && accelerometer != activeSensor) {
-                    sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME)
-                }
-            }
+            // Register shake detection sensors using the helper
+            registerShakeSensors()
             
             isStarted = true
-            Log.d(TAG, "Sensor started with mode: $parallaxMode, sensor: ${activeSensor?.name}")
+            Log.d(TAG, "Sensor started with mode: $parallaxMode, shakeEnabled=$shakeEnabled")
         }
     }
 
@@ -357,10 +383,18 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         gyroPitch = (gyroPitch + avgPitch.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
         gyroRoll = (gyroRoll + avgRoll.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
         
-        // Output tilt matching reference app's setTilt(f2, f) = setTilt(-roll, pitch)
-        // tiltX = -roll (Y-axis rotation), tiltY = pitch (X-axis rotation)
+        // Output tilt matching reference app's setTilt(f2, f) = setTilt(-pitch, yaw)
+        // where pitch = values[1], yaw = values[0]
+        // In our terms: setTilt(-roll, pitch)
+        // 
+        // For intuitive behavior:
+        // - Tilting phone right → scene shifts left (negative tiltX)
+        // - Tilting phone forward → scene shifts up (negative tiltY) to reveal more bottom
+        //
+        // Reference app's Y behavior in OpenGL may differ from our 2D Canvas.
+        // Negate Y for intuitive parallax (tilt forward = see more of bottom = shift up)
         val tiltX = (-gyroRoll / MAX_TILT_RAD).coerceIn(-1f, 1f)
-        val tiltY = (gyroPitch / MAX_TILT_RAD).coerceIn(-1f, 1f)
+        val tiltY = (-gyroPitch / MAX_TILT_RAD).coerceIn(-1f, 1f)  // Negated for intuitive feel
         
         // Direct output - no additional filtering (reference only uses averaging)
         listener?.onTiltChanged(tiltX, tiltY)
@@ -372,15 +406,36 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
      */
     private fun detectShakeFromLinearAccel(values: FloatArray) {
         val magnitude = sqrt(values[0] * values[0] + values[1] * values[1] + values[2] * values[2])
-        processShakeMagnitude(magnitude)
+        processShakeMagnitude(magnitude, isLinearAccel = true)
     }
     
     /**
      * Detect shake from raw accelerometer (fallback when LINEAR_ACCELERATION unavailable).
-     * Uses per-axis low-pass filter to estimate and remove gravity.
+     * Uses both:
+     * 1. gForce threshold (proven reliable across devices) - triggers on gForce > 2.7
+     * 2. Filtered linear acceleration (per-axis gravity removal)
      */
     private fun detectShakeFromAccelerometer(values: FloatArray) {
-        // Low-pass filter to estimate gravity (alpha=0.8 as per Android docs)
+        // Method 1: gForce-based detection (widely used, proven reliable)
+        // Compute gForce = sqrt((x/g)² + (y/g)² + (z/g)²)
+        // At rest this is ~1.0, during shake it exceeds 2.0+
+        val g = SensorManager.GRAVITY_EARTH
+        val gForce = sqrt(
+            (values[0] / g) * (values[0] / g) +
+            (values[1] / g) * (values[1] / g) +
+            (values[2] / g) * (values[2] / g)
+        )
+        
+        // gForce > 2.7 is a common shake threshold (about 2.7g acceleration)
+        // Map our shakeThreshold (1.5-5.0 m/s²) to gForce threshold (2.0-3.5g)
+        // Using linear mapping: threshold 1.5 → 2.0g, threshold 5.0 → 3.5g
+        val gForceThreshold = 2.0f + ((shakeThreshold - 1.5f) / 3.5f) * 1.5f
+        if (gForce > gForceThreshold) {
+            processShakeMagnitude(gForce * g, isLinearAccel = false) // Convert back for consistent logging
+            return
+        }
+        
+        // Method 2: Low-pass filter to estimate gravity (alpha=0.8 as per Android docs)
         val alpha = 0.8f
         gravityEstimate[0] = alpha * gravityEstimate[0] + (1 - alpha) * values[0]
         gravityEstimate[1] = alpha * gravityEstimate[1] + (1 - alpha) * values[1]
@@ -392,15 +447,17 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         val linearZ = values[2] - gravityEstimate[2]
         
         val magnitude = sqrt(linearX * linearX + linearY * linearY + linearZ * linearZ)
-        processShakeMagnitude(magnitude)
+        processShakeMagnitude(magnitude, isLinearAccel = false)
     }
     
     /**
      * Process shake detection from linear acceleration magnitude.
      * Counts spikes above threshold and triggers ShakeListener.onShake() 
      * when 3 quick shakes are detected within the time window.
+     * @param magnitude The acceleration magnitude (m/s²)
+     * @param isLinearAccel True if from LINEAR_ACCELERATION sensor, false if from accelerometer fallback
      */
-    private fun processShakeMagnitude(magnitude: Float) {
+    private fun processShakeMagnitude(magnitude: Float, isLinearAccel: Boolean = true) {
         val currentTime = System.currentTimeMillis()
         
         // Check cooldown after a successful shake
@@ -420,7 +477,8 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
                 
                 shakeCount++
                 lastShakeCountTime = currentTime
-                Log.d(TAG, "Shake count: $shakeCount (magnitude=${"%.2f".format(magnitude)}, threshold=${"%.2f".format(shakeThreshold)})")
+                val source = if (isLinearAccel) "linear" else "accel"
+                Log.d(TAG, "Shake count: $shakeCount ($source, magnitude=${"%.2f".format(magnitude)}, threshold=${"%.2f".format(shakeThreshold)})")
                 
                 if (shakeCount >= SHAKE_COUNT_THRESHOLD) {
                     // Shake detected! Trigger listener and reset

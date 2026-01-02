@@ -615,15 +615,17 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                     canvas.save()
                     canvas.translate(treePx, treePy)
                     
-                    val normalizedDepth = ((tree.depthFactor - RenderConstants.PARALLAX_HILLS_MIN) / 
-                        (RenderConstants.PARALLAX_HILLS_MAX - RenderConstants.PARALLAX_HILLS_MIN)).coerceIn(0f, 1f)
+                    // Color variation based on Y position (actual depth on screen)
+                    // yRatio ~0.6-0.7 = background trees (top of hills), yRatio ~0.85-0.95 = foreground trees
+                    // Map yRatio to 0-1 depth: lower Y = distant (less variation), higher Y = near (more variation)
+                    val yBasedDepth = ((tree.yRatio - 0.6f) / 0.35f).coerceIn(0f, 1f)
                     
                     val timeMultiplier = if (!state.isNight && !state.isDawn && !state.isDusk) {
                         0.15f
                     } else {
                         1.0f
                     }
-                    val treeBlendAmount = RenderConstants.applyAmbientTint(tree.dayColor, ambientColor, normalizedDepth) * timeMultiplier
+                    val treeBlendAmount = RenderConstants.applyAmbientTint(tree.dayColor, ambientColor, yBasedDepth) * timeMultiplier
                     treePaint.color = RenderConstants.blendWithAmbient(tree.dayColor, ambientColor, treeBlendAmount)
                     drawTree(canvas, tree, state)
                     
