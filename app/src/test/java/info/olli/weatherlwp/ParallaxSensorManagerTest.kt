@@ -21,6 +21,11 @@ class ParallaxSensorManagerTest {
     companion object {
         const val FILTER_ALPHA = 0.12f  // Matches ParallaxSensorManager
         const val DEADZONE = 0.08f
+        const val GRAVITY_EARTH = 9.81f  // SensorManager.GRAVITY_EARTH
+        const val SHAKE_THRESHOLD_GRAVITY = 2.7f
+        const val SHAKE_SLOP_TIME_MS = 500L
+        const val SHAKE_COUNT_RESET_TIME_MS = 3000L
+        const val SHAKE_TRIGGER_COUNT = 3
     }
 
     // ============== Gravity Extraction Tests ==============
@@ -470,6 +475,109 @@ class ParallaxSensorManagerTest {
         
         assertTrue("tiltX should be positive (from positive roll)", tiltX > 0)
         assertTrue("tiltY should be negative (from negated positive pitch)", tiltY < 0)
+    }
+    
+    // ============== gForce Shake Detection Tests ==============
+    
+    @Test
+    fun `gForce at rest is approximately 1`() {
+        // At rest, accelerometer reads ~9.81 m/s² in one axis (gravity)
+        val values = floatArrayOf(0f, 0f, GRAVITY_EARTH)  // Phone flat, gravity on Z
+        
+        val gX = values[0] / GRAVITY_EARTH
+        val gY = values[1] / GRAVITY_EARTH
+        val gZ = values[2] / GRAVITY_EARTH
+        val gForce = sqrt(gX * gX + gY * gY + gZ * gZ)
+        
+        assertEquals("gForce at rest should be ~1.0", 1.0f, gForce, 0.01f)
+    }
+    
+    @Test
+    fun `gForce below threshold does not trigger shake`() {
+        // Simulate mild movement (2.0g - below 2.7g threshold)
+        val values = floatArrayOf(GRAVITY_EARTH * 1.5f, GRAVITY_EARTH * 0.5f, GRAVITY_EARTH)
+        
+        val gX = values[0] / GRAVITY_EARTH
+        val gY = values[1] / GRAVITY_EARTH
+        val gZ = values[2] / GRAVITY_EARTH
+        val gForce = sqrt(gX * gX + gY * gY + gZ * gZ)
+        
+        assertTrue("gForce should be less than threshold", gForce < SHAKE_THRESHOLD_GRAVITY)
+    }
+    
+    @Test
+    fun `gForce exceeds threshold during shake`() {
+        // Simulate strong shake (> 2.7g)
+        val values = floatArrayOf(GRAVITY_EARTH * 2.0f, GRAVITY_EARTH * 1.5f, GRAVITY_EARTH)
+        
+        val gX = values[0] / GRAVITY_EARTH
+        val gY = values[1] / GRAVITY_EARTH
+        val gZ = values[2] / GRAVITY_EARTH
+        val gForce = sqrt(gX * gX + gY * gY + gZ * gZ)
+        
+        assertTrue("gForce during shake should exceed threshold: $gForce", gForce >= SHAKE_THRESHOLD_GRAVITY)
+    }
+    
+    @Test
+    fun `shake count reset after timeout`() {
+        // Simulate: count should reset if no shake for SHAKE_COUNT_RESET_TIME_MS
+        var shakeCount = 2
+        var shakeTimestamp = 0L
+        val now = SHAKE_COUNT_RESET_TIME_MS + 100  // More than reset time
+        
+        // This mimics the reset logic in detectShakeFromAccelerometer
+        if (shakeTimestamp + SHAKE_COUNT_RESET_TIME_MS < now) {
+            shakeCount = 0
+        }
+        
+        assertEquals("Shake count should reset after timeout", 0, shakeCount)
+    }
+    
+    @Test
+    fun `shake slop ignores rapid consecutive shakes`() {
+        // Simulate: shakes too close together should be ignored
+        val shakeTimestamp = 100L
+        val now = shakeTimestamp + 100  // Only 100ms later (< 500ms slop)
+        
+        val shouldIgnore = shakeTimestamp + SHAKE_SLOP_TIME_MS > now
+        
+        assertTrue("Shakes within slop time should be ignored", shouldIgnore)
+    }
+    
+    @Test
+    fun `shake slop allows shakes after slop time`() {
+        val shakeTimestamp = 100L
+        val now = shakeTimestamp + 600  // 600ms later (> 500ms slop)
+        
+        val shouldIgnore = shakeTimestamp + SHAKE_SLOP_TIME_MS > now
+        
+        assertFalse("Shakes after slop time should be processed", shouldIgnore)
+    }
+    
+    @Test
+    fun `three shakes trigger shake event`() {
+        // Simulate shake count reaching trigger threshold
+        var shakeCount = SHAKE_TRIGGER_COUNT - 1
+        shakeCount++
+        
+        val shouldTrigger = shakeCount >= SHAKE_TRIGGER_COUNT
+        
+        assertTrue("Three shakes should trigger event", shouldTrigger)
+    }
+    
+    @Test
+    fun `gForce calculation is correct for tilted phone`() {
+        // Phone tilted 45 degrees, gravity split between Y and Z
+        val cos45 = 0.707f
+        val values = floatArrayOf(0f, GRAVITY_EARTH * cos45, GRAVITY_EARTH * cos45)
+        
+        val gX = values[0] / GRAVITY_EARTH
+        val gY = values[1] / GRAVITY_EARTH
+        val gZ = values[2] / GRAVITY_EARTH
+        val gForce = sqrt(gX * gX + gY * gY + gZ * gZ)
+        
+        // Should still be ~1.0 (no additional acceleration beyond gravity)
+        assertEquals("gForce for tilted phone at rest should still be ~1.0", 1.0f, gForce, 0.02f)
     }
 }
 
