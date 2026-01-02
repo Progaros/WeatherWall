@@ -164,36 +164,42 @@ class ParallaxCalculator {
         targetX = targetX.coerceIn(-xLimit, xLimit)
         targetY = targetY.coerceIn(-effectiveMaxOffset, effectiveMaxOffset)
         
-        // Apply return-to-center when tilt is near zero
-        // returnSpeed: 0.0 = no return, 1.0 = fast constant return
-        if (tiltMagnitude < RETURN_TILT_THRESHOLD && returnSpeed > 0.01f) {
-            // Calculate return rate using logarithmic scale for natural feel
-            // ln(1+x)/ln(2) gives 0 at x=0, 1 at x=1, with more weight to higher values
-            val logScale = kotlin.math.ln(1f + returnSpeed) / kotlin.math.ln(2f)
-            
-            // Base return rate from logarithmic scale (0 to ~0.15 per frame at max)
-            val baseReturnRate = logScale * 0.15f
-            
-            // Calculate current distance from center
-            val distFromCenter = kotlin.math.sqrt(positionX * positionX + positionY * positionY)
-            
-            // Slow down return speed when close to center (proportional to distance)
-            // This prevents jitter at center and gives a more natural deceleration
-            val distanceFactor = (distFromCenter / effectiveMaxOffset).coerceIn(0.1f, 1f)
-            
-            // Apply constant movement toward center (not percentage-based)
-            // Movement amount = rate * distance factor * delta time
-            val movementAmount = baseReturnRate * distanceFactor * deltaScale
-            
-            // Calculate direction to center and apply movement
-            if (distFromCenter > 0.1f) {
-                val moveX = (positionX / distFromCenter) * movementAmount * effectiveMaxOffset
-                val moveY = (positionY / distFromCenter) * movementAmount * effectiveMaxOffset
-                targetX = positionX - moveX
-                targetY = positionY - moveY
+        // Handle return-to-center behavior when tilt is near zero
+        if (tiltMagnitude < RETURN_TILT_THRESHOLD) {
+            if (returnSpeed > 0.01f) {
+                // returnSpeed > 0: Apply return-to-center with logarithmic scaling
+                // Calculate return rate using logarithmic scale for natural feel
+                // ln(1+x)/ln(2) gives 0 at x=0, 1 at x=1, with more weight to higher values
+                val logScale = kotlin.math.ln(1f + returnSpeed) / kotlin.math.ln(2f)
+                
+                // Base return rate from logarithmic scale (0 to ~0.15 per frame at max)
+                val baseReturnRate = logScale * 0.15f
+                
+                // Calculate current distance from center
+                val distFromCenter = kotlin.math.sqrt(positionX * positionX + positionY * positionY)
+                
+                // Slow down return speed when close to center (proportional to distance)
+                // This prevents jitter at center and gives a more natural deceleration
+                val distanceFactor = (distFromCenter / effectiveMaxOffset).coerceIn(0.1f, 1f)
+                
+                // Apply constant movement toward center (not percentage-based)
+                // Movement amount = rate * distance factor * delta time
+                val movementAmount = baseReturnRate * distanceFactor * deltaScale
+                
+                // Calculate direction to center and apply movement
+                if (distFromCenter > 0.1f) {
+                    val moveX = (positionX / distFromCenter) * movementAmount * effectiveMaxOffset
+                    val moveY = (positionY / distFromCenter) * movementAmount * effectiveMaxOffset
+                    targetX = positionX - moveX
+                    targetY = positionY - moveY
+                } else {
+                    targetX = 0f
+                    targetY = 0f
+                }
             } else {
-                targetX = 0f
-                targetY = 0f
+                // returnSpeed = 0: Hold current position (no return to center)
+                targetX = positionX
+                targetY = positionY
             }
         }
         

@@ -95,6 +95,7 @@ class ParallaxCalculatorTest {
     fun testReturnsToZeroWhenTiltRemoved() {
         calculator.strength = 1.0f
         calculator.maxOffsetPx = 40f
+        calculator.returnSpeed = 1.0f  // Fast return for predictable test
         
         // Move to offset
         calculator.updateFromSensor(1.0f, 0f)
@@ -277,6 +278,7 @@ class ParallaxCalculatorTest {
     fun testZeroTiltReturnsToCenter() {
         calculator.strength = 1.0f
         calculator.maxOffsetPx = 40f
+        calculator.returnSpeed = 1.0f  // Fast return for predictable test
         
         // Move to various positions, then return to center
         val testDirections = listOf(
