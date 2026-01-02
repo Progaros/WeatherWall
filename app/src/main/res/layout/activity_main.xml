@@ -15,7 +15,8 @@
             android:layout_height="?attr/actionBarSize"
             android:background="?attr/colorPrimary"
             app:title="@string/app_name"
-            app:titleTextColor="@android:color/white" />
+            app:titleTextColor="@android:color/white"
+            app:navigationIcon="@null" />
 
         <!-- Preview container with resize handle - wrapped in outer container for handle visibility -->
         <FrameLayout
@@ -55,28 +56,12 @@
                 android:elevation="8dp" />
         </FrameLayout>
 
-        <!-- ViewPager2 for tabbed settings (fills remaining space) -->
-        <androidx.viewpager2.widget.ViewPager2
-            android:id="@+id/view_pager"
+        <!-- Settings fragment container (fills remaining space) -->
+        <androidx.fragment.app.FragmentContainerView
+            android:id="@+id/settings_container"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1" />
-
-        <!-- Tab Layout at bottom -->
-        <com.google.android.material.tabs.TabLayout
-            android:id="@+id/tab_layout"
-            android:layout_width="match_parent"
-            android:layout_height="72dp"
-            android:minHeight="72dp"
-            android:background="?attr/colorPrimary"
-            app:tabTextColor="@android:color/white"
-            app:tabSelectedTextColor="@android:color/white"
-            app:tabIndicatorColor="@android:color/white"
-            app:tabMode="fixed"
-            app:tabGravity="fill"
-            app:tabMinWidth="0dp"
-            app:tabPaddingTop="16dp"
-            app:tabPaddingBottom="16dp" />
 
     </LinearLayout>
 
@@ -86,7 +71,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="72dp"
+        android:layout_marginBottom="16dp"
         android:text="@string/set_wallpaper"
         android:textAllCaps="true"
         android:contentDescription="@string/apply_wallpaper"

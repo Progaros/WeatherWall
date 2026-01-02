@@ -27,16 +27,9 @@ class SettingsFragment : PreferenceFragmentCompat() {
     private var versionTapCount = 0
     private var lastTapTime = 0L
     private val easterEggMessages = listOf(
-        "🌲 The trees are watching...",
-        "⛰️ Mountains whisper secrets",
-        "🌧️ Even virtual rain is wet",
-        "☁️ Cloud nine was full, try ten",
-        "⚡ Zeus says hi!",
-        "❄️ Brrr... cold code!",
-        "🌙 The night is dark and full of pixels",
-        "🎄 Ho ho ho!",
-        "🎆 Party mode activated!",
-        "🦆 Quack! Wrong easter egg..."
+        "� Try shaking your phone...",
+        "📱 Shake it 3 times!",
+        "✨ Give your phone a shake!"
     )
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {

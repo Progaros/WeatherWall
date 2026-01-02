@@ -27,7 +27,7 @@ class ParallaxScene(
     private val sensor: ParallaxSensorManager,
     private val weatherRepo: WeatherRepository,
     private val isPreview: Boolean = false  // True for MainActivity preview, false for live wallpaper
-) : ParallaxSensorManager.Listener {
+) : ParallaxSensorManager.Listener, ParallaxSensorManager.ShakeListener {
 
     companion object {
         private const val TAG = "ParallaxScene"
@@ -93,6 +93,7 @@ class ParallaxScene(
         // Load settings BEFORE enabling sensor to ensure correct initial strength
         loadPrefs()
         sensor.setListener(this)
+        sensor.setShakeListener(this)
     }
     
     // Temporary references for ground event drawer callback
@@ -112,6 +113,14 @@ class ParallaxScene(
     override fun onTiltChanged(tiltX: Float, tiltY: Float) {
         // Pass absolute tilt position to calculator
         parallaxCalculator.updateFromSensor(tiltX, tiltY)
+    }
+    
+    override fun onShake() {
+        // Trigger fireworks when shake gesture is detected
+        if (seasonalEvents.isShakeFireworksEnabled()) {
+            Log.d(TAG, "Shake detected - triggering fireworks")
+            seasonalEvents.triggerShakeFireworks()
+        }
     }
 
     fun render(canvas: Canvas, deltaTimeMs: Long = 16L) {
@@ -311,6 +320,11 @@ class ParallaxScene(
             }
             weatherLayer.reloadSettings()
             seasonalEvents.loadSettings()
+            
+            // Configure shake detection based on settings
+            val shakeEnabled = prefs.getBoolean("pref_shake_fireworks_enabled", true)
+            val shakeSensitivity = prefs.getInt("pref_shake_sensitivity", 50) / 100f
+            sensor.setShakeSettings(shakeEnabled, shakeSensitivity)
             
         } catch (e: Exception) {
             Log.e(TAG, "Error loading prefs", e)

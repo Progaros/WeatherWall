@@ -149,6 +149,10 @@ class SeasonalEvents(private val context: Context? = null) {
     private var rainbowPositionY = 50    // 0-100, vertical position (0 = top, 100 = bottom)
     private var rainbowSize = 100        // 0-200, size percentage
     
+    // Shake-to-fireworks settings
+    private var shakeFireworksEnabled = true
+    private var shakeFireworksCount = 12  // Number of fireworks to launch on shake (10-15)
+    
     // Track last settings load time to avoid polling SharedPreferences every frame
     private var lastSettingsLoad = 0L
     private val SETTINGS_RELOAD_INTERVAL_MS = 1000L  // Reload settings every 1 second
@@ -173,8 +177,34 @@ class SeasonalEvents(private val context: Context? = null) {
             rainbowPositionX = it.getInt("pref_rainbow_position_x", 50).coerceIn(0, 100)
             rainbowPositionY = it.getInt("pref_rainbow_position_y", 40).coerceIn(0, 100)
             rainbowSize = it.getInt("pref_rainbow_size", 100).coerceIn(20, 200)
+            
+            // Shake-to-fireworks settings
+            shakeFireworksEnabled = it.getBoolean("pref_shake_fireworks_enabled", true)
+            shakeFireworksCount = it.getInt("pref_shake_fireworks_count", 12).coerceIn(5, 20)
         }
         lastSettingsLoad = System.currentTimeMillis()
+    }
+    
+    /**
+     * Check if shake-to-fireworks is enabled.
+     */
+    fun isShakeFireworksEnabled(): Boolean = shakeFireworksEnabled
+    
+    /**
+     * Trigger fireworks on shake gesture.
+     * Launches multiple rockets in quick succession for a burst effect.
+     */
+    fun triggerShakeFireworks() {
+        if (!shakeFireworksEnabled) return
+        if (!initialized) return
+        
+        Log.d(TAG, "Triggering shake fireworks: $shakeFireworksCount rockets")
+        
+        // Launch multiple rockets with slight random timing variation
+        // We'll stagger them slightly by adjusting their initial Y positions
+        for (i in 0 until shakeFireworksCount.coerceAtMost(rockets.size * 3)) {
+            launchRocket()
+        }
     }
 
     fun getCurrentSeason(): Season {

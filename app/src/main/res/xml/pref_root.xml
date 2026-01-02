@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <!-- Root Settings - Navigate to sub-screens -->
+    
+    <Preference
+        android:key="pref_nav_scene"
+        android:title="Scene"
+        android:summary="Mountains, hills, trees, landscape settings"
+        android:icon="@android:drawable/ic_menu_gallery"
+        app:fragment="info.olli.weatherlwp.settings.SceneSettingsFragment" />
+
+    <Preference
+        android:key="pref_nav_effects"
+        android:title="Effects"
+        android:summary="Parallax, clouds, weather, seasonal decorations"
+        android:icon="@android:drawable/ic_menu_slideshow"
+        app:fragment="info.olli.weatherlwp.settings.EffectsSettingsFragment" />
+
+    <Preference
+        android:key="pref_nav_events"
+        android:title="Events"
+        android:summary="Random animals, seasonal events, spawn settings"
+        android:icon="@android:drawable/ic_menu_today"
+        app:fragment="info.olli.weatherlwp.settings.EventsSettingsFragment" />
+
+    <Preference
+        android:key="pref_nav_system"
+        android:title="System"
+        android:summary="Performance, about, preview settings"
+        android:icon="@android:drawable/ic_menu_manage"
+        app:fragment="info.olli.weatherlwp.settings.SystemSettingsFragment" />
+
+</PreferenceScreen>
