@@ -16,6 +16,9 @@ import android.os.Build
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationState
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.random.Random
 
 /**
@@ -162,7 +165,30 @@ class CloudLayer(private val context: Context) : SceneLayer {
         
         // Maximum bitmap regenerations per frame to prevent spikes
         const val MAX_REGENERATIONS_PER_FRAME = 3
+        
+        // Async compositing: target update rate (ms between composite refreshes)
+        const val ASYNC_COMPOSITE_INTERVAL_MS = 50L  // 20fps for cloud composite
     }
+    
+    // ==== ASYNC COMPOSITING ====
+    // Pre-composite all clouds to a single bitmap off the main thread
+    // This reduces per-frame work from ~40 bitmap draws to 1 bitmap draw
+    private val compositeExecutor = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "CloudCompositor").apply { priority = Thread.MIN_PRIORITY }
+    }
+    private val isCompositing = AtomicBoolean(false)
+    private var lastCompositeTime = 0L
+    
+    // Double-buffered composite bitmaps (front = display, back = rendering)
+    private val frontComposite = AtomicReference<Bitmap?>(null)
+    private val backComposite = AtomicReference<Bitmap?>(null)
+    
+    // Snapshot of state for async compositing
+    @Volatile private var compositeWidth = 0
+    @Volatile private var compositeHeight = 0
+    @Volatile private var compositeColor = Color.WHITE
+    @Volatile private var compositeParallaxX = 0f
+    @Volatile private var compositeParallaxY = 0f
     
     init {
         reloadSettings()
@@ -412,75 +438,198 @@ class CloudLayer(private val context: Context) : SceneLayer {
     }
     
     /**
-     * Original cached bitmap mode - best quality, higher CPU usage.
+     * Cached bitmap mode with ASYNC COMPOSITING.
+     * 
+     * Instead of drawing 40+ individual cloud bitmaps per frame,
+     * we pre-composite all clouds to a single bitmap on a background thread,
+     * then just blit that one bitmap to screen each frame.
+     * 
+     * This reduces per-frame draw calls from ~40 to 1, with compositing
+     * happening asynchronously at ~20fps (enough for smooth cloud movement).
      */
     private fun drawCachedMode(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         // Cloud count comes directly from weather/simulation data
-        // Scale cloud count based on aspect ratio to maintain consistent density
-        // Taller screens (higher aspect ratio) need more clouds to avoid looking sparse
         val aspectRatio = height / width
-        val aspectScale = (aspectRatio / 1.5f).coerceIn(0.8f, 1.5f)  // Normalize around typical phone ratio
+        val aspectScale = (aspectRatio / 1.5f).coerceIn(0.8f, 1.5f)
         val baseCount = state.getCloudCount()
         val targetCount = (baseCount * aspectScale).toInt().coerceIn(0, MAX_GROUPS)
         
-        // Only regenerate if count changed significantly (by more than 3) to prevent jumping
+        // Regenerate groups if count changed significantly
         if (kotlin.math.abs(targetCount - cloudCount) > 3 || 
             (targetCount == 0 && cloudCount > 0) || 
             (targetCount > 0 && cloudCount == 0)) {
             cloudCount = targetCount
             generateCloudGroups()
+            invalidateComposite()
         }
         
         val currentGroups = cloudGroups
         if (currentGroups.isEmpty()) return
         
-        // PERFORMANCE: Clouds are cached as white bitmaps, color applied at draw time
-        // This eliminates expensive bitmap regeneration during dawn/dusk transitions
+        // Update composite state for background thread
+        compositeColor = currentCloudColor
+        compositeParallaxX = parallaxCalculator.getOffsetXForDepth(0.25f)
+        compositeParallaxY = parallaxCalculator.getOffsetYForDepth(0.25f)
+        
+        // Trigger async composite if needed
+        val now = System.currentTimeMillis()
+        if (now - lastCompositeTime > ASYNC_COMPOSITE_INTERVAL_MS && !isCompositing.get()) {
+            triggerAsyncComposite()
+        }
+        
+        // Draw the front (display) composite bitmap
+        val displayBitmap = frontComposite.get()
+        if (displayBitmap != null && !displayBitmap.isRecycled) {
+            drawPaint.colorFilter = PorterDuffColorFilter(currentCloudColor, PorterDuff.Mode.MULTIPLY)
+            canvas.drawBitmap(displayBitmap, compositeParallaxX, compositeParallaxY, drawPaint)
+        } else {
+            // Fallback: draw directly if no composite ready yet
+            drawCachedModeDirect(canvas, state, parallaxCalculator)
+        }
+    }
+    
+    /**
+     * Trigger async compositing of all clouds to a single bitmap.
+     */
+    private fun triggerAsyncComposite() {
+        if (!isCompositing.compareAndSet(false, true)) return
+        
+        // Capture current state for background thread
+        val groups = cloudGroups.toList()
+        val w = width.toInt()
+        val h = height.toInt()
+        val extW = extendedWidth
+        val extO = extendedOffset
+        val mDim = minDim
+        
+        lastCompositeTime = System.currentTimeMillis()
+        
+        compositeExecutor.execute {
+            try {
+                if (w <= 0 || h <= 0 || groups.isEmpty()) {
+                    isCompositing.set(false)
+                    return@execute
+                }
+                
+                // Get or create back buffer
+                var bitmap = backComposite.get()
+                if (bitmap == null || bitmap.isRecycled || 
+                    bitmap.width != w || bitmap.height != h) {
+                    bitmap?.recycle()
+                    bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                    backComposite.set(bitmap)
+                }
+                
+                val compositeCanvas = Canvas(bitmap)
+                compositeCanvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+                
+                // Composite paint (no color filter - applied at draw time)
+                val compositePaint = Paint().apply {
+                    isAntiAlias = true
+                    isFilterBitmap = true
+                }
+                
+                // Draw all groups to composite (back layer first)
+                for (isBack in listOf(true, false)) {
+                    for (group in groups) {
+                        if (group.isBackLayer != isBack) continue
+                        
+                        // Ensure group bitmap is rendered
+                        if (group.cachedBitmap == null) {
+                            val groupWidthPx = (group.groupWidth * mDim).toInt()
+                                .coerceIn(50, MAX_BITMAP_DIMENSION)
+                            val groupHeightPx = (group.groupHeight * mDim).toInt()
+                                .coerceIn(30, MAX_BITMAP_DIMENSION)
+                            renderGroupToBitmap(group, groupWidthPx, groupHeightPx)
+                        }
+                        
+                        val groupBitmap = group.cachedBitmap ?: continue
+                        if (groupBitmap.isRecycled) continue
+                        
+                        // Calculate position
+                        val screenX = group.currentX * extW - extO
+                        val screenY = group.y * h
+                        
+                        val groupWidthPx = (group.groupWidth * mDim).toInt()
+                            .coerceIn(50, MAX_BITMAP_DIMENSION)
+                        val groupHeightPx = (group.groupHeight * mDim).toInt()
+                            .coerceIn(30, MAX_BITMAP_DIMENSION)
+                        val paddingX = (groupWidthPx * BLUR_PADDING).toInt()
+                        val paddingY = (groupHeightPx * BLUR_PADDING).toInt()
+                        val paddedWidth = groupWidthPx + paddingX * 2
+                        val paddedHeight = groupHeightPx + paddingY * 2
+                        
+                        compositeCanvas.drawBitmap(
+                            groupBitmap,
+                            screenX - paddedWidth / 2f,
+                            screenY - paddedHeight / 2f,
+                            compositePaint
+                        )
+                    }
+                }
+                
+                // Swap buffers: back becomes front
+                val oldFront = frontComposite.getAndSet(bitmap)
+                if (oldFront != null && oldFront !== bitmap) {
+                    backComposite.set(oldFront)  // Reuse old front as new back
+                }
+                
+            } catch (e: Exception) {
+                android.util.Log.e("CloudLayer", "Async composite failed: ${e.message}")
+            } finally {
+                isCompositing.set(false)
+            }
+        }
+    }
+    
+    /**
+     * Invalidate composite to force regeneration.
+     */
+    private fun invalidateComposite() {
+        lastCompositeTime = 0L
+    }
+    
+    /**
+     * Direct draw mode (fallback when composite not ready).
+     * Same as original drawCachedMode but used only briefly.
+     */
+    private fun drawCachedModeDirect(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
+        val currentGroups = cloudGroups
+        if (currentGroups.isEmpty()) return
+        
         drawPaint.colorFilter = PorterDuffColorFilter(currentCloudColor, PorterDuff.Mode.MULTIPLY)
         
-        // Draw back layer first, then front layer
         var regenerationsThisFrame = 0
         for (isBack in listOf(true, false)) {
             for (group in currentGroups) {
                 if (group.isBackLayer != isBack) continue
                 
-                // Calculate parallax for this group's depth
                 val px = parallaxCalculator.getOffsetXForDepth(group.depthFactor)
                 val py = parallaxCalculator.getOffsetYForDepth(group.depthFactor)
-                
-                // Use accumulated position from update() - no more time-based jumps
                 val groupX = group.currentX
-                
-                // Convert to screen coordinates
                 val screenX = groupX * extendedWidth - extendedOffset + px
                 val screenY = group.y * height + py
                 
-                // Use minDim as reference to prevent gigantic bitmaps on tall portrait screens
-                // Apply hard cap to prevent GPU texture limit issues
                 val groupWidthPx = (group.groupWidth * minDim).toInt()
                     .coerceIn(50, MAX_BITMAP_DIMENSION)
                 val groupHeightPx = (group.groupHeight * minDim).toInt()
                     .coerceIn(30, MAX_BITMAP_DIMENSION)
                 
-                // Calculate padded dimensions (must match renderGroupToBitmap)
                 val paddingX = (groupWidthPx * BLUR_PADDING).toInt()
                 val paddingY = (groupHeightPx * BLUR_PADDING).toInt()
                 val paddedWidth = groupWidthPx + paddingX * 2
                 val paddedHeight = groupHeightPx + paddingY * 2
                 
-                // Ensure bitmap is rendered - but limit regenerations per frame
                 if (group.cachedBitmap == null) {
                     if (regenerationsThisFrame < MAX_REGENERATIONS_PER_FRAME) {
                         renderGroupToBitmap(group, groupWidthPx, groupHeightPx)
                         regenerationsThisFrame++
                     } else {
-                        // Skip this cloud this frame, will be rendered next frame
                         continue
                     }
                 }
                 
                 group.cachedBitmap?.let { bitmap ->
-                    // Draw with padding offset so cloud content is centered at target position
                     canvas.drawBitmap(
                         bitmap,
                         screenX - paddedWidth / 2f,
@@ -767,6 +916,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
                 group.cachedBitmap?.recycle()
             }
             cloudGroups = emptyList()
+            invalidateComposite()
         } else if (enabledChanged || stretchChanged || seedChanged || opacityChanged || fluffinessChanged) {
             // Invalidate cached bitmaps when settings change
             for (group in cloudGroups) {
@@ -775,15 +925,30 @@ class CloudLayer(private val context: Context) : SceneLayer {
             }
             // Regenerate cloud groups with new settings
             generateCloudGroups()
+            invalidateComposite()
         }
     }
 
     override fun destroy() {
-        // Cleanup cached bitmaps to prevent memory leaks
+        // Shutdown async compositor thread
+        compositeExecutor.shutdown()
+        
+        // Cleanup composite bitmaps
+        frontComposite.get()?.recycle()
+        frontComposite.set(null)
+        backComposite.get()?.recycle()
+        backComposite.set(null)
+        
+        // Cleanup cached cloud group bitmaps to prevent memory leaks
         for (group in cloudGroups) {
             group.cachedBitmap?.recycle()
             group.cachedBitmap = null
         }
         cloudGroups = emptyList()
+        
+        // Cleanup tiled mode resources
+        tiledNoiseBitmap?.recycle()
+        tiledNoiseBitmap = null
+        tiledShader = null
     }
 }

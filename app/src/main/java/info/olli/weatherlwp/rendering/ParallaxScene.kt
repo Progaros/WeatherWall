@@ -90,6 +90,11 @@ class ParallaxScene(
             }
         }
         
+        // Set up hill height provider so ground events can follow terrain contour
+        randomEventLayer.hillHeightProvider = { xRatio, depthFactor ->
+            terrainLayer.getHillYAtPosition(xRatio, depthFactor)
+        }
+        
         // Load settings BEFORE enabling sensor to ensure correct initial strength
         loadPrefs()
         sensor.setListener(this)

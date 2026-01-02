@@ -191,7 +191,7 @@
             android:key="pref_cloud_shadows"
             android:title="Cloud Shadows"
             android:summary="Clouds cast soft shadows on terrain"
-            android:defaultValue="true"
+            android:defaultValue="false"
             android:dependency="pref_clouds_enabled" />
 
         <ListPreference

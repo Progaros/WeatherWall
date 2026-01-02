@@ -39,10 +39,11 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         private const val SCREEN_FLIP_FREEZE = 0.08f // Don't change state when |z| is this small
         
         // Shake detection constants
-        private const val SHAKE_THRESHOLD_DEFAULT = 12f  // Minimum acceleration magnitude for shake
-        private const val SHAKE_TIME_WINDOW_MS = 800L    // Time window to count shakes
-        private const val SHAKE_COUNT_THRESHOLD = 3      // Number of direction reversals for trigger
-        private const val SHAKE_COOLDOWN_MS = 1500L      // Cooldown after triggering shake event
+        private const val SHAKE_THRESHOLD_DEFAULT = 2.5f  // Acceleration threshold (m/s²) above gravity
+        private const val SHAKE_TIME_WINDOW_MS = 600L     // Time window to count shakes
+        private const val SHAKE_COUNT_THRESHOLD = 3       // Number of acceleration spikes for trigger
+        private const val SHAKE_COOLDOWN_MS = 1000L       // Cooldown after triggering shake event
+        private const val SHAKE_SLOP_MS = 100L            // Minimum time between shake counts
     }
     
     interface Listener {
@@ -102,13 +103,8 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     private var shakeThreshold = SHAKE_THRESHOLD_DEFAULT
     private var lastShakeTime = 0L
     private var shakeCount = 0
-    private var lastShakeDirectionX = 0  // -1, 0, or 1
-    private var lastShakeDirectionY = 0
     private var shakeWindowStartTime = 0L
-    private var lastAccelX = 0f
-    private var lastAccelY = 0f
-    private var lastAccelZ = 0f
-    private var hasLastAccel = false
+    private var lastShakeCountTime = 0L
 
     fun setListener(l: Listener) { listener = l }
     
@@ -121,8 +117,8 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
      */
     fun setShakeSettings(enabled: Boolean, sensitivity: Float = 0.5f) {
         shakeEnabled = enabled
-        // Map sensitivity 0-1 to threshold range: 20 (low sensitivity) to 5 (high sensitivity)
-        shakeThreshold = 20f - (sensitivity.coerceIn(0f, 1f) * 15f)
+        // Map sensitivity 0-1 to threshold range: 5.0 (low sensitivity) to 1.5 (high sensitivity)
+        shakeThreshold = 5.0f - (sensitivity.coerceIn(0f, 1f) * 3.5f)
     }
 
     fun start() {
@@ -142,8 +138,8 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             
             // Reset shake state
             shakeCount = 0
-            hasLastAccel = false
             lastShakeTime = 0L
+            lastShakeCountTime = 0L
             
             // Use SENSOR_DELAY_FASTEST for smoothest parallax (matches 60 FPS target)
             // This gives ~5-10ms updates on most devices
@@ -225,12 +221,13 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     
     /**
      * Detect shake gestures from accelerometer data.
-     * Triggers ShakeListener.onShake() when 3 quick back-and-forth shakes are detected.
+     * Uses simple acceleration magnitude detection - counts spikes above threshold.
+     * Triggers ShakeListener.onShake() when 3 quick shakes are detected within the time window.
      */
     private fun detectShake(values: FloatArray) {
         val currentTime = System.currentTimeMillis()
         
-        // Check cooldown
+        // Check cooldown after a successful shake
         if (currentTime - lastShakeTime < SHAKE_COOLDOWN_MS) {
             return
         }
@@ -239,44 +236,16 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         val y = values[1]
         val z = values[2]
         
-        if (!hasLastAccel) {
-            lastAccelX = x
-            lastAccelY = y
-            lastAccelZ = z
-            hasLastAccel = true
-            return
-        }
+        // Calculate acceleration magnitude minus gravity (~9.8 m/s²)
+        // We're looking for excess acceleration from shaking
+        val magnitude = sqrt(x * x + y * y + z * z)
+        val gravity = 9.81f
+        val excessAccel = abs(magnitude - gravity)
         
-        // Calculate delta acceleration (jerk) in X and Y axes
-        // Ignore Z (vertical) to focus on side-to-side shakes
-        val deltaX = x - lastAccelX
-        val deltaY = y - lastAccelY
-        
-        lastAccelX = x
-        lastAccelY = y
-        lastAccelZ = z
-        
-        // Check if delta exceeds threshold (significant acceleration change)
-        val magnitude = sqrt(deltaX * deltaX + deltaY * deltaY)
-        
-        if (magnitude > shakeThreshold) {
-            // Determine shake direction
-            val dirX = when {
-                deltaX > shakeThreshold * 0.7f -> 1
-                deltaX < -shakeThreshold * 0.7f -> -1
-                else -> 0
-            }
-            val dirY = when {
-                deltaY > shakeThreshold * 0.7f -> 1
-                deltaY < -shakeThreshold * 0.7f -> -1
-                else -> 0
-            }
-            
-            // Check for direction reversal (back-and-forth shake)
-            val reversedX = lastShakeDirectionX != 0 && dirX != 0 && dirX != lastShakeDirectionX
-            val reversedY = lastShakeDirectionY != 0 && dirY != 0 && dirY != lastShakeDirectionY
-            
-            if (reversedX || reversedY) {
+        // Check if this is a significant shake
+        if (excessAccel > shakeThreshold) {
+            // Prevent counting the same shake motion multiple times
+            if (currentTime - lastShakeCountTime > SHAKE_SLOP_MS) {
                 // Reset window if too much time has passed
                 if (currentTime - shakeWindowStartTime > SHAKE_TIME_WINDOW_MS) {
                     shakeCount = 0
@@ -284,18 +253,17 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
                 }
                 
                 shakeCount++
+                lastShakeCountTime = currentTime
+                Log.d(TAG, "Shake count: $shakeCount (excess=${"%.2f".format(excessAccel)}, threshold=${"%.2f".format(shakeThreshold)})")
                 
                 if (shakeCount >= SHAKE_COUNT_THRESHOLD) {
                     // Shake detected! Trigger listener and reset
-                    Log.d(TAG, "Shake detected! Count=$shakeCount")
+                    Log.d(TAG, "Shake gesture detected! Triggering listener")
                     lastShakeTime = currentTime
                     shakeCount = 0
                     shakeListener?.onShake()
                 }
             }
-            
-            lastShakeDirectionX = dirX
-            lastShakeDirectionY = dirY
         }
     }
     

@@ -14,21 +14,23 @@ import kotlin.random.Random
  * Fox with proper tail and ears using local coordinate system.
  * Uses absolute time for deterministic position across preview/wallpaper.
  * Depth is based on groundY - animals lower on screen are in front.
+ * Now follows hill contour using hillHeightProvider.
  */
 class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
     override val layer = EventLayer.GROUND
     
     private val startX = if (random.nextBoolean()) -0.1f else 1.1f
     private val direction = if (startX < 0.5f) 1f else -1f
-    private val groundY = 0.82f + random.nextFloat() * 0.06f
+    // Base ground Y when no hill data available
+    private val fallbackGroundY = 0.82f + random.nextFloat() * 0.06f
     private val size = 0.7f + random.nextFloat() * 0.3f
     private val path = Path()
+    // Random vertical offset from hill surface (-2% to +1% of screen height)
+    private val groundOffset = -0.02f + random.nextFloat() * 0.03f
     
-    // Depth based on groundY: lower on screen = more foreground (higher depthFactor)
+    // Depth based on initial groundY: lower on screen = more foreground (higher depthFactor)
     // Using normalized range matching hills: PARALLAX_HILLS_MIN (0.50) to PARALLAX_HILLS_MAX (0.80)
-    // groundY 0.82 -> depthFactor 0.50 (background, near back hills)
-    // groundY 0.88 -> depthFactor 0.80 (foreground, near front hills)
-    override val depthFactor: Float = 0.50f + (groundY - 0.82f) / 0.06f * 0.30f
+    override val depthFactor: Float = 0.50f + (fallbackGroundY - 0.82f) / 0.06f * 0.30f
     
     // Reduced speed: was 0.00008, now 0.000025 (~3x slower)
     private val speed = 0.000025f
@@ -36,7 +38,8 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
-                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long) {
+                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
+                      hillHeightProvider: HillHeightProvider?) {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val x = startX + direction * speed * elapsedMs
         val walkPhase = elapsedMs * 0.008f  // Slower walk animation
@@ -48,7 +51,11 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         canvas.translate(px, py)
         
         val cx = x * width - extendedOffset
-        val cy = groundY * height
+        
+        // Get ground Y from hill height provider if available, otherwise use fallback
+        val groundY = hillHeightProvider?.invoke(x, depthFactor) ?: fallbackGroundY
+        val cy = (groundY + groundOffset) * height
+        
         val unit = minOf(width, height)
         val s = size * unit * 0.012f
         val flip = if (direction > 0) 1f else -1f

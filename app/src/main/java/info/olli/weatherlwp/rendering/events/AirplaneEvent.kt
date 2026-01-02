@@ -42,7 +42,8 @@ class AirplaneEvent(random: Random, override val spawnTimeMs: Long = System.curr
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
-                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long) {
+                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
+                      hillHeightProvider: HillHeightProvider?) {
         // Scale: 0.4-0.8% of height based on distance (was 1%)
         val unit = height * 0.004f * sizeScale
         val size = unit * 8f  // Base airplane size

@@ -47,6 +47,12 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     private var eventsEnabled = true
     private var spawnChance = 0.001f
     
+    /**
+     * Hill height provider for ground events to follow terrain contour.
+     * Set by TerrainLayer to provide hill Y at given X and depth.
+     */
+    var hillHeightProvider: HillHeightProvider? = null
+    
     // Individual event toggles
     private var airplaneEnabled = true
     private var birdsEnabled = true
@@ -207,7 +213,8 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
             if (event.layer == EventLayer.GROUND && event.depthFactor < maxDepth) {
                 try {
                     event.draw(canvas, paint, strokePaint, parallaxCalculator, extendedWidth, height, 
-                        state.timeSeconds, ambientColor, extendedOffset, state.absoluteTimeMs)
+                        state.timeSeconds, ambientColor, extendedOffset, state.absoluteTimeMs,
+                        if (event.layer == EventLayer.GROUND) hillHeightProvider else null)
                 } catch (e: Exception) {
                     android.util.Log.e("RandomEventLayer", "Error drawing event ${event.javaClass.simpleName}", e)
                 }
@@ -238,7 +245,8 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
                 event.depthFactor >= minDepth && event.depthFactor < maxDepth) {
                 try {
                     event.draw(canvas, paint, strokePaint, parallaxCalculator, extendedWidth, height, 
-                        state.timeSeconds, ambientColor, extendedOffset, state.absoluteTimeMs)
+                        state.timeSeconds, ambientColor, extendedOffset, state.absoluteTimeMs,
+                        hillHeightProvider)
                 } catch (e: Exception) {
                     android.util.Log.e("RandomEventLayer", "Error drawing event ${event.javaClass.simpleName}", e)
                 }
@@ -266,7 +274,8 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
             if (event.layer == EventLayer.GROUND && event.depthFactor >= minDepth) {
                 try {
                     event.draw(canvas, paint, strokePaint, parallaxCalculator, extendedWidth, height, 
-                        state.timeSeconds, ambientColor, extendedOffset, state.absoluteTimeMs)
+                        state.timeSeconds, ambientColor, extendedOffset, state.absoluteTimeMs,
+                        hillHeightProvider)
                 } catch (e: Exception) {
                     android.util.Log.e("RandomEventLayer", "Error drawing event ${event.javaClass.simpleName}", e)
                 }
@@ -290,7 +299,8 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
                 try {
                     // Pass extendedWidth so events can span the full parallax area
                     event.draw(canvas, paint, strokePaint, parallaxCalculator, extendedWidth, height, 
-                        state.timeSeconds, ambientColor, extendedOffset, state.absoluteTimeMs)
+                        state.timeSeconds, ambientColor, extendedOffset, state.absoluteTimeMs,
+                        if (targetLayer == EventLayer.GROUND) hillHeightProvider else null)
                 } catch (e: Exception) {
                     // Log but don't crash - one bad event shouldn't break the layer
                     android.util.Log.e("RandomEventLayer", "Error drawing event ${event.javaClass.simpleName}", e)

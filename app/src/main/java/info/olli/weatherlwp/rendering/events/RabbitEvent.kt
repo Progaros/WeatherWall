@@ -13,20 +13,22 @@ import kotlin.random.Random
  * Rabbit with bunny silhouette using local coordinate system.
  * Uses absolute time for deterministic position across preview/wallpaper.
  * Depth is based on groundY - animals lower on screen are in front.
+ * Now follows hill contour using hillHeightProvider.
  */
 class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
     override val layer = EventLayer.GROUND
     
     private val startX = if (random.nextBoolean()) -0.05f else 1.05f
     private val direction = if (startX < 0.5f) 1f else -1f
-    private val groundY = 0.85f + random.nextFloat() * 0.05f
+    // Base ground Y when no hill data available
+    private val fallbackGroundY = 0.85f + random.nextFloat() * 0.05f
     private val size = 0.5f + random.nextFloat() * 0.2f
+    // Random vertical offset from hill surface (-2% to +1% of screen height)
+    private val groundOffset = -0.02f + random.nextFloat() * 0.03f
     
-    // Depth based on groundY: lower on screen = more foreground (higher depthFactor)
+    // Depth based on initial groundY: lower on screen = more foreground (higher depthFactor)
     // Using normalized range matching hills: PARALLAX_HILLS_MIN (0.50) to PARALLAX_HILLS_MAX (0.80)
-    // groundY 0.85 -> depthFactor 0.55 (background, near back hills)  
-    // groundY 0.90 -> depthFactor 0.75 (foreground, near front hills)
-    override val depthFactor: Float = 0.55f + (groundY - 0.85f) / 0.05f * 0.20f
+    override val depthFactor: Float = 0.55f + (fallbackGroundY - 0.85f) / 0.05f * 0.20f
     
     // Reduced speed: was 0.0001, now 0.00003 (~3x slower)
     private val avgSpeed = 0.00003f
@@ -34,7 +36,8 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
-                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long) {
+                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
+                      hillHeightProvider: HillHeightProvider?) {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         
         val hopPhase = (elapsedMs * 0.006f) % (2f * 3.14159f)  // Slower hop animation
@@ -51,7 +54,11 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
         val cx = x * width - extendedOffset
         val unit = minOf(width, height)
         val hopHeight = (sin(hopPhase).coerceAtLeast(0f)) * unit * 0.02f * size
-        val cy = groundY * height - hopHeight
+        
+        // Get ground Y from hill height provider if available, otherwise use fallback
+        val groundY = hillHeightProvider?.invoke(x, depthFactor) ?: fallbackGroundY
+        val cy = (groundY + groundOffset) * height - hopHeight
+        
         val s = size * unit * 0.015f
         val flip = if (direction > 0) 1f else -1f
         

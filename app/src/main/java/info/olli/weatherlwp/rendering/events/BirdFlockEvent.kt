@@ -53,7 +53,8 @@ class BirdFlockEvent(random: Random, override val spawnTimeMs: Long = System.cur
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
-                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long) {
+                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
+                      hillHeightProvider: HillHeightProvider?) {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val elapsedSec = elapsedMs / 1000f
         

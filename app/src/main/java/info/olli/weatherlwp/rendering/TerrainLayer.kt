@@ -507,6 +507,32 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         return hill.heightOffset + 0.12f * (1f - interpolated)
     }
+    
+    /**
+     * Get hill Y position at given X ratio and depth factor.
+     * Used by ground events to follow terrain contour.
+     * @param xRatio X position as ratio of extended width (0.0 to 1.0)
+     * @param depthFactor Depth layer to sample (matches hill depthFactor)
+     * @return Y position as ratio of screen height (0.0=top, 1.0=bottom)
+     */
+    fun getHillYAtPosition(xRatio: Float, depthFactor: Float): Float {
+        val currentHills = hills
+        if (currentHills.isEmpty()) return 0.85f  // Default ground level
+        
+        // Find the hill closest to the requested depth factor
+        var closestHill: HillData? = null
+        var closestDistance = Float.MAX_VALUE
+        
+        for (hill in currentHills) {
+            val distance = kotlin.math.abs(hill.depthFactor - depthFactor)
+            if (distance < closestDistance) {
+                closestDistance = distance
+                closestHill = hill
+            }
+        }
+        
+        return closestHill?.let { getHillY(xRatio, it) } ?: 0.85f
+    }
 
     override fun resize(w: Float, h: Float) {
         width = w

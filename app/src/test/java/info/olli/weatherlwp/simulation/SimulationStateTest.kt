@@ -294,7 +294,7 @@ class SimulationStateTest {
     fun `default state has shadows enabled`() {
         val state = SimulationState.default()
         assertTrue(state.shadowsEnabled)
-        assertTrue(state.cloudShadowsEnabled)
+        assertFalse(state.cloudShadowsEnabled)  // Cloud shadows disabled by default
         assertEquals(0.5f, state.shadowStrength, 0.01f)
     }
 }

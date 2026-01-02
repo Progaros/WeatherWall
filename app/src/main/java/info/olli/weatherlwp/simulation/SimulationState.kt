@@ -46,7 +46,7 @@ data class SimulationState(
     // Shadows & Lighting
     val shadowsEnabled: Boolean = true,      // Global shadow toggle
     val shadowStrength: Float = 0.5f,        // 0-1 shadow intensity from settings
-    val cloudShadowsEnabled: Boolean = true, // Cloud shadows on terrain
+    val cloudShadowsEnabled: Boolean = false, // Cloud shadows on terrain
     
     // Screen
     val screenWidth: Float,

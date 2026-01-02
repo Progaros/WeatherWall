@@ -18,6 +18,14 @@ enum class EventLayer {
 }
 
 /**
+ * Function type for getting hill Y position at a given X ratio and depth factor.
+ * @param xRatio X position as ratio of extended width (0.0 to 1.0)
+ * @param depthFactor Depth layer to sample (0.0=background to 1.0=foreground)
+ * @return Y position as ratio of screen height (0.0=top, 1.0=bottom)
+ */
+typealias HillHeightProvider = (xRatio: Float, depthFactor: Float) -> Float
+
+/**
  * Base interface for random events.
  * 
  * Events are synchronized across preview and wallpaper by using absolute time
@@ -83,9 +91,11 @@ interface RandomEvent {
      * @param height Screen height
      * @param extendedOffset Offset to center content (subtract from X to convert extended coords to screen coords)
      * @param absoluteTimeMs Current absolute time in milliseconds (use for elapsed time calculation)
+     * @param hillHeightProvider Optional function to get hill Y at given X and depth (for ground events)
      */
     fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint, 
              parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
              timeSeconds: Float, ambientColor: Int, extendedOffset: Float = 0f,
-             absoluteTimeMs: Long = System.currentTimeMillis())
+             absoluteTimeMs: Long = System.currentTimeMillis(),
+             hillHeightProvider: HillHeightProvider? = null)
 }

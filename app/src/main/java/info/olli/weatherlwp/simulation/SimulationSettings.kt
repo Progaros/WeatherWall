@@ -48,7 +48,7 @@ class SimulationSettings(context: Context) {
         private set
     var shadowStrength: Float = 0.5f
         private set
-    var cloudShadowsEnabled: Boolean = true
+    var cloudShadowsEnabled: Boolean = false
         private set
     
     // Moon phase (for simulation mode)
@@ -116,7 +116,7 @@ class SimulationSettings(context: Context) {
         shadowsEnabled = prefs.getBoolean("pref_shadows_enabled", true)
         val shadowVal = prefs.getInt("pref_shadow_strength", 50)
         shadowStrength = shadowVal / 100f
-        cloudShadowsEnabled = prefs.getBoolean("pref_cloud_shadows", true)
+        cloudShadowsEnabled = prefs.getBoolean("pref_cloud_shadows", false)
         
         // Moon phase - only used in simulation mode (0-100 -> 0.0-1.0)
         val moonPhaseVal = prefs.getInt("pref_moon_phase", 50)

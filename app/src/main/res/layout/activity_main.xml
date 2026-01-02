@@ -56,12 +56,28 @@
                 android:elevation="8dp" />
         </FrameLayout>
 
-        <!-- Settings fragment container (fills remaining space) -->
-        <androidx.fragment.app.FragmentContainerView
-            android:id="@+id/settings_container"
+        <!-- ViewPager2 for tabbed settings (fills remaining space) -->
+        <androidx.viewpager2.widget.ViewPager2
+            android:id="@+id/view_pager"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1" />
+
+        <!-- Tab Layout at bottom -->
+        <com.google.android.material.tabs.TabLayout
+            android:id="@+id/tab_layout"
+            android:layout_width="match_parent"
+            android:layout_height="72dp"
+            android:minHeight="72dp"
+            android:background="?attr/colorPrimary"
+            app:tabTextColor="@android:color/white"
+            app:tabSelectedTextColor="@android:color/white"
+            app:tabIndicatorColor="@android:color/white"
+            app:tabMode="fixed"
+            app:tabGravity="fill"
+            app:tabMinWidth="0dp"
+            app:tabPaddingTop="16dp"
+            app:tabPaddingBottom="16dp" />
 
     </LinearLayout>
 

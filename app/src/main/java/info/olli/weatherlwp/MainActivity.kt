@@ -14,21 +14,27 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
-import androidx.preference.Preference
-import androidx.preference.PreferenceFragmentCompat
+import androidx.fragment.app.Fragment
 import androidx.preference.PreferenceManager
+import androidx.viewpager2.adapter.FragmentStateAdapter
+import androidx.viewpager2.widget.ViewPager2
 import info.olli.weatherlwp.rendering.ParallaxScene
 import info.olli.weatherlwp.wallpaper.WeatherWallpaper
 import info.olli.weatherlwp.weather.WeatherRepository
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+import com.google.android.material.tabs.TabLayout
+import com.google.android.material.tabs.TabLayoutMediator
 import info.olli.weatherlwp.parallax.ParallaxSensorManager
-import info.olli.weatherlwp.settings.RootSettingsFragment
+import info.olli.weatherlwp.settings.SceneSettingsFragment
+import info.olli.weatherlwp.settings.EffectsSettingsFragment
+import info.olli.weatherlwp.settings.EventsSettingsFragment
+import info.olli.weatherlwp.settings.SystemSettingsFragment
 import android.os.Handler
 import android.os.Looper
 import android.widget.FrameLayout
 
-class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceStartFragmentCallback {
+class MainActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "MainActivity"
         // Match wallpaper FPS (30) for consistent parallax preview
@@ -41,8 +47,6 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
         private const val PREVIEW_HEIGHT_DEFAULT_DP = 180
         private const val PREVIEW_HEIGHT_MAX_PERCENT = 0.90f  // Allow up to 90% of screen
         private const val SNAP_THRESHOLD_DP = 40  // Snap to default if within this range
-        
-        private const val TITLE_TAG = "settingsFragmentTitle"
     }
     
     private var previewScene: ParallaxScene? = null
@@ -71,9 +75,6 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
     
     // FAB for applying wallpaper
     private var fabApply: ExtendedFloatingActionButton? = null
-    
-    // Toolbar for navigation
-    private var toolbar: MaterialToolbar? = null
     
     // Preference change listener for live preview updates
     private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -111,7 +112,7 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
+        val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
         setSupportActionBar(toolbar)
         
         // Initialize density and screen dimensions for dp to px conversions
@@ -169,25 +170,21 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
             }
         })
 
-        // Setup root settings fragment if this is a fresh start
-        if (savedInstanceState == null) {
-            supportFragmentManager
-                .beginTransaction()
-                .replace(R.id.settings_container, RootSettingsFragment())
-                .commit()
-        } else {
-            // Restore toolbar title from saved state
-            title = savedInstanceState.getCharSequence(TITLE_TAG)
-        }
+        // Setup tabbed settings
+        val viewPager = findViewById<ViewPager2>(R.id.view_pager)
+        val tabLayout = findViewById<TabLayout>(R.id.tab_layout)
         
-        // Handle back stack changes to update toolbar
-        supportFragmentManager.addOnBackStackChangedListener {
-            if (supportFragmentManager.backStackEntryCount == 0) {
-                // Back to root - hide back button, show app title
-                supportActionBar?.setDisplayHomeAsUpEnabled(false)
-                setTitle(R.string.app_name)
+        viewPager.adapter = SettingsPagerAdapter(this)
+        
+        TabLayoutMediator(tabLayout, viewPager) { tab, position ->
+            tab.text = when (position) {
+                0 -> "Scene"
+                1 -> "Effects"
+                2 -> "Events"
+                3 -> "System"
+                else -> null
             }
-        }
+        }.attach()
         
         // Setup FAB for applying wallpaper
         fabApply = findViewById(R.id.fab_apply)
@@ -197,48 +194,21 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
         updateFabVisibility()
     }
     
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        // Save the current title
-        outState.putCharSequence(TITLE_TAG, title)
-    }
-    
     /**
-     * Handle navigation to sub-screen preferences.
-     * Called when a Preference with app:fragment attribute is clicked.
+     * Adapter for the ViewPager2 tabbed settings UI.
      */
-    override fun onPreferenceStartFragment(
-        caller: PreferenceFragmentCompat,
-        pref: Preference
-    ): Boolean {
-        // Instantiate the new Fragment
-        val args = pref.extras
-        val fragment = supportFragmentManager.fragmentFactory.instantiate(
-            classLoader,
-            pref.fragment ?: return false
-        ).apply {
-            arguments = args
-            setTargetFragment(caller, 0)
+    private inner class SettingsPagerAdapter(activity: AppCompatActivity) : FragmentStateAdapter(activity) {
+        override fun getItemCount(): Int = 4
+        
+        override fun createFragment(position: Int): Fragment {
+            return when (position) {
+                0 -> SceneSettingsFragment()
+                1 -> EffectsSettingsFragment()
+                2 -> EventsSettingsFragment()
+                3 -> SystemSettingsFragment()
+                else -> throw IllegalArgumentException("Invalid tab position: $position")
+            }
         }
-        
-        // Replace the existing Fragment with the new Fragment
-        supportFragmentManager.beginTransaction()
-            .replace(R.id.settings_container, fragment)
-            .addToBackStack(null)
-            .commit()
-        
-        // Update toolbar with the preference title
-        title = pref.title
-        supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        
-        return true
-    }
-    
-    override fun onSupportNavigateUp(): Boolean {
-        if (supportFragmentManager.popBackStackImmediate()) {
-            return true
-        }
-        return super.onSupportNavigateUp()
     }
     
     override fun onResume() {

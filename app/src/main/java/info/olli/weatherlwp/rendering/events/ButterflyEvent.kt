@@ -47,7 +47,8 @@ class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
-                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long) {
+                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
+                      hillHeightProvider: HillHeightProvider?) {
         // Butterflies: 0.4-0.6% of screen height
         val unit = height * 0.003f * sizeScale
         val size = unit * 4f  // About 1.2% max wingspan (24px on 2000px screen)
