@@ -60,9 +60,9 @@ class ParallaxScene(
     private var width = 0f
     private var height = 0f
     
-    // Settings - defaults match preference defaults
-    private var parallaxStrength = 2.5f  // (50/100)^2 * 10 = 2.5 (pref_parallax_strength=50)
-    private var parallaxMaxOffsetPx = 150f  // pref_parallax_max_offset=150
+    // Settings - defaults match pref_effects.xml
+    private var parallaxStrength = 2.5f  // (25/50)^2 * 10 = 2.5 (pref_parallax_strength=25)
+    private var parallaxMaxOffsetPx = 130f  // pref_parallax_max_offset=130
     private var weatherEnabled = true
     private var seasonalEnabled = true
     
@@ -266,37 +266,35 @@ class ParallaxScene(
                 }
             }
             
-            // Input sensitivity: slider 0-100 with QUADRATIC curve for dramatic response at max
-            // 0 = off, 50 = 2.5x (noticeable), 100 = 10x (extremely responsive)
-            // Quadratic: (val/100)^2 * 10 gives 0->0, 50->2.5, 100->10
-            val sensitivityVal = prefs.getInt("pref_parallax_strength", 50).coerceIn(0, 100)
-            val normalized = sensitivityVal / 100f
-            val rawStrength = normalized * normalized * 10f  // Quadratic: 50->2.5x, 100->10x
+            // Input sensitivity: slider 0-50 with QUADRATIC curve
+            // 0 = off, 25 = normal (2.5x), 50 = high (10x)
+            // Quadratic: (val/50)^2 * 10 gives 0->0, 25->2.5, 50->10
+            val sensitivityVal = prefs.getInt("pref_parallax_strength", 25).coerceIn(0, 50)
+            val normalized = sensitivityVal / 50f
+            val rawStrength = normalized * normalized * 10f  // Quadratic: 25->2.5x, 50->10x
             parallaxStrength = if (parallaxEnabled) rawStrength else 0f
             
-            // Max offset slider: 5..400 px (default 150)
-            // Higher max allows extremely dramatic parallax at max settings
-            parallaxMaxOffsetPx = (prefs.getInt("pref_parallax_max_offset", 150)).toFloat().coerceIn(5f, 400f)
+            // Max offset slider: 20..200 px (default 130)
+            parallaxMaxOffsetPx = (prefs.getInt("pref_parallax_max_offset", 130)).toFloat().coerceIn(20f, 200f)
             
             // Smoothing slider: map 1..100 -> 0.02f..0.40f (wider range)
             // 1 = nearly instant, 50 = moderate smoothing, 100 = floaty
             val smoothingVal = prefs.getInt("pref_parallax_smoothing", 30).coerceIn(1, 100)
             val smoothingFactor = 0.02f + (smoothingVal / 100f) * 0.38f
             
-            // Depth separation slider: map 0..100 -> 0f..4.0f (default 50 = 2x effect)
-            // At max (100), gives 4.0x depth separation for extreme 3D parallax
-            val depthVal = prefs.getInt("pref_parallax_depth", 50).coerceIn(0, 100)
+            // Depth separation slider: map 0..100 -> 0f..4.0f (default 33 = ~1.3x effect)
+            val depthVal = prefs.getInt("pref_parallax_depth", 33).coerceIn(0, 100)
             val depthSeparation = (depthVal / 100f) * 4.0f
             
-            // Perspective slider: map 0..100 -> 0f..1f
+            // Perspective slider: map 0..100 -> 0f..1f (default 100 = background moves)
             // 0 = foreground moves most (head tilts, window stays)
             // 100 = background moves most (window shifts, head stays)
-            val perspectiveVal = prefs.getInt("pref_parallax_perspective", 0).coerceIn(0, 100)
+            val perspectiveVal = prefs.getInt("pref_parallax_perspective", 100).coerceIn(0, 100)
             val perspective = perspectiveVal / 100f
             
-            // Return speed slider: map 1..100 -> 0f..1f
+            // Return speed slider: map 1..100 -> 0f..1f (default 10 = fast return)
             // 1 = instant return to center, 50 = medium, 100 = never return (stays offset)
-            val returnSpeedVal = prefs.getInt("pref_parallax_return_speed", 30).coerceIn(1, 100)
+            val returnSpeedVal = prefs.getInt("pref_parallax_return_speed", 10).coerceIn(1, 100)
             val returnSpeed = (returnSpeedVal - 1) / 99f  // 1->0, 100->1
             
             // Apply to parallax calculator

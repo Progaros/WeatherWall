@@ -41,27 +41,27 @@ class ParallaxCalculator {
     private var targetX = 0f
     private var targetY = 0f
     
-    // User-configurable settings - defaults match preference defaults
+    // User-configurable settings - defaults match pref_effects.xml
     // These are overwritten by loadPrefs() but provide sane defaults before settings load
-    var strength = 2.5f                 // Default: (50/100)^2 * 10 = 2.5 (pref_parallax_strength=50)
-    var maxOffsetPx = 150f              // Default: pref_parallax_max_offset=150
+    var strength = 2.5f                 // Default: (25/50)^2 * 10 = 2.5 (pref_parallax_strength=25)
+    var maxOffsetPx = 130f              // Default: pref_parallax_max_offset=130
     var smoothing = 0.134f              // Default: 0.02 + (30/100)*0.38 (pref_parallax_smoothing=30)
-    var depthSeparation = 2.0f          // Default: (50/100)*4.0 = 2.0 (pref_parallax_depth=50)
+    var depthSeparation = 1.32f         // Default: (33/100)*4.0 = 1.32 (pref_parallax_depth=33)
     
     /**
      * Return speed: how fast position drifts back to center when tilt is zero.
      * 0.0 = instant return, 0.5 = medium, 1.0 = never return (disabled)
      * Maps from pref setting: 1=instant (0.0), 50=medium (0.5), 100=slow (1.0)
      */
-    var returnSpeed = 0.3f
+    var returnSpeed = 0.09f             // Default: (10-1)/99 = 0.09 (pref_parallax_return_speed=10)
     
     /**
      * Parallax perspective: controls which layers move more.
-     * 0.0 = foreground moves most (head moves, window stays - current default)
-     * 1.0 = background moves most (window moves, head stays)
+     * 0.0 = foreground moves most (head moves, window stays)
+     * 1.0 = background moves most (window moves, head stays - default)
      * This keeps the 3D "through a window" effect but shifts which plane feels anchored.
      */
-    var perspective = 0.0f
+    var perspective = 1.0f              // Default: pref_parallax_perspective=100
     
     /**
      * Calculate movement multiplier for a given depth, accounting for perspective.

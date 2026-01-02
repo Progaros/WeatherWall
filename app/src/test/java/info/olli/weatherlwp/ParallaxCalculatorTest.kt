@@ -126,6 +126,7 @@ class ParallaxCalculatorTest {
         calculator.strength = 1.0f
         calculator.maxOffsetPx = 100f
         calculator.depthSeparation = 1.0f  // Max separation for clear test
+        calculator.perspective = 0f         // Foreground-heavy for predictable math
         
         calculator.updateFromSensor(1.0f, 0f)
         repeat(100) { calculator.update(16) }

@@ -199,13 +199,22 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             // Process shake detection from accelerometer
             if (event.sensor.type == Sensor.TYPE_ACCELEROMETER && shakeEnabled) {
                 detectShake(event.values)
+                // Only use accelerometer for parallax if it's the active sensor (fallback)
+                // Otherwise, return early to avoid jitter from raw accelerometer data
+                if (activeSensor?.type != Sensor.TYPE_ACCELEROMETER) {
+                    return
+                }
             }
 
             when (event.sensor.type) {
                 Sensor.TYPE_ROTATION_VECTOR, Sensor.TYPE_GAME_ROTATION_VECTOR -> {
                     handleRotationVector(event.values, displayRotation)
                 }
-                Sensor.TYPE_GRAVITY, Sensor.TYPE_ACCELEROMETER -> {
+                Sensor.TYPE_GRAVITY -> {
+                    handleGravityVector(event.values, displayRotation)
+                }
+                Sensor.TYPE_ACCELEROMETER -> {
+                    // Only reach here if accelerometer is the active sensor (line 201 check passed)
                     handleGravityVector(event.values, displayRotation)
                 }
             }
