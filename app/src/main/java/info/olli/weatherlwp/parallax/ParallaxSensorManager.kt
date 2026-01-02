@@ -136,10 +136,18 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     // Shake detection state
     private var shakeEnabled = true
     private var shakeThreshold = SHAKE_THRESHOLD_DEFAULT
+    private var linearAccelRegistered = false  // Track if LINEAR_ACCELERATION actually registered
+    private var lastLinearAccelEventTime = 0L  // Track last linear-accel event to detect "silent" sensor
     private var lastShakeTime = 0L
     private var shakeCount = 0
     private var shakeWindowStartTime = 0L
     private var lastShakeCountTime = 0L
+    
+    companion object LinearAccelTimeout {
+        // If no linear-accel event for this long, fall back to accelerometer
+        // 1000ms is safer than 500ms to avoid false fallback during power-saving modes
+        private const val LINEAR_ACCEL_TIMEOUT_MS = 1000L
+    }
 
     fun setListener(l: Listener) { listener = l }
     
@@ -187,20 +195,33 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     /**
      * Register shake detection sensors.
      * Call this when starting or when shake settings change at runtime.
+     * 
+     * Always registers accelerometer for robust fallback (handles "silent" linear-accel sensors).
+     * Preference is given to linear-accel events at runtime; accelerometer is used if no
+     * linear-accel events seen recently.
      */
     private fun registerShakeSensors() {
-        if (!shakeEnabled) return
+        if (!shakeEnabled) {
+            linearAccelRegistered = false
+            lastLinearAccelEventTime = 0L
+            return
+        }
         
-        val okLinear = if (linearAccelerationSensor != null) {
-            sensorManager.registerListener(this, linearAccelerationSensor, SensorManager.SENSOR_DELAY_GAME)
-        } else false
+        // Reset timing state
+        lastLinearAccelEventTime = 0L
         
+        // Try to register LINEAR_ACCELERATION (preferred - gravity already removed)
+        linearAccelRegistered = linearAccelerationSensor?.let {
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
+        } ?: false
+        
+        // ALWAYS register accelerometer for shake as robust fallback
+        // This handles devices where linear-accel exists but never delivers events
         val okAccel = if (accelerometer != null && accelerometer != activeSensor) {
             sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME)
         } else false
         
-        Log.d(TAG, "Shake sensors registered: linearAccel=$okLinear (available=${linearAccelerationSensor != null}), " +
-                   "accel=$okAccel (available=${accelerometer != null}, isActive=${accelerometer == activeSensor})")
+        Log.d(TAG, "Shake sensors registered: linearAccel=$linearAccelRegistered, accel=$okAccel")
     }
 
     fun start() {
@@ -258,6 +279,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         if (isStarted) {
             sensorManager.unregisterListener(this)
             isStarted = false
+            linearAccelRegistered = false  // Reset registration state
             Log.d(TAG, "Sensor stopped")
         }
     }
@@ -304,13 +326,24 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             
             // Process shake detection - prefer LINEAR_ACCELERATION (gravity removed)
             if (event.sensor.type == Sensor.TYPE_LINEAR_ACCELERATION && shakeEnabled) {
+                lastLinearAccelEventTime = System.currentTimeMillis()
                 detectShakeFromLinearAccel(event.values)
                 return  // LINEAR_ACCELERATION is only for shake, not parallax
             }
             
-            // Fallback: process shake from accelerometer if LINEAR_ACCELERATION unavailable
-            if (event.sensor.type == Sensor.TYPE_ACCELEROMETER && shakeEnabled && linearAccelerationSensor == null) {
-                detectShakeFromAccelerometer(event.values)
+            // Fallback: process shake from accelerometer if:
+            // 1. Linear-accel sensor was never registered, OR
+            // 2. Linear-accel registered but no events received recently ("silent" sensor)
+            if (event.sensor.type == Sensor.TYPE_ACCELEROMETER && shakeEnabled) {
+                val currentTime = System.currentTimeMillis()
+                val linearAccelActive = linearAccelRegistered && 
+                    (lastLinearAccelEventTime > 0) && 
+                    (currentTime - lastLinearAccelEventTime < LINEAR_ACCEL_TIMEOUT_MS)
+                
+                if (!linearAccelActive) {
+                    detectShakeFromAccelerometer(event.values)
+                }
+                
                 // Only use accelerometer for parallax if it's the active sensor (fallback)
                 if (activeSensor?.type != Sensor.TYPE_ACCELEROMETER) {
                     return
