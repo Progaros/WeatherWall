@@ -22,7 +22,7 @@ import info.olli.weatherlwp.rendering.ParallaxScene
 import info.olli.weatherlwp.wallpaper.WeatherWallpaper
 import info.olli.weatherlwp.weather.WeatherRepository
 import com.google.android.material.appbar.MaterialToolbar
-import com.google.android.material.floatingactionbutton.FloatingActionButton
+import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
 import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayoutMediator
 import info.olli.weatherlwp.parallax.ParallaxSensorManager
@@ -75,7 +75,7 @@ class MainActivity : AppCompatActivity() {
     private var lastPrefReloadTime = 0L
     
     // FAB for applying wallpaper
-    private var fabApply: FloatingActionButton? = null
+    private var fabApply: ExtendedFloatingActionButton? = null
     
     // Preference change listener for live preview updates
     private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->

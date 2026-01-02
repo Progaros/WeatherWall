@@ -172,13 +172,12 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     private fun handleGravityVector(values: FloatArray, displayRotation: Int) {
         var gx = values[0]
         var gy = values[1]
-        var gz = values[2]
+        val gz = values[2]
         
-        when (displayRotation) {
-            Surface.ROTATION_90 -> { val temp = gx; gx = gy; gy = -temp }
-            Surface.ROTATION_180 -> { gx = -gx; gy = -gy }
-            Surface.ROTATION_270 -> { val temp = gx; gx = -gy; gy = temp }
-        }
+        // NOTE: No display rotation remapping for gravity
+        // Gravity is world-space (always points down) - work in world coordinates directly
+        // This matches the world-space output from handleRotationVector's getOrientation()
+        // and prevents double transformation that causes axis inversions
         
         val norm = sqrt(gx * gx + gy * gy + gz * gz)
         if (norm < 0.1f) return

@@ -80,18 +80,19 @@
 
     </LinearLayout>
 
-    <!-- Floating Action Button to apply wallpaper - shown only when not applied -->
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
+    <!-- Extended FAB to apply wallpaper - shown only when not applied -->
+    <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
         android:id="@+id/fab_apply"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom|end"
-        android:layout_margin="16dp"
+        android:layout_gravity="bottom|center_horizontal"
         android:layout_marginBottom="72dp"
+        android:text="@string/use_wallpaper"
         android:contentDescription="@string/apply_wallpaper"
-        android:src="@android:drawable/ic_menu_set_as"
         android:visibility="gone"
-        app:fabSize="normal"
-        app:backgroundTint="?attr/colorPrimary" />
+        app:icon="@android:drawable/ic_menu_set_as"
+        app:backgroundTint="?attr/colorPrimary"
+        android:textColor="@android:color/white"
+        app:iconTint="@android:color/white" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
