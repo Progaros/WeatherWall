@@ -52,11 +52,12 @@ enum class CloudRenderMode {
 class CloudLayer(private val context: Context) : SceneLayer {
     
     // Paint for rendering to bitmap (with blur)
+    // PERFORMANCE: Reduced blur radius from 15 to 10 for faster rendering
     private val bitmapPaint = Paint().apply {
         color = Color.WHITE
         style = Paint.Style.FILL
         isAntiAlias = true
-        maskFilter = BlurMaskFilter(15f, BlurMaskFilter.Blur.NORMAL)
+        maskFilter = BlurMaskFilter(10f, BlurMaskFilter.Blur.NORMAL)
     }
     
     // Paint for drawing cached bitmaps to screen (no blur - already baked)
@@ -145,23 +146,24 @@ class CloudLayer(private val context: Context) : SceneLayer {
         const val FRONT_LAYER_DEPTH_MAX = 0.35f
         
         // Group size ranges - relative to minDim (min of width/height) for consistent sizing
-        // Using minDim prevents gigantic bitmaps on tall portrait screens
-        const val GROUP_WIDTH_MIN = 0.60f
-        const val GROUP_WIDTH_MAX = 1.20f
-        const val GROUP_HEIGHT_MIN = 0.20f
-        const val GROUP_HEIGHT_MAX = 0.40f
+        // REDUCED for performance: smaller bitmaps = faster drawing
+        const val GROUP_WIDTH_MIN = 0.40f
+        const val GROUP_WIDTH_MAX = 0.80f
+        const val GROUP_HEIGHT_MIN = 0.15f
+        const val GROUP_HEIGHT_MAX = 0.30f
         
         // Extra padding for blur effect to prevent edge cutoff (fraction of group size)
-        const val BLUR_PADDING = 0.25f  // Reduced from 0.3 to save memory
+        const val BLUR_PADDING = 0.20f  // Reduced from 0.25 for smaller bitmaps
         
         // Hard cap on bitmap dimensions to avoid GPU texture limits
-        const val MAX_BITMAP_DIMENSION = 1536
+        // REDUCED for performance: smaller max = less GPU work
+        const val MAX_BITMAP_DIMENSION = 800
         
-        // Max groups for performance (increased for better overcast coverage)
-        const val MAX_GROUPS = 40
+        // Max groups for performance (reduced for better frame rate)
+        const val MAX_GROUPS = 25
         
         // Maximum bitmap regenerations per frame to prevent spikes
-        const val MAX_REGENERATIONS_PER_FRAME = 3
+        const val MAX_REGENERATIONS_PER_FRAME = 2
     }
     
     init {
