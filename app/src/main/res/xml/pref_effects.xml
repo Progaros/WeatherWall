@@ -142,6 +142,31 @@
             app:showSeekBarValue="true"
             app:updatesContinuously="true"
             android:dependency="pref_parallax_enabled" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_parallax_invert_x"
+            android:title="Invert Horizontal"
+            android:summary="Reverse left/right parallax direction"
+            android:defaultValue="false"
+            android:dependency="pref_parallax_enabled" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_parallax_invert_y"
+            android:title="Invert Vertical"
+            android:summary="Reverse up/down parallax direction"
+            android:defaultValue="false"
+            android:dependency="pref_parallax_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_parallax_aspect_ratio"
+            android:title="H/V Ratio"
+            android:summary="Horizontal vs vertical movement (50=less H, 100=equal, 150=more H)"
+            android:defaultValue="100"
+            android:max="150"
+            app:min="50"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_parallax_enabled" />
     </PreferenceCategory>
 
     <!-- Cloud Settings -->

@@ -105,4 +105,97 @@ class ParallaxCalculatorTest {
         // Half-height should have half the offset (proportionally)
         assertEquals(offsetAtFullHeight * 0.5f, offsetAtHalfHeight, 5f)
     }
+    
+    @Test
+    fun testInvertX() {
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPx = 100f
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.invertX = false
+        
+        // Without inversion
+        calculator.updateFromSensor(1.0f, 0.0f)
+        repeat(100) { calculator.update(16) }
+        val xNormal = calculator.getOffsetX()
+        
+        // With inversion
+        val calculator2 = ParallaxCalculator()
+        calculator2.strength = 1.0f
+        calculator2.maxOffsetPx = 100f
+        calculator2.setCanvasSize(1080f, 1920f)
+        calculator2.invertX = true
+        
+        calculator2.updateFromSensor(1.0f, 0.0f)
+        repeat(100) { calculator2.update(16) }
+        val xInverted = calculator2.getOffsetX()
+        
+        // Inverted should be opposite sign
+        assert(xNormal > 0) { "Normal X should be positive: $xNormal" }
+        assert(xInverted < 0) { "Inverted X should be negative: $xInverted" }
+        assertEquals(xNormal, -xInverted, 1f)
+    }
+    
+    @Test
+    fun testInvertY() {
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPx = 100f
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.invertY = false
+        
+        // Without inversion
+        calculator.updateFromSensor(0.0f, 1.0f)
+        repeat(100) { calculator.update(16) }
+        val yNormal = calculator.getOffsetY()
+        
+        // With inversion
+        val calculator2 = ParallaxCalculator()
+        calculator2.strength = 1.0f
+        calculator2.maxOffsetPx = 100f
+        calculator2.setCanvasSize(1080f, 1920f)
+        calculator2.invertY = true
+        
+        calculator2.updateFromSensor(0.0f, 1.0f)
+        repeat(100) { calculator2.update(16) }
+        val yInverted = calculator2.getOffsetY()
+        
+        // Inverted should be opposite sign
+        assert(yNormal > 0) { "Normal Y should be positive: $yNormal" }
+        assert(yInverted < 0) { "Inverted Y should be negative: $yInverted" }
+        assertEquals(yNormal, -yInverted, 1f)
+    }
+    
+    @Test
+    fun testAspectRatioCompensation() {
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPx = 100f
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.aspectRatioCompensation = 1.0f  // 1:1 ratio
+        
+        // With 1:1 aspect ratio
+        calculator.updateFromSensor(1.0f, 1.0f)
+        repeat(100) { calculator.update(16) }
+        val xNormal = calculator.getOffsetX()
+        val yNormal = calculator.getOffsetY()
+        
+        // X and Y should have similar magnitudes at 1:1
+        assertEquals(kotlin.math.abs(xNormal), kotlin.math.abs(yNormal), 5f)
+        
+        // With 1.5x horizontal aspect ratio
+        val calculator2 = ParallaxCalculator()
+        calculator2.strength = 1.0f
+        calculator2.maxOffsetPx = 100f
+        calculator2.setCanvasSize(1080f, 1920f)
+        calculator2.aspectRatioCompensation = 1.5f  // 50% more horizontal
+        
+        calculator2.updateFromSensor(1.0f, 1.0f)
+        repeat(100) { calculator2.update(16) }
+        val xScaled = calculator2.getOffsetX()
+        val yScaled = calculator2.getOffsetY()
+        
+        // X should be ~1.5x of Y
+        assertEquals(kotlin.math.abs(yScaled) * 1.5f, kotlin.math.abs(xScaled), 5f)
+    }
 }

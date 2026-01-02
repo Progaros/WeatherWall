@@ -338,6 +338,15 @@ class ParallaxScene(
             val returnSpeedVal = prefs.getInt("pref_parallax_return_speed", 10).coerceIn(1, 100)
             val returnSpeed = (returnSpeedVal - 1) / 99f  // 1->0, 100->1
             
+            // Axis inversion settings (for correcting inverted movement direction)
+            val invertX = prefs.getBoolean("pref_parallax_invert_x", false)
+            val invertY = prefs.getBoolean("pref_parallax_invert_y", false)
+            
+            // Aspect ratio compensation: map 50..150 -> 0.5..1.5 (default 100 = 1:1 ratio)
+            // Adjusts horizontal movement relative to vertical for 1:1 pixel offset
+            val aspectRatioVal = prefs.getInt("pref_parallax_aspect_ratio", 100).coerceIn(50, 150)
+            val aspectRatioCompensation = aspectRatioVal / 100f
+            
             // Apply to parallax calculator
             parallaxCalculator.strength = parallaxStrength
             parallaxCalculator.maxOffsetPx = parallaxMaxOffsetPx
@@ -345,6 +354,9 @@ class ParallaxScene(
             parallaxCalculator.depthSeparation = depthSeparation
             parallaxCalculator.perspective = perspective
             parallaxCalculator.returnSpeed = returnSpeed
+            parallaxCalculator.invertX = invertX
+            parallaxCalculator.invertY = invertY
+            parallaxCalculator.aspectRatioCompensation = aspectRatioCompensation
             
             // Weather and seasonal toggles
             weatherEnabled = prefs.getBoolean("pref_weather_enabled", true)

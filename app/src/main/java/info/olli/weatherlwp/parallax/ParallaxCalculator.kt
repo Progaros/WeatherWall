@@ -48,6 +48,16 @@ class ParallaxCalculator {
     var smoothing = 0.134f              // Default: 0.02 + (30/100)*0.38 (pref_parallax_smoothing=30)
     var depthSeparation = 1.32f         // Default: (33/100)*4.0 = 1.32 (pref_parallax_depth=33)
     
+    // Axis inversion settings - for correcting inverted parallax directions
+    var invertX = false                 // Default: pref_parallax_invert_x=false
+    var invertY = false                 // Default: pref_parallax_invert_y=false
+    
+    // Aspect ratio compensation: adjusts horizontal movement relative to vertical
+    // 1.0 = same pixel movement for both axes (1:1 ratio)
+    // >1.0 = more horizontal movement, <1.0 = less horizontal movement
+    // Default 1.0 means horizontal and vertical have same pixel offset
+    var aspectRatioCompensation = 1.0f  // Default: pref_parallax_aspect_ratio=100 (100/100=1.0)
+    
     /**
      * Reference height for scaling parallax offset.
      * Parallax offset is scaled relative to this height, so smaller canvases
@@ -110,7 +120,10 @@ class ParallaxCalculator {
      * @param tiltY Current tilt in Y axis (-1 to 1, absolute position)
      */
     fun updateFromSensor(tiltX: Float, tiltY: Float) {
-        pendingTilt.set(TiltPair(tiltX, tiltY))
+        // Apply axis inversion if enabled
+        val adjustedX = if (invertX) -tiltX else tiltX
+        val adjustedY = if (invertY) -tiltY else tiltY
+        pendingTilt.set(TiltPair(adjustedX, adjustedY))
     }
     
     /**
@@ -130,11 +143,14 @@ class ParallaxCalculator {
         
         // Calculate target position from tilt
         // Tilt values are -1 to 1, map to pixel offset
-        targetX = tilt.x * effectiveMaxOffset * strength
+        // Apply aspect ratio compensation to X axis for 1:1 movement ratio
+        targetX = tilt.x * effectiveMaxOffset * strength * aspectRatioCompensation
         targetY = tilt.y * effectiveMaxOffset * strength
         
         // Clamp target to bounds (use scaled offset for consistent limits)
-        targetX = targetX.coerceIn(-effectiveMaxOffset, effectiveMaxOffset)
+        // X limit is also scaled by aspect ratio compensation
+        val xLimit = effectiveMaxOffset * aspectRatioCompensation
+        targetX = targetX.coerceIn(-xLimit, xLimit)
         targetY = targetY.coerceIn(-effectiveMaxOffset, effectiveMaxOffset)
         
         // Apply return-to-center when tilt is near zero
