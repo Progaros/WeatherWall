@@ -152,6 +152,7 @@ class SimulationController(private val context: Context) {
             mountainShadowsEnabled = settings.mountainShadowsEnabled,
             treeShadowsEnabled = settings.treeShadowsEnabled,
             shadowStrength = settings.shadowStrength,
+            nightShadeStrength = settings.nightShadeStrength,
             screenWidth = screenWidth,
             screenHeight = screenHeight,
             isDebugMode = settings.debugEnabled

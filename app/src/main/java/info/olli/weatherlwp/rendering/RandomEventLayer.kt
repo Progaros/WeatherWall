@@ -206,7 +206,8 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         if (currentEvents.isEmpty()) return
         
         val ambientColor = RenderConstants.getAmbientColor(
-            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk
+            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
+            state.nightShadeStrength
         )
         
         for (event in currentEvents) {
@@ -237,7 +238,8 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         if (currentEvents.isEmpty()) return
         
         val ambientColor = RenderConstants.getAmbientColor(
-            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk
+            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
+            state.nightShadeStrength
         )
         
         for (event in currentEvents) {
@@ -267,7 +269,8 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         if (currentEvents.isEmpty()) return emptyList()
         
         val ambientColor = RenderConstants.getAmbientColor(
-            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk
+            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
+            state.nightShadeStrength
         )
         
         val result = mutableListOf<Pair<Float, () -> Unit>>()
@@ -307,7 +310,8 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         if (currentEvents.isEmpty()) return
         
         val ambientColor = RenderConstants.getAmbientColor(
-            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk
+            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
+            state.nightShadeStrength
         )
         
         for (event in currentEvents) {
@@ -331,7 +335,8 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         if (currentEvents.isEmpty()) return
         
         val ambientColor = RenderConstants.getAmbientColor(
-            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk
+            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
+            state.nightShadeStrength
         )
         
         for (event in currentEvents) {

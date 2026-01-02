@@ -65,6 +65,12 @@ class PreferenceSyncTest {
                 defaultValue = "30",
                 min = 1,
                 max = 100
+            ),
+            SyncedPreference(
+                key = "pref_night_shade_strength",
+                defaultValue = "35",
+                min = 0,
+                max = 100
             )
         )
     }

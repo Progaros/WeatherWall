@@ -47,6 +47,7 @@ data class SimulationState(
     val mountainShadowsEnabled: Boolean = true,  // Mountain side shading
     val treeShadowsEnabled: Boolean = true,      // Tree shadows on ground
     val shadowStrength: Float = 0.5f,            // 0-1 shadow intensity from settings
+    val nightShadeStrength: Float = 0f,          // 0-1 night darkening (0=bright, 0.35=default, 1=very dark)
     
     // Legacy computed property for backward compatibility
     val shadowsEnabled: Boolean = mountainShadowsEnabled || treeShadowsEnabled,

@@ -488,6 +488,16 @@
             android:summary="Change sky colors based on real time"
             android:defaultValue="true" />
 
+        <SeekBarPreference
+            android:key="pref_night_shade_strength"
+            android:title="Night Shade Strength"
+            android:summary="How dark nights appear (0=bright, 35=default, 100=very dark)"
+            android:defaultValue="35"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
         <ListPreference
             android:key="pref_max_fps"
             android:title="Max FPS"

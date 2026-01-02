@@ -576,7 +576,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         // Get ambient color for current time of day (global tint system)
         val ambientColor = RenderConstants.getAmbientColor(
-            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk
+            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
+            state.nightShadeStrength
         )
         
         // Draw Hills AND their Trees together, sorted by depth

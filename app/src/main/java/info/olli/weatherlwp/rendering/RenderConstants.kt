@@ -1,6 +1,7 @@
 package info.olli.weatherlwp.rendering
 
 import android.graphics.Color
+import info.olli.weatherlwp.util.ColorMath
 
 /**
  * Centralized constants for rendering layers.
@@ -351,12 +352,24 @@ object RenderConstants {
      * Get the ambient color for a given time of day.
      */
     @Suppress("UNUSED_PARAMETER")
-    fun getAmbientColor(timeOfDayHours: Float, isNight: Boolean, isDawn: Boolean, isDusk: Boolean): Int {
-        return when {
+    fun getAmbientColor(
+        timeOfDayHours: Float,
+        isNight: Boolean,
+        isDawn: Boolean,
+        isDusk: Boolean,
+        nightShadeStrength: Float = 0f
+    ): Int {
+        val base = when {
             isNight -> AMBIENT_NIGHT
             isDawn -> AMBIENT_DAWN
             isDusk -> AMBIENT_DUSK
             else -> AMBIENT_DAY
+        }
+
+        return if (isNight && nightShadeStrength > 0f) {
+            ColorMath.shadeRgb(base, nightShadeStrength)
+        } else {
+            base
         }
     }
     

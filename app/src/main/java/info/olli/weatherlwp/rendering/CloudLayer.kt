@@ -16,6 +16,9 @@ import android.os.Build
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationState
+import info.olli.weatherlwp.util.ColorMath
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.random.Random
 
 /**
@@ -96,6 +99,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
         
         // Current X position (accumulated via delta time, wraps 0-1)
         @Volatile var currentX: Float = initialX
+        
+        // Flag to prevent duplicate background render requests
+        val isRendering = AtomicBoolean(false)
     }
     
     // Thread-safe cloud group list
@@ -125,6 +131,11 @@ class CloudLayer(private val context: Context) : SceneLayer {
     private val shaderPaint = Paint().apply { isAntiAlias = true }
     private var cloudsEnabled = true
     private var randomSeed = 42
+    
+    // Background executor for async bitmap rendering (prevents frame stutters)
+    private val bitmapExecutor = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "CloudBitmapRenderer").apply { isDaemon = true }
+    }
     
     // Configuration constants
     companion object {
@@ -161,9 +172,6 @@ class CloudLayer(private val context: Context) : SceneLayer {
         
         // Max groups for overcast conditions (increased to support full sky coverage)
         const val MAX_GROUPS = 50
-        
-        // Maximum bitmap regenerations per frame to prevent spikes
-        const val MAX_REGENERATIONS_PER_FRAME = 2
     }
     
     init {
@@ -429,6 +437,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
     /**
      * Cached bitmap mode - draws pre-rendered cloud bitmaps directly.
      * Each cloud group has its own cached bitmap with blur baked in.
+     * 
+     * PERFORMANCE: Bitmaps are rendered asynchronously in background thread
+     * to prevent frame stutters during allocation/blur operations.
      */
     private fun drawCachedMode(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         // Cloud count comes directly from weather/simulation data
@@ -452,7 +463,6 @@ class CloudLayer(private val context: Context) : SceneLayer {
         drawPaint.colorFilter = PorterDuffColorFilter(currentCloudColor, PorterDuff.Mode.MULTIPLY)
         
         // Draw all groups directly (back layer first, then front)
-        var regenerationsThisFrame = 0
         for (isBack in listOf(true, false)) {
             for (group in currentGroups) {
                 if (group.isBackLayer != isBack) continue
@@ -475,14 +485,22 @@ class CloudLayer(private val context: Context) : SceneLayer {
                 val paddedWidth = groupWidthPx + paddingX * 2
                 val paddedHeight = groupHeightPx + paddingY * 2
                 
-                // Ensure bitmap is rendered - limit regenerations per frame
+                // Queue async bitmap render if not ready and not already rendering
                 if (group.cachedBitmap == null) {
-                    if (regenerationsThisFrame < MAX_REGENERATIONS_PER_FRAME) {
-                        renderGroupToBitmap(group, groupWidthPx, groupHeightPx)
-                        regenerationsThisFrame++
-                    } else {
-                        continue
+                    if (group.isRendering.compareAndSet(false, true)) {
+                        // Capture values for background thread
+                        val w = groupWidthPx
+                        val h = groupHeightPx
+                        bitmapExecutor.execute {
+                            try {
+                                renderGroupToBitmap(group, w, h)
+                            } finally {
+                                group.isRendering.set(false)
+                            }
+                        }
                     }
+                    // Skip drawing this group until bitmap is ready
+                    continue
                 }
                 
                 group.cachedBitmap?.let { bitmap ->
@@ -665,6 +683,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
     /**
      * AGSL RuntimeShader mode - GPU procedural clouds (Android 13+).
      * Falls back to tiled mode on older devices.
+     * 
+     * Note: Requires hardware canvas (lockHardwareCanvas) for RuntimeShader to work.
+     * WeatherWallpaper.kt already uses lockHardwareCanvas with fallback.
      */
     private fun drawShaderMode(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         // Fall back to tiled mode on older Android versions
@@ -686,37 +707,39 @@ class CloudLayer(private val context: Context) : SceneLayer {
             return
         }
         
-        // Set shader uniforms
+        // Set shader uniforms - use 'i' prefix matching shader code
         val coverage = (state.getCloudCount() / 50f).coerceIn(0f, 1f)
         
-        // Use tiledOffsetX (updated in update() with consistent wind speed) for animation
-        shader.setFloatUniform("resolution", width, height)
-        shader.setFloatUniform("time", tiledOffsetX * 0.01f)  // Scale down for shader animation
-        shader.setFloatUniform("coverage", coverage)
-        shader.setFloatUniform("cloudColor", 
-            Color.red(currentCloudColor) / 255f,
-            Color.green(currentCloudColor) / 255f,
-            Color.blue(currentCloudColor) / 255f
-        )
+        // Resolution matches the drawn rect size (full screen for shader mode)
+        shader.setFloatUniform("iResolution", width, height)
+        shader.setFloatUniform("iTime", tiledOffsetX * 0.01f)  // Scale down for shader animation
+        shader.setFloatUniform("iCoverage", coverage)
+        // Use setColorUniform for layout(color) uniform
+        shader.setColorUniform("iCloudColor", currentCloudColor)
         
         shaderPaint.shader = shader
-        canvas.drawRect(0f, 0f, width, height * 0.6f, shaderPaint)
+        // Draw full screen - shader handles fading at edges
+        canvas.drawRect(0f, 0f, width, height, shaderPaint)
         shaderPaint.shader = null
     }
     
     /**
      * Create AGSL RuntimeShader for procedural clouds.
+     * 
+     * Uses layout(color) uniform for proper Android color handling and
+     * carefully tuned coverage→threshold mapping to avoid solid-white saturation.
      */
     private fun createAgslShader() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         
         // AGSL shader for procedural cloud rendering
         // Uses FBM noise to create fluffy cloud patterns
+        // Note: layout(color) is the Android-recommended way to pass colors
         val agslCode = """
-            uniform float2 resolution;
-            uniform float time;
-            uniform float coverage;
-            uniform float3 cloudColor;
+            uniform float2 iResolution;
+            uniform float iTime;
+            uniform float iCoverage;
+            layout(color) uniform half4 iCloudColor;
             
             // Hash function for pseudo-random noise
             float hash(float2 p) {
@@ -746,7 +769,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
                 float value = 0.0;
                 float amplitude = 0.5;
                 float frequency = 1.0;
-                for (int i = 0; i < 5; i++) {
+                for (int k = 0; k < 5; k++) {
                     value += amplitude * noise(p * frequency);
                     frequency *= 2.0;
                     amplitude *= 0.5;
@@ -755,35 +778,30 @@ class CloudLayer(private val context: Context) : SceneLayer {
             }
             
             half4 main(float2 fragCoord) {
-                float2 uv = fragCoord / resolution;
-                
-                // Only render in top portion of screen (clouds)
-                if (uv.y > 0.55) {
-                    return half4(0.0);
-                }
+                float2 uv = fragCoord / iResolution;
                 
                 // Animate with time (wind effect)
-                float2 offset = float2(time * 0.02, time * 0.005);
+                float2 offset = float2(iTime * 0.02, iTime * 0.006);
                 
                 // Multi-layer noise for fluffy cloud appearance
                 float n1 = fbm(uv * 4.0 + offset);
                 float n2 = fbm(uv * 8.0 + offset * 1.5);
                 float n = n1 * 0.7 + n2 * 0.3;
                 
-                // Coverage affects how much of the noise becomes cloud
-                // Lower threshold = more cloud coverage
-                float threshold = 0.6 - coverage * 0.4;
-                float cloud = smoothstep(threshold, threshold + 0.25, n);
+                // Coverage affects threshold - TUNED to avoid saturation at overcast
+                // At coverage=0: threshold=0.62, at coverage=1: threshold=0.32
+                // Narrower smoothstep band (0.18) prevents flood-fill
+                float threshold = 0.62 - iCoverage * 0.30;
+                float cloud = smoothstep(threshold, threshold + 0.18, n);
                 
-                // Edge fade for natural cloud bottom
-                float bottomFade = 1.0 - smoothstep(0.35, 0.55, uv.y);
-                float topFade = smoothstep(0.0, 0.08, uv.y);
-                cloud *= bottomFade * topFade;
+                // Edge fades for natural cloud layer appearance
+                float topFade = smoothstep(0.00, 0.10, uv.y);
+                float bottomFade = 1.0 - smoothstep(0.70, 0.95, uv.y);
+                cloud *= topFade * bottomFade;
                 
-                // Add some variation for fluffier appearance
-                cloud *= 0.6 + 0.4 * n;
-                
-                return half4(cloudColor.r, cloudColor.g, cloudColor.b, cloud * 0.8);
+                // Keep alpha < 1 to maintain translucency, avoid solid fill
+                float a = cloud * 0.75;
+                return half4(iCloudColor.rgb * half(a), half(a));
             }
         """.trimIndent()
         
@@ -797,7 +815,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
     
     private fun calculateCloudColor(state: SimulationState): Int {
         val hour = state.timeOfDayHours
-        return when {
+        val baseColor = when {
             state.isNight -> Color.rgb(150, 155, 180)
             state.isDawn -> {
                 val t = (hour - 5f).coerceIn(0f, 2f) / 2f
@@ -808,6 +826,13 @@ class CloudLayer(private val context: Context) : SceneLayer {
                 RenderConstants.lerpColor(Color.rgb(255, 220, 200), Color.rgb(200, 170, 190), t)
             }
             else -> Color.rgb(250, 250, 255)
+        }
+        
+        // Apply night shade darkening
+        return if (state.isNight && state.nightShadeStrength > 0f) {
+            ColorMath.shadeRgb(baseColor, state.nightShadeStrength)
+        } else {
+            baseColor
         }
     }
     
@@ -884,6 +909,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
     }
 
     override fun destroy() {
+        // Shutdown background bitmap renderer
+        bitmapExecutor.shutdownNow()
+        
         // Cleanup cached cloud group bitmaps to prevent memory leaks
         for (group in cloudGroups) {
             group.cachedBitmap?.recycle()

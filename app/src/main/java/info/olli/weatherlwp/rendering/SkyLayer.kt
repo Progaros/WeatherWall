@@ -11,6 +11,7 @@ import android.graphics.Shader
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationState
+import info.olli.weatherlwp.util.ColorMath
 import kotlin.math.abs
 import kotlin.math.sin
 import kotlin.random.Random
@@ -75,6 +76,9 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
     private var skyMid = Color.CYAN
     private var skyHorizon = Color.WHITE
     
+    // Night shade strength for darker nights
+    private var nightShadeStrength = 0f
+    
     // Settings
     private var sunEnabled = true
     private var moonEnabled = true
@@ -108,10 +112,15 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
     }
 
     override fun update(state: SimulationState, deltaTimeMs: Long) {
-        updateColorsForTime(state)
+        // Track night shade strength for darker nights
+        val newShadeStrength = if (state.isNight) state.nightShadeStrength else 0f
+        val shadeChanged = newShadeStrength != nightShadeStrength
+        nightShadeStrength = newShadeStrength
+        
+        updateColorsForTime(state, shadeChanged)
     }
     
-    private fun updateColorsForTime(state: SimulationState) {
+    private fun updateColorsForTime(state: SimulationState, forceUpdate: Boolean = false) {
         // Use smoothed time for eased color transitions
         val hour = state.smoothedTimeOfDayHours
         
@@ -163,10 +172,21 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
             else -> Triple(RenderConstants.SKY_NIGHT_TOP, RenderConstants.SKY_NIGHT_MID, RenderConstants.SKY_NIGHT_BOTTOM)
         }
         
-        if (newTop != skyTop || newMid != skyMid || newHorizon != skyHorizon) {
-            skyTop = newTop
-            skyMid = newMid
-            skyHorizon = newHorizon
+        // Apply night shade darkening if at night
+        val (shadedTop, shadedMid, shadedHorizon) = if (nightShadeStrength > 0f) {
+            Triple(
+                ColorMath.shadeRgb(newTop, nightShadeStrength),
+                ColorMath.shadeRgb(newMid, nightShadeStrength),
+                ColorMath.shadeRgb(newHorizon, nightShadeStrength)
+            )
+        } else {
+            Triple(newTop, newMid, newHorizon)
+        }
+        
+        if (forceUpdate || shadedTop != skyTop || shadedMid != skyMid || shadedHorizon != skyHorizon) {
+            skyTop = shadedTop
+            skyMid = shadedMid
+            skyHorizon = shadedHorizon
             updateGradient()
         }
     }

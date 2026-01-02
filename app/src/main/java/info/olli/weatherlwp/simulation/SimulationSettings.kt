@@ -51,6 +51,10 @@ class SimulationSettings(context: Context) {
     var shadowStrength: Float = 0.5f
         private set
     
+    // Night shade strength (0-1: 0=bright, 0.35=default, 1=very dark)
+    var nightShadeStrength: Float = 0.35f
+        private set
+    
     // Legacy - kept for compatibility but mapped to both settings
     val shadowsEnabled: Boolean
         get() = mountainShadowsEnabled || treeShadowsEnabled
@@ -121,6 +125,10 @@ class SimulationSettings(context: Context) {
         treeShadowsEnabled = prefs.getBoolean("pref_tree_shadows_enabled", true)
         val shadowVal = prefs.getInt("pref_shadow_strength", 50)
         shadowStrength = shadowVal / 100f
+        
+        // Night shade strength (0-100 -> 0.0-1.0, default 35 = 0.35)
+        val nightShadeVal = prefs.getInt("pref_night_shade_strength", 35)
+        nightShadeStrength = nightShadeVal / 100f
         
         // Moon phase - only used in simulation mode (0-100 -> 0.0-1.0)
         val moonPhaseVal = prefs.getInt("pref_moon_phase", 50)

@@ -176,7 +176,8 @@ class MountainLayer(private val context: Context) : SceneLayer {
         
         // Get ambient color for atmospheric blending
         val ambientColor = RenderConstants.getAmbientColor(
-            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk
+            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
+            state.nightShadeStrength
         )
         
         for (mountain in currentMountains) {
