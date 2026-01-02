@@ -155,9 +155,9 @@
         <SeekBarPreference
             android:key="pref_firework_amount"
             android:title="Firework Amount"
-            android:summary="Particles per explosion (10=subtle, 100=spectacular)"
-            android:defaultValue="50"
-            android:max="100"
+            android:summary="Particles per explosion (10=subtle, 200=spectacular)"
+            android:defaultValue="100"
+            android:max="200"
             app:min="10"
             app:showSeekBarValue="true"
             app:updatesContinuously="true"

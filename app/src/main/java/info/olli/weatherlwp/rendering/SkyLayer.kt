@@ -209,9 +209,10 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
             }
         }
         
-        // Sun and Moon with subtle parallax (half of sky depth for subtle effect)
-        val celestialPx = skyPx * 0.5f
-        val celestialPy = skyPy * 0.5f
+        // Sun and Moon: celestial bodies at "infinite" distance, should match sky parallax
+        // Using the same depth as sky (PARALLAX_SKY = 0.05f) keeps them fixed relative to sky
+        val celestialPx = skyPx
+        val celestialPy = skyPy
         
         if (sunEnabled) {
             drawSun(canvas, state, celestialPx, celestialPy)

@@ -7,6 +7,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
 import android.graphics.RectF
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.parallax.ParallaxCalculator
@@ -83,8 +84,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
     // Thread-safe cloud group list
     @Volatile private var cloudGroups: List<CloudGroup> = emptyList()
     
-    // Cached cloud color for bitmap regeneration
-    @Volatile private var cachedCloudColor: Int = Color.WHITE
+    // Current cloud tint color (applied at draw time, no bitmap regeneration needed)
+    @Volatile private var currentCloudColor: Int = Color.WHITE
     
     private var cloudCount = 10
     private var cloudStretch = 2.0f
@@ -212,8 +213,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
      * 
      * Includes edge fadeout and extra padding for blur to prevent cutoff.
      * fluffinessMultiplier controls how many puffs make up each cloud (more puffs = denser/fluffier).
+     * Clouds are rendered as WHITE - color tint applied at draw time for performance.
      */
-    private fun renderGroupToBitmap(group: CloudGroup, bitmapWidth: Int, bitmapHeight: Int, color: Int) {
+    private fun renderGroupToBitmap(group: CloudGroup, bitmapWidth: Int, bitmapHeight: Int) {
         // Add padding for blur effect to prevent edge cutoff
         val paddingX = (bitmapWidth * BLUR_PADDING).toInt()
         val paddingY = (bitmapHeight * BLUR_PADDING).toInt()
@@ -237,7 +239,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val canvas = Canvas(bitmap)
         canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
         
-        bitmapPaint.color = color
+        // Render as white - color tint applied at draw time via PorterDuffColorFilter
+        // This eliminates expensive bitmap regeneration during dawn/dusk color transitions
+        bitmapPaint.color = Color.WHITE
         bitmapPaint.alpha = group.alpha
         
         val random = Random(group.seed)
@@ -385,19 +389,11 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val currentGroups = cloudGroups
         if (currentGroups.isEmpty()) return
         
-        // Calculate cloud color for this frame
-        val cloudColor = calculateCloudColor(state)
-        
-        // Regenerate bitmaps only if color changed significantly (not on small interpolation steps)
-        // This prevents expensive bitmap recreation during dawn/dusk color transitions
-        val colorChanged = !colorsAreSimilar(cloudColor, cachedCloudColor, threshold = 15)
-        if (colorChanged) {
-            cachedCloudColor = cloudColor
-            for (group in currentGroups) {
-                group.cachedBitmap?.recycle()
-                group.cachedBitmap = null
-            }
-        }
+        // Calculate cloud color for this frame and apply as tint filter
+        // PERFORMANCE: Clouds are cached as white bitmaps, color applied at draw time
+        // This eliminates expensive bitmap regeneration during dawn/dusk transitions
+        currentCloudColor = calculateCloudColor(state)
+        drawPaint.colorFilter = PorterDuffColorFilter(currentCloudColor, PorterDuff.Mode.MULTIPLY)
         
         // Draw back layer first, then front layer
         var regenerationsThisFrame = 0
@@ -432,7 +428,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
                 // Ensure bitmap is rendered - but limit regenerations per frame
                 if (group.cachedBitmap == null) {
                     if (regenerationsThisFrame < MAX_REGENERATIONS_PER_FRAME) {
-                        renderGroupToBitmap(group, groupWidthPx, groupHeightPx, cloudColor)
+                        renderGroupToBitmap(group, groupWidthPx, groupHeightPx)
                         regenerationsThisFrame++
                     } else {
                         // Skip this cloud this frame, will be rendered next frame
@@ -467,23 +463,6 @@ class CloudLayer(private val context: Context) : SceneLayer {
             }
             else -> Color.rgb(250, 250, 255)
         }
-    }
-    
-    /**
-     * Check if two colors are similar within a threshold.
-     * Used to avoid expensive bitmap regeneration on small color changes.
-     */
-    private fun colorsAreSimilar(color1: Int, color2: Int, threshold: Int): Boolean {
-        val r1 = Color.red(color1)
-        val g1 = Color.green(color1)
-        val b1 = Color.blue(color1)
-        val r2 = Color.red(color2)
-        val g2 = Color.green(color2)
-        val b2 = Color.blue(color2)
-        
-        return kotlin.math.abs(r1 - r2) <= threshold &&
-               kotlin.math.abs(g1 - g2) <= threshold &&
-               kotlin.math.abs(b1 - b2) <= threshold
     }
     
     // Expose for testing

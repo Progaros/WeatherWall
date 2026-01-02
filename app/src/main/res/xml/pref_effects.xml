@@ -72,7 +72,7 @@
             android:key="pref_parallax_strength"
             android:title="Tilt Sensitivity"
             android:summary="Response to phone tilt (0=off, 25=normal, 50=high)"
-            android:defaultValue="10"
+            android:defaultValue="25"
             android:max="50"
             app:min="0"
             app:showSeekBarValue="true"
@@ -83,7 +83,7 @@
             android:key="pref_parallax_max_offset"
             android:title="Max Movement"
             android:summary="How far scene can shift (pixels)"
-            android:defaultValue="100"
+            android:defaultValue="130"
             android:max="200"
             app:min="20"
             app:showSeekBarValue="true"
@@ -94,7 +94,7 @@
             android:key="pref_parallax_return_speed"
             android:title="Return Speed"
             android:summary="Recenter time (1=instant, 50=medium, 100=slow)"
-            android:defaultValue="30"
+            android:defaultValue="10"
             android:max="100"
             app:min="1"
             app:showSeekBarValue="true"
@@ -127,7 +127,7 @@
             android:key="pref_parallax_perspective"
             android:title="Perspective"
             android:summary="0=foreground moves (head tilts), 100=background moves (window shifts)"
-            android:defaultValue="0"
+            android:defaultValue="100"
             android:max="100"
             app:min="0"
             app:showSeekBarValue="true"
@@ -217,14 +217,7 @@
 
     <!-- Seasonal Terrain Effects -->
     <PreferenceCategory android:title="Seasonal Terrain">
-        <!-- Terrain Season Override -->
-        <ListPreference
-            android:key="pref_terrain_season"
-            android:title="Terrain Season"
-            android:summary="Override terrain season for flowers, grass color, snow"
-            android:entries="@array/terrain_season_options"
-            android:entryValues="@array/terrain_season_values"
-            android:defaultValue="auto" />
+        <!-- Note: Terrain Season Override is in Simulation Mode (System settings) -->
 
         <!-- Spring Flowers -->
         <SwitchPreferenceCompat

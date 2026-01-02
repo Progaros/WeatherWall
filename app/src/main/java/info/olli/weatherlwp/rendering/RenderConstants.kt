@@ -159,7 +159,7 @@ object RenderConstants {
     
     const val RAIN_PARTICLE_POOL_SIZE = 300
     const val SNOW_PARTICLE_POOL_SIZE = 200
-    const val FIREWORK_PARTICLE_POOL_SIZE = 100
+    const val FIREWORK_PARTICLE_POOL_SIZE = 200
     const val STAR_COUNT = 100
     
     // ============== Animation Speeds ==============

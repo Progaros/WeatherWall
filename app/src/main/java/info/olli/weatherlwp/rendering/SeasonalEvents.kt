@@ -142,7 +142,7 @@ class SeasonalEvents(private val context: Context? = null) {
     private var starSizeMultiplier = 1.0f
     private var trailLengthMultiplier = 1.0f
     private var fireworkFrequency = 50  // 0-100, default 50
-    private var fireworkAmount = 50     // 10-100, controls particles per explosion
+    private var fireworkAmount = 100    // 10-200, controls particles per explosion
     
     // Rainbow settings (St. Patrick's Day)
     private var rainbowPositionX = 50    // 0-100, horizontal position (50 = center)
@@ -167,7 +167,7 @@ class SeasonalEvents(private val context: Context? = null) {
             starSizeMultiplier = (it.getInt("pref_christmas_star_size", 100) / 100f).coerceIn(0.5f, 2.0f)
             trailLengthMultiplier = (it.getInt("pref_christmas_star_trail", 100) / 100f).coerceIn(0f, 2.0f)
             fireworkFrequency = it.getInt("pref_firework_frequency", 50).coerceIn(0, 100)
-            fireworkAmount = it.getInt("pref_firework_amount", 50).coerceIn(10, 100)
+            fireworkAmount = it.getInt("pref_firework_amount", 100).coerceIn(10, 200)
             
             // Rainbow settings
             rainbowPositionX = it.getInt("pref_rainbow_position_x", 50).coerceIn(0, 100)
@@ -614,10 +614,10 @@ class SeasonalEvents(private val context: Context? = null) {
         val colors = rocket.colors
         
         // Spawn explosion particles based on fireworkAmount setting
-        // At 10: 10-15 particles, at 50: 25-45 particles, at 100: 60-85 particles
+        // At 10: 10-15 particles, at 100: 55-85 particles, at 200: 105-165 particles
         var particleCount = 0
-        val baseParticles = (fireworkAmount * 0.5f + 5).toInt()  // 10→10, 50→30, 100→55
-        val varianceParticles = (fireworkAmount * 0.3f).toInt()   // 10→3, 50→15, 100→30
+        val baseParticles = (fireworkAmount * 0.5f + 5).toInt()  // 10→10, 100→55, 200→105
+        val varianceParticles = (fireworkAmount * 0.3f).toInt()   // 10→3, 100→30, 200→60
         val targetParticles = baseParticles + Random.nextInt(varianceParticles.coerceAtLeast(1))
         
         for (f in fireworks) {
@@ -658,6 +658,12 @@ class SeasonalEvents(private val context: Context? = null) {
     
     private var rainbowPhase = 0f
     
+    // Pre-allocated paint for rainbow bands (avoid allocation in render loop)
+    private val rainbowBandPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.BUTT
+    }
+    
     private fun renderStPatricksDay(canvas: Canvas) {
         rainbowPhase += 0.02f
         
@@ -667,83 +673,208 @@ class SeasonalEvents(private val context: Context? = null) {
         val sizeMultiplier = rainbowSize / 100f
         val arcRadius = screenWidth * 0.45f * sizeMultiplier
         
-        // Draw rainbow arc with gradient bands
+        // Full semi-circle: 180° to 360° (or equivalently 180° sweep starting at 180°)
+        val startAngle = 180f
+        val sweepAngle = 180f
+        
+        // Draw rainbow arc bands from outer (red) to inner (violet)
         for (i in rainbowColors.indices.reversed()) {
-            val bandWidth = arcRadius * 0.06f
+            val bandWidth = arcRadius * 0.055f
             val bandRadius = arcRadius - i * bandWidth
             
-            // Shimmer effect
-            val shimmer = (kotlin.math.sin(rainbowPhase + i * 0.5f) * 0.15f + 0.85f).toFloat()
+            // Shimmer effect - subtle pulsing
+            val shimmer = (kotlin.math.sin(rainbowPhase + i * 0.5f) * 0.1f + 0.9f).toFloat()
             
-            // Create paint for this band
-            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                style = Paint.Style.STROKE
-                strokeWidth = bandWidth
-                strokeCap = Paint.Cap.ROUND
-            }
+            // Base alpha for the center of the band
+            val centerAlpha = (90 * shimmer).toInt()
             
-            val baseAlpha = (100 * shimmer).toInt()  // Lower base alpha for subtle effect
-            paint.color = Color.argb(
-                baseAlpha,
-                Color.red(rainbowColors[i]),
-                Color.green(rainbowColors[i]),
-                Color.blue(rainbowColors[i])
+            // Create a sweep gradient that fades at the edges of the arc
+            // The gradient goes around the arc: transparent -> color -> color -> transparent
+            val bandColor = rainbowColors[i]
+            val transparentColor = Color.argb(0, Color.red(bandColor), Color.green(bandColor), Color.blue(bandColor))
+            val visibleColor = Color.argb(centerAlpha, Color.red(bandColor), Color.green(bandColor), Color.blue(bandColor))
+            
+            // SweepGradient with fade at edges (positions 0.0=3 o'clock, going counter-clockwise)
+            // For 180° arc starting at 180° (9 o'clock), we need fade at 180° and 360°
+            // Map: 0.0=0°, 0.25=90°, 0.5=180° (start), 0.75=270° (top), 1.0=360° (end)
+            val gradient = android.graphics.SweepGradient(
+                centerX, baseY,
+                intArrayOf(
+                    transparentColor,   // 0° (right) - not visible
+                    transparentColor,   // ~170° approaching start
+                    visibleColor,       // ~195° just after start - fade in
+                    visibleColor,       // ~270° top - full color
+                    visibleColor,       // ~345° approaching end - still full
+                    transparentColor,   // ~355° fade out
+                    transparentColor    // 360° end
+                ),
+                floatArrayOf(0f, 0.47f, 0.54f, 0.75f, 0.96f, 0.995f, 1f)
             )
             
-            // Only draw the upper portion of the arc (behind terrain)
-            // Draw arc from 200° to 340° (upper portion, skipping bottom)
+            rainbowBandPaint.strokeWidth = bandWidth
+            rainbowBandPaint.shader = gradient
+            
+            // Draw full semi-circle arc (180° sweep from 180°)
             canvas.drawArc(
                 centerX - bandRadius,
                 baseY - bandRadius,
                 centerX + bandRadius,
                 baseY + bandRadius,
-                200f, 140f, false, paint  // Draw upper arc only
+                startAngle, sweepAngle, false, rainbowBandPaint
             )
         }
         
-        // No sparkles - keep it subtle as a background element
+        // Clear shader to avoid affecting other drawing
+        rainbowBandPaint.shader = null
     }
     
     // ========== CHINESE NEW YEAR ==========
     
     private var dragonPhase = 0f
     private val dragonColors = intArrayOf(
-        Color.rgb(200, 30, 30),    // Red
-        Color.rgb(255, 200, 50)    // Gold
+        Color.rgb(200, 30, 30),    // Red (body)
+        Color.rgb(255, 200, 50),   // Gold (accents)
+        Color.rgb(255, 80, 30),    // Orange-red (scales)
+        Color.rgb(180, 20, 20)     // Dark red (outline)
     )
     
+    private val dragonPaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.FILL
+    }
+    
+    private val dragonOutlinePaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.STROKE
+        strokeWidth = 2f
+        color = dragonColors[3]
+    }
+    
     private fun renderChineseNewYear(canvas: Canvas) {
-        dragonPhase += 0.03f
+        dragonPhase += 0.025f
         
         // Render New Year fireworks as base
         renderNewYearFireworks(canvas)
         
-        // Add simple dragon silhouette moving across screen
-        val dragonX = (dragonPhase * 50f) % (screenWidth + 200f) - 100f
-        val dragonY = screenHeight * 0.2f + kotlin.math.sin(dragonPhase * 2f).toFloat() * 30f
+        // Draw a traditional Chinese paper dragon flying across the sky
+        // Dragon moves right-to-left, undulating up and down
+        val baseX = screenWidth + 150f - (dragonPhase * 40f) % (screenWidth + 400f)
+        val baseY = screenHeight * 0.18f
         
-        // Dragon body segments
-        val segmentCount = 8
-        val segmentSize = 15f
+        // Scale based on screen size for consistent look
+        val scale = (screenWidth / 1080f).coerceIn(0.6f, 1.5f)
+        val segmentRadius = 18f * scale
+        val segmentCount = 12
+        val segmentSpacing = segmentRadius * 1.6f
         
-        for (i in 0 until segmentCount) {
-            val segPhase = dragonPhase - i * 0.3f
-            val segX = dragonX - i * segmentSize * 1.2f
-            val segY = dragonY + kotlin.math.sin(segPhase * 3f).toFloat() * 15f
-            
-            // Alternate colors
-            starPaint.color = if (i % 2 == 0) dragonColors[0] else dragonColors[1]
-            canvas.drawCircle(segX, segY, segmentSize - i * 0.5f, starPaint)
+        // Pre-calculate segment positions for smooth body curve
+        val segmentPositions = Array(segmentCount) { i ->
+            val t = i.toFloat()
+            // Primary undulation wave
+            val wave1 = kotlin.math.sin((dragonPhase * 3f - t * 0.5f).toDouble()).toFloat() * 25f * scale
+            // Secondary faster ripple
+            val wave2 = kotlin.math.sin((dragonPhase * 5f - t * 0.8f).toDouble()).toFloat() * 8f * scale
+            val x = baseX - t * segmentSpacing
+            val y = baseY + wave1 + wave2
+            Pair(x, y)
         }
         
-        // Dragon head (larger)
-        starPaint.color = dragonColors[0]
-        canvas.drawCircle(dragonX, dragonY, segmentSize * 1.5f, starPaint)
+        // Draw body segments from tail to head (so head overlaps body)
+        for (i in (segmentCount - 1) downTo 1) {
+            val (x, y) = segmentPositions[i]
+            // Segment size tapers toward tail
+            val sizeFactor = 1f - (i.toFloat() / segmentCount) * 0.4f
+            val radius = segmentRadius * sizeFactor
+            
+            // Body: alternating red/orange-red with gold trim
+            dragonPaint.color = if (i % 2 == 0) dragonColors[0] else dragonColors[2]
+            canvas.drawCircle(x, y, radius, dragonPaint)
+            
+            // Gold scale accent on every other segment
+            if (i % 2 == 1) {
+                dragonPaint.color = dragonColors[1]
+                val scaleSize = radius * 0.5f
+                canvas.drawCircle(x, y - radius * 0.3f, scaleSize, dragonPaint)
+            }
+            
+            // Outline
+            canvas.drawCircle(x, y, radius, dragonOutlinePaint)
+        }
         
-        // Eyes
-        starPaint.color = Color.WHITE
-        canvas.drawCircle(dragonX + 5f, dragonY - 5f, 4f, starPaint)
-        starPaint.color = Color.BLACK
-        canvas.drawCircle(dragonX + 6f, dragonY - 5f, 2f, starPaint)
+        // Draw dragon head (first segment, larger and more detailed)
+        val (headX, headY) = segmentPositions[0]
+        val headRadius = segmentRadius * 1.8f
+        
+        // Head base (red)
+        dragonPaint.color = dragonColors[0]
+        canvas.drawCircle(headX, headY, headRadius, dragonPaint)
+        
+        // Snout/muzzle (elongated forward)
+        val snoutLength = headRadius * 1.2f
+        dragonPaint.color = dragonColors[0]
+        canvas.drawOval(
+            headX + headRadius * 0.3f, headY - headRadius * 0.4f,
+            headX + headRadius * 0.3f + snoutLength, headY + headRadius * 0.4f,
+            dragonPaint
+        )
+        
+        // Gold whiskers/mane
+        dragonPaint.color = dragonColors[1]
+        val whiskerLength = headRadius * 0.8f
+        for (angle in listOf(-30f, -60f, 30f, 60f)) {
+            val rad = Math.toRadians(angle.toDouble())
+            val wx = headX - headRadius * 0.3f
+            val wy = headY + kotlin.math.sin(rad).toFloat() * headRadius * 0.5f
+            val wxEnd = wx - whiskerLength
+            val wyEnd = wy + kotlin.math.sin(rad).toFloat() * whiskerLength * 0.5f
+            dragonOutlinePaint.color = dragonColors[1]
+            dragonOutlinePaint.strokeWidth = 3f * scale
+            canvas.drawLine(wx, wy, wxEnd, wyEnd, dragonOutlinePaint)
+        }
+        dragonOutlinePaint.color = dragonColors[3]
+        dragonOutlinePaint.strokeWidth = 2f
+        
+        // Eyes (white with black pupils, gold outline)
+        val eyeRadius = headRadius * 0.25f
+        val eyeOffsetX = headRadius * 0.4f
+        val eyeOffsetY = headRadius * 0.35f
+        
+        // Left eye
+        dragonPaint.color = Color.WHITE
+        canvas.drawCircle(headX + eyeOffsetX, headY - eyeOffsetY, eyeRadius, dragonPaint)
+        dragonPaint.color = Color.BLACK
+        canvas.drawCircle(headX + eyeOffsetX + eyeRadius * 0.2f, headY - eyeOffsetY, eyeRadius * 0.5f, dragonPaint)
+        dragonOutlinePaint.color = dragonColors[1]
+        canvas.drawCircle(headX + eyeOffsetX, headY - eyeOffsetY, eyeRadius, dragonOutlinePaint)
+        
+        // Right eye (slightly lower due to perspective)
+        dragonPaint.color = Color.WHITE
+        canvas.drawCircle(headX + eyeOffsetX, headY + eyeOffsetY * 0.3f, eyeRadius * 0.8f, dragonPaint)
+        dragonPaint.color = Color.BLACK
+        canvas.drawCircle(headX + eyeOffsetX + eyeRadius * 0.15f, headY + eyeOffsetY * 0.3f, eyeRadius * 0.4f, dragonPaint)
+        dragonOutlinePaint.color = dragonColors[1]
+        canvas.drawCircle(headX + eyeOffsetX, headY + eyeOffsetY * 0.3f, eyeRadius * 0.8f, dragonOutlinePaint)
+        
+        // Horns/antlers (gold)
+        dragonPaint.color = dragonColors[1]
+        val hornPath = Path()
+        // Left horn
+        hornPath.moveTo(headX - headRadius * 0.2f, headY - headRadius * 0.8f)
+        hornPath.lineTo(headX - headRadius * 0.5f, headY - headRadius * 1.6f)
+        hornPath.lineTo(headX, headY - headRadius * 0.9f)
+        hornPath.close()
+        canvas.drawPath(hornPath, dragonPaint)
+        
+        // Right horn  
+        hornPath.reset()
+        hornPath.moveTo(headX - headRadius * 0.2f, headY + headRadius * 0.2f)
+        hornPath.lineTo(headX - headRadius * 0.4f, headY + headRadius * 0.9f)
+        hornPath.lineTo(headX + headRadius * 0.1f, headY + headRadius * 0.3f)
+        hornPath.close()
+        canvas.drawPath(hornPath, dragonPaint)
+        
+        // Head outline
+        dragonOutlinePaint.color = dragonColors[3]
+        canvas.drawCircle(headX, headY, headRadius, dragonOutlinePaint)
     }
 }

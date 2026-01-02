@@ -50,8 +50,8 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long
     ) {
         // Scale: ~0.8-1.2% of height based on distance
-        val unit = height * 0.004f * sizeScale
-        val size = unit * 6f
+        val unit = height * 0.005f * sizeScale
+        val size = unit * 8f
         
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val localTime = elapsedMs * 0.001f
@@ -66,78 +66,158 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         val bob = sin(localTime * 0.7f + bobPhase) * size * 0.04f
         val currentY = baseY + bob
 
-        // Flap animation
+        // Flap animation - owls have slow, deep wing beats
         val cycleT = (localTime + wingPhase) % flapInterval
         val burst01 = (1f - (cycleT / flapDuration)).coerceIn(0f, 1f)
         val envelope = smoothstep01(burst01)
         val beat = sin(localTime * flapRate * 6.28318f + wingPhase)
-        val wingDown = beat * envelope * size * 0.4f  // How much wings move down
+        val wingAngle = beat * envelope * 25f  // Wing rotation in degrees
 
         canvas.save()
         canvas.translate(px, py)
         canvas.save()
         canvas.rotate(bank * 0.3f, currentX, currentY)
 
-        // Owl color - dark brown silhouette
-        paint.color = RenderConstants.blendWithAmbient(Color.rgb(40, 32, 25), ambientColor, 0.4f)
+        // Owl colors - rich brown tones
+        val bodyColor = RenderConstants.blendWithAmbient(Color.rgb(65, 50, 35), ambientColor, 0.35f)
+        val darkColor = RenderConstants.blendWithAmbient(Color.rgb(35, 28, 20), ambientColor, 0.35f)
+        val faceColor = RenderConstants.blendWithAmbient(Color.rgb(180, 165, 140), ambientColor, 0.3f)
 
-        // Compact owl body - rounded shape
-        val bodyW = size * 0.5f
-        val bodyH = size * 0.4f
+        // === BODY ===
+        // Compact, barrel-shaped body (owls are stocky)
+        val bodyW = size * 0.35f
+        val bodyH = size * 0.45f
+        paint.color = bodyColor
+        canvas.drawOval(
+            currentX - bodyW * 0.8f, currentY - bodyH * 0.4f,
+            currentX + bodyW * 0.5f, currentY + bodyH * 0.6f, paint
+        )
         
-        // Body - oval
-        canvas.drawOval(currentX - bodyW, currentY - bodyH * 0.3f,
-                        currentX + bodyW * 0.6f, currentY + bodyH, paint)
-        
-        // Large round head (owls have big heads)
-        val headR = size * 0.35f
-        val headX = currentX + bodyW * 0.3f
-        val headY = currentY - bodyH * 0.2f
+        // === HEAD ===
+        // Large round head - owls have proportionally huge heads
+        val headR = size * 0.32f
+        val headX = currentX + bodyW * 0.15f
+        val headY = currentY - bodyH * 0.35f
+        paint.color = bodyColor
         canvas.drawCircle(headX, headY, headR, paint)
         
-        // Ear tufts (small triangles)
+        // Facial disc - distinctive owl feature (lighter heart-shaped area)
+        paint.color = faceColor
+        val faceW = headR * 0.75f
+        val faceH = headR * 0.85f
+        canvas.drawOval(headX - faceW, headY - faceH * 0.6f,
+                        headX + faceW, headY + faceH * 0.5f, paint)
+        
+        // Brow ridge (darker line above eyes)
+        paint.color = darkColor
         path.reset()
-        path.moveTo(headX - headR * 0.5f, headY - headR * 0.7f)
-        path.lineTo(headX - headR * 0.7f, headY - headR * 1.3f)
-        path.lineTo(headX - headR * 0.2f, headY - headR * 0.8f)
+        path.moveTo(headX - headR * 0.5f, headY - headR * 0.25f)
+        path.quadTo(headX, headY - headR * 0.45f, headX + headR * 0.5f, headY - headR * 0.25f)
+        path.lineTo(headX + headR * 0.4f, headY - headR * 0.15f)
+        path.quadTo(headX, headY - headR * 0.3f, headX - headR * 0.4f, headY - headR * 0.15f)
+        path.close()
+        canvas.drawPath(path, paint)
+        
+        // Ear tufts (great horned owl style)
+        paint.color = bodyColor
+        path.reset()
+        path.moveTo(headX - headR * 0.55f, headY - headR * 0.6f)
+        path.lineTo(headX - headR * 0.75f, headY - headR * 1.25f)
+        path.lineTo(headX - headR * 0.25f, headY - headR * 0.7f)
         path.close()
         canvas.drawPath(path, paint)
         
         path.reset()
-        path.moveTo(headX + headR * 0.5f, headY - headR * 0.7f)
-        path.lineTo(headX + headR * 0.7f, headY - headR * 1.3f)
-        path.lineTo(headX + headR * 0.2f, headY - headR * 0.8f)
+        path.moveTo(headX + headR * 0.55f, headY - headR * 0.6f)
+        path.lineTo(headX + headR * 0.75f, headY - headR * 1.25f)
+        path.lineTo(headX + headR * 0.25f, headY - headR * 0.7f)
         path.close()
         canvas.drawPath(path, paint)
         
-        // Short broad wings - owl wings are rounded
-        val wingSpan = size * 1.4f
-        val wingH = size * 0.3f + wingDown
+        // === WINGS ===
+        // Broad, rounded wings - owls have wide wings for silent flight
+        val wingSpan = size * 0.9f
         
-        // Left wing
+        canvas.save()
+        // Left wing (top wing when flying right) - rotates with flap
+        canvas.rotate(-wingAngle * 0.7f, currentX - bodyW * 0.2f, currentY)
+        paint.color = bodyColor
         path.reset()
-        path.moveTo(currentX - bodyW * 0.3f, currentY)
-        path.quadTo(currentX - wingSpan * 0.5f, currentY - wingH,
-                    currentX - wingSpan, currentY + size * 0.1f)
-        path.quadTo(currentX - wingSpan * 0.6f, currentY + wingH * 0.3f,
-                    currentX - bodyW * 0.3f, currentY + bodyH * 0.5f)
+        path.moveTo(currentX - bodyW * 0.2f, currentY - bodyH * 0.2f)
+        path.quadTo(currentX - bodyW * 0.6f, currentY - wingSpan * 0.6f,
+                    currentX - wingSpan, currentY - wingSpan * 0.15f)
+        // Rounded wing tip with feather notches
+        path.quadTo(currentX - wingSpan * 1.05f, currentY + bodyH * 0.1f,
+                    currentX - wingSpan * 0.85f, currentY + bodyH * 0.25f)
+        path.quadTo(currentX - bodyW * 0.5f, currentY + bodyH * 0.3f,
+                    currentX - bodyW * 0.3f, currentY + bodyH * 0.2f)
         path.close()
         canvas.drawPath(path, paint)
         
-        // Tail - short fan
+        // Wing pattern - darker flight feathers
+        paint.color = darkColor
         path.reset()
-        path.moveTo(currentX - bodyW * 0.8f, currentY + bodyH * 0.3f)
-        path.lineTo(currentX - bodyW * 1.2f, currentY + bodyH * 0.1f)
-        path.lineTo(currentX - bodyW * 1.4f, currentY + bodyH * 0.4f)
-        path.lineTo(currentX - bodyW * 1.2f, currentY + bodyH * 0.7f)
+        path.moveTo(currentX - bodyW * 0.4f, currentY)
+        path.quadTo(currentX - wingSpan * 0.5f, currentY - wingSpan * 0.35f,
+                    currentX - wingSpan * 0.9f, currentY - wingSpan * 0.05f)
+        path.lineTo(currentX - wingSpan * 0.85f, currentY + bodyH * 0.15f)
+        path.quadTo(currentX - bodyW * 0.5f, currentY + bodyH * 0.2f,
+                    currentX - bodyW * 0.4f, currentY + bodyH * 0.1f)
+        path.close()
+        canvas.drawPath(path, paint)
+        canvas.restore()
+        
+        // === TAIL ===
+        // Short, broad tail
+        paint.color = bodyColor
+        path.reset()
+        path.moveTo(currentX - bodyW * 0.7f, currentY + bodyH * 0.3f)
+        path.lineTo(currentX - bodyW * 1.1f, currentY + bodyH * 0.15f)
+        path.lineTo(currentX - bodyW * 1.3f, currentY + bodyH * 0.35f)
+        path.lineTo(currentX - bodyW * 1.1f, currentY + bodyH * 0.55f)
+        path.lineTo(currentX - bodyW * 0.7f, currentY + bodyH * 0.45f)
         path.close()
         canvas.drawPath(path, paint)
         
-        // Eyes - glowing at night
-        val eyeGlow = 0.3f + 0.7f * envelope
-        paint.color = Color.argb((200 * eyeGlow).toInt(), 255, 210, 80)
-        canvas.drawCircle(headX - headR * 0.25f, headY - headR * 0.1f, headR * 0.15f, paint)
-        canvas.drawCircle(headX + headR * 0.25f, headY - headR * 0.1f, headR * 0.15f, paint)
+        // Tail barring (dark stripes)
+        paint.color = darkColor
+        val tailCx = currentX - bodyW * 1.0f
+        val tailCy = currentY + bodyH * 0.35f
+        canvas.drawLine(tailCx - size * 0.08f, tailCy - size * 0.06f,
+                        tailCx + size * 0.04f, tailCy - size * 0.04f, strokePaint)
+        canvas.drawLine(tailCx - size * 0.06f, tailCy + size * 0.02f,
+                        tailCx + size * 0.05f, tailCy + size * 0.03f, strokePaint)
+        
+        // === EYES ===
+        // Large, forward-facing eyes - defining owl feature
+        val eyeR = headR * 0.22f
+        val eyeSpacing = headR * 0.35f
+        val eyeY = headY - headR * 0.05f
+        
+        // Eye glow intensity varies with wing beat
+        val eyeGlow = 0.5f + 0.5f * envelope
+        
+        // Left eye
+        paint.color = Color.rgb(30, 25, 20)  // Dark iris
+        canvas.drawCircle(headX - eyeSpacing, eyeY, eyeR, paint)
+        paint.color = Color.argb((220 * eyeGlow).toInt(), 255, 200, 50)  // Glowing pupil
+        canvas.drawCircle(headX - eyeSpacing, eyeY, eyeR * 0.5f, paint)
+        
+        // Right eye
+        paint.color = Color.rgb(30, 25, 20)
+        canvas.drawCircle(headX + eyeSpacing, eyeY, eyeR, paint)
+        paint.color = Color.argb((220 * eyeGlow).toInt(), 255, 200, 50)
+        canvas.drawCircle(headX + eyeSpacing, eyeY, eyeR * 0.5f, paint)
+        
+        // Beak - small, hooked
+        paint.color = Color.rgb(60, 55, 45)
+        path.reset()
+        path.moveTo(headX, headY + headR * 0.1f)
+        path.lineTo(headX - headR * 0.08f, headY + headR * 0.25f)
+        path.lineTo(headX, headY + headR * 0.35f)
+        path.lineTo(headX + headR * 0.08f, headY + headR * 0.25f)
+        path.close()
+        canvas.drawPath(path, paint)
 
         canvas.restore() // banking
         canvas.restore() // parallax

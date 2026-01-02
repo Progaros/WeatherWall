@@ -306,7 +306,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 Color.rgb(255, 255, 255)   // White
             )
             val newFlowers = mutableMapOf<Int, List<FlowerData>>()
-            val flowersPerHill = (springFlowerDensity / 10).coerceAtLeast(2)
+            // Scale: density 100 should give ~1000 total flowers across all hills
+            // With ~8 hills, that's ~125 per hill at max
+            // Formula: (density * 1.25) gives 0-125 range, minimum 5
+            val flowersPerHill = ((springFlowerDensity * 1.25f).toInt()).coerceIn(5, 150)
             
             for ((index, _) in currentHills.withIndex()) {
                 val hillFlowers = mutableListOf<FlowerData>()
@@ -607,14 +610,44 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         hillPath.lineTo(endX, bottomY)
         hillPath.close()
         
-        // Apply linear gradient from top (light) to bottom (dark) for natural shading
-        val gradient = LinearGradient(
-            0f, minY,           // Start: top of hill (lighter)
-            0f, bottomY,        // End: bottom (darker)
-            hillColor,          // Top color (original)
-            darkenColor(hillColor, 0.7f),  // Bottom color (darkened)
-            Shader.TileMode.CLAMP
-        )
+        // Check if we should apply snow cap effect
+        val season = getCurrentTerrainSeason()
+        val applySnow = winterSnowEnabled && season == "winter"
+        
+        // Apply linear gradient from top to bottom
+        val gradient = if (applySnow) {
+            // Winter: white snow at top, transitioning to hill color, then darker at bottom
+            // Snow coverage determines how far down the white extends
+            val snowDepth = (winterSnowCoverage / 100f).coerceIn(0.1f, 0.6f)  // 10-60% of hill
+            val snowColor = Color.argb(220, 255, 255, 255)  // Slightly translucent white
+            val snowTransition = Color.argb(180, 
+                (Color.red(hillColor) + 255) / 2,
+                (Color.green(hillColor) + 255) / 2, 
+                (Color.blue(hillColor) + 255) / 2
+            )  // Blend of white and hill color
+            
+            LinearGradient(
+                0f, minY,           // Start: top of hill
+                0f, bottomY,        // End: bottom
+                intArrayOf(
+                    snowColor,                      // Snow white at very top
+                    snowTransition,                 // Transition zone
+                    hillColor,                      // Original hill color
+                    darkenColor(hillColor, 0.7f)    // Darker at bottom
+                ),
+                floatArrayOf(0f, snowDepth * 0.4f, snowDepth, 1f),  // Stop positions
+                Shader.TileMode.CLAMP
+            )
+        } else {
+            // Non-winter: standard gradient
+            LinearGradient(
+                0f, minY,           // Start: top of hill (lighter)
+                0f, bottomY,        // End: bottom (darker)
+                hillColor,          // Top color (original)
+                darkenColor(hillColor, 0.7f),  // Bottom color (darkened)
+                Shader.TileMode.CLAMP
+            )
+        }
         hillPaint.shader = gradient
         
         canvas.drawPath(hillPath, hillPaint)
@@ -626,30 +659,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private fun drawSeasonalDecorations(canvas: Canvas, hillIndex: Int, hill: HillData, ambientColor: Int) {
         val startX = -extendedOffset - width * 0.1f
         val endX = width + extendedOffset + width * 0.1f
-        val stepX = (endX - startX) / (hill.controlPoints.size - 1)
         
-        // Draw snow patches first (on top of hill)
-        snowByHill[hillIndex]?.let { patches ->
-            for (patch in patches) {
-                val patchStartX = startX + patch.startXRatio * (endX - startX)
-                val patchEndX = startX + patch.endXRatio * (endX - startX)
-                
-                // Get hill Y at patch center
-                val centerRatio = (patch.startXRatio + patch.endXRatio) / 2f
-                val pointIndex = (centerRatio * (hill.controlPoints.size - 1)).toInt()
-                    .coerceIn(0, hill.controlPoints.size - 1)
-                val yRatio = hill.heightOffset + 0.12f * (1f - hill.controlPoints[pointIndex])
-                val y = yRatio * height
-                
-                // Draw semi-transparent white overlay on hill top
-                snowPaint.color = Color.argb(patch.alpha, 255, 255, 255)
-                canvas.drawOval(
-                    patchStartX, y - 3f,
-                    patchEndX, y + 8f,
-                    snowPaint
-                )
-            }
-        }
+        // Note: Snow is now integrated into the hill gradient (drawHill),
+        // so we no longer draw floating snow patches here.
         
         // Draw flowers (small colored dots)
         flowersByHill[hillIndex]?.let { flowers ->
