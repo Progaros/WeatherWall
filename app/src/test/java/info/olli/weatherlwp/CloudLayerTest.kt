@@ -283,4 +283,94 @@ class CloudLayerTest {
         
         assertTrue("Front moves more than back", frontMovement > backMovement)
     }
+    
+    // ============== Tiled Noise Generation Tests ==============
+    
+    @Test
+    fun `value noise produces values in 0-1 range`() {
+        // Simulating the value noise algorithm used in tiled mode
+        val random = java.util.Random(42)
+        val values = FloatArray(256) { random.nextFloat() }
+        
+        // All values should be 0-1
+        for (v in values) {
+            assertTrue("Value should be >= 0", v >= 0f)
+            assertTrue("Value should be <= 1", v <= 1f)
+        }
+    }
+    
+    @Test
+    fun `smoothstep produces correct interpolation`() {
+        fun smoothstep(t: Float): Float = t * t * (3f - 2f * t)
+        
+        assertEquals("smoothstep(0) = 0", 0f, smoothstep(0f), 0.001f)
+        assertEquals("smoothstep(1) = 1", 1f, smoothstep(1f), 0.001f)
+        assertEquals("smoothstep(0.5) = 0.5", 0.5f, smoothstep(0.5f), 0.001f)
+        
+        // Smoothstep should be slower at edges, faster in middle (derivative)
+        val delta = 0.01f
+        val derivAt0 = (smoothstep(delta) - smoothstep(0f)) / delta
+        val derivAt05 = (smoothstep(0.5f + delta) - smoothstep(0.5f - delta)) / (2 * delta)
+        
+        assertTrue("Derivative at 0 should be small (slow start)", derivAt0 < 1f)
+        assertTrue("Derivative at 0.5 should be larger (fast middle)", derivAt05 > derivAt0)
+    }
+    
+    @Test
+    fun `cloud threshold produces visible clouds`() {
+        // Cloud threshold algorithm from tiled mode
+        val threshold = 0.35f
+        val softness = 0.30f
+        
+        fun applyThreshold(value: Float): Float = when {
+            value < threshold - softness -> 0f
+            value > threshold + softness -> 1f
+            else -> (value - (threshold - softness)) / (softness * 2f)
+        }
+        
+        // Values well below threshold should be transparent
+        assertEquals("Low values are transparent", 0f, applyThreshold(0f), 0.001f)
+        
+        // Values well above threshold should be opaque
+        assertEquals("High values are opaque", 1f, applyThreshold(0.8f), 0.001f)
+        
+        // Values near threshold should be partial
+        val midValue = applyThreshold(0.35f)  // At threshold center
+        assertTrue("Threshold center should be ~0.5", midValue > 0.4f && midValue < 0.6f)
+    }
+    
+    @Test
+    fun `FBM noise combines multiple octaves correctly`() {
+        // FBM (fractal brownian motion) sums octaves with decreasing amplitude
+        var amplitude = 1f
+        var total = 0f
+        var totalAmplitude = 0f
+        
+        for (octave in 0 until 4) {
+            val noiseValue = 0.5f  // Simulated noise value
+            total += noiseValue * amplitude
+            totalAmplitude += amplitude
+            amplitude *= 0.5f
+        }
+        
+        val normalized = total / totalAmplitude
+        
+        assertEquals("Normalized FBM with constant 0.5 input should be 0.5", 
+            0.5f, normalized, 0.001f)
+    }
+    
+    @Test
+    fun `seamless tiling wraps coordinates correctly`() {
+        val period = 64
+        
+        fun wrap(coord: Int): Int = ((coord % period) + period) % period
+        
+        // Test wrapping
+        assertEquals("0 stays 0", 0, wrap(0))
+        assertEquals("63 stays 63", 63, wrap(63))
+        assertEquals("64 wraps to 0", 0, wrap(64))
+        assertEquals("128 wraps to 0", 0, wrap(128))
+        assertEquals("-1 wraps to 63", 63, wrap(-1))
+        assertEquals("-64 wraps to 0", 0, wrap(-64))
+    }
 }

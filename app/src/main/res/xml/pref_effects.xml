@@ -68,6 +68,15 @@
             android:summary="Tilt phone to look around the scene"
             android:defaultValue="true" />
 
+        <ListPreference
+            android:key="pref_parallax_sensor_mode"
+            android:title="Sensor Mode"
+            android:summary="rotation_vector=robust (works any orientation), gyroscope=smooth (reference app style)"
+            android:defaultValue="rotation_vector"
+            android:entries="@array/parallax_sensor_mode_entries"
+            android:entryValues="@array/parallax_sensor_mode_values"
+            android:dependency="pref_parallax_enabled" />
+
         <SeekBarPreference
             android:key="pref_parallax_strength"
             android:title="Tilt Sensitivity"
@@ -197,10 +206,10 @@
         <ListPreference
             android:key="pref_cloud_render_mode"
             android:title="Cloud Render Mode"
-            android:summary="Drawing method (Cached=quality, Tiled=fast, Shader=GPU)"
+            android:summary="Drawing method (Tiled=fast default, Cached=detailed, Shader=GPU)"
             android:entries="@array/cloud_render_mode_options"
             android:entryValues="@array/cloud_render_mode_values"
-            android:defaultValue="cached"
+            android:defaultValue="tiled"
             android:dependency="pref_clouds_enabled" />
     </PreferenceCategory>
 

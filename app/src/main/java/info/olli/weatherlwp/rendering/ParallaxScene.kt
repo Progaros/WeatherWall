@@ -258,6 +258,14 @@ class ParallaxScene(
         try {
             val parallaxEnabled = prefs.getBoolean("pref_parallax_enabled", true)
             
+            // Sensor mode: rotation_vector (our robust implementation) or gyroscope (reference app style)
+            val sensorMode = prefs.getString("pref_parallax_sensor_mode", "rotation_vector") ?: "rotation_vector"
+            val parallaxMode = when (sensorMode) {
+                "gyroscope" -> info.olli.weatherlwp.parallax.ParallaxSensorManager.ParallaxMode.GYROSCOPE
+                else -> info.olli.weatherlwp.parallax.ParallaxSensorManager.ParallaxMode.ROTATION_VECTOR
+            }
+            sensor.setParallaxMode(parallaxMode)
+            
             // Start/stop sensor based on parallax enabled state
             // This saves significant battery/CPU when parallax is disabled
             if (parallaxEnabled) {

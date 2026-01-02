@@ -1,4 +1,5 @@
 .gradle/
+.decompile/
 .idea/
 .vscode/
 *.iml

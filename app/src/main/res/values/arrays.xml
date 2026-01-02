@@ -110,4 +110,14 @@
         <item>tiled</item>
         <item>shader</item>
     </string-array>
+    
+    <!-- Parallax sensor mode options -->
+    <string-array name="parallax_sensor_mode_entries">
+        <item>Rotation Vector (Robust)</item>
+        <item>Gyroscope (Smooth)</item>
+    </string-array>
+    <string-array name="parallax_sensor_mode_values">
+        <item>rotation_vector</item>
+        <item>gyroscope</item>
+    </string-array>
 </resources>

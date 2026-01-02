@@ -56,16 +56,32 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
          */
         fun onShake()
     }
+    
+    /**
+     * Parallax sensor mode - determines which algorithm is used.
+     */
+    enum class ParallaxMode {
+        /** Our implementation: Delta-based with rotation vector (works at any orientation) */
+        ROTATION_VECTOR,
+        /** Reference app style: Gyroscope with averaging (simpler, very smooth) */
+        GYROSCOPE
+    }
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     
+    // Available sensors
     private val rotationVector = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
     private val gameRotationVector = sensorManager.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
     private val gravitySensor = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY)
     private val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+    private val gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
     
-    private val activeSensor: Sensor? = rotationVector ?: gameRotationVector ?: gravitySensor ?: accelerometer
+    // Active sensor depends on mode
+    private var activeSensor: Sensor? = rotationVector ?: gameRotationVector ?: gravitySensor ?: accelerometer
+    
+    // Parallax mode - can be changed at runtime
+    private var parallaxMode = ParallaxMode.ROTATION_VECTOR
     
     private val rotationMatrix = FloatArray(9)
     private val remappedMatrix = FloatArray(9)
@@ -94,6 +110,21 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     // Track display rotation for reset on rotation change
     private var lastDisplayRotation = Surface.ROTATION_0
     
+    // ==== Gyroscope mode state (reference app approach) ====
+    // Simple averager buffers (3 samples each, like reference app)
+    private val avgYaw = Averager(3)
+    private val avgPitch = Averager(3)
+    private val avgRoll = Averager(3)
+    
+    // Accumulated angles from gyroscope (radians, clamped to ±18°)
+    private var gyroYaw = 0f
+    private var gyroPitch = 0f
+    private var gyroRoll = 0f
+    private var lastGyroTime = 0L
+    
+    // Maximum tilt angle in radians (18 degrees, same as reference app: 0.31415927)
+    private val MAX_TILT_RAD = (18f * PI / 180f).toFloat()
+    
     private var listener: Listener? = null
     private var shakeListener: ShakeListener? = null
     private var isStarted = false
@@ -111,6 +142,21 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     fun setShakeListener(l: ShakeListener?) { shakeListener = l }
     
     /**
+     * Set the parallax sensor mode.
+     * @param mode ROTATION_VECTOR (our implementation) or GYROSCOPE (reference app style)
+     */
+    fun setParallaxMode(mode: ParallaxMode) {
+        if (mode != parallaxMode) {
+            val wasStarted = isStarted
+            if (wasStarted) stop()
+            parallaxMode = mode
+            if (wasStarted) start()
+        }
+    }
+    
+    fun getParallaxMode(): ParallaxMode = parallaxMode
+    
+    /**
      * Configure shake detection sensitivity.
      * @param enabled Whether shake detection is enabled
      * @param sensitivity 0.0 to 1.0 where higher = more sensitive (requires less force)
@@ -122,6 +168,12 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     }
 
     fun start() {
+        // Select sensor based on mode
+        activeSensor = when (parallaxMode) {
+            ParallaxMode.GYROSCOPE -> gyroscope ?: rotationVector ?: gameRotationVector ?: gravitySensor
+            ParallaxMode.ROTATION_VECTOR -> rotationVector ?: gameRotationVector ?: gravitySensor ?: accelerometer
+        }
+        
         if (activeSensor == null) {
             Log.w(TAG, "No suitable sensor available for parallax")
             return
@@ -136,14 +188,26 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             accumulatedY = 0f
             lastDisplayRotation = getCurrentDisplayRotation()
             
+            // Reset gyroscope state
+            gyroYaw = 0f
+            gyroPitch = 0f
+            gyroRoll = 0f
+            avgYaw.reset()
+            avgPitch.reset()
+            avgRoll.reset()
+            lastGyroTime = System.nanoTime()
+            
             // Reset shake state
             shakeCount = 0
             lastShakeTime = 0L
             lastShakeCountTime = 0L
             
-            // Use SENSOR_DELAY_FASTEST for smoothest parallax (matches 60 FPS target)
-            // This gives ~5-10ms updates on most devices
-            sensorManager.registerListener(this, activeSensor, SensorManager.SENSOR_DELAY_FASTEST)
+            // Use SENSOR_DELAY_FASTEST for smoothest parallax
+            val sensorRate = if (parallaxMode == ParallaxMode.GYROSCOPE) 
+                SensorManager.SENSOR_DELAY_GAME  // Reference app uses GAME rate
+            else 
+                SensorManager.SENSOR_DELAY_FASTEST
+            sensorManager.registerListener(this, activeSensor, sensorRate)
             
             // Also register accelerometer for shake detection if not already the active sensor
             if (shakeEnabled && accelerometer != null && accelerometer != activeSensor) {
@@ -151,7 +215,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             }
             
             isStarted = true
-            Log.d(TAG, "Sensor started with delta-based motion detection")
+            Log.d(TAG, "Sensor started with mode: $parallaxMode, sensor: ${activeSensor?.name}")
         }
     }
 
@@ -168,6 +232,13 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         isFirstSample = true
         accumulatedX = 0f
         accumulatedY = 0f
+        // Reset gyroscope state
+        gyroYaw = 0f
+        gyroPitch = 0f
+        gyroRoll = 0f
+        avgYaw.reset()
+        avgPitch.reset()
+        avgRoll.reset()
         filteredX = 0f
         filteredY = 0f
         Log.d(TAG, "Recalibration triggered (delta reset)")
@@ -203,6 +274,9 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             }
 
             when (event.sensor.type) {
+                Sensor.TYPE_GYROSCOPE -> {
+                    handleGyroscope(event.values, displayRotation)
+                }
                 Sensor.TYPE_ROTATION_VECTOR, Sensor.TYPE_GAME_ROTATION_VECTOR -> {
                     handleRotationVector(event.values, displayRotation)
                 }
@@ -217,6 +291,60 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         } catch (e: Exception) {
             Log.e(TAG, "Error processing sensor event: ${e.message}", e)
         }
+    }
+    
+    /**
+     * Handle gyroscope sensor data (reference app approach).
+     * Accumulates angular velocity over time to get tilt angle.
+     * Uses 3-sample averaging for smooth output.
+     */
+    private fun handleGyroscope(values: FloatArray, displayRotation: Int) {
+        // Gyroscope reports angular velocity in rad/s around device axes
+        // values[0] = rotation rate around X axis (pitch rate)
+        // values[1] = rotation rate around Y axis (roll rate)
+        // values[2] = rotation rate around Z axis (yaw rate)
+        
+        // Remap based on display rotation (same as reference app)
+        val (rateX, rateY, rateZ) = when (displayRotation) {
+            Surface.ROTATION_90 -> Triple(values[1], -values[0], values[2])
+            Surface.ROTATION_180 -> Triple(-values[0], -values[1], values[2])
+            Surface.ROTATION_270 -> Triple(-values[1], values[0], values[2])
+            else -> Triple(values[0], values[1], values[2])
+        }
+        
+        // Add to averagers for smoothing (like reference app's Averager class)
+        avgPitch.add(rateX)
+        avgRoll.add(rateY)
+        avgYaw.add(rateZ)
+        
+        // Calculate time delta
+        val currentTime = System.nanoTime()
+        val deltaTimeSec = (currentTime - lastGyroTime) * 1e-9f
+        lastGyroTime = currentTime
+        
+        // Reference app formula: angle += avgRate * deltaTime * 6.0 * DEG_TO_RAD
+        // The 6.0 is a sensitivity multiplier
+        val sensitivity = 6.0f * (PI.toFloat() / 180f)  // Convert to radians
+        
+        // Accumulate averaged angular velocity into angle
+        gyroPitch = (gyroPitch + avgPitch.calc() * deltaTimeSec * sensitivity)
+            .coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
+        gyroRoll = (gyroRoll + avgRoll.calc() * deltaTimeSec * sensitivity)
+            .coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
+        gyroYaw = (gyroYaw + avgYaw.calc() * deltaTimeSec * sensitivity)
+            .coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
+        
+        // Convert gyro angles to tilt output (-1 to 1 range)
+        // Reference app uses these directly for layer offset via tan()
+        // We normalize to our -1..1 range by dividing by MAX_TILT_RAD
+        val tiltX = (gyroRoll / MAX_TILT_RAD).coerceIn(-1f, 1f)
+        val tiltY = (-gyroPitch / MAX_TILT_RAD).coerceIn(-1f, 1f)
+        
+        // Apply low-pass filter for extra smoothness
+        filteredX += FILTER_ALPHA * (tiltX - filteredX)
+        filteredY += FILTER_ALPHA * (tiltY - filteredY)
+        
+        listener?.onTiltChanged(filteredX, filteredY)
     }
     
     /**
@@ -423,4 +551,29 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     }
 
     override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) = Unit
+}
+
+/**
+ * Simple circular buffer averager (matches reference app implementation).
+ * Computes running average of last N values for smooth sensor output.
+ */
+internal class Averager(private val bufferSize: Int) {
+    private val values = FloatArray(bufferSize)
+    private var index = 0
+    
+    fun add(value: Float): Averager {
+        values[index] = value
+        index = (index + 1) % bufferSize
+        return this
+    }
+    
+    fun calc(): Float {
+        var sum = 0f
+        for (v in values) sum += v
+        return sum / bufferSize
+    }
+    
+    fun reset(value: Float = 0f) {
+        for (i in values.indices) values[i] = value
+    }
 }

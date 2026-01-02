@@ -264,4 +264,107 @@ class ParallaxSensorManagerTest {
         assertEquals("ROTATION_90 axisX should be AXIS_Y", AXIS_Y, 2)
         assertEquals("ROTATION_90 axisY should be AXIS_MINUS_X", AXIS_MINUS_X, 129)
     }
+    
+    // ============== Averager Tests (Gyroscope Mode) ==============
+    
+    @Test
+    fun `averager calculates simple average`() {
+        val averager = TestAverager(3)
+        averager.add(1f)
+        averager.add(2f)
+        averager.add(3f)
+        
+        assertEquals("Average of 1,2,3 should be 2", 2f, averager.calc(), 0.001f)
+    }
+    
+    @Test
+    fun `averager wraps around buffer`() {
+        val averager = TestAverager(3)
+        averager.add(1f)
+        averager.add(2f)
+        averager.add(3f)
+        averager.add(10f)  // Overwrites 1
+        
+        // Buffer now contains [10, 2, 3], average = 15/3 = 5
+        assertEquals("Average after wrap should be 5", 5f, averager.calc(), 0.001f)
+    }
+    
+    @Test
+    fun `averager reset clears buffer`() {
+        val averager = TestAverager(3)
+        averager.add(5f)
+        averager.add(5f)
+        averager.add(5f)
+        averager.reset(0f)
+        
+        assertEquals("Average after reset should be 0", 0f, averager.calc(), 0.001f)
+    }
+    
+    @Test
+    fun `averager smooths noisy input`() {
+        val averager = TestAverager(3)
+        // Simulating noisy gyroscope readings
+        averager.add(0.1f)
+        averager.add(0.15f)
+        averager.add(0.05f)
+        
+        // Average smooths out the noise: (0.1 + 0.15 + 0.05) / 3 = 0.1
+        assertEquals("Noisy input should average to 0.1", 0.1f, averager.calc(), 0.001f)
+    }
+    
+    // ============== Gyroscope Mode Integration Tests ==============
+    
+    @Test
+    fun `gyroscope accumulation clamps to max tilt`() {
+        val MAX_TILT_RAD = (18f * Math.PI / 180f).toFloat()  // ~0.314 rad
+        
+        // Simulating continuous gyro input that would exceed limits
+        var angle = 0f
+        val angularVelocity = 10.0f  // rad/s (fast rotation)
+        val deltaTime = 0.5f  // 500ms
+        val sensitivity = 6.0f * (Math.PI.toFloat() / 180f)
+        
+        // Accumulated angle = 0 + (10.0 * 0.5 * sensitivity) = ~0.52 rad, exceeds max
+        angle = (angle + angularVelocity * deltaTime * sensitivity).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
+        
+        assertEquals("Angle should clamp to MAX_TILT_RAD", MAX_TILT_RAD, angle, 0.001f)
+    }
+    
+    @Test
+    fun `gyroscope mode produces tilt in -1 to 1 range`() {
+        val MAX_TILT_RAD = (18f * Math.PI / 180f).toFloat()
+        
+        // At max tilt angle, output should be ±1
+        val gyroAngle = MAX_TILT_RAD
+        val tilt = (gyroAngle / MAX_TILT_RAD).coerceIn(-1f, 1f)
+        
+        assertEquals("Max gyro angle should map to tilt of 1.0", 1f, tilt, 0.001f)
+        
+        val halfTilt = (MAX_TILT_RAD / 2f / MAX_TILT_RAD).coerceIn(-1f, 1f)
+        assertEquals("Half max angle should map to tilt of 0.5", 0.5f, halfTilt, 0.001f)
+    }
+}
+
+/**
+ * Test implementation of Averager (mirrors the internal class in ParallaxSensorManager).
+ */
+private class TestAverager(private val bufferSize: Int) {
+    private val values = FloatArray(bufferSize)
+    private var index = 0
+    
+    fun add(value: Float): TestAverager {
+        values[index] = value
+        index = (index + 1) % bufferSize
+        return this
+    }
+    
+    fun calc(): Float {
+        var sum = 0f
+        for (v in values) sum += v
+        return sum / bufferSize
+    }
+    
+    fun reset(value: Float = 0f) {
+        for (i in values.indices) values[i] = value
+    }
 }

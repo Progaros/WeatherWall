@@ -82,12 +82,13 @@
     </LinearLayout>
 
     <!-- Extended FAB to apply wallpaper - shown only when not applied -->
+    <!-- Positioned above tab bar: 72dp (tab height) + 16dp margin = 88dp from bottom -->
     <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
         android:id="@+id/fab_apply"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="16dp"
+        android:layout_marginBottom="88dp"
         android:text="@string/set_wallpaper"
         android:textAllCaps="true"
         android:contentDescription="@string/apply_wallpaper"
