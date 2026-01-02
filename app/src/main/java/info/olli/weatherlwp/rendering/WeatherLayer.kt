@@ -44,8 +44,15 @@ class WeatherLayer : SceneLayer {
         var y: Float = 0f,
         var speed: Float = 0f,
         var size: Float = 0f,
-        var alpha: Int = 255
+        var alpha: Int = 255,
+        var layer: Int = 0  // 0=front (closest), higher=further back
     )
+    
+    // Weather layer settings - particles spawn across layers for depth effect
+    // Layer 0 = front (largest, fastest), higher layers = further back (smaller, slower)
+    private var weatherLayers = 3          // Number of depth layers (1-5)
+    private var layerSeparation = 0.3f     // Size/speed difference between layers (0.1-0.5)
+    private var layerDepthOffset = 0.2f    // Parallax depth offset per layer (0.1-0.4)
 
     // Pre-allocated particle pools (no runtime allocations)
     // Max pool sizes - actual active count depends on intensity
@@ -370,27 +377,74 @@ class WeatherLayer : SceneLayer {
     }
 
     private fun resetRainParticle(p: Particle) {
+        // Assign to a random layer (0 = front/closest, weatherLayers-1 = back/furthest)
+        p.layer = Random.nextInt(weatherLayers.coerceAtLeast(1))
+        val layerScale = getLayerScale(p.layer)
+        
         p.x = Random.nextFloat() * screenWidth
         p.y = -20f
-        p.speed = 15f + Random.nextFloat() * 10f
-        p.size = 15f + Random.nextFloat() * 25f
-        p.alpha = 120 + Random.nextInt(80)
+        // Base speed scaled by layer (back layers are slower)
+        p.speed = (15f + Random.nextFloat() * 10f) * layerScale
+        // Base size scaled by layer (back layers are smaller)
+        p.size = (15f + Random.nextFloat() * 25f) * layerScale
+        // Alpha reduced for back layers (more atmospheric)
+        p.alpha = ((120 + Random.nextInt(80)) * layerScale).toInt().coerceIn(60, 255)
     }
 
     private fun resetSnowParticle(p: Particle) {
+        // Assign to a random layer
+        p.layer = Random.nextInt(weatherLayers.coerceAtLeast(1))
+        val layerScale = getLayerScale(p.layer)
+        
         p.x = Random.nextFloat() * screenWidth
         p.y = -10f
-        p.speed = 1.5f + Random.nextFloat() * 2f
-        p.size = 3f + Random.nextFloat() * 5f
-        p.alpha = 180 + Random.nextInt(75)
+        // Base speed scaled by layer
+        p.speed = (1.5f + Random.nextFloat() * 2f) * layerScale
+        // Size relative to screen height, also scaled by layer
+        val heightScale = screenHeight / 1920f
+        p.size = (3f + Random.nextFloat() * 5f) * heightScale * layerScale
+        // Alpha reduced for back layers
+        p.alpha = ((180 + Random.nextInt(75)) * layerScale).toInt().coerceIn(60, 255)
     }
     
     private fun resetHailParticle(p: Particle) {
+        // Assign to a random layer
+        p.layer = Random.nextInt(weatherLayers.coerceAtLeast(1))
+        val layerScale = getLayerScale(p.layer)
+        
         p.x = Random.nextFloat() * screenWidth
         p.y = -15f
-        p.speed = 18f + Random.nextFloat() * 12f  // Fast falling
-        p.size = 5f + Random.nextFloat() * 8f     // Larger than rain/snow
-        p.alpha = 200 + Random.nextInt(55)
+        // Base speed scaled by layer
+        p.speed = (18f + Random.nextFloat() * 12f) * layerScale
+        // Base size scaled by layer
+        p.size = (5f + Random.nextFloat() * 8f) * layerScale
+        // Alpha reduced for back layers
+        p.alpha = ((200 + Random.nextInt(55)) * layerScale).toInt().coerceIn(80, 255)
+    }
+    
+    /**
+     * Get scale factor for a layer (0=front=1.0, higher=further back=smaller).
+     * Layer scale affects size, speed, and alpha to create depth illusion.
+     */
+    private fun getLayerScale(layer: Int): Float {
+        if (weatherLayers <= 1) return 1f
+        // Front layer (0) = 1.0, back layer (max) = 1.0 - (maxLayer * separation)
+        // E.g., 3 layers with 0.3 separation: layer0=1.0, layer1=0.7, layer2=0.4
+        val maxLayer = weatherLayers - 1
+        return 1f - (layer.toFloat() / maxLayer) * layerSeparation * 2f
+    }
+    
+    /**
+     * Get parallax depth multiplier for a layer.
+     * Front layers move more with parallax (closer to camera).
+     */
+    fun getLayerDepth(layer: Int): Float {
+        if (weatherLayers <= 1) return 0.5f
+        // Front layer (0) = higher depth (more movement), back = lower
+        val maxLayer = weatherLayers - 1
+        val normalizedLayer = layer.toFloat() / maxLayer  // 0 to 1
+        // Map to depth: front (0) = 0.3 (foreground), back (1) = 0.8 (background)
+        return 0.3f + normalizedLayer * layerDepthOffset * 2f
     }
 
     private fun renderRain(canvas: Canvas, state: SimulationState) {
@@ -719,7 +773,21 @@ class WeatherLayer : SceneLayer {
     }
 
     override fun reloadSettings() {
-        // No-op
+        // No-op - settings are set via setLayerSettings()
+    }
+    
+    /**
+     * Configure weather layer depth settings.
+     * @param layers Number of depth layers (1-5)
+     * @param separation Size/speed difference between layers (0.1-0.5)
+     * @param depth Parallax depth offset per layer (0.1-0.4)
+     */
+    fun setLayerSettings(layers: Int, separation: Float, depth: Float) {
+        weatherLayers = layers.coerceIn(1, 5)
+        layerSeparation = separation.coerceIn(0.1f, 0.5f)
+        layerDepthOffset = depth.coerceIn(0.1f, 0.4f)
+        // Reinitialize particles with new layer assignments
+        initialized = false
     }
 
     override fun destroy() {

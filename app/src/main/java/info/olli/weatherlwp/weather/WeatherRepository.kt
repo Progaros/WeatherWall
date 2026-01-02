@@ -38,7 +38,7 @@ object WeatherRepository {
         val humidity: Int = 0,              // 0-100%
         val visibility: Int = 0,            // meters
         val pressure: Int = 1013,           // hPa
-        val moonPhase: Int = 0,             // 0-360 degrees (0=new, 180=full)
+        val moonPhase: Int = 180,           // 0-360 degrees (0=new, 180=full) - default full
         val moonRise: Long = -1L,           // Unix timestamp
         val moonSet: Long = -1L,            // Unix timestamp
         val windDirection: Int = 0          // 0-360 degrees
@@ -208,7 +208,7 @@ object WeatherRepository {
      */
     fun getMoonPhase(context: Context): Int {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        return prefs.getInt(KEY_MOON_PHASE, 0)
+        return prefs.getInt(KEY_MOON_PHASE, 180)
     }
     
     /**
@@ -279,7 +279,7 @@ object WeatherRepository {
             humidity = prefs.getInt(KEY_HUMIDITY, 0),
             visibility = prefs.getInt(KEY_VISIBILITY, 10000),
             pressure = prefs.getInt(KEY_PRESSURE, 1013),
-            moonPhase = prefs.getInt(KEY_MOON_PHASE, 0),
+            moonPhase = prefs.getInt(KEY_MOON_PHASE, 180),
             moonRise = prefs.getLong(KEY_MOON_RISE, -1L),
             moonSet = prefs.getLong(KEY_MOON_SET, -1L),
             windDirection = windDirection

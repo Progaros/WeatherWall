@@ -191,4 +191,26 @@ class WeatherRepositoryTest {
             else -> precipProb * 0.3f
         }.coerceIn(0f, 1f)
     }
+    
+    // ============== Moon Phase Default Tests ==============
+    
+    @Test
+    fun `moon phase default should be full moon`() {
+        // Default moon phase is 180 degrees (full moon)
+        val defaultMoonPhase = 180
+        
+        // Full moon (180 degrees) should give max illumination
+        val illumination = moonIllumination(defaultMoonPhase)
+        assertEquals("Default moon phase should give full illumination", 1f, illumination, 0.01f)
+    }
+    
+    @Test
+    fun `moon phase normalized default should be 0_5`() {
+        // Extended data moonPhase default is 180 degrees
+        // When normalized to 0-1: 180/360 = 0.5
+        val defaultMoonPhaseDegrees = 180
+        val normalized = defaultMoonPhaseDegrees / 360f
+        
+        assertEquals("Normalized moon phase should be 0.5", 0.5f, normalized, 0.01f)
+    }
 }

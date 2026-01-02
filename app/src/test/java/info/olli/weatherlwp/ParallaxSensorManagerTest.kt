@@ -463,17 +463,18 @@ class ParallaxSensorManagerTest {
     @Test
     fun `gyroscope output maps roll to tiltX and pitch to tiltY`() {
         // After remapping and accumulation:
-        // tiltX = gyroRoll / MAX_TILT_RAD (left/right tilt)
+        // tiltX = -gyroRoll / MAX_TILT_RAD (left/right tilt, negated for gyro mode)
         // tiltY = -gyroPitch / MAX_TILT_RAD (forward/back tilt, negated for natural feel)
         val MAX_TILT_RAD = 0.31415927f
         
         val gyroRoll = 0.15f
         val gyroPitch = 0.1f
         
-        val tiltX = (gyroRoll / MAX_TILT_RAD).coerceIn(-1f, 1f)
+        // Gyro mode inverts horizontal (roll) to match rotation vector behavior
+        val tiltX = (-gyroRoll / MAX_TILT_RAD).coerceIn(-1f, 1f)
         val tiltY = (-gyroPitch / MAX_TILT_RAD).coerceIn(-1f, 1f)
         
-        assertTrue("tiltX should be positive (from positive roll)", tiltX > 0)
+        assertTrue("tiltX should be negative (from negated positive roll)", tiltX < 0)
         assertTrue("tiltY should be negative (from negated positive pitch)", tiltY < 0)
     }
     

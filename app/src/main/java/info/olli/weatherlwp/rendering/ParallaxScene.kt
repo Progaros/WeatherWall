@@ -315,8 +315,13 @@ class ParallaxScene(
             val rawStrength = normalized * normalized * 10f  // Quadratic: 25->2.5x, 50->10x
             parallaxStrength = if (parallaxEnabled) rawStrength else 0f
             
-            // Max offset slider: 20..200 px (default 130)
-            parallaxMaxOffsetPx = (prefs.getInt("pref_parallax_max_offset", 130)).toFloat().coerceIn(20f, 200f)
+            // Max offset as percentage of screen height: 2..20% (default 10%)
+            // This ensures movement scales proportionally with screen size
+            val maxOffsetPercentVal = prefs.getInt("pref_parallax_max_offset", 10).coerceIn(2, 20)
+            val maxOffsetPercent = maxOffsetPercentVal.toFloat()
+            
+            // Legacy pixel offset (not used when percentage is set, but kept for compatibility)
+            parallaxMaxOffsetPx = 130f
             
             // Smoothing slider: map 1..100 -> 0.02f..0.40f (wider range)
             // 1 = nearly instant, 50 = moderate smoothing, 100 = floaty
@@ -343,13 +348,15 @@ class ParallaxScene(
             val invertY = prefs.getBoolean("pref_parallax_invert_y", false)
             
             // Aspect ratio compensation: map 50..150 -> 0.5..1.5 (default 100 = 1:1 ratio)
-            // Adjusts horizontal movement relative to vertical for 1:1 pixel offset
+            // Adjusts horizontal movement relative to vertical
+            // At 100: horizontal uses same % of height as vertical (equal pixel movement)
             val aspectRatioVal = prefs.getInt("pref_parallax_aspect_ratio", 100).coerceIn(50, 150)
             val aspectRatioCompensation = aspectRatioVal / 100f
             
             // Apply to parallax calculator
             parallaxCalculator.strength = parallaxStrength
             parallaxCalculator.maxOffsetPx = parallaxMaxOffsetPx
+            parallaxCalculator.maxOffsetPercent = maxOffsetPercent
             parallaxCalculator.smoothing = smoothingFactor
             parallaxCalculator.depthSeparation = depthSeparation
             parallaxCalculator.perspective = perspective
@@ -361,6 +368,12 @@ class ParallaxScene(
             // Weather and seasonal toggles
             weatherEnabled = prefs.getBoolean("pref_weather_enabled", true)
             seasonalEnabled = prefs.getBoolean("pref_seasonal_enabled", true)
+            
+            // Weather particle layer settings (depth effect for rain/snow/lightning)
+            val weatherLayers = prefs.getInt("pref_weather_layers", 3).coerceIn(1, 5)
+            val weatherSeparation = prefs.getInt("pref_weather_layer_separation", 30) / 100f
+            val weatherDepth = prefs.getInt("pref_weather_layer_depth", 20) / 100f
+            weatherLayer.setLayerSettings(weatherLayers, weatherSeparation, weatherDepth)
             
             // Reload simulation controller settings
             simulationController.reloadSettings()

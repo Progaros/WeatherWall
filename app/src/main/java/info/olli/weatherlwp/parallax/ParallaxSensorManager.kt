@@ -386,7 +386,8 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         
         // Convert gyro angles to tilt output (-1 to 1 range)
         // Roll = left/right tilt → tiltX, Pitch = forward/back tilt → tiltY
-        val tiltX = (gyroRoll / MAX_TILT_RAD).coerceIn(-1f, 1f)
+        // Note: gyroRoll is negated to match rotation vector behavior (invert horizontal for gyro)
+        val tiltX = (-gyroRoll / MAX_TILT_RAD).coerceIn(-1f, 1f)
         val tiltY = (-gyroPitch / MAX_TILT_RAD).coerceIn(-1f, 1f)
         
         // Apply low-pass filter for extra smoothness

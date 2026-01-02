@@ -259,10 +259,10 @@
         <SeekBarPreference
             android:key="pref_parallax_max_offset"
             android:title="Max Movement"
-            android:summary="How far scene can shift (pixels)"
-            android:defaultValue="200"
-            android:max="500"
-            app:min="5"
+            android:summary="Scene shift as % of screen height (2-20%)"
+            android:defaultValue="10"
+            android:max="20"
+            app:min="2"
             app:showSeekBarValue="true"
             app:updatesContinuously="true"
             android:dependency="pref_parallax_enabled" />

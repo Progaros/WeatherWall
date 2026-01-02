@@ -290,4 +290,25 @@ class SimulationStateTest {
         assertTrue(state.treeShadowsEnabled)
         assertEquals(0.5f, state.shadowStrength, 0.01f)
     }
+    
+    // ============== Moon Phase Default Tests ==============
+    
+    @Test
+    fun `default state has full moon`() {
+        val state = SimulationState.default()
+        // Default moonPhase should be 0.5 (full moon)
+        assertEquals("Default moon should be full (0.5)", 0.5f, state.moonPhase, 0.01f)
+    }
+    
+    @Test
+    fun `moonPhase of 0 is new moon`() {
+        val state = SimulationState.default().copy(moonPhase = 0f)
+        assertEquals(0f, state.moonPhase, 0.01f)
+    }
+    
+    @Test
+    fun `moonPhase of 1 is also new moon (cycle end)`() {
+        val state = SimulationState.default().copy(moonPhase = 1f)
+        assertEquals(1f, state.moonPhase, 0.01f)
+    }
 }

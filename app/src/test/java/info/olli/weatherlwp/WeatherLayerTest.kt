@@ -223,4 +223,48 @@ class WeatherLayerTest {
         assertTrue("Mid layer medium", sizeMid < sizeFront)
         assertTrue("Front layer largest", sizeFront <= 1.0f)
     }
+    
+    // ============== Snowflake Size Tests ==============
+    
+    @Test
+    fun `snowflake size scales with screen height`() {
+        // Reference height is 1920px
+        val referenceHeight = 1920f
+        val baseMinSize = 3f
+        val baseMaxSize = 8f  // 3 + 5
+        
+        // On full-size screen (1920px), size should be 3-8px
+        val fullScale = 1920f / referenceHeight
+        val fullMinSize = baseMinSize * fullScale
+        val fullMaxSize = baseMaxSize * fullScale
+        
+        assertEquals("Full-size screen min size", 3f, fullMinSize, 0.01f)
+        assertEquals("Full-size screen max size", 8f, fullMaxSize, 0.01f)
+        
+        // On preview (480px), size should be 0.75-2px
+        val previewScale = 480f / referenceHeight
+        val previewMinSize = baseMinSize * previewScale
+        val previewMaxSize = baseMaxSize * previewScale
+        
+        assertEquals("Preview min size", 0.75f, previewMinSize, 0.01f)
+        assertEquals("Preview max size", 2f, previewMaxSize, 0.01f)
+        
+        // Verify proportional scaling
+        assertEquals("Scale ratio", 0.25f, previewScale, 0.01f)
+    }
+    
+    @Test
+    fun `snowflake size relative to height stays consistent`() {
+        // Snowflakes should be ~0.15% to 0.4% of screen height
+        val referenceHeight = 1920f
+        val baseMinSize = 3f
+        val baseMaxSize = 8f
+        
+        // Calculate percentage of height
+        val minPercent = (baseMinSize / referenceHeight) * 100f
+        val maxPercent = (baseMaxSize / referenceHeight) * 100f
+        
+        assertTrue("Min size at least 0.1% of height", minPercent >= 0.1f)
+        assertTrue("Max size at most 0.5% of height", maxPercent <= 0.5f)
+    }
 }

@@ -44,7 +44,8 @@ class ParallaxCalculator {
     // User-configurable settings - defaults match pref_effects.xml
     // These are overwritten by loadPrefs() but provide sane defaults before settings load
     var strength = 2.5f                 // Default: (25/50)^2 * 10 = 2.5 (pref_parallax_strength=25)
-    var maxOffsetPx = 130f              // Default: pref_parallax_max_offset=130
+    var maxOffsetPx = 130f              // Legacy: used when maxOffsetPercent is 0
+    var maxOffsetPercent = 10f          // Default: 10% of screen height (pref_parallax_max_offset_percent)
     var smoothing = 0.134f              // Default: 0.02 + (30/100)*0.38 (pref_parallax_smoothing=30)
     var depthSeparation = 1.32f         // Default: (33/100)*4.0 = 1.32 (pref_parallax_depth=33)
     
@@ -53,9 +54,8 @@ class ParallaxCalculator {
     var invertY = false                 // Default: pref_parallax_invert_y=false
     
     // Aspect ratio compensation: adjusts horizontal movement relative to vertical
-    // 1.0 = same pixel movement for both axes (1:1 ratio)
+    // 1.0 = same movement for both axes (default with height-based percentage)
     // >1.0 = more horizontal movement, <1.0 = less horizontal movement
-    // Default 1.0 means horizontal and vertical have same pixel offset
     var aspectRatioCompensation = 1.0f  // Default: pref_parallax_aspect_ratio=100 (100/100=1.0)
     
     /**
@@ -137,18 +137,26 @@ class ParallaxCalculator {
         val tilt = pendingTilt.get()
         val tiltMagnitude = kotlin.math.sqrt(tilt.x * tilt.x + tilt.y * tilt.y)
         
-        // Calculate effective max offset scaled to canvas size
-        // This ensures smaller canvases (preview) have proportionally smaller offsets
-        val effectiveMaxOffset = maxOffsetPx * scaleFactor
+        // Calculate effective max offset based on canvas height percentage
+        // This ensures movement is proportional to screen size (e.g., 10% = 192px on 1920p screen)
+        // For vertical movement: use maxOffsetPercent of canvas height
+        // For horizontal movement: use same pixel value (height-based) * aspectRatioCompensation
+        val effectiveMaxOffset = if (maxOffsetPercent > 0) {
+            canvasHeight * (maxOffsetPercent / 100f)
+        } else {
+            // Fallback to legacy pixel-based offset if percentage not set
+            maxOffsetPx * scaleFactor
+        }
         
         // Calculate target position from tilt
         // Tilt values are -1 to 1, map to pixel offset
-        // Apply aspect ratio compensation to X axis for 1:1 movement ratio
+        // Both axes use the same base offset (height-based) for consistent movement
+        // Aspect ratio compensation only affects horizontal for fine-tuning
         targetX = tilt.x * effectiveMaxOffset * strength * aspectRatioCompensation
         targetY = tilt.y * effectiveMaxOffset * strength
         
-        // Clamp target to bounds (use scaled offset for consistent limits)
-        // X limit is also scaled by aspect ratio compensation
+        // Clamp target to bounds
+        // X limit uses aspect ratio compensation for horizontal adjustment
         val xLimit = effectiveMaxOffset * aspectRatioCompensation
         targetX = targetX.coerceIn(-xLimit, xLimit)
         targetY = targetY.coerceIn(-effectiveMaxOffset, effectiveMaxOffset)

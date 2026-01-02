@@ -162,10 +162,25 @@ class SimulationSettings(context: Context) {
     fun getEffectiveWeather(realWeather: WeatherType): WeatherType {
         val override = debugWeatherOverride
         if (debugEnabled && override != null) {
-            return try {
-                WeatherType.valueOf(override.uppercase())
-            } catch (e: Exception) {
-                realWeather
+            // Handle special cases for UI-friendly names
+            return when (override.lowercase()) {
+                "none", "clear" -> WeatherType.CLEAR
+                "rain" -> WeatherType.RAIN
+                "snow" -> WeatherType.SNOW
+                "lightning", "thunderstorm" -> WeatherType.THUNDERSTORM
+                "fog" -> WeatherType.FOG
+                "hail" -> WeatherType.HAIL
+                "cloudy" -> WeatherType.CLOUDY
+                "overcast" -> WeatherType.OVERCAST
+                "partly_cloudy" -> WeatherType.PARTLY_CLOUDY
+                else -> {
+                    // Try direct enum match as fallback
+                    try {
+                        WeatherType.valueOf(override.uppercase())
+                    } catch (e: Exception) {
+                        realWeather
+                    }
+                }
             }
         }
         return if (useRealWeather) realWeather else manualWeather

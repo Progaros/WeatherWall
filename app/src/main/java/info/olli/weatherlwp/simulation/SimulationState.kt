@@ -33,7 +33,7 @@ data class SimulationState(
     val humidity: Float = 0f,           // 0-1 (from 0-100%)
     val visibility: Float = 1f,         // 0-1 normalized (0=poor, 1=excellent)
     val pressure: Int = 1013,           // hPa
-    val moonPhase: Float = 0f,          // 0-1 (0=new, 0.5=full, 1=new again)
+    val moonPhase: Float = 0.5f,        // 0-1 (0=new, 0.5=full, 1=new again) - default full
     val moonIllumination: Float = 0f,   // 0-1 (0=new moon dark, 1=full moon bright)
     
     // Wind
@@ -216,7 +216,7 @@ data class SimulationState(
             humidity = 0.5f,
             visibility = 1f,
             pressure = 1013,
-            moonPhase = 0f,
+            moonPhase = 0.5f,  // Default to full moon
             moonIllumination = 0f,
             windStrength = 0.5f,
             windDirection = 0f,

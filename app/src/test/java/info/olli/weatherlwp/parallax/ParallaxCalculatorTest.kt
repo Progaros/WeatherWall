@@ -198,4 +198,54 @@ class ParallaxCalculatorTest {
         // X should be ~1.5x of Y
         assertEquals(kotlin.math.abs(yScaled) * 1.5f, kotlin.math.abs(xScaled), 5f)
     }
+    
+    @Test
+    fun testAspectRatioDefault() {
+        val calculator = ParallaxCalculator()
+        
+        // Default aspect ratio should be 1.0 (100/100) - equal movement for both axes
+        assertEquals("Default aspect ratio should be 1.0", 1.0f, calculator.aspectRatioCompensation, 0.01f)
+    }
+    
+    @Test
+    fun testMaxOffsetPercentDefault() {
+        val calculator = ParallaxCalculator()
+        
+        // Default max offset should be 10% of screen height
+        assertEquals("Default max offset percent should be 10%", 10f, calculator.maxOffsetPercent, 0.01f)
+    }
+    
+    @Test
+    fun testMaxOffsetPercent() {
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 10f  // 10% of height
+        calculator.setCanvasSize(1080f, 1920f)
+        
+        // With 10% of 1920px = 192px max offset
+        calculator.updateFromSensor(1.0f, 0f)
+        repeat(100) { calculator.update(16) }
+        val x = calculator.getOffsetX()
+        
+        // At max tilt (1.0) with strength 1.0, should approach 192px
+        assertTrue("Max offset should be ~10% of height", kotlin.math.abs(x) > 150f)
+        assertTrue("Max offset should not exceed ~10% of height", kotlin.math.abs(x) < 250f)
+    }
+    
+    @Test
+    fun testMaxOffsetPercentPreview() {
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 10f  // 10% of height
+        calculator.setCanvasSize(270f, 480f)  // Preview size
+        
+        // With 10% of 480px = 48px max offset
+        calculator.updateFromSensor(1.0f, 0f)
+        repeat(100) { calculator.update(16) }
+        val x = calculator.getOffsetX()
+        
+        // At max tilt, should approach 48px on preview
+        assertTrue("Preview offset should be ~10% of preview height", kotlin.math.abs(x) > 35f)
+        assertTrue("Preview offset should not exceed ~10% of preview height", kotlin.math.abs(x) < 65f)
+    }
 }
