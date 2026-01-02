@@ -512,9 +512,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
         if (tiledOffsetX < -10000f) tiledOffsetX += 10000f
         if (tiledOffsetY > 10000f) tiledOffsetY -= 10000f
         
-        // Simple tint using paint color (no color filter - faster)
-        tiledPaint.color = currentCloudColor
+        // Apply cloud color as tint using SRC_IN mode (tints the white texture)
         tiledPaint.shader = shader
+        tiledPaint.colorFilter = PorterDuffColorFilter(currentCloudColor, PorterDuff.Mode.SRC_IN)
         
         // Draw two layers for depth - back layer and front layer
         // Back layer - higher, more transparent
@@ -524,7 +524,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         tiledMatrix.setScale(2.5f, 2.5f)
         tiledMatrix.postTranslate(tiledOffsetX * 0.6f + backPx, tiledOffsetY * 0.3f + backPy)
         shader.setLocalMatrix(tiledMatrix)
-        tiledPaint.alpha = (coverage * 100).toInt().coerceIn(0, 255)
+        tiledPaint.alpha = (coverage * 180).toInt().coerceIn(0, 255)
         canvas.drawRect(0f, 0f, width, height * 0.5f, tiledPaint)
         
         // Front layer - lower, more opaque
@@ -534,10 +534,11 @@ class CloudLayer(private val context: Context) : SceneLayer {
         tiledMatrix.setScale(1.5f, 1.5f)
         tiledMatrix.postTranslate(tiledOffsetX + frontPx, tiledOffsetY * 0.5f + frontPy)
         shader.setLocalMatrix(tiledMatrix)
-        tiledPaint.alpha = (coverage * 150).toInt().coerceIn(0, 255)
+        tiledPaint.alpha = (coverage * 220).toInt().coerceIn(0, 255)
         canvas.drawRect(0f, 0f, width, height * 0.45f, tiledPaint)
         
         tiledPaint.shader = null
+        tiledPaint.colorFilter = null
     }
     
     /**
@@ -594,16 +595,20 @@ class CloudLayer(private val context: Context) : SceneLayer {
                 val nx = x.toFloat() / size
                 val ny = y.toFloat() / size
                 
-                // 3 octaves of noise (fast)
-                var value = sampleNoise(nx, ny) * 0.6f +
+                // 3 octaves of noise (fast) - combine for cloud-like pattern
+                var value = sampleNoise(nx, ny) * 0.5f +
                            sampleNoise(nx * 2f % 1f, ny * 2f % 1f) * 0.3f +
-                           sampleNoise(nx * 4f % 1f, ny * 4f % 1f) * 0.1f
+                           sampleNoise(nx * 4f % 1f, ny * 4f % 1f) * 0.2f
                 
-                // Soft threshold for cloud shape
-                value = ((value - 0.3f) / 0.4f).coerceIn(0f, 1f)
-                value = value * value  // Soften edges
+                // Remap from 0.0-1.0 to have more cloud coverage
+                // Original range is roughly 0.2-0.8, we want some to be solid
+                value = ((value - 0.2f) / 0.5f).coerceIn(0f, 1f)
                 
-                val alpha = (value * 255).toInt()
+                // Apply soft threshold (clouds have softer edges)
+                value = kotlin.math.sqrt(value)  // Soften - sqrt expands lower values
+                
+                // Pixel: white color with varying alpha based on cloud density
+                val alpha = (value * 255).toInt().coerceIn(0, 255)
                 pixels[y * size + x] = (alpha shl 24) or 0x00FFFFFF  // White with varying alpha
             }
         }
@@ -611,6 +616,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         bitmap.setPixels(pixels, 0, size, 0, 0, size, size)
         tiledNoiseBitmap = bitmap
         tiledShader = BitmapShader(bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
+        android.util.Log.d("CloudLayer", "Generated tiled noise bitmap ${size}x${size}")
     }
     
     /**
@@ -715,7 +721,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
                 float edgeFade = smoothstep(0.0, 0.1, uv.y) * smoothstep(0.6, 0.4, uv.y);
                 cloud *= edgeFade;
                 
-                return half4(cloudColor, cloud * 0.7);
+                return half4(cloudColor.r, cloudColor.g, cloudColor.b, cloud * 0.7);
             }
         """.trimIndent()
         

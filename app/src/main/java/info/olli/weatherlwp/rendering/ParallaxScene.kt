@@ -142,6 +142,8 @@ class ParallaxScene(
                 height = h
                 resizeLayers(w, h)
                 simulationController.resize(w, h)
+                // Update parallax calculator with canvas size for proportional scaling
+                parallaxCalculator.setCanvasSize(w, h)
             }
             
             // Get current simulation state (single source of truth)
@@ -258,7 +260,7 @@ class ParallaxScene(
         try {
             val parallaxEnabled = prefs.getBoolean("pref_parallax_enabled", true)
             
-            // Sensor mode: rotation_vector (our robust implementation) or gyroscope (reference app style)
+            // Sensor mode: rotation_vector (our robust implementation) or gyroscope
             val sensorMode = prefs.getString("pref_parallax_sensor_mode", "rotation_vector") ?: "rotation_vector"
             val parallaxMode = when (sensorMode) {
                 "gyroscope" -> info.olli.weatherlwp.parallax.ParallaxSensorManager.ParallaxMode.GYROSCOPE

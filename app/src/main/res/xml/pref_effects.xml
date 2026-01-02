@@ -71,7 +71,7 @@
         <ListPreference
             android:key="pref_parallax_sensor_mode"
             android:title="Sensor Mode"
-            android:summary="rotation_vector=robust (works any orientation), gyroscope=smooth (reference app style)"
+            android:summary="rotation_vector=robust (works any orientation), gyroscope=smooth"
             android:defaultValue="rotation_vector"
             android:entries="@array/parallax_sensor_mode_entries"
             android:entryValues="@array/parallax_sensor_mode_values"

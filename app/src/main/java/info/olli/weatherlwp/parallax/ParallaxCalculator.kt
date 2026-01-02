@@ -49,6 +49,33 @@ class ParallaxCalculator {
     var depthSeparation = 1.32f         // Default: (33/100)*4.0 = 1.32 (pref_parallax_depth=33)
     
     /**
+     * Reference height for scaling parallax offset.
+     * Parallax offset is scaled relative to this height, so smaller canvases
+     * (like preview) get proportionally smaller offsets.
+     */
+    private val referenceHeight = 1920f
+    
+    /**
+     * Current canvas height for scaling. Set via setCanvasSize().
+     */
+    private var canvasHeight = referenceHeight
+    
+    /**
+     * Scale factor computed from canvas height / reference height.
+     * Ensures parallax looks the same proportionally regardless of canvas size.
+     */
+    private val scaleFactor: Float
+        get() = (canvasHeight / referenceHeight).coerceIn(0.1f, 2f)
+    
+    /**
+     * Update canvas dimensions for scaling parallax offset.
+     * Call this when canvas size changes.
+     */
+    fun setCanvasSize(width: Float, height: Float) {
+        canvasHeight = height.coerceAtLeast(1f)
+    }
+    
+    /**
      * Return speed: how fast position drifts back to center when tilt is zero.
      * 0.0 = instant return, 0.5 = medium, 1.0 = never return (disabled)
      * Maps from pref setting: 1=instant (0.0), 50=medium (0.5), 100=slow (1.0)
@@ -97,14 +124,18 @@ class ParallaxCalculator {
         val tilt = pendingTilt.get()
         val tiltMagnitude = kotlin.math.sqrt(tilt.x * tilt.x + tilt.y * tilt.y)
         
+        // Calculate effective max offset scaled to canvas size
+        // This ensures smaller canvases (preview) have proportionally smaller offsets
+        val effectiveMaxOffset = maxOffsetPx * scaleFactor
+        
         // Calculate target position from tilt
         // Tilt values are -1 to 1, map to pixel offset
-        targetX = tilt.x * maxOffsetPx * strength
-        targetY = tilt.y * maxOffsetPx * strength
+        targetX = tilt.x * effectiveMaxOffset * strength
+        targetY = tilt.y * effectiveMaxOffset * strength
         
-        // Clamp target to bounds
-        targetX = targetX.coerceIn(-maxOffsetPx, maxOffsetPx)
-        targetY = targetY.coerceIn(-maxOffsetPx, maxOffsetPx)
+        // Clamp target to bounds (use scaled offset for consistent limits)
+        targetX = targetX.coerceIn(-effectiveMaxOffset, effectiveMaxOffset)
+        targetY = targetY.coerceIn(-effectiveMaxOffset, effectiveMaxOffset)
         
         // Apply return-to-center when tilt is near zero
         // returnSpeed: 0.0 = instant return, 1.0 = never return

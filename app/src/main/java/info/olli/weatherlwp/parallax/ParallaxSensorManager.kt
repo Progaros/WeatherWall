@@ -63,7 +63,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     enum class ParallaxMode {
         /** Our implementation: Delta-based with rotation vector (works at any orientation) */
         ROTATION_VECTOR,
-        /** Reference app style: Gyroscope with averaging (simpler, very smooth) */
+        /** Gyroscope with averaging (simpler, very smooth) */
         GYROSCOPE
     }
 
@@ -110,8 +110,8 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     // Track display rotation for reset on rotation change
     private var lastDisplayRotation = Surface.ROTATION_0
     
-    // ==== Gyroscope mode state (reference app approach) ====
-    // Simple averager buffers (3 samples each, like reference app)
+    // ==== Gyroscope mode state approach) ====
+    // Simple averager buffers (3 samples each)
     private val avgYaw = Averager(3)
     private val avgPitch = Averager(3)
     private val avgRoll = Averager(3)
@@ -122,7 +122,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     private var gyroRoll = 0f
     private var lastGyroTime = 0L
     
-    // Maximum tilt angle in radians (18 degrees, same as reference app: 0.31415927)
+    // Maximum tilt angle in radians (18 degrees: 0.31415927)
     private val MAX_TILT_RAD = (18f * PI / 180f).toFloat()
     
     private var listener: Listener? = null
@@ -143,7 +143,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     
     /**
      * Set the parallax sensor mode.
-     * @param mode ROTATION_VECTOR (our implementation) or GYROSCOPE (reference app style)
+     * @param mode ROTATION_VECTOR (our implementation) or GYROSCOPE
      */
     fun setParallaxMode(mode: ParallaxMode) {
         if (mode != parallaxMode) {
@@ -204,7 +204,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             
             // Use SENSOR_DELAY_FASTEST for smoothest parallax
             val sensorRate = if (parallaxMode == ParallaxMode.GYROSCOPE) 
-                SensorManager.SENSOR_DELAY_GAME  // Reference app uses GAME rate
+                SensorManager.SENSOR_DELAY_GAME
             else 
                 SensorManager.SENSOR_DELAY_FASTEST
             sensorManager.registerListener(this, activeSensor, sensorRate)
@@ -294,57 +294,57 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     }
     
     /**
-     * Handle gyroscope sensor data (reference app approach).
-     * Accumulates angular velocity over time to get tilt angle.
-     * Uses 3-sample averaging for smooth output.
+     * Handle gyroscope sensor data.
+     * - 3-sample averaging only (no deadzone, no decay)
+     * - Formula: angle += avgRate * deltaTime * 1e-8 * 6.0 * DEG_TO_RAD
+     * - Clamp to ±18° (0.31415927 rad)
+     * - No additional filtering
      */
     private fun handleGyroscope(values: FloatArray, displayRotation: Int) {
         // Gyroscope reports angular velocity in rad/s around device axes
-        // values[0] = rotation rate around X axis (pitch rate)
-        // values[1] = rotation rate around Y axis (roll rate)
-        // values[2] = rotation rate around Z axis (yaw rate)
+        //  mapping: values[0]=yaw, values[1]=pitch, values[2]=roll
         
-        // Remap based on display rotation (same as reference app)
-        val (rateX, rateY, rateZ) = when (displayRotation) {
-            Surface.ROTATION_90 -> Triple(values[1], -values[0], values[2])
+        // Remap based on display rotation (matching ForestRenderer lines 580-595)
+        val (yawRate, pitchRate, rollRate) = when (displayRotation) {
+            Surface.ROTATION_90 -> Triple(values[0], -values[1], values[2])
             Surface.ROTATION_180 -> Triple(-values[0], -values[1], values[2])
-            Surface.ROTATION_270 -> Triple(-values[1], values[0], values[2])
+            Surface.ROTATION_270 -> Triple(-values[0], values[1], values[2])
             else -> Triple(values[0], values[1], values[2])
         }
         
-        // Add to averagers for smoothing (like reference app's Averager class)
-        avgPitch.add(rateX)
-        avgRoll.add(rateY)
-        avgYaw.add(rateZ)
+        // Add to averagers for smoothing
+        avgYaw.add(yawRate)
+        avgPitch.add(pitchRate)
+        avgRoll.add(rollRate)
         
         // Calculate time delta
         val currentTime = System.nanoTime()
-        val deltaTimeSec = (currentTime - lastGyroTime) * 1e-9f
+        val deltaTimeNanos = currentTime - lastGyroTime
         lastGyroTime = currentTime
         
-        // Reference app formula: angle += avgRate * deltaTime * 6.0 * DEG_TO_RAD
-        // The 6.0 is a sensitivity multiplier
-        val sensitivity = 6.0f * (PI.toFloat() / 180f)  // Convert to radians
+        // Skip first sample (no previous time)
+        if (deltaTimeNanos <= 0 || deltaTimeNanos > 100_000_000L) {  // >100ms = stale
+            return
+        }
         
-        // Accumulate averaged angular velocity into angle
-        gyroPitch = (gyroPitch + avgPitch.calc() * deltaTimeSec * sensitivity)
-            .coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
-        gyroRoll = (gyroRoll + avgRoll.calc() * deltaTimeSec * sensitivity)
-            .coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
-        gyroYaw = (gyroYaw + avgYaw.calc() * deltaTimeSec * sensitivity)
-            .coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
+        // formula: f = deltaTimeNanos * 1e-8 * 6.0 * 0.017453292
+        // = deltaTimeSec * 10 * 6.0 * DEG_TO_RAD
+        // = deltaTimeSec * 1.0472
+        val f = deltaTimeNanos * 1e-8f * 6.0f * 0.017453292f
         
-        // Convert gyro angles to tilt output (-1 to 1 range)
-        // Reference app uses these directly for layer offset via tan()
-        // We normalize to our -1..1 range by dividing by MAX_TILT_RAD
-        val tiltX = (gyroRoll / MAX_TILT_RAD).coerceIn(-1f, 1f)
-        val tiltY = (-gyroPitch / MAX_TILT_RAD).coerceIn(-1f, 1f)
+        // Accumulate: angle = clamp(angle + avgRate * f, ±0.31415927)
+        gyroYaw = (gyroYaw + avgYaw.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
+        gyroPitch = (gyroPitch + avgPitch.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
+        gyroRoll = (gyroRoll + avgRoll.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
         
-        // Apply low-pass filter for extra smoothness
-        filteredX += FILTER_ALPHA * (tiltX - filteredX)
-        filteredY += FILTER_ALPHA * (tiltY - filteredY)
+        // Output tilt: -lastPitch and lastYaw for ROTATION_0
+        // Layer.setTilt uses tan(angle) * tiltValue for perspective, but we normalize to -1..1
+        // tan(18°) ≈ 0.325, so we can use direct ratio for small angles
+        val tiltX = (gyroRoll / MAX_TILT_RAD).coerceIn(-1f, 1f)   // Roll affects X
+        val tiltY = (-gyroPitch / MAX_TILT_RAD).coerceIn(-1f, 1f) // Pitch affects Y (negated)
         
-        listener?.onTiltChanged(filteredX, filteredY)
+        // Direct output - no additional filtering
+        listener?.onTiltChanged(tiltX, tiltY)
     }
     
     /**
@@ -554,7 +554,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
 }
 
 /**
- * Simple circular buffer averager (matches reference app implementation).
+ * Simple circular buffer averager.
  * Computes running average of last N values for smooth sensor output.
  */
 internal class Averager(private val bufferSize: Int) {

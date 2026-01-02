@@ -16,6 +16,8 @@ class ParallaxCalculatorTest {
     @Before
     fun setUp() {
         calculator = ParallaxCalculator()
+        // Set canvas size to reference height so scale factor is 1.0 for predictable tests
+        calculator.setCanvasSize(1080f, 1920f)
     }
 
     // P1: Test position follows tilt and respects maxOffset

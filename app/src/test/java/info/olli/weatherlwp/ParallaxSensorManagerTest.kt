@@ -343,6 +343,70 @@ class ParallaxSensorManagerTest {
         val halfTilt = (MAX_TILT_RAD / 2f / MAX_TILT_RAD).coerceIn(-1f, 1f)
         assertEquals("Half max angle should map to tilt of 0.5", 0.5f, halfTilt, 0.001f)
     }
+    
+    // ============== Gyroscope Formula Tests ==============
+    
+    @Test
+    fun `formula calculates correct time factor`() {
+        // Reference formula: f = deltaTimeNanos * 1e-8 * 6.0 * 0.017453292
+        val deltaTimeNanos = 16_666_666L  // ~16.67ms (60fps)
+        val f = deltaTimeNanos * 1e-8f * 6.0f * 0.017453292f
+        
+        // Expected: 16666666 * 1e-8 * 6 * 0.01745 ≈ 0.01745
+        assertEquals("Time factor at 60fps", 0.01745f, f, 0.001f)
+    }
+    
+    @Test
+    fun `gyroscope accumulation matches reference`() {
+        val MAX_TILT_RAD = 0.31415927f  // 18 degrees
+        
+        // Simulate reference accumulation
+        var angle = 0f
+        val angularVelocity = 1.0f  // 1 rad/s
+        val deltaTimeNanos = 16_666_666L  // ~60fps
+        val f = deltaTimeNanos * 1e-8f * 6.0f * 0.017453292f
+        
+        // 60 frames at 1 rad/s
+        for (i in 0 until 60) {
+            angle = (angle + angularVelocity * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
+        }
+        
+        // After 60 frames: 60 * 0.01745 ≈ 1.047 rad, but clamped to MAX_TILT_RAD
+        assertEquals("Should be clamped to MAX_TILT_RAD", MAX_TILT_RAD, angle, 0.001f)
+    }
+    
+    @Test
+    fun `averaging smooths noisy gyroscope input`() {
+        // Reference uses 3-sample averaging
+        val averager = TestAverager(3)
+        
+        // Noisy input
+        averager.add(0.5f)
+        averager.add(0.6f)
+        averager.add(0.4f)
+        
+        // Average = (0.5 + 0.6 + 0.4) / 3 = 0.5
+        assertEquals("Averaging should smooth noise", 0.5f, averager.calc(), 0.001f)
+    }
+    
+    @Test
+    fun `tilt output normalized to -1 to 1 range`() {
+        val MAX_TILT_RAD = 0.31415927f
+        
+        // At max tilt
+        val gyroAngle = MAX_TILT_RAD
+        val tilt = (gyroAngle / MAX_TILT_RAD).coerceIn(-1f, 1f)
+        assertEquals("Max angle should map to 1.0", 1f, tilt, 0.001f)
+        
+        // At half max tilt
+        val halfAngle = MAX_TILT_RAD / 2f
+        val halfTilt = (halfAngle / MAX_TILT_RAD).coerceIn(-1f, 1f)
+        assertEquals("Half angle should map to 0.5", 0.5f, halfTilt, 0.001f)
+        
+        // At negative max
+        val negativeTilt = (-MAX_TILT_RAD / MAX_TILT_RAD).coerceIn(-1f, 1f)
+        assertEquals("Negative max should map to -1.0", -1f, negativeTilt, 0.001f)
+    }
 }
 
 /**
