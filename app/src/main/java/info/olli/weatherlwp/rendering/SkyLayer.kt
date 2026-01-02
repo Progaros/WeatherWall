@@ -178,13 +178,15 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
     }
 
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
-        val (px, py) = parallaxCalculator.getOffset()
+        // Use getOffsetForDepth for proper perspective support
+        // PARALLAX_SKY is the depth factor (0 = background, 1 = foreground)
+        val (skyPx, skyPy) = parallaxCalculator.getOffsetForDepth(RenderConstants.PARALLAX_SKY)
         
         // Sky moves opposite to create depth illusion (infinite distance)
-        val overscan = 300f + abs(px) * 0.4f + abs(py) * 0.4f
+        val overscan = 300f + abs(skyPx) * 0.4f + abs(skyPy) * 0.4f
         
         canvas.save()
-        canvas.translate(px * RenderConstants.PARALLAX_SKY, py * RenderConstants.PARALLAX_SKY)
+        canvas.translate(skyPx, skyPy)
         canvas.drawRect(-overscan, -overscan, width + overscan, height + overscan, skyPaint)
         canvas.restore()
 
@@ -193,31 +195,30 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
             val time = state.absoluteTimeMs
             val starAlphaBase = if (state.isNight) 150 else 80
             
-            val starParallaxX = px * RenderConstants.PARALLAX_STARS
-            val starParallaxY = py * RenderConstants.PARALLAX_STARS
+            val (starPx, starPy) = parallaxCalculator.getOffsetForDepth(RenderConstants.PARALLAX_STARS)
             
             for (star in stars) {
                 val twinkle = sin((time * RenderConstants.STAR_TWINKLE_SPEED + star[0] * 10).toDouble())
                 val alpha = (starAlphaBase + 50 * twinkle).toInt().coerceIn(30, 220)
                 starPaint.alpha = alpha
                 
-                val x = star[0] * width + starParallaxX
-                val y = star[1] * height + starParallaxY
+                val x = star[0] * width + starPx
+                val y = star[1] * height + starPy
                 
                 canvas.drawCircle(x, y, star[2], starPaint)
             }
         }
         
-        // Sun and Moon with subtle parallax
-        val celestialParallaxX = px * RenderConstants.PARALLAX_SKY * 0.5f
-        val celestialParallaxY = py * RenderConstants.PARALLAX_SKY * 0.5f
+        // Sun and Moon with subtle parallax (half of sky depth for subtle effect)
+        val celestialPx = skyPx * 0.5f
+        val celestialPy = skyPy * 0.5f
         
         if (sunEnabled) {
-            drawSun(canvas, state, celestialParallaxX, celestialParallaxY)
+            drawSun(canvas, state, celestialPx, celestialPy)
         }
         
         if (moonEnabled) {
-            drawMoon(canvas, state, celestialParallaxX, celestialParallaxY)
+            drawMoon(canvas, state, celestialPx, celestialPy)
         }
         
         // Vignette effect for night/dusk - darker corners for atmosphere

@@ -87,12 +87,15 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
         android:layout_marginBottom="72dp"
-        android:text="@string/use_wallpaper"
+        android:text="@string/set_wallpaper"
+        android:textAllCaps="true"
         android:contentDescription="@string/apply_wallpaper"
         android:visibility="gone"
         app:icon="@android:drawable/ic_menu_set_as"
         app:backgroundTint="?attr/colorPrimary"
         android:textColor="@android:color/white"
         app:iconTint="@android:color/white" />
+    
+        
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

@@ -2,5 +2,5 @@
     <string name="app_name">WeatherWall</string>
     <string name="wallpaper_description">Weather-reactive live wallpaper</string>
     <string name="apply_wallpaper">Apply Wallpaper</string>
-    <string name="use_wallpaper">USE</string>
+    <string name="set_wallpaper">Set Wallpaper</string>
 </resources>

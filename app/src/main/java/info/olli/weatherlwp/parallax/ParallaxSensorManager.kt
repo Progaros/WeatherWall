@@ -64,6 +64,10 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     private var accumulatedY = 0f
     private val DECAY_RATE = 0.995f  // Slowly decay back to center
     
+    // Pose gain: reduces sensitivity when near vertical (gimbal-lock region)
+    // 1.0 = flat (stable), 0.0 = vertical (unstable)
+    private var poseGain = 1f
+    
     // Track display rotation for reset on rotation change
     private var lastDisplayRotation = Surface.ROTATION_0
     
@@ -166,6 +170,12 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         val pitch = orientationAngles[1]  // Forward/backward tilt → Y parallax
         val roll = orientationAngles[2]   // Left/right tilt → X parallax
         
+        // Calculate pose gain from rotation matrix: remappedMatrix[8] is the Z component
+        // of the device's Z-axis in world space. When phone is flat, |Z[8]| ≈ 1.
+        // When phone is vertical (screen facing user), |Z[8]| ≈ 0.
+        val zComponent = abs(remappedMatrix[8])
+        poseGain = (zComponent / 0.3f).coerceIn(0f, 1f)  // Fade sensitivity below 0.3
+        
         processOrientationAngles(pitch, roll)
     }
     
@@ -187,6 +197,11 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         gx *= inv
         gy *= inv
         val gzn = gz * inv
+        
+        // Calculate pose gain: |gzn| is large when phone is flat, small when vertical
+        // When phone is near vertical, Euler angle extraction becomes unstable (gimbal lock)
+        // Reduce sensitivity to prevent jitter in that region
+        poseGain = (abs(gzn) / 0.3f).coerceIn(0f, 1f)  // Fade sensitivity below |gz| = 0.3
         
         // Correct formulas for pitch/roll from gravity:
         // When solving for angle about axis A, exclude A-component from denominator
@@ -228,6 +243,11 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         // Clamp delta to reasonable range (prevents huge jumps from sensor noise)
         deltaPitch = deltaPitch.coerceIn(-FULL_TILT_RADIANS * 0.5f, FULL_TILT_RADIANS * 0.5f)
         deltaRoll = deltaRoll.coerceIn(-FULL_TILT_RADIANS * 0.5f, FULL_TILT_RADIANS * 0.5f)
+        
+        // Apply pose gain: reduces sensitivity near vertical orientation (gimbal lock region)
+        // poseGain is 0-1 where 0 = near vertical (unstable), 1 = flat (stable)
+        deltaPitch *= poseGain
+        deltaRoll *= poseGain
         
         // Accumulate motion into parallax offset (like moving a camera)
         // Sensitivity factor converts radians to parallax units

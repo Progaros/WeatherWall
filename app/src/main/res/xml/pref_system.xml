@@ -120,10 +120,11 @@
             android:title="Version"
             android:selectable="true" />
 
-        <Preference
-            android:key="pref_export_log"
-            android:title="Export Debug Log"
-            android:summary="Generate log for troubleshooting" />
+        <SwitchPreferenceCompat
+            android:key="pref_debug_logging"
+            android:title="Debug Logging"
+            android:summary="Enable tracing (copies log when disabled)"
+            android:defaultValue="false" />
 
         <Preference
             android:key="pref_preview"

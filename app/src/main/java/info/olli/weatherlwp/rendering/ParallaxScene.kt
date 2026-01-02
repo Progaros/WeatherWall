@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.graphics.Canvas
 import android.util.Log
 import androidx.preference.PreferenceManager
+import info.olli.weatherlwp.DebugTracer
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.parallax.ParallaxSensorManager
 import info.olli.weatherlwp.simulation.SimulationController
@@ -113,6 +114,7 @@ class ParallaxScene(
     }
 
     fun render(canvas: Canvas, deltaTimeMs: Long = 16L) {
+        DebugTracer.traceStart("render")
         try {
             val w = canvas.width.toFloat()
             val h = canvas.height.toFloat()
@@ -222,6 +224,7 @@ class ParallaxScene(
                 }
             }
             
+            DebugTracer.traceEnd("render")
         } catch (e: Exception) {
             Log.e(TAG, "Error rendering scene", e)
         }

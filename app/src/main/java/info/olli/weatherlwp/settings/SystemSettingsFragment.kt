@@ -7,7 +7,9 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
+import androidx.preference.SwitchPreferenceCompat
 import info.olli.weatherlwp.BuildConfig
+import info.olli.weatherlwp.DebugTracer
 import info.olli.weatherlwp.R
 import info.olli.weatherlwp.wallpaper.WeatherWallpaper
 import info.olli.weatherlwp.weather.WeatherRepository
@@ -45,10 +47,20 @@ class SystemSettingsFragment : PreferenceFragmentCompat() {
             true
         }
         
-        // Export debug log
-        findPreference<Preference>("pref_export_log")?.setOnPreferenceClickListener {
-            exportDebugLog()
-            true
+        // Debug logging toggle
+        findPreference<SwitchPreferenceCompat>("pref_debug_logging")?.apply {
+            setOnPreferenceChangeListener { _, newValue ->
+                val enabled = newValue as Boolean
+                if (enabled) {
+                    DebugTracer.enable()
+                    Toast.makeText(context, "Debug tracing enabled", Toast.LENGTH_SHORT).show()
+                } else {
+                    DebugTracer.disableAndCopy(requireContext())
+                }
+                true
+            }
+            // Sync toggle with actual tracer state
+            isChecked = DebugTracer.isEnabled()
         }
         
         // Preview wallpaper
@@ -92,11 +104,6 @@ class SystemSettingsFragment : PreferenceFragmentCompat() {
         } else {
             Toast.makeText(context, "No weather data available. Open Breezy Weather first.", Toast.LENGTH_LONG).show()
         }
-    }
-    
-    private fun exportDebugLog() {
-        Toast.makeText(context, "Debug log exported to Downloads", Toast.LENGTH_SHORT).show()
-        // TODO: Implement actual log export
     }
     
     private fun openWallpaperPreview() {
