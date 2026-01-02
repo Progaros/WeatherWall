@@ -103,6 +103,13 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         path.close()
         canvas.drawPath(path, paint)
         
+        // Eye (small dark dot on head)
+        paint.color = Color.rgb(20, 15, 10)
+        canvas.drawCircle(2.6f*s, -1.35f*s, 0.12f*s, paint)
+        
+        // Nose (black dot on snout)
+        canvas.drawCircle(3.5f*s, -1.15f*s, 0.1f*s, paint)
+        
         canvas.restore()
         canvas.restore()
     }

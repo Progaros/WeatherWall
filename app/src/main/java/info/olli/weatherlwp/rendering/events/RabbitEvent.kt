@@ -72,6 +72,14 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
         canvas.drawRoundRect(1.4f*s, -3.0f*s, 1.8f*s, -1.1f*s, 0.4f*s, 0.4f*s, paint)
         canvas.drawRoundRect(1.9f*s, -2.8f*s, 2.3f*s, -1.1f*s, 0.4f*s, 0.4f*s, paint)
         
+        // Eye (dark dot on head)
+        paint.color = Color.rgb(20, 15, 10)
+        canvas.drawCircle(2.0f*s, -0.75f*s, 0.12f*s, paint)
+        
+        // Nose (small pink dot)
+        paint.color = Color.rgb(180, 120, 120)
+        canvas.drawCircle(2.35f*s, -0.5f*s, 0.08f*s, paint)
+        
         // Tail (fluffy white)
         paint.color = Color.rgb(200, 190, 180)
         canvas.drawCircle(-2.2f*s, 0.0f, 0.45f*s, paint)

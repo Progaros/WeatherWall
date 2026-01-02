@@ -40,9 +40,9 @@ class EagleEvent(random: Random, override val spawnTimeMs: Long = System.current
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long) {
-        // Scale: 0.5-0.8% of height based on distance (was 1%)
-        val unit = height * 0.006f * sizeScale
-        val size = unit * 12f
+        // Scale: ~1-1.5% of height based on distance
+        val unit = height * 0.005f * sizeScale
+        val size = unit * 5f
         
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val progress = -0.1f + speed * elapsedMs
@@ -53,31 +53,58 @@ class EagleEvent(random: Random, override val spawnTimeMs: Long = System.current
         canvas.translate(px, py)
         
         val currentX = -0.1f * width + 1.4f * width * progress - extendedOffset
-        // Less soaring movement for distant eagles
         val soarOffset = sin(timeSeconds * 0.8f + soarPhase) * 0.015f * sizeScale
         val currentY = (baseY + soarOffset) * height
         
-        // Distant eagles are slightly faded
+        // Alpha based on distance
         val alpha = (1f - distance * 0.25f)
-        strokePaint.color = RenderConstants.blendWithAmbient(
-            Color.argb((255 * alpha).toInt(), 40, 35, 30), ambientColor, 0.35f)
-        strokePaint.style = Paint.Style.STROKE
-        strokePaint.strokeWidth = (size * 0.15f).coerceAtLeast(1.5f)
+        val birdColor = RenderConstants.blendWithAmbient(
+            Color.argb((255 * alpha).toInt(), 35, 30, 25), ambientColor, 0.35f)
+        paint.color = birdColor
         
-        val span = size * 2f
-        val camber = size * 0.4f
+        // Soaring eagle silhouette - wide outstretched wings
+        val wingspan = size * 2.2f
+        val bodyLen = size * 0.8f
         
+        // Body - elongated oval
         path.reset()
-        path.moveTo(currentX - span, currentY)
-        path.quadTo(currentX - size * 0.9f, currentY - camber, currentX, currentY)
-        path.quadTo(currentX + size * 0.9f, currentY - camber, currentX + span, currentY)
-        canvas.drawPath(path, strokePaint)
+        path.addOval(currentX - bodyLen * 0.5f, currentY - size * 0.12f,
+                     currentX + bodyLen * 0.5f, currentY + size * 0.12f, Path.Direction.CW)
+        canvas.drawPath(path, paint)
         
-        // Head (only visible for closer eagles)
-        if (distance < 0.5f) {
-            paint.color = strokePaint.color
-            canvas.drawCircle(currentX + size * 0.2f, currentY, size * 0.15f, paint)
-        }
+        // Left wing - broad with slight upward curve (soaring position)
+        path.reset()
+        path.moveTo(currentX - size * 0.15f, currentY)
+        path.quadTo(currentX - wingspan * 0.5f, currentY - size * 0.35f,
+                    currentX - wingspan, currentY - size * 0.1f)
+        path.lineTo(currentX - wingspan * 0.85f, currentY + size * 0.05f)
+        path.quadTo(currentX - wingspan * 0.5f, currentY - size * 0.1f,
+                    currentX - size * 0.15f, currentY + size * 0.08f)
+        path.close()
+        canvas.drawPath(path, paint)
+        
+        // Right wing - mirror
+        path.reset()
+        path.moveTo(currentX + size * 0.15f, currentY)
+        path.quadTo(currentX + wingspan * 0.5f, currentY - size * 0.35f,
+                    currentX + wingspan, currentY - size * 0.1f)
+        path.lineTo(currentX + wingspan * 0.85f, currentY + size * 0.05f)
+        path.quadTo(currentX + wingspan * 0.5f, currentY - size * 0.1f,
+                    currentX + size * 0.15f, currentY + size * 0.08f)
+        path.close()
+        canvas.drawPath(path, paint)
+        
+        // Tail - fan shape
+        path.reset()
+        path.moveTo(currentX - bodyLen * 0.4f, currentY)
+        path.lineTo(currentX - bodyLen * 0.7f, currentY - size * 0.15f)
+        path.lineTo(currentX - bodyLen * 0.9f, currentY)
+        path.lineTo(currentX - bodyLen * 0.7f, currentY + size * 0.15f)
+        path.close()
+        canvas.drawPath(path, paint)
+        
+        // Head
+        canvas.drawCircle(currentX + bodyLen * 0.45f, currentY - size * 0.02f, size * 0.12f, paint)
         
         canvas.restore()
     }

@@ -121,23 +121,27 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     }
 
     override fun onSensorChanged(event: SensorEvent) {
-        val displayRotation = getCurrentDisplayRotation()
-        
-        // Auto-recalibrate if display rotation changed
-        if (displayRotation != lastDisplayRotation) {
-            Log.d(TAG, "Display rotation changed: $lastDisplayRotation -> $displayRotation, recalibrating")
-            lastDisplayRotation = displayRotation
-            recalibrate()
-            return  // Skip this sample, wait for fresh calibration
-        }
+        try {
+            val displayRotation = getCurrentDisplayRotation()
+            
+            // Auto-recalibrate if display rotation changed
+            if (displayRotation != lastDisplayRotation) {
+                Log.d(TAG, "Display rotation changed: $lastDisplayRotation -> $displayRotation, recalibrating")
+                lastDisplayRotation = displayRotation
+                recalibrate()
+                return  // Skip this sample, wait for fresh calibration
+            }
 
-        when (event.sensor.type) {
-            Sensor.TYPE_ROTATION_VECTOR, Sensor.TYPE_GAME_ROTATION_VECTOR -> {
-                handleRotationVector(event.values, displayRotation)
+            when (event.sensor.type) {
+                Sensor.TYPE_ROTATION_VECTOR, Sensor.TYPE_GAME_ROTATION_VECTOR -> {
+                    handleRotationVector(event.values, displayRotation)
+                }
+                Sensor.TYPE_GRAVITY, Sensor.TYPE_ACCELEROMETER -> {
+                    handleGravityVector(event.values, displayRotation)
+                }
             }
-            Sensor.TYPE_GRAVITY, Sensor.TYPE_ACCELEROMETER -> {
-                handleGravityVector(event.values, displayRotation)
-            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error processing sensor event: ${e.message}", e)
         }
     }
     
@@ -181,8 +185,16 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         val norm = sqrt(gx * gx + gy * gy + gz * gz)
         if (norm < 0.1f) return
         
-        val roll = atan2(gx, gz)
-        val pitch = atan2(gy, gz)
+        // Use projection-based tilt instead of atan2(*, gz) to avoid singularity when gz → 0
+        // This gives stable 2D tilt even when device is vertical
+        // Use sqrt(gy*gy + gz*gz) and sqrt(gx*gx + gz*gz) as denominators
+        val rollDenom = sqrt(gx * gx + gz * gz)
+        val pitchDenom = sqrt(gy * gy + gz * gz)
+        
+        val roll = if (rollDenom > 0.01f) atan2(gx, rollDenom) * if (gz < 0) -1f else 1f 
+                   else if (gx > 0) (PI / 2).toFloat() else (-PI / 2).toFloat()
+        val pitch = if (pitchDenom > 0.01f) atan2(gy, pitchDenom) * if (gz < 0) -1f else 1f
+                    else if (gy > 0) (PI / 2).toFloat() else (-PI / 2).toFloat()
         
         processOrientationAngles(pitch, roll)
     }
@@ -201,17 +213,33 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             return
         }
         
-        val relativePitch = pitch - baselinePitch
-        val relativeRoll = roll - baselineRoll
+        // Calculate relative angles from baseline
+        var relativePitch = pitch - baselinePitch
+        var relativeRoll = roll - baselineRoll
+        
+        // Clamp relative angles to valid range to prevent extreme values
+        // when phone is tilted far from calibration position
+        relativePitch = relativePitch.coerceIn(-FULL_TILT_RADIANS * 1.5f, FULL_TILT_RADIANS * 1.5f)
+        relativeRoll = relativeRoll.coerceIn(-FULL_TILT_RADIANS * 1.5f, FULL_TILT_RADIANS * 1.5f)
+        
+        // Detect near-vertical orientation (phone tilted far from flat)
+        // When absolute pitch is high, reduce parallax effect to avoid erratic behavior
+        val absolutePitchFromFlat = abs(pitch)
+        val verticalFactor = if (absolutePitchFromFlat > (PI / 3).toFloat()) {  // > 60 degrees
+            // Smoothly reduce effect as phone approaches vertical
+            val excess = (absolutePitchFromFlat - (PI / 3).toFloat()) / ((PI / 6).toFloat())  // 0-1 over 60-90 degrees
+            (1f - excess.coerceIn(0f, 1f))
+        } else {
+            1f
+        }
         
         // Use soft clamp (tanh) instead of hard coerceIn to avoid "stuck at edge" feel
         // tanh approaches ±1 asymptotically, giving smooth response at all tilts
-        // With FULL_TILT_DEGREES=45 and no extra multiplier, we get a gentle curve
         val normalizedX = -relativeRoll / FULL_TILT_RADIANS
         val normalizedY = -relativePitch / FULL_TILT_RADIANS
         
-        val targetX = tanh(normalizedX.toDouble()).toFloat()
-        val targetY = tanh(normalizedY.toDouble()).toFloat()
+        val targetX = tanh(normalizedX.toDouble()).toFloat() * verticalFactor
+        val targetY = tanh(normalizedY.toDouble()).toFloat() * verticalFactor
         
         processTiltValues(targetX, targetY)
     }

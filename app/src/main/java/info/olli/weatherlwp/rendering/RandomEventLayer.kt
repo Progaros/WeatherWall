@@ -126,34 +126,36 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     private var lastSpawnBucket = 0L
     
     private fun spawnRandomEvent(state: SimulationState, currentEvents: MutableList<RandomEvent>, random: Random, spawnTime: Long) {
-        val availableEvents = mutableListOf<() -> RandomEvent?>()
+        val availableEvents = mutableListOf<(Long) -> RandomEvent?>()
         
-        // Day events
-        if (airplaneEnabled && !state.isNight) availableEvents.add { AirplaneEvent(random, spawnTime) }
-        if (birdsEnabled && !state.isNight) availableEvents.add { BirdFlockEvent(random, spawnTime) }
-        if (eagleEnabled && !state.isNight) availableEvents.add { EagleEvent(random, spawnTime) }
-        if (butterflyEnabled && !state.isNight) availableEvents.add { ButterflyEvent(random, spawnTime) }
+        // Day events (lambda takes spawnTime to create deterministic event)
+        if (airplaneEnabled && !state.isNight) availableEvents.add { t -> AirplaneEvent(Random(t), t) }
+        if (birdsEnabled && !state.isNight) availableEvents.add { t -> BirdFlockEvent(Random(t + 1), t) }
+        if (eagleEnabled && !state.isNight) availableEvents.add { t -> EagleEvent(Random(t + 2), t) }
+        if (butterflyEnabled && !state.isNight) availableEvents.add { t -> ButterflyEvent(Random(t + 3), t) }
         val isRaining = state.weather == WeatherType.RAIN || state.weather == WeatherType.THUNDERSTORM || state.weather == WeatherType.SNOW
-        if (balloonEnabled && !state.isNight && !isRaining) availableEvents.add { HotAirBalloonEvent(random, spawnTime) }
+        if (balloonEnabled && !state.isNight && !isRaining) availableEvents.add { t -> HotAirBalloonEvent(Random(t + 4), t) }
         
         // Any time
-        if (rabbitEnabled) availableEvents.add { RabbitEvent(random, spawnTime) }
-        if (foxEnabled) availableEvents.add { FoxEvent(random, spawnTime) }
+        if (rabbitEnabled) availableEvents.add { t -> RabbitEvent(Random(t + 5), t) }
+        if (foxEnabled) availableEvents.add { t -> FoxEvent(Random(t + 6), t) }
         
         // Night events
         val isClearEnough = state.cloudDensity == CloudDensity.LIGHT || state.cloudDensity == CloudDensity.MEDIUM
-        if (shootingStarEnabled && state.isNight && isClearEnough) availableEvents.add { ShootingStarEvent(random, spawnTime) }
-        if (firefliesEnabled && state.isNight && !isRaining) availableEvents.add { FireflyEvent(random, spawnTime) }
-        if (owlEnabled && state.isNight) availableEvents.add { OwlEvent(random, spawnTime) }
+        if (shootingStarEnabled && state.isNight && isClearEnough) availableEvents.add { t -> ShootingStarEvent(Random(t + 7), t) }
+        if (firefliesEnabled && state.isNight && !isRaining) availableEvents.add { t -> FireflyEvent(Random(t + 8), t) }
+        if (owlEnabled && state.isNight) availableEvents.add { t -> OwlEvent(Random(t + 9), t) }
         
         // Rare alien event - night only, very low chance
         if (alienEnabled && state.isNight && random.nextFloat() < 0.05f) {
-            availableEvents.add { AlienEvent(random, spawnTime) }
+            availableEvents.add { t -> AlienEvent(Random(t + 10), t) }
         }
         
         if (availableEvents.isEmpty()) return
         
-        val event = availableEvents[random.nextInt(availableEvents.size)]()
+        // Use deterministic selection based on spawnTime
+        val selectionRandom = Random(spawnTime + 99999)
+        val event = availableEvents[selectionRandom.nextInt(availableEvents.size)](spawnTime)
         event?.let { currentEvents.add(it) }
     }
     

@@ -59,7 +59,7 @@
         <item>dusk</item>
     </string-array>
 
-    <!-- Debug season options -->
+    <!-- Debug season options (for overlay events) -->
     <string-array name="season_options">
         <item>Auto (Real Date)</item>
         <item>Normal</item>
@@ -67,7 +67,6 @@
         <item>New Year</item>
         <item>Chinese New Year</item>
         <item>St. Patrick\'s Day</item>
-        <item>Winter Snow</item>
     </string-array>
     <string-array name="season_values">
         <item>auto</item>
@@ -76,6 +75,21 @@
         <item>newyear</item>
         <item>cn_newyear</item>
         <item>st_patricks</item>
-        <item>winter_snow</item>
+    </string-array>
+    
+    <!-- Terrain season options (for flowers, grass color, snow patches) -->
+    <string-array name="terrain_season_options">
+        <item>Auto (Real Date)</item>
+        <item>Spring</item>
+        <item>Summer</item>
+        <item>Autumn</item>
+        <item>Winter</item>
+    </string-array>
+    <string-array name="terrain_season_values">
+        <item>auto</item>
+        <item>spring</item>
+        <item>summer</item>
+        <item>autumn</item>
+        <item>winter</item>
     </string-array>
 </resources>

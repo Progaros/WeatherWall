@@ -28,8 +28,7 @@ class SeasonalEvents(private val context: Context? = null) {
         CHRISTMAS,      // Dec 15-26
         NEW_YEAR,       // Dec 27 - Jan 7
         CN_NEW_YEAR,    // Chinese New Year (late Jan - mid Feb, varies)
-        ST_PATRICKS,    // St. Patrick's Day (Mar 14-18)
-        WINTER_SNOW     // Winter snow (Dec 1-14, then Jan 8 - Feb 28)
+        ST_PATRICKS     // St. Patrick's Day (Mar 14-18)
     }
 
     // Christmas star (Bethlehem star with trail/Schweif)
@@ -145,6 +144,11 @@ class SeasonalEvents(private val context: Context? = null) {
     private var fireworkFrequency = 50  // 0-100, default 50
     private var fireworkAmount = 50     // 10-100, controls particles per explosion
     
+    // Rainbow settings (St. Patrick's Day)
+    private var rainbowPositionX = 50    // 0-100, horizontal position (50 = center)
+    private var rainbowPositionY = 50    // 0-100, vertical position (0 = top, 100 = bottom)
+    private var rainbowSize = 100        // 0-200, size percentage
+    
     // Track last settings load time to avoid polling SharedPreferences every frame
     private var lastSettingsLoad = 0L
     private val SETTINGS_RELOAD_INTERVAL_MS = 1000L  // Reload settings every 1 second
@@ -164,6 +168,11 @@ class SeasonalEvents(private val context: Context? = null) {
             trailLengthMultiplier = (it.getInt("pref_christmas_star_trail", 100) / 100f).coerceIn(0f, 2.0f)
             fireworkFrequency = it.getInt("pref_firework_frequency", 50).coerceIn(0, 100)
             fireworkAmount = it.getInt("pref_firework_amount", 50).coerceIn(10, 100)
+            
+            // Rainbow settings
+            rainbowPositionX = it.getInt("pref_rainbow_position_x", 50).coerceIn(0, 100)
+            rainbowPositionY = it.getInt("pref_rainbow_position_y", 40).coerceIn(0, 100)
+            rainbowSize = it.getInt("pref_rainbow_size", 100).coerceIn(20, 200)
         }
         lastSettingsLoad = System.currentTimeMillis()
     }
@@ -185,7 +194,6 @@ class SeasonalEvents(private val context: Context? = null) {
                         "newyear" -> return Season.NEW_YEAR
                         "cn_newyear" -> return Season.CN_NEW_YEAR
                         "st_patricks" -> return Season.ST_PATRICKS
-                        "winter_snow" -> return Season.WINTER_SNOW
                         "none" -> return Season.NONE
                     }
                 }
@@ -208,9 +216,6 @@ class SeasonalEvents(private val context: Context? = null) {
             (month == 0 && day >= 20) || (month == 1 && day <= 15) -> Season.CN_NEW_YEAR
             // St. Patrick's Day: Mar 14-18
             month == 2 && day in 14..18 -> Season.ST_PATRICKS
-            // Winter Snow: Dec 1-14 and Jan 8 - Feb 28 (outside other winter events)
-            (month == 11 && day < 15) -> Season.WINTER_SNOW
-            (month == 0 && day >= 8) || (month == 1 && day >= 16) -> Season.WINTER_SNOW
             else -> Season.NONE
         }
     }
@@ -240,7 +245,6 @@ class SeasonalEvents(private val context: Context? = null) {
                 Season.NEW_YEAR -> renderNewYearFireworks(canvas)
                 Season.CN_NEW_YEAR -> renderChineseNewYear(canvas)
                 Season.ST_PATRICKS -> renderStPatricksDay(canvas)
-                Season.WINTER_SNOW -> renderWinterSnow(canvas)
                 Season.NONE -> {}
             }
         } catch (e: Exception) {
@@ -628,55 +632,47 @@ class SeasonalEvents(private val context: Context? = null) {
     private fun renderStPatricksDay(canvas: Canvas) {
         rainbowPhase += 0.02f
         
-        val centerX = screenWidth * 0.3f
-        val baseY = screenHeight * 0.6f
-        val arcRadius = screenWidth * 0.35f
+        // Position and size based on settings
+        val centerX = screenWidth * (rainbowPositionX / 100f)
+        val baseY = screenHeight * (rainbowPositionY / 100f)
+        val sizeMultiplier = rainbowSize / 100f
+        val arcRadius = screenWidth * 0.45f * sizeMultiplier
         
         // Draw rainbow arc with gradient bands
         for (i in rainbowColors.indices.reversed()) {
-            val bandWidth = arcRadius * 0.08f
+            val bandWidth = arcRadius * 0.06f
             val bandRadius = arcRadius - i * bandWidth
             
             // Shimmer effect
             val shimmer = (kotlin.math.sin(rainbowPhase + i * 0.5f) * 0.15f + 0.85f).toFloat()
             
-            starPaint.color = Color.argb(
-                (180 * shimmer).toInt(),
+            // Create paint for this band
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = bandWidth
+                strokeCap = Paint.Cap.ROUND
+            }
+            
+            val baseAlpha = (100 * shimmer).toInt()  // Lower base alpha for subtle effect
+            paint.color = Color.argb(
+                baseAlpha,
                 Color.red(rainbowColors[i]),
                 Color.green(rainbowColors[i]),
                 Color.blue(rainbowColors[i])
             )
-            starPaint.style = Paint.Style.STROKE
-            starPaint.strokeWidth = bandWidth
             
-            // Draw arc from left ground to right ground
+            // Only draw the upper portion of the arc (behind terrain)
+            // Draw arc from 200° to 340° (upper portion, skipping bottom)
             canvas.drawArc(
                 centerX - bandRadius,
                 baseY - bandRadius,
                 centerX + bandRadius,
                 baseY + bandRadius,
-                180f, 180f, false, starPaint
+                200f, 140f, false, paint  // Draw upper arc only
             )
         }
-        starPaint.style = Paint.Style.FILL
         
-        // Add some sparkles at the rainbow ends
-        val sparkleCount = 5
-        for (i in 0 until sparkleCount) {
-            val sparklePhase = rainbowPhase * 3f + i * 1.2f
-            val alpha = ((kotlin.math.sin(sparklePhase) + 1f) * 0.5f * 200).toInt()
-            starPaint.color = Color.argb(alpha, 255, 215, 0)  // Gold sparkles
-            
-            // Left end sparkle
-            val leftX = centerX - arcRadius + (Random(i.toLong()).nextFloat() - 0.5f) * 20f
-            val leftY = baseY + (Random(i.toLong() + 100).nextFloat() - 0.5f) * 20f
-            canvas.drawCircle(leftX, leftY, 3f + Random(i.toLong()).nextFloat() * 4f, starPaint)
-            
-            // Right end sparkle
-            val rightX = centerX + arcRadius + (Random(i.toLong() + 50).nextFloat() - 0.5f) * 20f
-            val rightY = baseY + (Random(i.toLong() + 150).nextFloat() - 0.5f) * 20f
-            canvas.drawCircle(rightX, rightY, 3f + Random(i.toLong() + 50).nextFloat() * 4f, starPaint)
-        }
+        // No sparkles - keep it subtle as a background element
     }
     
     // ========== CHINESE NEW YEAR ==========
@@ -720,53 +716,5 @@ class SeasonalEvents(private val context: Context? = null) {
         canvas.drawCircle(dragonX + 5f, dragonY - 5f, 4f, starPaint)
         starPaint.color = Color.BLACK
         canvas.drawCircle(dragonX + 6f, dragonY - 5f, 2f, starPaint)
-    }
-    
-    // ========== WINTER SNOW ==========
-    
-    private data class Snowflake(
-        var x: Float = 0f,
-        var y: Float = 0f,
-        var size: Float = 0f,
-        var speed: Float = 0f,
-        var drift: Float = 0f,
-        var alpha: Int = 255
-    )
-    
-    private val snowflakes = Array(40) { Snowflake() }
-    private var snowInitialized = false
-    
-    private fun renderWinterSnow(canvas: Canvas) {
-        if (!snowInitialized) {
-            initSnowflakes()
-            snowInitialized = true
-        }
-        
-        for (flake in snowflakes) {
-            // Update position
-            flake.y += flake.speed
-            flake.x += kotlin.math.sin(flake.y * 0.01f + flake.drift).toFloat() * 0.8f
-            
-            // Reset if off screen
-            if (flake.y > screenHeight + 10f) {
-                flake.y = -10f
-                flake.x = Random.nextFloat() * screenWidth
-            }
-            
-            // Draw snowflake (simple circle with transparency)
-            starPaint.color = Color.argb(flake.alpha, 255, 255, 255)
-            canvas.drawCircle(flake.x, flake.y, flake.size, starPaint)
-        }
-    }
-    
-    private fun initSnowflakes() {
-        for (flake in snowflakes) {
-            flake.x = Random.nextFloat() * screenWidth
-            flake.y = Random.nextFloat() * screenHeight
-            flake.size = 2f + Random.nextFloat() * 4f
-            flake.speed = 0.6f + Random.nextFloat() * 1.2f
-            flake.drift = Random.nextFloat() * 6.28f
-            flake.alpha = 150 + Random.nextInt(105)
-        }
     }
 }

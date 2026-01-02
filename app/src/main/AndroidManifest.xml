@@ -4,6 +4,7 @@
     <!-- Weather data comes from Breezy Weather broadcasts - no internet or location needed -->
 
     <application
+        android:name=".WeatherWallApp"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"

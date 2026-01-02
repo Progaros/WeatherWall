@@ -217,6 +217,15 @@
 
     <!-- Seasonal Terrain Effects -->
     <PreferenceCategory android:title="Seasonal Terrain">
+        <!-- Terrain Season Override -->
+        <ListPreference
+            android:key="pref_terrain_season"
+            android:title="Terrain Season"
+            android:summary="Override terrain season for flowers, grass color, snow"
+            android:entries="@array/terrain_season_options"
+            android:entryValues="@array/terrain_season_values"
+            android:defaultValue="auto" />
+
         <!-- Spring Flowers -->
         <SwitchPreferenceCompat
             android:key="pref_spring_flowers"

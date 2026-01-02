@@ -55,29 +55,31 @@ class BirdFlockEvent(random: Random, override val spawnTimeMs: Long = System.cur
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long) {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
+        val elapsedSec = elapsedMs / 1000f
         
         // Calculate x position from elapsed time
         val x = -0.15f + speed * elapsedMs
         
-        // Deterministic flap pattern: cycle between glide and flap
-        val cyclePos = elapsedMs % flapCycleMs
-        val isFlapping = cyclePos > (flapCycleMs - flapUpDuration)
+        // Smooth flap cycle using sine - continuous oscillation
+        val flapCycleSec = flapCycleMs / 1000f
+        val cyclePhase = (elapsedSec % flapCycleSec) / flapCycleSec  // 0-1 through cycle
         
-        // Y position oscillates based on flap state (less movement for distant birds)
-        val cycleOffset = if (isFlapping) {
-            -0.008f * sizeScale * (cyclePos - (flapCycleMs - flapUpDuration)) / flapUpDuration.toFloat()
-        } else {
-            0.006f * sizeScale * cyclePos / (flapCycleMs - flapUpDuration).toFloat()
-        }
-        val y = baseY + cycleOffset
+        // Smooth vertical movement: birds rise during flap, glide down slowly
+        // Use smoothstep for natural easing
+        val flapPortion = 0.25f  // Flapping takes 25% of cycle
+        val isFlapping = cyclePhase < flapPortion
+        
+        // Vertical position: smooth sine wave with bias upward during flap
+        val verticalWave = sin(cyclePhase * 6.28f) * 0.008f * sizeScale
+        val y = baseY + verticalWave
         
         val px = parallaxCalculator.getOffsetXForDepth(parallaxDepth)
         val py = parallaxCalculator.getOffsetYForDepth(parallaxDepth)
         canvas.save()
         canvas.translate(px, py)
         
-        // Scale: 0.3-0.5% of height based on distance (was 1%)
-        val unit = height * 0.004f * sizeScale
+        // Scale: 0.4-0.7% of height based on distance - bird V-shapes
+        val unit = height * 0.003f * sizeScale
         
         // Distant birds are more faded
         val alpha = (1f - distance * 0.3f)
@@ -86,22 +88,25 @@ class BirdFlockEvent(random: Random, override val spawnTimeMs: Long = System.cur
         strokePaint.style = Paint.Style.STROKE
         
         for (bird in birds) {
-            val size = bird.sizeVariation * unit * 5f  // Scale bird size
+            val size = bird.sizeVariation * unit * 4f
             val birdX = (x + bird.offsetX) * width - extendedOffset
             val birdY = (y + bird.offsetY) * height
             
-            val wingY = if (isFlapping) {
-                sin(timeSeconds * 18f + bird.wingPhase) * size * 0.9f
-            } else {
-                sin(timeSeconds * 1.5f + bird.wingPhase) * size * 0.12f - size * 0.25f
-            }
+            // Smooth wing animation using sine
+            // During flap: fast wing beats, during glide: slow gentle movement
+            val wingBeatSpeed = if (isFlapping) 12f else 2f
+            val wingAmplitude = if (isFlapping) size * 0.7f else size * 0.15f
+            val wingOffset = if (isFlapping) 0f else -size * 0.2f  // Wings slightly down when gliding
             
-            strokePaint.strokeWidth = (size * 0.3f).coerceAtLeast(1f)
+            val wingY = sin(elapsedSec * wingBeatSpeed + bird.wingPhase) * wingAmplitude + wingOffset
             
+            strokePaint.strokeWidth = (size * 0.25f).coerceAtLeast(1.5f)
+            
+            // Draw bird as smooth curved V-shape
             path.reset()
-            path.moveTo(birdX - size, birdY)
-            path.quadTo(birdX - size * 0.2f, birdY - wingY, birdX, birdY)
-            path.quadTo(birdX + size * 0.2f, birdY - wingY, birdX + size, birdY)
+            path.moveTo(birdX - size, birdY + wingY * 0.3f)  // Left wingtip
+            path.quadTo(birdX - size * 0.3f, birdY - wingY, birdX, birdY)  // Left wing curve
+            path.quadTo(birdX + size * 0.3f, birdY - wingY, birdX + size, birdY + wingY * 0.3f)  // Right wing curve
             canvas.drawPath(path, strokePaint)
         }
         canvas.restore()

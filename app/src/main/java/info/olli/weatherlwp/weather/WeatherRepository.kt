@@ -239,10 +239,28 @@ object WeatherRepository {
     
     /**
      * Get wind direction in degrees (0-360, 0=North, 90=East, etc.)
+     * If no weather data, returns a deterministic "random" direction based on day.
      */
     fun getWindDirection(context: Context): Int {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        return prefs.getInt(KEY_WIND_DIRECTION, 0)
+        val storedDirection = prefs.getInt(KEY_WIND_DIRECTION, -1)  // -1 means not set
+        if (storedDirection >= 0) {
+            return storedDirection
+        }
+        // Generate deterministic wind direction based on current day
+        // Changes once per day, consistent across all instances
+        return getDailyWindDirection()
+    }
+    
+    /**
+     * Get a deterministic wind direction that changes once per day.
+     * Based on day number since epoch, so all instances see same direction.
+     */
+    private fun getDailyWindDirection(): Int {
+        val dayNumber = (System.currentTimeMillis() / (24 * 60 * 60 * 1000L)).toInt()
+        // Use a simple hash to create pseudo-random but deterministic direction
+        val seed = dayNumber * 1234567 + 987654
+        return (seed % 360 + 360) % 360  // Ensure positive 0-359
     }
     
     /**
@@ -250,6 +268,11 @@ object WeatherRepository {
      */
     fun getExtendedData(context: Context): ExtendedWeatherData {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        
+        // Use daily wind direction if not set in weather data
+        val storedDirection = prefs.getInt(KEY_WIND_DIRECTION, -1)
+        val windDirection = if (storedDirection >= 0) storedDirection else getDailyWindDirection()
+        
         return ExtendedWeatherData(
             precipProbability = prefs.getInt(KEY_PRECIP_PROBABILITY, 0),
             cloudCover = prefs.getInt(KEY_CLOUD_COVER, 0),
@@ -259,7 +282,7 @@ object WeatherRepository {
             moonPhase = prefs.getInt(KEY_MOON_PHASE, 0),
             moonRise = prefs.getLong(KEY_MOON_RISE, -1L),
             moonSet = prefs.getLong(KEY_MOON_SET, -1L),
-            windDirection = prefs.getInt(KEY_WIND_DIRECTION, 0)
+            windDirection = windDirection
         )
     }
 }

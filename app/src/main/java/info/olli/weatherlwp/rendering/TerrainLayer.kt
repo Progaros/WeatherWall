@@ -105,6 +105,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private var hillFrequency = 2.0f  // Controls how many hills visible per layer (0-10 range)
     
     // Seasonal settings
+    private var terrainSeasonOverride = "auto"  // "auto", "spring", "summer", "autumn", "winter"
     private var springFlowersEnabled = true
     private var springFlowerDensity = 50  // 0-100
     private var autumnGrassEnabled = true
@@ -137,10 +138,16 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     }
     
     /**
-     * Determines current terrain season based on date.
+     * Determines current terrain season based on date or override setting.
      * Returns: "spring" (Mar-May), "summer" (Jun-Aug), "autumn" (Sep-Nov), "winter" (Dec-Feb)
      */
     private fun getCurrentTerrainSeason(): String {
+        // Check for manual override first
+        if (terrainSeasonOverride != "auto") {
+            return terrainSeasonOverride
+        }
+        
+        // Fall back to calendar-based season
         val cal = java.util.Calendar.getInstance()
         return when (cal.get(java.util.Calendar.MONTH)) {
             2, 3, 4 -> "spring"    // Mar, Apr, May
@@ -887,6 +894,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         treeSegments = prefs.getInt("pref_tree_segments", 1).coerceIn(1, 5)
         
         // Seasonal terrain settings
+        terrainSeasonOverride = prefs.getString("pref_terrain_season", "auto") ?: "auto"
         springFlowersEnabled = prefs.getBoolean("pref_spring_flowers", true)
         springFlowerDensity = prefs.getInt("pref_spring_flower_density", 50)
         autumnGrassEnabled = prefs.getBoolean("pref_autumn_grass", true)

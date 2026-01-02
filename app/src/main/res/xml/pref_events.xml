@@ -162,6 +162,40 @@
             app:showSeekBarValue="true"
             app:updatesContinuously="true"
             android:dependency="pref_seasonal_enabled" />
+
+        <!-- Rainbow Settings (St. Patrick's Day) -->
+        <SeekBarPreference
+            android:key="pref_rainbow_position_x"
+            android:title="Rainbow Horizontal Position"
+            android:summary="Left to right placement (0=left, 100=right)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_seasonal_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_rainbow_position_y"
+            android:title="Rainbow Vertical Position"
+            android:summary="Top to bottom placement (0=top, 100=bottom)"
+            android:defaultValue="40"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_seasonal_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_rainbow_size"
+            android:title="Rainbow Size"
+            android:summary="Arc size (20=small, 200=large)"
+            android:defaultValue="66"
+            android:max="200"
+            app:min="20"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_seasonal_enabled" />
     </PreferenceCategory>
 
 </PreferenceScreen>

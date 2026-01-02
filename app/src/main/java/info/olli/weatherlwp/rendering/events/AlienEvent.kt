@@ -21,10 +21,13 @@ class AlienEvent(random: Random, override val spawnTimeMs: Long = System.current
     private val startX = if (random.nextBoolean()) -0.1f else 1.1f
     private val direction = if (startX < 0.5f) 1f else -1f
     private val startY = 0.1f + random.nextFloat() * 0.15f
-    private val speed = 0.00004f + random.nextFloat() * 0.00003f  // Much slower UFO drift (60% reduction)
+    private val speed = 0.00004f + random.nextFloat() * 0.00003f
     override val durationMs: Long = (1.25f / speed).toLong()
     
-    private val baseSize = 12f + random.nextFloat() * 6f  // Renamed: will be scaled by height
+    // Distance for depth: 0.3-0.7 (UFOs in the distance)
+    private val distance = 0.3f + random.nextFloat() * 0.4f
+    private val sizeScale = 1.0f - distance * 0.5f  // 0.65-0.85 based on distance
+    
     private val path = Path()
     private val initialWobblePhase = random.nextFloat() * 6.28f
     private val initialHoverPhase = random.nextFloat() * 6.28f
@@ -36,38 +39,42 @@ class AlienEvent(random: Random, override val spawnTimeMs: Long = System.current
         Color.rgb(255, 100, 255)
     )
     
+    // Parallax based on distance
+    private val parallaxDepth = 0.1f + distance * 0.1f
+    
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long) {
-        // Scale size to 0.5% of height (was 1% - reduced by half)
-        val unit = height * 0.005f
-        val size = baseSize * unit
+        // Scale: ~0.6-1% of height - distant UFO
+        val unit = height * 0.004f * sizeScale
+        val size = unit * 5f  // About 2% saucer width max (40px on 2000px screen)
         
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val x = startX + direction * speed * elapsedMs
-        val wobblePhase = initialWobblePhase + elapsedMs * 0.005f
-        val hoverPhase = initialHoverPhase + elapsedMs * 0.003f
-        val lightPhase = elapsedMs * 0.02f
+        // Slow, gentle movement - much calmer UFO drift
+        val wobblePhase = initialWobblePhase + elapsedMs * 0.0008f  // Very slow wobble
+        val hoverPhase = initialHoverPhase + elapsedMs * 0.0005f   // Very slow hover bob
+        val lightPhase = elapsedMs * 0.008f  // Slower light pulse
         
-        // Y position with erratic vertical movement based on elapsed time
-        val verticalOffset = sin(hoverPhase * 2f) * 0.002f * (elapsedMs / 100f)
+        // Y position with gentle vertical bob
+        val verticalOffset = sin(hoverPhase) * 0.015f  // Gentle constant bob, no accumulation
         val y = (startY + verticalOffset).coerceIn(0.05f, 0.3f)
         
-        val px = parallaxCalculator.getOffsetXForDepth(0.15f)
-        val py = parallaxCalculator.getOffsetYForDepth(0.15f)
+        val px = parallaxCalculator.getOffsetXForDepth(parallaxDepth)
+        val py = parallaxCalculator.getOffsetYForDepth(parallaxDepth)
         canvas.save()
         canvas.translate(px, py)
         
         val currentX = x * width - extendedOffset
-        // Add slight wobble to position
-        val wobbleX = sin(wobblePhase) * size * 0.3f
-        val wobbleY = sin(hoverPhase) * size * 0.5f
+        // Very subtle wobble
+        val wobbleX = sin(wobblePhase) * size * 0.15f
+        val wobbleY = sin(hoverPhase * 1.3f) * size * 0.2f
         val currentY = y * height + wobbleY
         
-        // Tilt based on movement
+        // Tilt based on movement - very subtle
         canvas.save()
         canvas.translate(currentX + wobbleX, currentY)
-        val tilt = sin(wobblePhase * 0.5f) * 8f
+        val tilt = sin(wobblePhase * 0.3f) * 4f  // Reduced tilt
         canvas.rotate(tilt)
         
         // Glow effect (soft outer light)

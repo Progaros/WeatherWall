@@ -18,20 +18,24 @@ import kotlin.random.Random
 class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
     override val layer = EventLayer.MID_SKY  // Flying in sky, in front of mountains
     
+    // Distance for depth: 0.2-0.6 (owls fly at various distances)
+    private val distance = 0.2f + random.nextFloat() * 0.4f
+    private val sizeScale = 1.0f - distance * 0.5f  // 0.7-1.0 based on distance
+    
     private val y = 0.18f + random.nextFloat() * 0.12f
-    // Reduced speed: was 0.00008-0.00012, now 0.000025-0.000040 (~3x slower)
     private val speed = 0.000025f + random.nextFloat() * 0.000015f
     override val durationMs: Long = (1.35f / speed).toLong()
-    
-    private val baseSize = 14f + random.nextFloat() * 6f  // Renamed: will be scaled by height
 
     // Animation tuning (random per owl)
-    private val flapInterval = 1.8f + random.nextFloat() * 0.8f   // seconds between flap bursts
-    private val flapDuration = 0.45f + random.nextFloat() * 0.2f   // seconds of active flapping
-    private val flapRate = 2.4f + random.nextFloat() * 0.8f        // wing beats per second during burst
+    private val flapInterval = 1.8f + random.nextFloat() * 0.8f
+    private val flapDuration = 0.45f + random.nextFloat() * 0.2f
+    private val flapRate = 2.4f + random.nextFloat() * 0.8f
     private val wingPhase = random.nextFloat() * 6.28f
-    private val bank = (-8f + random.nextFloat() * 16f)            // slight tilt in degrees
+    private val bank = (-8f + random.nextFloat() * 16f)
     private val bobPhase = random.nextFloat() * 6.28f
+    
+    // Parallax based on distance
+    private val parallaxDepth = 0.2f + distance * 0.15f
 
     private val path = Path()
 
@@ -45,105 +49,97 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
         timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long
     ) {
-        // Scale size to 0.6% of height - medium-sized night bird
-        val unit = height * 0.006f
-        val size = baseSize * unit
+        // Scale: ~0.8-1.2% of height based on distance
+        val unit = height * 0.004f * sizeScale
+        val size = unit * 6f
         
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val localTime = elapsedMs * 0.001f
         val progress = -0.15f + speed * elapsedMs
         
-        val px = parallaxCalculator.getOffsetXForDepth(0.25f)
-        val py = parallaxCalculator.getOffsetYForDepth(0.25f)
+        val px = parallaxCalculator.getOffsetXForDepth(parallaxDepth)
+        val py = parallaxCalculator.getOffsetYForDepth(parallaxDepth)
 
-        val eased = smoothstep01((progress + 0.15f) / 1.15f) // nicer entry/exit pacing
+        val eased = smoothstep01((progress + 0.15f) / 1.15f)
         val currentX = (-0.2f + eased * 1.4f) * width - extendedOffset
         val baseY = y * height
-        val bob = sin(localTime * 0.7f + bobPhase) * size * 0.06f
+        val bob = sin(localTime * 0.7f + bobPhase) * size * 0.04f
         val currentY = baseY + bob
 
-        // Flap envelope: mostly 0, spikes during a burst
+        // Flap animation
         val cycleT = (localTime + wingPhase) % flapInterval
         val burst01 = (1f - (cycleT / flapDuration)).coerceIn(0f, 1f)
-        val envelope = smoothstep01(burst01) // quick-ish rise/decay
-
-        val beat = sin(localTime * flapRate * 6.28318f + wingPhase) // -1..1
-        val beat01 = (beat * 0.5f + 0.5f) // 0..1
-
-        // Angle + lift are almost zero when gliding
-        val wingAngle = (-18f + 36f * beat01) * envelope // degrees
-        val wingLift = size * (0.10f + 0.35f * beat01) * envelope
+        val envelope = smoothstep01(burst01)
+        val beat = sin(localTime * flapRate * 6.28318f + wingPhase)
+        val wingDown = beat * envelope * size * 0.4f  // How much wings move down
 
         canvas.save()
         canvas.translate(px, py)
-
-        // Optional subtle banking (whole owl)
         canvas.save()
-        canvas.rotate(bank, currentX, currentY)
+        canvas.rotate(bank * 0.3f, currentX, currentY)
 
-        // Color
-        paint.color = RenderConstants.blendWithAmbient(Color.rgb(35, 30, 25), ambientColor, 0.5f)
-        strokePaint.color = paint.color
-        strokePaint.strokeWidth = size * 0.18f
-        strokePaint.strokeCap = Paint.Cap.ROUND
+        // Owl color - dark brown silhouette
+        paint.color = RenderConstants.blendWithAmbient(Color.rgb(40, 32, 25), ambientColor, 0.4f)
 
-        // --- Side-profile body (asymmetric) ---
-        // Body ellipse (slightly longer)
-        canvas.drawOval(
-            currentX - size * 0.55f, currentY - size * 0.38f,
-            currentX + size * 0.45f, currentY + size * 0.38f, paint
-        )
-
-        // Head (front)
-        val headCx = currentX + size * 0.38f
-        val headCy = currentY - size * 0.18f
-        canvas.drawCircle(headCx, headCy, size * 0.28f, paint)
-
-        // Beak (small triangle)
+        // Compact owl body - rounded shape
+        val bodyW = size * 0.5f
+        val bodyH = size * 0.4f
+        
+        // Body - oval
+        canvas.drawOval(currentX - bodyW, currentY - bodyH * 0.3f,
+                        currentX + bodyW * 0.6f, currentY + bodyH, paint)
+        
+        // Large round head (owls have big heads)
+        val headR = size * 0.35f
+        val headX = currentX + bodyW * 0.3f
+        val headY = currentY - bodyH * 0.2f
+        canvas.drawCircle(headX, headY, headR, paint)
+        
+        // Ear tufts (small triangles)
         path.reset()
-        path.moveTo(headCx + size * 0.28f, headCy)
-        path.lineTo(headCx + size * 0.42f, headCy + size * 0.06f)
-        path.lineTo(headCx + size * 0.28f, headCy + size * 0.12f)
+        path.moveTo(headX - headR * 0.5f, headY - headR * 0.7f)
+        path.lineTo(headX - headR * 0.7f, headY - headR * 1.3f)
+        path.lineTo(headX - headR * 0.2f, headY - headR * 0.8f)
         path.close()
         canvas.drawPath(path, paint)
-
-        // Tail wedge (back)
+        
         path.reset()
-        path.moveTo(currentX - size * 0.60f, currentY + size * 0.05f)
-        path.lineTo(currentX - size * 0.85f, currentY + size * 0.18f)
-        path.lineTo(currentX - size * 0.62f, currentY + size * 0.28f)
+        path.moveTo(headX + headR * 0.5f, headY - headR * 0.7f)
+        path.lineTo(headX + headR * 0.7f, headY - headR * 1.3f)
+        path.lineTo(headX + headR * 0.2f, headY - headR * 0.8f)
         path.close()
         canvas.drawPath(path, paint)
-
-        // --- Main wing (near side): rotate around shoulder ---
-        val shoulderX = currentX + size * 0.05f
-        val shoulderY = currentY + size * 0.02f
-
-        canvas.save()
-        canvas.translate(shoulderX, shoulderY)
-        canvas.rotate(wingAngle)
-
+        
+        // Short broad wings - owl wings are rounded
+        val wingSpan = size * 1.4f
+        val wingH = size * 0.3f + wingDown
+        
+        // Left wing
         path.reset()
-        path.moveTo(0f, 0f)
-        path.quadTo(-size * 0.55f, -wingLift, -size * 1.15f, size * 0.12f)
-        canvas.drawPath(path, strokePaint)
-
-        canvas.restore()
-
-        // Far wing hint (very subtle, smaller amplitude)
-        val farLift = wingLift * 0.45f
+        path.moveTo(currentX - bodyW * 0.3f, currentY)
+        path.quadTo(currentX - wingSpan * 0.5f, currentY - wingH,
+                    currentX - wingSpan, currentY + size * 0.1f)
+        path.quadTo(currentX - wingSpan * 0.6f, currentY + wingH * 0.3f,
+                    currentX - bodyW * 0.3f, currentY + bodyH * 0.5f)
+        path.close()
+        canvas.drawPath(path, paint)
+        
+        // Tail - short fan
         path.reset()
-        path.moveTo(currentX, currentY + size * 0.03f)
-        path.quadTo(currentX - size * 0.45f, currentY - farLift, currentX - size * 0.95f, currentY + size * 0.10f)
-        strokePaint.alpha = 120
-        canvas.drawPath(path, strokePaint)
-        strokePaint.alpha = 255
-
-        // Single eye glow (front side only)
-        paint.color = Color.argb((140f * (0.3f + 0.7f * envelope)).toInt(), 255, 220, 100)
-        canvas.drawCircle(headCx + size * 0.06f, headCy - size * 0.02f, size * 0.05f, paint)
+        path.moveTo(currentX - bodyW * 0.8f, currentY + bodyH * 0.3f)
+        path.lineTo(currentX - bodyW * 1.2f, currentY + bodyH * 0.1f)
+        path.lineTo(currentX - bodyW * 1.4f, currentY + bodyH * 0.4f)
+        path.lineTo(currentX - bodyW * 1.2f, currentY + bodyH * 0.7f)
+        path.close()
+        canvas.drawPath(path, paint)
+        
+        // Eyes - glowing at night
+        val eyeGlow = 0.3f + 0.7f * envelope
+        paint.color = Color.argb((200 * eyeGlow).toInt(), 255, 210, 80)
+        canvas.drawCircle(headX - headR * 0.25f, headY - headR * 0.1f, headR * 0.15f, paint)
+        canvas.drawCircle(headX + headR * 0.25f, headY - headR * 0.1f, headR * 0.15f, paint)
 
         canvas.restore() // banking
-        canvas.restore() // parallax translate
+        canvas.restore() // parallax
     }
 }
