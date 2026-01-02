@@ -485,25 +485,21 @@ class CloudLayer(private val context: Context) : SceneLayer {
     /**
      * Tiled texture mode - single scrolling noise texture, very fast.
      * Uses a pre-generated noise bitmap with BitmapShader for tiling.
-     * PERFORMANCE: Draws 2 layers with single bitmap each = ~2ms per frame vs 30ms+ for cached.
      */
     private fun drawTiledMode(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         // Skip if no clouds
         if (state.getCloudCount() == 0) return
         
-        // Generate tiled noise bitmap if needed (once per resize)
-        if (tiledNoiseBitmap == null) {
+        // Generate tiled noise bitmap if needed (once only)
+        if (tiledNoiseBitmap == null || tiledShader == null) {
             generateTiledNoiseBitmap()
         }
         
         val shader = tiledShader ?: return
+        val bitmap = tiledNoiseBitmap ?: return
         
         // Calculate cloud coverage based on cloud count (0-50 maps to alpha 0-255)
         val coverage = (state.getCloudCount() / 50f).coerceIn(0f, 1f)
-        
-        // Apply color tint
-        tiledPaint.colorFilter = PorterDuffColorFilter(currentCloudColor, PorterDuff.Mode.MULTIPLY)
-        tiledPaint.shader = shader
         
         // Animate offset based on wind
         val windDirX = kotlin.math.cos(Math.toRadians(state.windDirection.toDouble())).toFloat()
@@ -516,128 +512,103 @@ class CloudLayer(private val context: Context) : SceneLayer {
         if (tiledOffsetX < -10000f) tiledOffsetX += 10000f
         if (tiledOffsetY > 10000f) tiledOffsetY -= 10000f
         
-        // Draw two layers for depth - back layer (smaller, faster) and front layer
-        // Back layer - higher, faster, more transparent
+        // Simple tint using paint color (no color filter - faster)
+        tiledPaint.color = currentCloudColor
+        tiledPaint.shader = shader
+        
+        // Draw two layers for depth - back layer and front layer
+        // Back layer - higher, more transparent
         val backPx = parallaxCalculator.getOffsetXForDepth(0.15f)
         val backPy = parallaxCalculator.getOffsetYForDepth(0.15f)
         tiledMatrix.reset()
-        tiledMatrix.setScale(2.5f, 2.5f)  // Larger pattern for back layer
+        tiledMatrix.setScale(2.5f, 2.5f)
         tiledMatrix.postTranslate(tiledOffsetX * 0.6f + backPx, tiledOffsetY * 0.3f + backPy)
         shader.setLocalMatrix(tiledMatrix)
-        tiledPaint.alpha = (coverage * 120).toInt()  // More transparent
+        tiledPaint.alpha = (coverage * 100).toInt().coerceIn(0, 255)
         canvas.drawRect(0f, 0f, width, height * 0.5f, tiledPaint)
         
-        // Front layer - lower, slower, more opaque
+        // Front layer - lower, more opaque
         val frontPx = parallaxCalculator.getOffsetXForDepth(0.30f)
         val frontPy = parallaxCalculator.getOffsetYForDepth(0.30f)
         tiledMatrix.reset()
-        tiledMatrix.setScale(1.5f, 1.5f)  // Smaller pattern for front layer
+        tiledMatrix.setScale(1.5f, 1.5f)
         tiledMatrix.postTranslate(tiledOffsetX + frontPx, tiledOffsetY * 0.5f + frontPy)
         shader.setLocalMatrix(tiledMatrix)
-        tiledPaint.alpha = (coverage * 180).toInt()  // More opaque
+        tiledPaint.alpha = (coverage * 150).toInt().coerceIn(0, 255)
         canvas.drawRect(0f, 0f, width, height * 0.45f, tiledPaint)
         
         tiledPaint.shader = null
     }
     
     /**
-     * Generate a cloud noise bitmap for tiled texture using value noise FBM.
-     * Produces soft, fluffy cloud patterns that tile seamlessly.
+     * Generate a cloud noise bitmap for tiled texture.
+     * Uses simple Perlin-style value noise with guaranteed visible output.
      */
     private fun generateTiledNoiseBitmap() {
-        val size = 256
+        val size = 128  // Smaller = faster generation
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-        val random = Random(randomSeed.toLong())
+        val random = java.util.Random(randomSeed.toLong())
         
-        // Pre-generate random value table for value noise (256x256 wrapping)
-        val permutation = IntArray(512)
-        val values = FloatArray(256)
-        for (i in 0 until 256) {
-            values[i] = random.nextFloat()
-            permutation[i] = i
+        // Pre-generate random values grid (for seamless tiling, edges must match)
+        val gridSize = 8  // 8x8 grid of control points
+        val grid = Array(gridSize + 1) { FloatArray(gridSize + 1) }
+        for (y in 0 until gridSize) {
+            for (x in 0 until gridSize) {
+                grid[y][x] = random.nextFloat()
+            }
         }
-        // Shuffle permutation
-        for (i in 255 downTo 1) {
-            val j = random.nextInt(i + 1)
-            val tmp = permutation[i]
-            permutation[i] = permutation[j]
-            permutation[j] = tmp
-        }
-        // Duplicate for wrapping
-        for (i in 0 until 256) {
-            permutation[256 + i] = permutation[i]
+        // Wrap edges for seamless tiling
+        for (i in 0..gridSize) {
+            grid[gridSize][i] = grid[0][i % gridSize]
+            grid[i][gridSize] = grid[i % gridSize][0]
         }
         
-        // Smoothstep interpolation function
+        // Smoothstep for interpolation
         fun smoothstep(t: Float): Float = t * t * (3f - 2f * t)
         
-        // Value noise with seamless tiling
-        fun valueNoise(x: Float, y: Float, period: Int): Float {
-            val xi = kotlin.math.floor(x).toInt()
-            val yi = kotlin.math.floor(y).toInt()
-            val xf = x - xi
-            val yf = y - yi
+        // Bilinear interpolation from grid
+        fun sampleNoise(x: Float, y: Float): Float {
+            val gx = (x * gridSize).coerceIn(0f, gridSize.toFloat() - 0.001f)
+            val gy = (y * gridSize).coerceIn(0f, gridSize.toFloat() - 0.001f)
+            val x0 = gx.toInt()
+            val y0 = gy.toInt()
+            val x1 = (x0 + 1).coerceAtMost(gridSize)
+            val y1 = (y0 + 1).coerceAtMost(gridSize)
+            val fx = smoothstep(gx - x0)
+            val fy = smoothstep(gy - y0)
             
-            val u = smoothstep(xf)
-            val v = smoothstep(yf)
+            val v00 = grid[y0][x0]
+            val v10 = grid[y0][x1]
+            val v01 = grid[y1][x0]
+            val v11 = grid[y1][x1]
             
-            // Wrap coordinates for seamless tiling
-            val x0 = (xi % period + period) % period
-            val y0 = (yi % period + period) % period
-            val x1 = (x0 + 1) % period
-            val y1 = (y0 + 1) % period
-            
-            // Sample from random values
-            val v00 = values[permutation[permutation[x0] + y0] % 256]
-            val v10 = values[permutation[permutation[x1] + y0] % 256]
-            val v01 = values[permutation[permutation[x0] + y1] % 256]
-            val v11 = values[permutation[permutation[x1] + y1] % 256]
-            
-            // Bilinear interpolation
-            val vx0 = v00 + u * (v10 - v00)
-            val vx1 = v01 + u * (v11 - v01)
-            return vx0 + v * (vx1 - vx0)
+            val top = v00 + fx * (v10 - v00)
+            val bot = v01 + fx * (v11 - v01)
+            return top + fy * (bot - top)
         }
         
-        // Generate FBM (fractal brownian motion) noise
+        // Generate pixels with multi-octave noise
+        val pixels = IntArray(size * size)
         for (y in 0 until size) {
             for (x in 0 until size) {
-                var value = 0f
-                var amplitude = 1f
-                var totalAmplitude = 0f
-                var period = 64  // Start with 4 cells across the texture (256/64 = 4)
+                val nx = x.toFloat() / size
+                val ny = y.toFloat() / size
                 
-                // 4 octaves of noise
-                for (octave in 0 until 4) {
-                    val nx = x.toFloat() * period / size
-                    val ny = y.toFloat() * period / size
-                    value += valueNoise(nx, ny, period) * amplitude
-                    totalAmplitude += amplitude
-                    amplitude *= 0.5f
-                    period *= 2
-                }
+                // 3 octaves of noise (fast)
+                var value = sampleNoise(nx, ny) * 0.6f +
+                           sampleNoise(nx * 2f % 1f, ny * 2f % 1f) * 0.3f +
+                           sampleNoise(nx * 4f % 1f, ny * 4f % 1f) * 0.1f
                 
-                // Normalize to 0-1 range
-                value /= totalAmplitude
+                // Soft threshold for cloud shape
+                value = ((value - 0.3f) / 0.4f).coerceIn(0f, 1f)
+                value = value * value  // Soften edges
                 
-                // Apply cloud-like threshold with soft edges for fluffy appearance
-                // Lower threshold = more cloud coverage
-                val threshold = 0.35f
-                val softness = 0.30f
-                value = when {
-                    value < threshold - softness -> 0f
-                    value > threshold + softness -> 1f
-                    else -> (value - (threshold - softness)) / (softness * 2f)
-                }
-                
-                // Apply soft falloff for fluffy edges
-                value = value * value * (3f - 2f * value)  // Smoothstep
-                
-                val alpha = (value * 255).toInt().coerceIn(0, 255)
-                bitmap.setPixel(x, y, Color.argb(alpha, 255, 255, 255))
+                val alpha = (value * 255).toInt()
+                pixels[y * size + x] = (alpha shl 24) or 0x00FFFFFF  // White with varying alpha
             }
         }
         
+        bitmap.setPixels(pixels, 0, size, 0, 0, size, size)
         tiledNoiseBitmap = bitmap
         tiledShader = BitmapShader(bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
     }

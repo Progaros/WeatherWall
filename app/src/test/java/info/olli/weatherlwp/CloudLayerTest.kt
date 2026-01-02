@@ -318,59 +318,43 @@ class CloudLayerTest {
     
     @Test
     fun `cloud threshold produces visible clouds`() {
-        // Cloud threshold algorithm from tiled mode
-        val threshold = 0.35f
-        val softness = 0.30f
-        
-        fun applyThreshold(value: Float): Float = when {
-            value < threshold - softness -> 0f
-            value > threshold + softness -> 1f
-            else -> (value - (threshold - softness)) / (softness * 2f)
+        // Cloud threshold algorithm from tiled mode (simplified version)
+        fun applyThreshold(value: Float): Float {
+            val v = ((value - 0.3f) / 0.4f).coerceIn(0f, 1f)
+            return v * v  // Soften edges
         }
         
         // Values well below threshold should be transparent
         assertEquals("Low values are transparent", 0f, applyThreshold(0f), 0.001f)
         
-        // Values well above threshold should be opaque
-        assertEquals("High values are opaque", 1f, applyThreshold(0.8f), 0.001f)
+        // Values well above threshold should be nearly opaque
+        assertTrue("High values are visible", applyThreshold(0.8f) > 0.5f)
         
         // Values near threshold should be partial
-        val midValue = applyThreshold(0.35f)  // At threshold center
-        assertTrue("Threshold center should be ~0.5", midValue > 0.4f && midValue < 0.6f)
+        val midValue = applyThreshold(0.5f)  // At threshold center
+        assertTrue("Threshold center should produce visible output", midValue > 0.1f)
     }
     
     @Test
-    fun `FBM noise combines multiple octaves correctly`() {
-        // FBM (fractal brownian motion) sums octaves with decreasing amplitude
-        var amplitude = 1f
-        var total = 0f
-        var totalAmplitude = 0f
+    fun `noise grid wraps for seamless tiling`() {
+        val gridSize = 8
+        val grid = Array(gridSize + 1) { FloatArray(gridSize + 1) }
         
-        for (octave in 0 until 4) {
-            val noiseValue = 0.5f  // Simulated noise value
-            total += noiseValue * amplitude
-            totalAmplitude += amplitude
-            amplitude *= 0.5f
+        // Fill grid with random values
+        for (y in 0 until gridSize) {
+            for (x in 0 until gridSize) {
+                grid[y][x] = (x + y).toFloat() / 16f  // Predictable values for testing
+            }
         }
         
-        val normalized = total / totalAmplitude
+        // Wrap edges
+        for (i in 0..gridSize) {
+            grid[gridSize][i] = grid[0][i % gridSize]
+            grid[i][gridSize] = grid[i % gridSize][0]
+        }
         
-        assertEquals("Normalized FBM with constant 0.5 input should be 0.5", 
-            0.5f, normalized, 0.001f)
-    }
-    
-    @Test
-    fun `seamless tiling wraps coordinates correctly`() {
-        val period = 64
-        
-        fun wrap(coord: Int): Int = ((coord % period) + period) % period
-        
-        // Test wrapping
-        assertEquals("0 stays 0", 0, wrap(0))
-        assertEquals("63 stays 63", 63, wrap(63))
-        assertEquals("64 wraps to 0", 0, wrap(64))
-        assertEquals("128 wraps to 0", 0, wrap(128))
-        assertEquals("-1 wraps to 63", 63, wrap(-1))
-        assertEquals("-64 wraps to 0", 0, wrap(-64))
+        // Verify wrapping
+        assertEquals("Top and bottom edges should match", grid[0][0], grid[gridSize][0], 0.001f)
+        assertEquals("Left and right edges should match", grid[0][0], grid[0][gridSize], 0.001f)
     }
 }
