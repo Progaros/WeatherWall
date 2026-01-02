@@ -56,8 +56,8 @@ class PreferenceSyncTest {
             ),
             SyncedPreference(
                 key = "pref_parallax_return_speed",
-                defaultValue = "10",
-                min = 1,
+                defaultValue = "15",
+                min = 0,
                 max = 100
             ),
             SyncedPreference(

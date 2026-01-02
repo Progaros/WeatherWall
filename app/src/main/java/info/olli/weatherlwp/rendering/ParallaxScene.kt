@@ -341,10 +341,10 @@ class ParallaxScene(
             val perspectiveVal = prefs.getInt("pref_parallax_perspective", 100).coerceIn(0, 100)
             val perspective = perspectiveVal / 100f
             
-            // Return speed slider: map 1..100 -> 0f..1f (default 10 = fast return)
-            // 1 = instant return to center, 50 = medium, 100 = never return (stays offset)
-            val returnSpeedVal = prefs.getInt("pref_parallax_return_speed", 10).coerceIn(1, 100)
-            val returnSpeed = (returnSpeedVal - 1) / 99f  // 1->0, 100->1
+            // Return speed slider: map 0..100 -> 0f..1f (default 15 = slow return)
+            // 0 = no return (scene stays offset), 50 = medium, 100 = fast return to center
+            val returnSpeedVal = prefs.getInt("pref_parallax_return_speed", 15).coerceIn(0, 100)
+            val returnSpeed = returnSpeedVal / 100f  // 0->0, 100->1
             
             // Axis inversion settings (for correcting inverted movement direction)
             val invertX = prefs.getBoolean("pref_parallax_invert_x", false)

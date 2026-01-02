@@ -87,10 +87,13 @@ class ParallaxCalculator {
     
     /**
      * Return speed: how fast position drifts back to center when tilt is zero.
-     * 0.0 = instant return, 0.5 = medium, 1.0 = never return (disabled)
-     * Maps from pref setting: 1=instant (0.0), 50=medium (0.5), 100=slow (1.0)
+     * 0.0 = no return (scene stays where it is)
+     * 0.5 = slow constant return
+     * 1.0 = fast constant return
+     * Uses logarithmic scale for natural feel.
+     * Maps from pref setting: 0=no return, 1-99=slow to fast, 100=instant
      */
-    var returnSpeed = 0.09f             // Default: (10-1)/99 = 0.09 (pref_parallax_return_speed=10)
+    var returnSpeed = 0.15f             // Default: slow return (pref_parallax_return_speed=15)
     
     /**
      * Parallax perspective: controls which layers move more.
@@ -162,14 +165,36 @@ class ParallaxCalculator {
         targetY = targetY.coerceIn(-effectiveMaxOffset, effectiveMaxOffset)
         
         // Apply return-to-center when tilt is near zero
-        // returnSpeed: 0.0 = instant return, 1.0 = never return
-        if (tiltMagnitude < RETURN_TILT_THRESHOLD && returnSpeed < 0.99f) {
-            // Gradually pull target toward center
-            // Lower returnSpeed = faster pull
-            val returnRate = 1f - returnSpeed  // 0-1 where 1 is fastest
-            val returnLerp = (returnRate * 0.3f * deltaScale).coerceAtMost(1f)
-            targetX *= (1f - returnLerp)
-            targetY *= (1f - returnLerp)
+        // returnSpeed: 0.0 = no return, 1.0 = fast constant return
+        if (tiltMagnitude < RETURN_TILT_THRESHOLD && returnSpeed > 0.01f) {
+            // Calculate return rate using logarithmic scale for natural feel
+            // ln(1+x)/ln(2) gives 0 at x=0, 1 at x=1, with more weight to higher values
+            val logScale = kotlin.math.ln(1f + returnSpeed) / kotlin.math.ln(2f)
+            
+            // Base return rate from logarithmic scale (0 to ~0.15 per frame at max)
+            val baseReturnRate = logScale * 0.15f
+            
+            // Calculate current distance from center
+            val distFromCenter = kotlin.math.sqrt(positionX * positionX + positionY * positionY)
+            
+            // Slow down return speed when close to center (proportional to distance)
+            // This prevents jitter at center and gives a more natural deceleration
+            val distanceFactor = (distFromCenter / effectiveMaxOffset).coerceIn(0.1f, 1f)
+            
+            // Apply constant movement toward center (not percentage-based)
+            // Movement amount = rate * distance factor * delta time
+            val movementAmount = baseReturnRate * distanceFactor * deltaScale
+            
+            // Calculate direction to center and apply movement
+            if (distFromCenter > 0.1f) {
+                val moveX = (positionX / distFromCenter) * movementAmount * effectiveMaxOffset
+                val moveY = (positionY / distFromCenter) * movementAmount * effectiveMaxOffset
+                targetX = positionX - moveX
+                targetY = positionY - moveY
+            } else {
+                targetX = 0f
+                targetY = 0f
+            }
         }
         
         // Calculate effective lerp rate based on smoothing setting

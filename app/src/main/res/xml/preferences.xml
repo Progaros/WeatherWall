@@ -270,10 +270,10 @@
         <SeekBarPreference
             android:key="pref_parallax_return_speed"
             android:title="Return Speed"
-            android:summary="Recenter time (1=instant, 50=medium, 100=slow)"
-            android:defaultValue="10"
+            android:summary="Recenter speed (0=stay, 15=slow, 100=fast)"
+            android:defaultValue="15"
             android:max="100"
-            app:min="1"
+            app:min="0"
             app:showSeekBarValue="true"
             app:updatesContinuously="true"
             android:dependency="pref_parallax_enabled" />

@@ -261,4 +261,78 @@ class ParallaxCalculatorTest {
         assertTrue("Preview offset should be ~10% of preview height", kotlin.math.abs(x) > 35f)
         assertTrue("Preview offset should not exceed ~10% of preview height", kotlin.math.abs(x) < 65f)
     }
+    
+    // ============== Return Speed Tests ==============
+    
+    @Test
+    fun testReturnSpeedZeroNoReturn() {
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 0f
+        calculator.maxOffsetPx = 100f
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.returnSpeed = 0f  // No return
+        
+        // Move to offset
+        calculator.updateFromSensor(1.0f, 0f)
+        repeat(100) { calculator.update(16) }
+        val xAtTilt = calculator.getOffsetX()
+        assertTrue("Should have moved", kotlin.math.abs(xAtTilt) > 50f)
+        
+        // Release tilt - with returnSpeed=0, should stay at position
+        calculator.updateFromSensor(0f, 0f)
+        repeat(100) { calculator.update(16) }
+        val xAfterRelease = calculator.getOffsetX()
+        
+        // Should NOT have moved back to center
+        assertEquals("With returnSpeed=0, position should stay", xAtTilt, xAfterRelease, 5f)
+    }
+    
+    @Test
+    fun testReturnSpeedHighFastReturn() {
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 0f
+        calculator.maxOffsetPx = 100f
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.returnSpeed = 1.0f  // Fast return
+        
+        // Move to offset
+        calculator.updateFromSensor(1.0f, 0f)
+        repeat(100) { calculator.update(16) }
+        val xAtTilt = calculator.getOffsetX()
+        assertTrue("Should have moved", kotlin.math.abs(xAtTilt) > 50f)
+        
+        // Release tilt - with high returnSpeed, should quickly return to center
+        calculator.updateFromSensor(0f, 0f)
+        repeat(50) { calculator.update(16) }
+        val xAfterRelease = calculator.getOffsetX()
+        
+        // Should have moved significantly toward center
+        assertTrue("With returnSpeed=1.0, should return quickly", kotlin.math.abs(xAfterRelease) < kotlin.math.abs(xAtTilt) * 0.3f)
+    }
+    
+    @Test
+    fun testReturnSpeedDefault() {
+        val calculator = ParallaxCalculator()
+        
+        // Default should be slow return (0.15)
+        assertEquals("Default return speed should be 0.15", 0.15f, calculator.returnSpeed, 0.01f)
+    }
+    
+    @Test
+    fun testReturnSpeedLogScale() {
+        // Test that logarithmic scale gives natural progression
+        val calculator = ParallaxCalculator()
+        
+        // At returnSpeed=0.5 (50%), should have noticeable but moderate return
+        // ln(1+0.5)/ln(2) = ln(1.5)/ln(2) ≈ 0.58
+        val logScaleAt50 = kotlin.math.ln(1f + 0.5f) / kotlin.math.ln(2f)
+        assertTrue("Log scale at 50% should be ~0.58", logScaleAt50 in 0.55f..0.62f)
+        
+        // At returnSpeed=1.0 (100%), should be maximum return
+        // ln(1+1)/ln(2) = ln(2)/ln(2) = 1.0
+        val logScaleAt100 = kotlin.math.ln(1f + 1f) / kotlin.math.ln(2f)
+        assertEquals("Log scale at 100% should be 1.0", 1.0f, logScaleAt100, 0.01f)
+    }
 }

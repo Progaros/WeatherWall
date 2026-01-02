@@ -278,7 +278,9 @@ class MountainLayer(private val context: Context) : SceneLayer {
         ridgePoints.add(Pair(peakCenterX, baseY))  // End at center base
         
         // Left side - connect from ridge to left edge
-        pathLeft.moveTo(ridgePoints[0].first, ridgePoints[0].second)
+        // Use slight overlap (1px) past ridge to prevent anti-aliasing gaps
+        val overlapPx = 1f
+        pathLeft.moveTo(ridgePoints[0].first + overlapPx, ridgePoints[0].second)
         
         // Draw left slope segments
         for (i in 0 until segments) {
@@ -290,9 +292,9 @@ class MountainLayer(private val context: Context) : SceneLayer {
         }
         pathLeft.lineTo(peakCenterX - halfWidthPx, baseY)
         
-        // Close back along ridge (in reverse)
+        // Close back along ridge (in reverse) - with overlap into right side
         for (i in ridgePoints.size - 1 downTo 0) {
-            pathLeft.lineTo(ridgePoints[i].first, ridgePoints[i].second)
+            pathLeft.lineTo(ridgePoints[i].first + overlapPx, ridgePoints[i].second)
         }
         pathLeft.close()
         
