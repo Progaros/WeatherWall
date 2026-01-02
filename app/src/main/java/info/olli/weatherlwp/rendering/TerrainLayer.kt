@@ -333,7 +333,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                         xRatio = xRatio,
                         yOffset = verticalOffset,  // Spread below hill line
                         color = flowerColors[random.nextInt(flowerColors.size)],
-                        size = 2f + random.nextFloat() * 3f
+                        size = 0.002f + random.nextFloat() * 0.003f  // 0.2-0.5% of height
                     ))
                 }
                 newFlowers[index] = hillFlowers
@@ -743,7 +743,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 // Blend flower color with ambient for time-of-day consistency
                 val blendedColor = RenderConstants.blendWithAmbient(flower.color, ambientColor, 0.15f)
                 flowerPaint.color = blendedColor
-                canvas.drawCircle(x, y, flower.size, flowerPaint)
+                // Scale flower size by height for consistent proportions
+                val flowerRadius = flower.size * height
+                canvas.drawCircle(x, y, flowerRadius, flowerPaint)
             }
         }
     }
@@ -813,7 +815,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val maxAmplitude = totalHeight * (ambientSway + 0.15f)  // Base amplitude with minimum movement
         
         // Get shadow offset from light source (sun/moon position)
-        val shadowStrength = state.getEffectiveShadowStrength()
+        val shadowStrength = if (state.treeShadowsEnabled) state.getEffectiveShadowStrength() else 0f
         val (shadowDx, shadowDy) = state.getShadowOffset(tree.scale)
         
         // Draw shadow first (if shadows enabled)

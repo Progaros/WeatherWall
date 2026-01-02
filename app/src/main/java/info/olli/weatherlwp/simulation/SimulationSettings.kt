@@ -43,13 +43,17 @@ class SimulationSettings(context: Context) {
     var cloudDensity: CloudDensity = CloudDensity.AUTO
         private set
     
-    // Shadow settings
-    var shadowsEnabled: Boolean = true
+    // Shadow settings - separate for mountains and trees
+    var mountainShadowsEnabled: Boolean = true
+        private set
+    var treeShadowsEnabled: Boolean = true
         private set
     var shadowStrength: Float = 0.5f
         private set
-    var cloudShadowsEnabled: Boolean = false
-        private set
+    
+    // Legacy - kept for compatibility but mapped to both settings
+    val shadowsEnabled: Boolean
+        get() = mountainShadowsEnabled || treeShadowsEnabled
     
     // Moon phase (for simulation mode)
     var moonPhase: Float = 0.5f  // 0-1: 0=new, 0.5=full, 1=new (cycle end)
@@ -112,11 +116,11 @@ class SimulationSettings(context: Context) {
             CloudDensity.AUTO
         }
         
-        // Shadow settings
-        shadowsEnabled = prefs.getBoolean("pref_shadows_enabled", true)
+        // Shadow settings - separate for mountains and trees
+        mountainShadowsEnabled = prefs.getBoolean("pref_mountain_shadows_enabled", true)
+        treeShadowsEnabled = prefs.getBoolean("pref_tree_shadows_enabled", true)
         val shadowVal = prefs.getInt("pref_shadow_strength", 50)
         shadowStrength = shadowVal / 100f
-        cloudShadowsEnabled = prefs.getBoolean("pref_cloud_shadows", false)
         
         // Moon phase - only used in simulation mode (0-100 -> 0.0-1.0)
         val moonPhaseVal = prefs.getInt("pref_moon_phase", 50)

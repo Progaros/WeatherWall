@@ -159,8 +159,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
         // REDUCED for performance: smaller max = less GPU work
         const val MAX_BITMAP_DIMENSION = 800
         
-        // Max groups for performance (reduced for better frame rate)
-        const val MAX_GROUPS = 25
+        // Max groups for overcast conditions (increased to support full sky coverage)
+        const val MAX_GROUPS = 50
         
         // Maximum bitmap regenerations per frame to prevent spikes
         const val MAX_REGENERATIONS_PER_FRAME = 2
@@ -249,7 +249,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
      */
     private fun renderGroupToBitmap(group: CloudGroup, bitmapWidth: Int, bitmapHeight: Int) {
         // Add padding for blur effect to prevent edge cutoff
-        val paddingX = (bitmapWidth * BLUR_PADDING).toInt()
+        // Scale padding with cloudStretch to accommodate wider puffs
+        val stretchPaddingMult = (cloudStretch / 2f).coerceIn(1f, 3f)  // 1x at stretch 2, up to 3x at stretch 6
+        val paddingX = (bitmapWidth * BLUR_PADDING * stretchPaddingMult).toInt()
         val paddingY = (bitmapHeight * BLUR_PADDING).toInt()
         val paddedWidth = bitmapWidth + paddingX * 2
         val paddedHeight = bitmapHeight + paddingY * 2
@@ -397,6 +399,17 @@ class CloudLayer(private val context: Context) : SceneLayer {
             while (newX < 0f) newX += 1f
             group.currentX = newX
         }
+        
+        // Update tiled/shader mode offset using same wind calculation as cached mode
+        // This ensures all render modes have consistent cloud movement speed
+        val tiledMovement = deltaSec * effectiveSpeed * RenderConstants.CLOUD_MOVEMENT_SCALE * dirX * width
+        tiledOffsetX += tiledMovement
+        tiledOffsetY += deltaSec * effectiveSpeed * 10f  // Slight vertical drift
+        
+        // Wrap offsets to prevent overflow
+        if (tiledOffsetX > 10000f) tiledOffsetX -= 10000f
+        if (tiledOffsetX < -10000f) tiledOffsetX += 10000f
+        if (tiledOffsetY > 10000f) tiledOffsetY -= 10000f
     }
 
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
@@ -455,7 +468,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
                 val groupHeightPx = (group.groupHeight * minDim).toInt()
                     .coerceIn(30, MAX_BITMAP_DIMENSION)
                 
-                val paddingX = (groupWidthPx * BLUR_PADDING).toInt()
+                // Padding scales with cloudStretch to accommodate wider puffs
+                val stretchPaddingMult = (cloudStretch / 2f).coerceIn(1f, 3f)
+                val paddingX = (groupWidthPx * BLUR_PADDING * stretchPaddingMult).toInt()
                 val paddingY = (groupHeightPx * BLUR_PADDING).toInt()
                 val paddedWidth = groupWidthPx + paddingX * 2
                 val paddedHeight = groupHeightPx + paddingY * 2
@@ -501,23 +516,17 @@ class CloudLayer(private val context: Context) : SceneLayer {
         // Calculate cloud coverage based on cloud count (0-50 maps to alpha 0-255)
         val coverage = (state.getCloudCount() / 50f).coerceIn(0f, 1f)
         
-        // Animate offset based on wind
-        val windDirX = kotlin.math.cos(Math.toRadians(state.windDirection.toDouble())).toFloat()
-        val windSpeed = state.windStrength * cloudSpeedMultiplier
-        tiledOffsetX += windSpeed * windDirX * 0.4f
-        tiledOffsetY += windSpeed * 0.05f
-        
-        // Wrap offset to prevent overflow
-        if (tiledOffsetX > 10000f) tiledOffsetX -= 10000f
-        if (tiledOffsetX < -10000f) tiledOffsetX += 10000f
-        if (tiledOffsetY > 10000f) tiledOffsetY -= 10000f
+        // tiledOffsetX/Y are now updated in update() with consistent wind speed
         
         // Apply cloud color as tint using SRC_IN mode (tints the white texture)
         tiledPaint.shader = shader
         tiledPaint.colorFilter = PorterDuffColorFilter(currentCloudColor, PorterDuff.Mode.SRC_IN)
         
+        // Create wavy path for cloud bottom edge (more natural than hard rectangle)
+        val wavyPath = android.graphics.Path()
+        
         // Draw two layers for depth - back layer and front layer
-        // Back layer - higher, more transparent
+        // Back layer - higher, more transparent, gentler wave
         val backPx = parallaxCalculator.getOffsetXForDepth(0.15f)
         val backPy = parallaxCalculator.getOffsetYForDepth(0.15f)
         tiledMatrix.reset()
@@ -525,9 +534,27 @@ class CloudLayer(private val context: Context) : SceneLayer {
         tiledMatrix.postTranslate(tiledOffsetX * 0.6f + backPx, tiledOffsetY * 0.3f + backPy)
         shader.setLocalMatrix(tiledMatrix)
         tiledPaint.alpha = (coverage * 180).toInt().coerceIn(0, 255)
-        canvas.drawRect(0f, 0f, width, height * 0.5f, tiledPaint)
         
-        // Front layer - lower, more opaque
+        // Draw back layer with wavy bottom (gentler wave)
+        wavyPath.reset()
+        wavyPath.moveTo(0f, 0f)
+        wavyPath.lineTo(width, 0f)
+        // Wavy bottom edge
+        val backBaseY = height * 0.45f
+        wavyPath.lineTo(width, backBaseY)
+        val backWaveAmp = height * 0.04f
+        val backWaveFreq = kotlin.math.PI / (width * 0.25f)
+        val backWavePhase = tiledOffsetX * 0.02f
+        var bx = width
+        while (bx >= 0f) {
+            val waveY = backBaseY + kotlin.math.sin((bx * backWaveFreq + backWavePhase).toDouble()).toFloat() * backWaveAmp
+            wavyPath.lineTo(bx, waveY)
+            bx -= width / 30f
+        }
+        wavyPath.close()
+        canvas.drawPath(wavyPath, tiledPaint)
+        
+        // Front layer - lower, more opaque, more pronounced wave
         val frontPx = parallaxCalculator.getOffsetXForDepth(0.30f)
         val frontPy = parallaxCalculator.getOffsetYForDepth(0.30f)
         tiledMatrix.reset()
@@ -535,7 +562,23 @@ class CloudLayer(private val context: Context) : SceneLayer {
         tiledMatrix.postTranslate(tiledOffsetX + frontPx, tiledOffsetY * 0.5f + frontPy)
         shader.setLocalMatrix(tiledMatrix)
         tiledPaint.alpha = (coverage * 220).toInt().coerceIn(0, 255)
-        canvas.drawRect(0f, 0f, width, height * 0.45f, tiledPaint)
+        
+        // Draw front layer with wavy bottom
+        wavyPath.reset()
+        wavyPath.moveTo(0f, 0f)
+        wavyPath.lineTo(width, 0f)
+        val frontBaseY = height * 0.40f
+        val frontWaveAmp = height * 0.06f
+        val frontWaveFreq = kotlin.math.PI / (width * 0.20f)
+        val frontWavePhase = tiledOffsetX * 0.03f
+        var fx = width
+        while (fx >= 0f) {
+            val waveY = frontBaseY + kotlin.math.sin((fx * frontWaveFreq + frontWavePhase).toDouble()).toFloat() * frontWaveAmp
+            wavyPath.lineTo(fx, waveY)
+            fx -= width / 30f
+        }
+        wavyPath.close()
+        canvas.drawPath(wavyPath, tiledPaint)
         
         tiledPaint.shader = null
         tiledPaint.colorFilter = null
@@ -645,14 +688,10 @@ class CloudLayer(private val context: Context) : SceneLayer {
         
         // Set shader uniforms
         val coverage = (state.getCloudCount() / 50f).coerceIn(0f, 1f)
-        val windOffset = tiledOffsetX  // Reuse offset for animation
         
-        // Update animation offset
-        tiledOffsetX += state.windStrength * cloudSpeedMultiplier * 0.01f
-        if (tiledOffsetX > 1000f) tiledOffsetX -= 1000f
-        
+        // Use tiledOffsetX (updated in update() with consistent wind speed) for animation
         shader.setFloatUniform("resolution", width, height)
-        shader.setFloatUniform("time", windOffset)
+        shader.setFloatUniform("time", tiledOffsetX * 0.01f)  // Scale down for shader animation
         shader.setFloatUniform("coverage", coverage)
         shader.setFloatUniform("cloudColor", 
             Color.red(currentCloudColor) / 255f,
@@ -671,34 +710,45 @@ class CloudLayer(private val context: Context) : SceneLayer {
     private fun createAgslShader() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         
+        // AGSL shader for procedural cloud rendering
+        // Uses FBM noise to create fluffy cloud patterns
         val agslCode = """
             uniform float2 resolution;
             uniform float time;
             uniform float coverage;
             uniform float3 cloudColor;
             
-            // Simple 2D noise function
+            // Hash function for pseudo-random noise
             float hash(float2 p) {
-                return fract(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
+                float h = dot(p, float2(127.1, 311.7));
+                return fract(sin(h) * 43758.5453);
             }
             
+            // Smooth noise using bilinear interpolation
             float noise(float2 p) {
                 float2 i = floor(p);
                 float2 f = fract(p);
+                // Smooth interpolation curve
                 float2 u = f * f * (3.0 - 2.0 * f);
-                return mix(
-                    mix(hash(i), hash(i + float2(1.0, 0.0)), u.x),
-                    mix(hash(i + float2(0.0, 1.0)), hash(i + float2(1.0, 1.0)), u.x),
-                    u.y
-                );
+                
+                // Sample corners
+                float a = hash(i);
+                float b = hash(i + float2(1.0, 0.0));
+                float c = hash(i + float2(0.0, 1.0));
+                float d = hash(i + float2(1.0, 1.0));
+                
+                // Bilinear interpolation
+                return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
             }
             
+            // Fractional Brownian Motion - layered noise for clouds
             float fbm(float2 p) {
                 float value = 0.0;
                 float amplitude = 0.5;
+                float frequency = 1.0;
                 for (int i = 0; i < 5; i++) {
-                    value += amplitude * noise(p);
-                    p *= 2.0;
+                    value += amplitude * noise(p * frequency);
+                    frequency *= 2.0;
                     amplitude *= 0.5;
                 }
                 return value;
@@ -707,21 +757,33 @@ class CloudLayer(private val context: Context) : SceneLayer {
             half4 main(float2 fragCoord) {
                 float2 uv = fragCoord / resolution;
                 
-                // Animate with time (wind)
-                float2 offset = float2(time * 0.01, time * 0.003);
+                // Only render in top portion of screen (clouds)
+                if (uv.y > 0.55) {
+                    return half4(0.0);
+                }
                 
-                // Multi-scale noise for clouds
-                float n = fbm(uv * 3.0 + offset);
+                // Animate with time (wind effect)
+                float2 offset = float2(time * 0.02, time * 0.005);
                 
-                // Apply coverage threshold
-                float threshold = 1.0 - coverage * 0.6;
-                float cloud = smoothstep(threshold - 0.1, threshold + 0.2, n);
+                // Multi-layer noise for fluffy cloud appearance
+                float n1 = fbm(uv * 4.0 + offset);
+                float n2 = fbm(uv * 8.0 + offset * 1.5);
+                float n = n1 * 0.7 + n2 * 0.3;
                 
-                // Fade at edges
-                float edgeFade = smoothstep(0.0, 0.1, uv.y) * smoothstep(0.6, 0.4, uv.y);
-                cloud *= edgeFade;
+                // Coverage affects how much of the noise becomes cloud
+                // Lower threshold = more cloud coverage
+                float threshold = 0.6 - coverage * 0.4;
+                float cloud = smoothstep(threshold, threshold + 0.25, n);
                 
-                return half4(cloudColor.r, cloudColor.g, cloudColor.b, cloud * 0.7);
+                // Edge fade for natural cloud bottom
+                float bottomFade = 1.0 - smoothstep(0.35, 0.55, uv.y);
+                float topFade = smoothstep(0.0, 0.08, uv.y);
+                cloud *= bottomFade * topFade;
+                
+                // Add some variation for fluffier appearance
+                cloud *= 0.6 + 0.4 * n;
+                
+                return half4(cloudColor.r, cloudColor.g, cloudColor.b, cloud * 0.8);
             }
         """.trimIndent()
         

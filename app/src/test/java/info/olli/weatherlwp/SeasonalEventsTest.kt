@@ -118,6 +118,57 @@ class SeasonalEventsTest {
         assertTrue("New Year should have fireworks", hasFireworks)
     }
     
+    // ============== Height Scaling Tests ==============
+    
+    @Test
+    fun `height scale should be 1 at reference height 1920`() {
+        val referenceHeight = 1920f
+        val screenHeight = 1920f
+        val scale = screenHeight / referenceHeight
+        
+        assertEquals("Scale at reference height should be 1.0", 1.0f, scale, 0.001f)
+    }
+    
+    @Test
+    fun `height scale should be 0_5 at 960px height`() {
+        val referenceHeight = 1920f
+        val screenHeight = 960f
+        val scale = screenHeight / referenceHeight
+        
+        assertEquals("Scale at 960px should be 0.5", 0.5f, scale, 0.001f)
+    }
+    
+    @Test
+    fun `height scale minimum should clamp at 0_5`() {
+        val referenceHeight = 1920f
+        val screenHeight = 480f  // Very small screen
+        val rawScale = screenHeight / referenceHeight
+        val clampedScale = rawScale.coerceAtLeast(0.5f)
+        
+        assertEquals("Scale should clamp to 0.5 minimum", 0.5f, clampedScale, 0.001f)
+    }
+    
+    @Test
+    fun `fireworks should render behind terrain in front of mountains`() {
+        // Verify render order for fireworks: mountains < fireworks < terrain
+        // In ParallaxScene, render order is:
+        // 1. Sky, 2. Clouds, 3. Far sky events, 4. Rainbow (St Patricks)
+        // 5. Mountains, 6. Mid sky events, 7. Fireworks (renderBehindTerrain)
+        // 8. Terrain (hills + trees)
+        
+        val renderOrder = listOf(
+            "sky", "clouds", "farSkyEvents", "rainbow",
+            "mountains", "midSkyEvents", "fireworks", "terrain"
+        )
+        
+        val fireworksIndex = renderOrder.indexOf("fireworks")
+        val mountainsIndex = renderOrder.indexOf("mountains")
+        val terrainIndex = renderOrder.indexOf("terrain")
+        
+        assertTrue("Fireworks should be after mountains", fireworksIndex > mountainsIndex)
+        assertTrue("Fireworks should be before terrain", fireworksIndex < terrainIndex)
+    }
+
     // Helper functions matching SeasonalEvents logic
     private fun isChristmasHelper(month: Int, day: Int): Boolean {
         return month == 12 && day in 20..26

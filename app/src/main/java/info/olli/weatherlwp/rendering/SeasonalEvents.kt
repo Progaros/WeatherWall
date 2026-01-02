@@ -115,6 +115,11 @@ class SeasonalEvents(private val context: Context? = null) {
     private var initialized = false
     private var screenWidth = 0
     private var screenHeight = 0
+    
+    // Scale factor for height-relative sizing (reference height: 1920px)
+    // All pixel values are designed for 1920px height and scaled proportionally
+    private var heightScale = 1f
+    private val REFERENCE_HEIGHT = 1920f
 
     private var fireworkTimer = 0
     private val fireworkColors = intArrayOf(
@@ -266,14 +271,17 @@ class SeasonalEvents(private val context: Context? = null) {
             if (!initialized || screenWidth != canvas.width || screenHeight != canvas.height) {
                 screenWidth = canvas.width
                 screenHeight = canvas.height
+                heightScale = screenHeight / REFERENCE_HEIGHT
                 initParticles()
                 initialized = true
             }
 
             when (season) {
                 Season.CHRISTMAS -> renderChristmasStars(canvas)
-                Season.NEW_YEAR -> renderNewYearFireworks(canvas)
-                Season.CN_NEW_YEAR -> renderChineseNewYear(canvas)
+                // NEW_YEAR and CN_NEW_YEAR fireworks are now drawn via renderBehindTerrain()
+                // to appear behind hills but in front of mountains
+                Season.NEW_YEAR -> {}  // handled by renderBehindTerrain
+                Season.CN_NEW_YEAR -> {}  // handled by renderBehindTerrain
                 // ST_PATRICKS (rainbow) is drawn behind mountains via renderBehindMountains()
                 Season.ST_PATRICKS -> {}  // handled elsewhere
                 Season.NONE -> {}
@@ -300,6 +308,7 @@ class SeasonalEvents(private val context: Context? = null) {
             if (!initialized || screenWidth != canvas.width || screenHeight != canvas.height) {
                 screenWidth = canvas.width
                 screenHeight = canvas.height
+                heightScale = screenHeight / REFERENCE_HEIGHT
                 initParticles()
                 initialized = true
             }
@@ -310,10 +319,45 @@ class SeasonalEvents(private val context: Context? = null) {
             Log.e(TAG, "Error rendering behind-mountain seasonal events", e)
         }
     }
+    
+    /**
+     * Render elements that belong in front of mountains but behind terrain/hills.
+     * This includes New Year fireworks and Chinese New Year effects.
+     * Called from scene renderer after mountains but before terrain layer.
+     */
+    fun renderBehindTerrain(canvas: Canvas, enabled: Boolean) {
+        if (!enabled) return
+        try {
+            val now = System.currentTimeMillis()
+            if (now - lastSettingsLoad > SETTINGS_RELOAD_INTERVAL_MS) {
+                loadSettings()
+            }
+            val season = getCurrentSeason()
+            if (season == Season.NONE) return
+            if (!initialized || screenWidth != canvas.width || screenHeight != canvas.height) {
+                screenWidth = canvas.width
+                screenHeight = canvas.height
+                heightScale = screenHeight / REFERENCE_HEIGHT
+                initParticles()
+                initialized = true
+            }
+            // Fireworks should appear behind hills but in front of mountains
+            when (season) {
+                Season.NEW_YEAR -> renderNewYearFireworks(canvas)
+                Season.CN_NEW_YEAR -> renderChineseNewYear(canvas)
+                else -> {}
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error rendering behind-terrain seasonal events", e)
+        }
+    }
 
     private fun initParticles() {
         // Use fixed seed for consistent star placement
         val starRandom = Random(54321)
+        
+        // Scale factor for sizes (min 50% for visibility on small screens)
+        val sizeScale = heightScale.coerceAtLeast(0.5f)
         
         // Initialize background twinkling stars in upper portion of screen
         // Avoid the christmas star area (upper right)
@@ -332,28 +376,32 @@ class SeasonalEvents(private val context: Context? = null) {
                      kotlin.math.abs(s.x - christmasStarX) < exclusionRadius && 
                      kotlin.math.abs(s.y - christmasStarY) < exclusionRadius)
             
-            s.size = 1.5f + starRandom.nextFloat() * 2.5f  // Smaller background stars
+            // Size scaled relative to height
+            s.size = (1.5f + starRandom.nextFloat() * 2.5f) * sizeScale
             s.twinkle = starRandom.nextFloat() * 360f
             s.twinkleSpeed = 2f + starRandom.nextFloat() * 4f
         }
         
         // Initialize the main Christmas star (Bethlehem star) - fixed position in upper right
+        // Size is relative to reference height (35f at 1920px)
         christmasStar = ChristmasStar(
             x = christmasStarX,
             y = christmasStarY,
-            size = 35f,
+            size = 35f * heightScale.coerceAtLeast(0.5f),  // Scale with height, min 50%
             twinkle = 0f,
             twinkleSpeed = 3f
         )
         
         // Initialize trail particles (emanating from the star)
+        // Sizes are relative to reference height
+        val trailScale = heightScale.coerceAtLeast(0.5f)
         for (i in trailParticles.indices) {
             val t = i.toFloat() / trailParticles.size
             trailParticles[i].apply {
                 x = 0f  // Will be set relative to star
                 y = 0f
                 alpha = (255 * (1f - t * 0.7f)).toInt()  // Fade along trail
-                size = 3f + (1f - t) * 8f  // Larger near star
+                size = (3f + (1f - t) * 8f) * trailScale  // Larger near star, scaled
             }
         }
 
@@ -542,21 +590,22 @@ class SeasonalEvents(private val context: Context? = null) {
                 r.trailX1 = r.x
                 r.trailY1 = r.y
                 
-                // Move rocket upward
-                r.y += r.vy
-                r.vy += 0.05f  // Slight deceleration
+                // Move rocket upward (scale velocity and deceleration by height)
+                r.y += r.vy * heightScale
+                r.vy += 0.05f  // Slight deceleration (in reference pixels)
                 
-                // Draw rocket trail (fading dots behind)
+                // Draw rocket trail (fading dots behind, scaled by height)
+                val trailScale = heightScale.coerceAtLeast(0.5f)  // Don't go below 50% size
                 rocketPaint.color = Color.argb(60, 255, 200, 100)
-                canvas.drawCircle(r.trailX3, r.trailY3, 1.5f, rocketPaint)
+                canvas.drawCircle(r.trailX3, r.trailY3, 1.5f * trailScale, rocketPaint)
                 rocketPaint.color = Color.argb(120, 255, 220, 150)
-                canvas.drawCircle(r.trailX2, r.trailY2, 2f, rocketPaint)
+                canvas.drawCircle(r.trailX2, r.trailY2, 2f * trailScale, rocketPaint)
                 rocketPaint.color = Color.argb(200, 255, 240, 200)
-                canvas.drawCircle(r.trailX1, r.trailY1, 2.5f, rocketPaint)
+                canvas.drawCircle(r.trailX1, r.trailY1, 2.5f * trailScale, rocketPaint)
                 
-                // Draw rocket head
+                // Draw rocket head (scaled by height)
                 rocketPaint.color = Color.WHITE
-                canvas.drawCircle(r.x, r.y, 3f, rocketPaint)
+                canvas.drawCircle(r.x, r.y, 3f * trailScale, rocketPaint)
                 
                 // Explode when reaching target or when rocket starts falling (vy > 0)
                 // This ensures rockets always explode even if they don't quite reach target
@@ -568,41 +617,48 @@ class SeasonalEvents(private val context: Context? = null) {
         }
 
         // Update and render explosion particles
+        // Scale factor for particle sizes (min 50% to keep visible on very small screens)
+        val particleScale = heightScale.coerceAtLeast(0.5f)
+        
         for (f in fireworks) {
             if (f.life > 0) {
                 // Store previous position for sparkle trail
                 f.sparkleTrailX = f.x
                 f.sparkleTrailY = f.y
                 
-                f.x += f.vx
-                f.y += f.vy
-                f.vy += 0.12f // gravity
+                // Update physics (scale velocity and gravity by height for consistent motion)
+                f.x += f.vx * heightScale
+                f.y += f.vy * heightScale
+                f.vy += 0.12f // gravity (in reference pixels per frame)
                 f.vx *= 0.98f // air resistance
                 f.life--
 
                 val lifeRatio = f.life / f.maxLife.toFloat()
                 val alpha = (255 * lifeRatio).toInt().coerceIn(0, 255)
                 
+                // Scaled size for this particle
+                val scaledSize = f.size * particleScale
+                
                 // Draw sparkle trail behind the ball (fine particles)
                 if (f.hasSparkle && lifeRatio > 0.3f) {
                     sparklePaint.color = f.color
                     sparklePaint.alpha = (alpha * 0.4f).toInt()
-                    canvas.drawCircle(f.sparkleTrailX, f.sparkleTrailY, f.size * 0.4f, sparklePaint)
+                    canvas.drawCircle(f.sparkleTrailX, f.sparkleTrailY, scaledSize * 0.4f, sparklePaint)
                     
-                    // Additional tiny sparkles
+                    // Additional tiny sparkles (spread scaled by height)
                     val sparkleAlpha = (alpha * 0.25f).toInt()
                     sparklePaint.alpha = sparkleAlpha
                     canvas.drawCircle(
-                        f.sparkleTrailX + (Random.nextFloat() - 0.5f) * 4f,
-                        f.sparkleTrailY + (Random.nextFloat() - 0.5f) * 4f,
-                        f.size * 0.2f, sparklePaint
+                        f.sparkleTrailX + (Random.nextFloat() - 0.5f) * 4f * heightScale,
+                        f.sparkleTrailY + (Random.nextFloat() - 0.5f) * 4f * heightScale,
+                        scaledSize * 0.2f, sparklePaint
                     )
                 }
                 
                 // Draw main colorful ball
                 fireworkPaint.color = f.color
                 fireworkPaint.alpha = alpha
-                val size = f.size * (0.5f + lifeRatio * 0.5f)  // Shrink as it fades
+                val size = scaledSize * (0.5f + lifeRatio * 0.5f)  // Shrink as it fades
                 canvas.drawCircle(f.x, f.y, size, fireworkPaint)
                 
                 // Bright core
@@ -806,11 +862,11 @@ class SeasonalEvents(private val context: Context? = null) {
         
         // Draw a traditional Chinese paper dragon flying across the sky
         // Dragon moves right-to-left, undulating up and down
-        val baseX = screenWidth + 150f - (dragonPhase * 40f) % (screenWidth + 400f)
+        val baseX = screenWidth + 150f * heightScale - (dragonPhase * 40f * heightScale) % (screenWidth + 400f * heightScale)
         val baseY = screenHeight * 0.18f
         
-        // Scale based on screen size for consistent look
-        val scale = (screenWidth / 1080f).coerceIn(0.6f, 1.5f)
+        // Scale based on screen height for consistent look
+        val scale = heightScale.coerceIn(0.5f, 1.5f)
         val segmentRadius = 18f * scale
         val segmentCount = 12
         val segmentSpacing = segmentRadius * 1.6f
@@ -880,7 +936,7 @@ class SeasonalEvents(private val context: Context? = null) {
             canvas.drawLine(wx, wy, wxEnd, wyEnd, dragonOutlinePaint)
         }
         dragonOutlinePaint.color = dragonColors[3]
-        dragonOutlinePaint.strokeWidth = 2f
+        dragonOutlinePaint.strokeWidth = 2f * scale
         
         // Eyes (white with black pupils, gold outline)
         val eyeRadius = headRadius * 0.25f

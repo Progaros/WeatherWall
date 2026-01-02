@@ -149,9 +149,9 @@ class SimulationController(private val context: Context) {
             windGust = windGust.coerceIn(0f, 1f),  // Clamp to valid range
             windMultiplier = settings.windMultiplier,
             treeSwaySpeed = settings.treeSwaySpeed,
-            shadowsEnabled = settings.shadowsEnabled,
+            mountainShadowsEnabled = settings.mountainShadowsEnabled,
+            treeShadowsEnabled = settings.treeShadowsEnabled,
             shadowStrength = settings.shadowStrength,
-            cloudShadowsEnabled = settings.cloudShadowsEnabled,
             screenWidth = screenWidth,
             screenHeight = screenHeight,
             isDebugMode = settings.debugEnabled

@@ -330,7 +330,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
         // Determine shadow side based on light source angle
         // getLightSourceAngle() returns: π = light from left, 0 = light from right
         val lightAngle = state.getLightSourceAngle()
-        val shadowStrength = state.getEffectiveShadowStrength()
+        val shadowStrength = if (state.mountainShadowsEnabled) state.getEffectiveShadowStrength() else 0f
         
         // Light from left (angle > π/2) means right side is shadowed
         // Light from right (angle < π/2) means left side is shadowed

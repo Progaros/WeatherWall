@@ -387,47 +387,55 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
      * Clamps to ±18° (0.31415927 rad)
      */
     private fun handleGyroscope(values: FloatArray, displayRotation: Int) {
-        // Reference: Add RAW sensor values to averagers (no display rotation remapping here!)
-        avgYaw.add(values[0])
-        avgPitch.add(values[1])
-        avgRoll.add(values[2])
+        // Gyroscope reports angular velocity in rad/s around device axes
+        // values[0] = rotation rate around X axis (pitch rate)
+        // values[1] = rotation rate around Y axis (roll rate)
+        // values[2] = rotation rate around Z axis (yaw rate)
         
-        // Calculate time delta (reference: this.time updated AFTER accumulation)
+        // Remap based on display rotation (same approach as v1.4.6 that worked)
+        val (rateX, rateY, rateZ) = when (displayRotation) {
+            Surface.ROTATION_90 -> Triple(values[1], -values[0], values[2])
+            Surface.ROTATION_180 -> Triple(-values[0], -values[1], values[2])
+            Surface.ROTATION_270 -> Triple(-values[1], values[0], values[2])
+            else -> Triple(values[0], values[1], values[2])
+        }
+        
+        // Add remapped values to averagers for smoothing
+        avgPitch.add(rateX)
+        avgRoll.add(rateY)
+        avgYaw.add(rateZ)
+        
+        // Calculate time delta
         val currentTime = System.nanoTime()
         val deltaTimeNanos = currentTime - lastGyroTime
         
         // Skip first sample or stale data
         if (deltaTimeNanos <= 0 || deltaTimeNanos > 100_000_000L) {
-            lastGyroTime = currentTime  // Update for next sample
+            lastGyroTime = currentTime
             return
         }
         
         // Reference formula: f = deltaTimeNanos * 1e-8 * 6.0 * DEG_TO_RAD
         val f = deltaTimeNanos * 1e-8f * 6.0f * 0.017453292f
         
-        // Accumulate averaged angular velocity into angle (exactly like reference)
-        gyroYaw = (gyroYaw + avgYaw.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
+        // Accumulate averaged angular velocity into angle
         gyroPitch = (gyroPitch + avgPitch.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
         gyroRoll = (gyroRoll + avgRoll.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
+        gyroYaw = (gyroYaw + avgYaw.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
         
-        // Update time AFTER accumulation (like reference: this.time = nanoTime at end)
+        // Update time AFTER accumulation
         lastGyroTime = currentTime
         
-        // Apply display rotation AFTER accumulation (like ForestRenderer)
-        // Reference: setTilt(f2, f) where f2=tiltX, f=tiltY
-        val (tiltXRaw, tiltYRaw) = when (displayRotation) {
-            Surface.ROTATION_90 -> Pair(-gyroYaw, -gyroPitch)  // tiltX=-yaw, tiltY=-pitch
-            Surface.ROTATION_180 -> Pair(gyroPitch, -gyroYaw)  // Inferred (not in reference)
-            Surface.ROTATION_270 -> Pair(gyroYaw, gyroPitch)   // tiltX=yaw, tiltY=pitch
-            else -> Pair(-gyroPitch, gyroYaw)                   // ROTATION_0: tiltX=-pitch, tiltY=yaw
-        }
+        // Convert gyro angles to tilt output (-1 to 1 range)
+        // Roll = left/right tilt → tiltX, Pitch = forward/back tilt → tiltY
+        val tiltX = (gyroRoll / MAX_TILT_RAD).coerceIn(-1f, 1f)
+        val tiltY = (-gyroPitch / MAX_TILT_RAD).coerceIn(-1f, 1f)
         
-        // Normalize to -1..1 range
-        val tiltX = (tiltXRaw / MAX_TILT_RAD).coerceIn(-1f, 1f)
-        val tiltY = (tiltYRaw / MAX_TILT_RAD).coerceIn(-1f, 1f)
+        // Apply low-pass filter for extra smoothness
+        filteredX += FILTER_ALPHA * (tiltX - filteredX)
+        filteredY += FILTER_ALPHA * (tiltY - filteredY)
         
-        // Direct output - no additional filtering (reference only uses averaging)
-        listener?.onTiltChanged(tiltX, tiltY)
+        listener?.onTiltChanged(filteredX, filteredY)
     }
     
     /**

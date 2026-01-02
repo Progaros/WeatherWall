@@ -43,10 +43,13 @@ data class SimulationState(
     val windMultiplier: Float = 1f,     // User setting multiplier for wind effect
     val treeSwaySpeed: Float = 1f,      // User setting multiplier for tree sway speed
     
-    // Shadows & Lighting
-    val shadowsEnabled: Boolean = true,      // Global shadow toggle
-    val shadowStrength: Float = 0.5f,        // 0-1 shadow intensity from settings
-    val cloudShadowsEnabled: Boolean = false, // Cloud shadows on terrain
+    // Shadows & Lighting - separate toggles for mountains and trees
+    val mountainShadowsEnabled: Boolean = true,  // Mountain side shading
+    val treeShadowsEnabled: Boolean = true,      // Tree shadows on ground
+    val shadowStrength: Float = 0.5f,            // 0-1 shadow intensity from settings
+    
+    // Legacy computed property for backward compatibility
+    val shadowsEnabled: Boolean = mountainShadowsEnabled || treeShadowsEnabled,
     
     // Screen
     val screenWidth: Float,
@@ -90,10 +93,10 @@ data class SimulationState(
     /**
      * Get effective shadow intensity combining settings and light level.
      * Shadows are strongest during bright day, and at night scale with moon illumination.
+     * Note: Callers should check mountainShadowsEnabled or treeShadowsEnabled first.
      * @return 0.0 = no shadow, 1.0 = full shadow intensity
      */
     fun getEffectiveShadowStrength(): Float {
-        if (!shadowsEnabled) return 0f
         // During day, shadows scale with light level
         // At night, shadows scale with moon illumination (full moon casts shadows, new moon doesn't)
         val lightFactor = if (isNight) {

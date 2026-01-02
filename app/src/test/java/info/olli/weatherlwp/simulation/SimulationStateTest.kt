@@ -259,19 +259,10 @@ class SimulationStateTest {
     // ============== Shadow Tests ==============
     
     @Test
-    fun `getEffectiveShadowStrength returns zero when disabled`() {
+    fun `getEffectiveShadowStrength scales with light level at midday`() {
         val state = SimulationState.default().copy(
-            shadowsEnabled = false,
-            shadowStrength = 1f,
-            timeOfDayHours = 12f  // Bright day
-        )
-        assertEquals(0f, state.getEffectiveShadowStrength(), 0.01f)
-    }
-    
-    @Test
-    fun `getEffectiveShadowStrength returns full strength at midday`() {
-        val state = SimulationState.default().copy(
-            shadowsEnabled = true,
+            mountainShadowsEnabled = true,
+            treeShadowsEnabled = true,
             shadowStrength = 0.5f,
             timeOfDayHours = 12f
         )
@@ -282,7 +273,8 @@ class SimulationStateTest {
     @Test
     fun `getEffectiveShadowStrength scales with light level at night`() {
         val state = SimulationState.default().copy(
-            shadowsEnabled = true,
+            mountainShadowsEnabled = true,
+            treeShadowsEnabled = true,
             shadowStrength = 1f,
             timeOfDayHours = 0f  // Midnight
         )
@@ -293,8 +285,9 @@ class SimulationStateTest {
     @Test
     fun `default state has shadows enabled`() {
         val state = SimulationState.default()
-        assertTrue(state.shadowsEnabled)
-        assertFalse(state.cloudShadowsEnabled)  // Cloud shadows disabled by default
+        assertTrue(state.shadowsEnabled)  // Combined getter from mountain || tree
+        assertTrue(state.mountainShadowsEnabled)
+        assertTrue(state.treeShadowsEnabled)
         assertEquals(0.5f, state.shadowStrength, 0.01f)
     }
 }

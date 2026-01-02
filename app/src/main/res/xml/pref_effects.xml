@@ -196,13 +196,6 @@
             app:updatesContinuously="true"
             android:dependency="pref_clouds_enabled" />
 
-        <SwitchPreferenceCompat
-            android:key="pref_cloud_shadows"
-            android:title="Cloud Shadows"
-            android:summary="Clouds cast soft shadows on terrain"
-            android:defaultValue="false"
-            android:dependency="pref_clouds_enabled" />
-
         <ListPreference
             android:key="pref_cloud_render_mode"
             android:title="Cloud Render Mode"
@@ -216,9 +209,15 @@
     <!-- Shadows & Lighting -->
     <PreferenceCategory android:title="Shadows &amp; Lighting">
         <SwitchPreferenceCompat
-            android:key="pref_shadows_enabled"
-            android:title="Enable Shadows"
-            android:summary="Trees and mountains cast shadows"
+            android:key="pref_mountain_shadows_enabled"
+            android:title="Mountain Shadows"
+            android:summary="Mountain sides darken based on sun position"
+            android:defaultValue="true" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_tree_shadows_enabled"
+            android:title="Tree Shadows"
+            android:summary="Trees cast shadows on the ground"
             android:defaultValue="true" />
 
         <SeekBarPreference
@@ -229,8 +228,7 @@
             android:max="100"
             app:min="0"
             app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_shadows_enabled" />
+            app:updatesContinuously="true" />
     </PreferenceCategory>
 
     <!-- Seasonal Terrain Effects -->
@@ -295,7 +293,7 @@
             android:key="pref_winter_snow_coverage"
             android:title="Snow Coverage"
             android:summary="How much of hill tops are covered (0=light, 100=heavy)"
-            android:defaultValue="50"
+            android:defaultValue="25"
             android:max="100"
             app:min="0"
             app:showSeekBarValue="true"

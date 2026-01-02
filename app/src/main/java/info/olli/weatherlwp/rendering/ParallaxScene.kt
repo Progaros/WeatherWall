@@ -206,9 +206,11 @@ class ParallaxScene(
             // 1. Sky (gradient)
             // 2. Clouds 
             // 3. FAR SKY events (shooting stars, balloons, UFOs) - behind mountains
-            // 4. Mountains
-            // 5. MID SKY events (birds, planes, eagles) - in front of mountains
-            // 6. Terrain (hills + trees + ground animals interleaved by depth)
+            // 4. Seasonal: rainbow (St. Patrick's) - behind mountains
+            // 5. Mountains
+            // 6. MID SKY events (birds, planes, eagles) - in front of mountains
+            // 7. Seasonal: fireworks (New Year, Chinese New Year) - behind terrain/hills
+            // 8. Terrain (hills + trees + ground animals interleaved by depth)
             for (layer in layers) {
                 try {
                     // Skip randomEventLayer in normal iteration - ground events drawn by terrain callback
@@ -222,9 +224,12 @@ class ParallaxScene(
                     }
                     
                     // After drawing mountainLayer, draw mid sky events (birds, planes, eagles)
+                    // and fireworks (which launch from behind hills but in front of mountains)
                     if (layer === mountainLayer) {
                         layer.draw(canvas, state, parallaxCalculator)
                         randomEventLayer.drawMidSkyEvents(canvas, state, parallaxCalculator)
+                        // Draw fireworks behind terrain/hills but in front of mountains
+                        seasonalEvents.renderBehindTerrain(canvas, seasonalEnabled)
                         continue  // Skip the layer.draw below since we already drew it
                     }
                     
@@ -244,7 +249,8 @@ class ParallaxScene(
                 }
             }
             
-            // Draw Seasonal Events (Christmas Star, Fireworks) - only if enabled
+            // Draw Seasonal Events (Christmas Star only - in front of everything)
+            // Note: Fireworks are rendered via renderBehindTerrain() to appear behind hills
             if (seasonalEnabled) {
                 try {
                     seasonalEvents.render(canvas, true)
