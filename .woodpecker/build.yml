@@ -33,7 +33,6 @@ steps:
     commands:
       - ./gradlew test --no-daemon --stacktrace
 
-  # Build debug APK on all branches
   - name: assembleDebug
     image: ghcr.io/cirruslabs/android-sdk:35
     environment:
@@ -42,47 +41,15 @@ steps:
       - ./gradlew assembleDebug --no-daemon --stacktrace
       - ls -lah app/build/outputs/apk/debug || true
       - |
+        # Extract version from build.gradle.kts and save for later steps
         VERSION=$(grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
         echo "Detected version: v$VERSION"
         echo "$VERSION" > .version
-        BRANCH="${CI_COMMIT_BRANCH:-unknown}"
-        if [ "$BRANCH" = "develop" ]; then
-          APK_NAME="WeatherWall-nightly-v${VERSION}-debug.apk"
-        else
-          APK_NAME="WeatherWall-v${VERSION}-debug.apk"
-        fi
-        cp app/build/outputs/apk/debug/app-debug.apk "$APK_NAME"
-        echo "Debug APK built: $APK_NAME"
+        cp app/build/outputs/apk/debug/app-debug.apk "WeatherWall-v$VERSION.apk"
+        echo "APK built successfully!"
         ls -la WeatherWall-*.apk
         sha256sum WeatherWall-*.apk
 
-  # Build release APK only on main and develop branches
-  - name: assembleRelease
-    image: ghcr.io/cirruslabs/android-sdk:35
-    environment:
-      GRADLE_USER_HOME: .gradle
-    commands:
-      - ./gradlew assembleRelease --no-daemon --stacktrace
-      - ls -lah app/build/outputs/apk/release || true
-      - |
-        VERSION=$(cat .version)
-        echo "Detected version: v$VERSION"
-        BRANCH="${CI_COMMIT_BRANCH:-unknown}"
-        if [ "$BRANCH" = "develop" ]; then
-          APK_NAME="WeatherWall-nightly-v${VERSION}.apk"
-        else
-          APK_NAME="WeatherWall-v${VERSION}.apk"
-        fi
-        cp app/build/outputs/apk/release/app-release.apk "$APK_NAME"
-        echo "Release APK built: $APK_NAME"
-        ls -la WeatherWall-*.apk
-        sha256sum WeatherWall-*.apk
-    when:
-      - event: push
-        branch: [main, develop]
-      - event: tag
-
-  # Publish release on main branch only
   - name: publish-release
     image: ghcr.io/cirruslabs/android-sdk:35
     environment:
@@ -91,14 +58,15 @@ steps:
     commands:
       - |
         VERSION=$(cat .version)
-        APK_FILE="WeatherWall-v${VERSION}.apk"
+        APK_FILE="WeatherWall-v$VERSION.apk"
         echo "Checking if release v$VERSION exists..."
         echo "APK file: $APK_FILE"
         ls -la "$APK_FILE" || { echo "APK not found!"; exit 1; }
         
+        # Check if release already exists
         EXISTING=$(curl -s -o /dev/null -w "%{http_code}" \
           -H "Authorization: token $FORGEJO_TOKEN" \
-          "https://git.olli.info/api/v1/repos/Oliver/WeatherWall/releases/tags/v${VERSION}"\)
+          "https://git.olli.info/api/v1/repos/Oliver/WeatherWall/releases/tags/v$VERSION")
         
         if [ "$EXISTING" = "200" ]; then
           echo "Release v$VERSION already exists, skipping publish"
@@ -107,11 +75,12 @@ steps:
         
         echo "Creating new release v$VERSION..."
         
+        # Create the release
         RELEASE_RESPONSE=$(curl -s -X POST \
           -H "Authorization: token $FORGEJO_TOKEN" \
           -H "Content-Type: application/json" \
-          -d "{\"tag_name\": \"v${VERSION}\", \"name\": \"v${VERSION}\", \"body\": \"Automated release v${VERSION}\"}" \
-          "https://git.olli.info/api/v1/repos/Oliver/WeatherWall/releases"\)
+          -d "{\"tag_name\": \"v$VERSION\", \"name\": \"v$VERSION\", \"body\": \"Automated release v$VERSION\"}" \
+          "https://git.olli.info/api/v1/repos/Oliver/WeatherWall/releases")
         
         RELEASE_ID=$(echo "$RELEASE_RESPONSE" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
         
@@ -123,22 +92,14 @@ steps:
         
         echo "Created release ID: $RELEASE_ID"
         
+        # Upload APK
         curl -s -X POST \
           -H "Authorization: token $FORGEJO_TOKEN" \
           -H "Content-Type: application/octet-stream" \
           --data-binary "@$APK_FILE" \
-          "https://git.olli.info/api/v1/repos/Oliver/WeatherWall/releases/${RELEASE_ID}/assets?name=${APK_FILE}"
-        
-        DEBUG_APK="WeatherWall-v${VERSION}-debug.apk"
-        if [ -f "$DEBUG_APK" ]; then
-          curl -s -X POST \
-            -H "Authorization: token $FORGEJO_TOKEN" \
-            -H "Content-Type: application/octet-stream" \
-            --data-binary "@$DEBUG_APK" \
-            "https://git.olli.info/api/v1/repos/Oliver/WeatherWall/releases/${RELEASE_ID}/assets?name=${DEBUG_APK}"
-        fi
+          "https://git.olli.info/api/v1/repos/Oliver/WeatherWall/releases/$RELEASE_ID/assets?name=$APK_FILE"
         
         echo "Release v$VERSION published successfully!"
     when:
       - event: push
-        branch: main
+        branch: main, develop
