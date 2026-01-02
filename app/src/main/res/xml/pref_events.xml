@@ -190,7 +190,7 @@
             android:key="pref_rainbow_size"
             android:title="Rainbow Size"
             android:summary="Arc size (20=small, 200=large)"
-            android:defaultValue="66"
+            android:defaultValue="100"
             android:max="200"
             app:min="20"
             app:showSeekBarValue="true"

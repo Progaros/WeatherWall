@@ -2,6 +2,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Weather data comes from Breezy Weather broadcasts - no internet or location needed -->
+    
+    <!-- Query live wallpaper services to detect if our wallpaper is applied (Android 14+) -->
+    <queries>
+        <intent>
+            <action android:name="android.service.wallpaper.WallpaperService" />
+        </intent>
+    </queries>
 
     <application
         android:name=".WeatherWallApp"

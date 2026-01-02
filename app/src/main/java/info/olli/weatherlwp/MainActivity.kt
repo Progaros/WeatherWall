@@ -1,7 +1,11 @@
 package info.olli.weatherlwp
 
+import android.app.WallpaperManager
+import android.content.ComponentName
+import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.util.Log
@@ -15,8 +19,10 @@ import androidx.preference.PreferenceManager
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import androidx.viewpager2.widget.ViewPager2
 import info.olli.weatherlwp.rendering.ParallaxScene
+import info.olli.weatherlwp.wallpaper.WeatherWallpaper
 import info.olli.weatherlwp.weather.WeatherRepository
 import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayoutMediator
 import info.olli.weatherlwp.parallax.ParallaxSensorManager
@@ -67,6 +73,9 @@ class MainActivity : AppCompatActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var pendingPrefReload: Runnable? = null
     private var lastPrefReloadTime = 0L
+    
+    // FAB for applying wallpaper
+    private var fabApply: FloatingActionButton? = null
     
     // Preference change listener for live preview updates
     private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -177,6 +186,77 @@ class MainActivity : AppCompatActivity() {
                 else -> null
             }
         }.attach()
+        
+        // Setup FAB for applying wallpaper
+        fabApply = findViewById(R.id.fab_apply)
+        fabApply?.setOnClickListener {
+            openWallpaperChooser()
+        }
+        updateFabVisibility()
+    }
+    
+    override fun onResume() {
+        super.onResume()
+        // Check wallpaper status when returning to app
+        updateFabVisibility()
+        // ParallaxScene.loadPrefs() handles all layer settings including weather and seasonal
+        previewScene?.loadPrefs()
+    }
+    
+    /**
+     * Check if our live wallpaper is currently applied
+     */
+    private fun isWallpaperApplied(): Boolean {
+        return try {
+            val wm = WallpaperManager.getInstance(this)
+            val myComponent = ComponentName(this, WeatherWallpaper::class.java)
+            
+            val info = if (Build.VERSION.SDK_INT >= 34) {
+                wm.getWallpaperInfo(WallpaperManager.FLAG_SYSTEM)
+            } else {
+                @Suppress("DEPRECATION")
+                wm.wallpaperInfo
+            }
+            
+            if (info != null) {
+                val currentComponent = ComponentName(info.packageName, info.serviceName)
+                currentComponent == myComponent
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking wallpaper status", e)
+            false  // Assume not applied if we can't check
+        }
+    }
+    
+    /**
+     * Show/hide FAB based on whether wallpaper is already applied
+     */
+    private fun updateFabVisibility() {
+        fabApply?.visibility = if (isWallpaperApplied()) View.GONE else View.VISIBLE
+    }
+    
+    /**
+     * Open the system wallpaper chooser for our live wallpaper
+     */
+    private fun openWallpaperChooser() {
+        try {
+            val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER)
+            intent.putExtra(
+                WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+                ComponentName(this, WeatherWallpaper::class.java)
+            )
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error opening wallpaper chooser", e)
+            // Fallback to generic live wallpaper picker
+            try {
+                startActivity(Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER))
+            } catch (e2: Exception) {
+                Log.e(TAG, "Error opening live wallpaper chooser", e2)
+            }
+        }
     }
     
     private fun setupResizeHandle(previewContainer: FrameLayout) {
@@ -396,12 +476,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
         previewThread = null
-    }
-    
-    override fun onResume() {
-        super.onResume()
-        // ParallaxScene.loadPrefs() handles all layer settings including weather and seasonal
-        previewScene?.loadPrefs()
     }
     
     override fun onDestroy() {

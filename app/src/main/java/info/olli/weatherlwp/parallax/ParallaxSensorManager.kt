@@ -12,7 +12,6 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.sqrt
-import kotlin.math.tanh
 
 /**
  * Manages sensor input for parallax effect.
@@ -21,20 +20,17 @@ import kotlin.math.tanh
  * Falls back to TYPE_GRAVITY if rotation vectors unavailable.
  * 
  * KEY IMPLEMENTATION:
- * 1. Remap coordinate system based on display rotation (portrait/landscape)
- * 2. Use SensorManager.getOrientation() after remapping for proper pitch/roll
- * 3. Auto-recalibrate when display rotation changes
- * 4. Use per-axis deadzone instead of magnitude-based (avoids killing single-axis motion)
- * 5. Use soft clamp (tanh) instead of hard clamp to avoid "stuck at edge" feel
+ * 1. Delta-based motion detection: responds to movement, not absolute position
+ * 2. Works at ANY orientation (flat, tilted, vertical, upside-down)
+ * 3. Accumulates motion with slow decay back to center
+ * 4. Auto-resets when display rotation changes
  */
 class ParallaxSensorManager(context: Context) : SensorEventListener {
     companion object {
         private const val TAG = "ParallaxSensorManager"
         private const val FILTER_ALPHA = 0.4f
-        private const val FULL_TILT_DEGREES = 45f  // Increased from 30 for more range
-        private const val FULL_TILT_RADIANS = (FULL_TILT_DEGREES * PI / 180f).toFloat()
+        private const val FULL_TILT_RADIANS = (45f * PI / 180f).toFloat()
         private const val DEADZONE = 0.03f
-        private const val CALIBRATION_SAMPLES = 10
     }
     
     interface Listener {
@@ -58,14 +54,17 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     private var filteredX = 0f
     private var filteredY = 0f
     
-    private var baselinePitch = 0f
-    private var baselineRoll = 0f
-    private var calibrationCount = 0
-    private var isCalibrated = false
-    private var calibrationPitchSum = 0f
-    private var calibrationRollSum = 0f
+    // Delta-based motion detection: track previous angles instead of fixed baseline
+    private var prevPitch = 0f
+    private var prevRoll = 0f
+    private var isFirstSample = true
     
-    // Track display rotation for auto-recalibration
+    // Accumulated parallax offset (integrates delta motion)
+    private var accumulatedX = 0f
+    private var accumulatedY = 0f
+    private val DECAY_RATE = 0.995f  // Slowly decay back to center
+    
+    // Track display rotation for reset on rotation change
     private var lastDisplayRotation = Surface.ROTATION_0
     
     private var listener: Listener? = null
@@ -81,17 +80,16 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         if (!isStarted) {
             filteredX = 0f
             filteredY = 0f
-            baselinePitch = 0f
-            baselineRoll = 0f
-            calibrationCount = 0
-            calibrationPitchSum = 0f
-            calibrationRollSum = 0f
-            isCalibrated = false
+            prevPitch = 0f
+            prevRoll = 0f
+            isFirstSample = true
+            accumulatedX = 0f
+            accumulatedY = 0f
             lastDisplayRotation = getCurrentDisplayRotation()
             
             sensorManager.registerListener(this, activeSensor, SensorManager.SENSOR_DELAY_GAME)
             isStarted = true
-            Log.d(TAG, "Sensor started, calibrating...")
+            Log.d(TAG, "Sensor started with delta-based motion detection")
         }
     }
 
@@ -104,13 +102,13 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     }
     
     fun recalibrate() {
-        calibrationCount = 0
-        calibrationPitchSum = 0f
-        calibrationRollSum = 0f
-        isCalibrated = false
+        // Reset delta tracking - next sample will be new reference
+        isFirstSample = true
+        accumulatedX = 0f
+        accumulatedY = 0f
         filteredX = 0f
         filteredY = 0f
-        Log.d(TAG, "Recalibration triggered")
+        Log.d(TAG, "Recalibration triggered (delta reset)")
     }
     
     fun isRunning(): Boolean = isStarted
@@ -174,7 +172,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     private fun handleGravityVector(values: FloatArray, displayRotation: Int) {
         var gx = values[0]
         var gy = values[1]
-        val gz = values[2]
+        var gz = values[2]
         
         when (displayRotation) {
             Surface.ROTATION_90 -> { val temp = gx; gx = gy; gy = -temp }
@@ -185,63 +183,68 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         val norm = sqrt(gx * gx + gy * gy + gz * gz)
         if (norm < 0.1f) return
         
-        // Use projection-based tilt instead of atan2(*, gz) to avoid singularity when gz → 0
-        // This gives stable 2D tilt even when device is vertical
-        // Use sqrt(gy*gy + gz*gz) and sqrt(gx*gx + gz*gz) as denominators
-        val rollDenom = sqrt(gx * gx + gz * gz)
-        val pitchDenom = sqrt(gy * gy + gz * gz)
+        // Normalize for numerical stability
+        val inv = 1f / norm
+        gx *= inv
+        gy *= inv
+        val gzn = gz * inv
         
-        val roll = if (rollDenom > 0.01f) atan2(gx, rollDenom) * if (gz < 0) -1f else 1f 
-                   else if (gx > 0) (PI / 2).toFloat() else (-PI / 2).toFloat()
-        val pitch = if (pitchDenom > 0.01f) atan2(gy, pitchDenom) * if (gz < 0) -1f else 1f
-                    else if (gy > 0) (PI / 2).toFloat() else (-PI / 2).toFloat()
+        // Correct formulas for pitch/roll from gravity:
+        // When solving for angle about axis A, exclude A-component from denominator
+        // Pitch = rotation about X axis → uses (Y,Z), denominator uses (X,Z) magnitude
+        val pitch = atan2(-gy, sqrt(gx * gx + gzn * gzn))   // [-π/2, +π/2]
+        
+        // Roll = rotation about Y axis → uses (X,Z), denominator uses (Y,Z) magnitude  
+        val roll = atan2(gx, sqrt(gy * gy + gzn * gzn))     // [-π/2, +π/2]
         
         processOrientationAngles(pitch, roll)
     }
     
     private fun processOrientationAngles(pitch: Float, roll: Float) {
-        if (!isCalibrated) {
-            calibrationPitchSum += pitch
-            calibrationRollSum += roll
-            calibrationCount++
-            if (calibrationCount >= CALIBRATION_SAMPLES) {
-                baselinePitch = calibrationPitchSum / calibrationCount
-                baselineRoll = calibrationRollSum / calibrationCount
-                isCalibrated = true
-                Log.d(TAG, "Calibrated: pitch=${Math.toDegrees(baselinePitch.toDouble())}deg, roll=${Math.toDegrees(baselineRoll.toDouble())}deg")
-            }
+        // Delta-based motion detection: respond to movement, not absolute position
+        // This works at ANY starting orientation (flat, tilted, vertical, upside-down)
+        
+        if (isFirstSample) {
+            // First sample: just set reference, don't move yet
+            prevPitch = pitch
+            prevRoll = roll
+            isFirstSample = false
             return
         }
         
-        // Calculate relative angles from baseline
-        var relativePitch = pitch - baselinePitch
-        var relativeRoll = roll - baselineRoll
+        // Calculate motion since last frame
+        var deltaPitch = pitch - prevPitch
+        var deltaRoll = roll - prevRoll
         
-        // Clamp relative angles to valid range to prevent extreme values
-        // when phone is tilted far from calibration position
-        relativePitch = relativePitch.coerceIn(-FULL_TILT_RADIANS * 1.5f, FULL_TILT_RADIANS * 1.5f)
-        relativeRoll = relativeRoll.coerceIn(-FULL_TILT_RADIANS * 1.5f, FULL_TILT_RADIANS * 1.5f)
+        // Handle angle wraparound (if pitch/roll jumps from -π to +π)
+        if (deltaPitch > PI.toFloat()) deltaPitch -= 2f * PI.toFloat()
+        if (deltaPitch < -PI.toFloat()) deltaPitch += 2f * PI.toFloat()
+        if (deltaRoll > PI.toFloat()) deltaRoll -= 2f * PI.toFloat()
+        if (deltaRoll < -PI.toFloat()) deltaRoll += 2f * PI.toFloat()
         
-        // Detect near-vertical orientation (phone tilted far from flat)
-        // When absolute pitch is high, reduce parallax effect to avoid erratic behavior
-        val absolutePitchFromFlat = abs(pitch)
-        val verticalFactor = if (absolutePitchFromFlat > (PI / 3).toFloat()) {  // > 60 degrees
-            // Smoothly reduce effect as phone approaches vertical
-            val excess = (absolutePitchFromFlat - (PI / 3).toFloat()) / ((PI / 6).toFloat())  // 0-1 over 60-90 degrees
-            (1f - excess.coerceIn(0f, 1f))
-        } else {
-            1f
-        }
+        // Update reference for next frame
+        prevPitch = pitch
+        prevRoll = roll
         
-        // Use soft clamp (tanh) instead of hard coerceIn to avoid "stuck at edge" feel
-        // tanh approaches ±1 asymptotically, giving smooth response at all tilts
-        val normalizedX = -relativeRoll / FULL_TILT_RADIANS
-        val normalizedY = -relativePitch / FULL_TILT_RADIANS
+        // Clamp delta to reasonable range (prevents huge jumps from sensor noise)
+        deltaPitch = deltaPitch.coerceIn(-FULL_TILT_RADIANS * 0.5f, FULL_TILT_RADIANS * 0.5f)
+        deltaRoll = deltaRoll.coerceIn(-FULL_TILT_RADIANS * 0.5f, FULL_TILT_RADIANS * 0.5f)
         
-        val targetX = tanh(normalizedX.toDouble()).toFloat() * verticalFactor
-        val targetY = tanh(normalizedY.toDouble()).toFloat() * verticalFactor
+        // Accumulate motion into parallax offset (like moving a camera)
+        // Sensitivity factor converts radians to parallax units
+        val sensitivity = 2.0f  // Higher = more responsive
+        accumulatedX += -deltaRoll * sensitivity
+        accumulatedY += -deltaPitch * sensitivity
         
-        processTiltValues(targetX, targetY)
+        // Clamp accumulated offset to ±1 range
+        accumulatedX = accumulatedX.coerceIn(-1f, 1f)
+        accumulatedY = accumulatedY.coerceIn(-1f, 1f)
+        
+        // Slow decay back to center when not moving (feels natural)
+        accumulatedX *= DECAY_RATE
+        accumulatedY *= DECAY_RATE
+        
+        processTiltValues(accumulatedX, accumulatedY)
     }
     
     private fun processTiltValues(targetX: Float, targetY: Float) {
