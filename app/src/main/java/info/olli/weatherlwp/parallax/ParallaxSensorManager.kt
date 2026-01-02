@@ -274,8 +274,9 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         
         filteredX += FILTER_ALPHA * (scaledX - filteredX)
         filteredY += FILTER_ALPHA * (scaledY - filteredY)
-        
-        listener?.onTiltChanged(filteredX, filteredY)
+
+        // Flip vertical axis: invert Y so up/down is reversed for consumers
+        listener?.onTiltChanged(filteredX, -filteredY)
     }
 
     override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) = Unit
