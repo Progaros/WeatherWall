@@ -508,7 +508,8 @@ class ParallaxSensorManagerTest {
     @Test
     fun `gForce exceeds threshold during shake`() {
         // Simulate strong shake (> 2.7g)
-        val values = floatArrayOf(GRAVITY_EARTH * 2.0f, GRAVITY_EARTH * 1.5f, GRAVITY_EARTH)
+        // Using 2.0g, 1.5g, 1.2g gives sqrt(4 + 2.25 + 1.44) = sqrt(7.69) ≈ 2.77g
+        val values = floatArrayOf(GRAVITY_EARTH * 2.0f, GRAVITY_EARTH * 1.5f, GRAVITY_EARTH * 1.2f)
         
         val gX = values[0] / GRAVITY_EARTH
         val gY = values[1] / GRAVITY_EARTH
