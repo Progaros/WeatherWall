@@ -1,5 +1,8 @@
 package info.olli.weatherlwp.simulation
 
+import java.util.Calendar
+import java.util.TimeZone
+
 /**
  * Manages time for the simulation.
  * 
@@ -8,6 +11,7 @@ package info.olli.weatherlwp.simulation
  * - Manual time (fixed hour set by user)
  * - Accelerated/decelerated for effects
  * 
+ * Can use actual sunrise/sunset times from weather data when available.
  * All layers should use this clock to ensure consistent behavior.
  */
 class SimulationClock {
@@ -16,8 +20,35 @@ class SimulationClock {
     private var manualTimeMinutes = 720  // Minutes since midnight (default: noon)
     private var timeMultiplier = 1.0f
     
+    // Sunrise/sunset hours (can be updated from weather data)
+    // Default values are reasonable approximations
+    private var sunriseHour = 6.0f
+    private var sunsetHour = 20.0f
+    
     // Base time for animation consistency (doesn't change on reload)
     private val startTimeMs = System.currentTimeMillis()
+    
+    /**
+     * Update sunrise/sunset times from weather data (Unix timestamps in seconds).
+     * Pass -1 for unknown values to use defaults.
+     */
+    fun updateSunTimes(sunriseUnix: Long, sunsetUnix: Long) {
+        if (sunriseUnix > 0) {
+            sunriseHour = unixToLocalHour(sunriseUnix)
+        }
+        if (sunsetUnix > 0) {
+            sunsetHour = unixToLocalHour(sunsetUnix)
+        }
+    }
+    
+    /**
+     * Convert Unix timestamp (seconds) to local hour of day (0-24).
+     */
+    private fun unixToLocalHour(unixSeconds: Long): Float {
+        val cal = Calendar.getInstance(TimeZone.getDefault())
+        cal.timeInMillis = unixSeconds * 1000
+        return cal.get(Calendar.HOUR_OF_DAY) + cal.get(Calendar.MINUTE) / 60f
+    }
     
     /**
      * Get current time of day as hours (0.0 - 24.0).
@@ -85,27 +116,30 @@ class SimulationClock {
     }
     
     /**
-     * Check if it's currently night (for theme purposes).
+     * Check if it's currently night (before sunrise or after sunset).
      */
     fun isNight(): Boolean {
         val hour = getTimeOfDayHours()
-        return hour < 6f || hour >= 20f
+        // Night is before sunrise or after sunset
+        return hour < sunriseHour || hour >= sunsetHour
     }
     
     /**
-     * Check if it's dawn (6:00-7:30).
+     * Check if it's dawn (sunrise transition, ~1.5 hours around sunrise).
      */
     fun isDawn(): Boolean {
         val hour = getTimeOfDayHours()
-        return hour >= 6f && hour < 7.5f
+        // Dawn window: from 30 min before sunrise to 1 hour after
+        return hour >= (sunriseHour - 0.5f) && hour < (sunriseHour + 1.0f)
     }
     
     /**
-     * Check if it's dusk (17:00-20:00).
+     * Check if it's dusk (sunset transition, ~2 hours before sunset to just after).
      */
     fun isDusk(): Boolean {
         val hour = getTimeOfDayHours()
-        return hour >= 17f && hour < 20f
+        // Dusk window: from 2 hours before sunset to 30 min after
+        return hour >= (sunsetHour - 2.0f) && hour < (sunsetHour + 0.5f)
     }
     
     /**

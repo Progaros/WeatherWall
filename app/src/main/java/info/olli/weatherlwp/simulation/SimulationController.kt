@@ -44,6 +44,11 @@ class SimulationController(private val context: Context) {
         // Update clock with settings
         clock.setUseRealTime(settings.useRealTime)
         clock.setManualTime(settings.getEffectiveTimeMinutes())
+        
+        // Update clock with actual sunrise/sunset times from weather data
+        val sunrise = WeatherRepository.getSunrise(context)
+        val sunset = WeatherRepository.getSunset(context)
+        clock.updateSunTimes(sunrise, sunset)
     }
     
     /**

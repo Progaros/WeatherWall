@@ -39,8 +39,15 @@ class MountainLayer(private val context: Context) : SceneLayer {
         isAntiAlias = true
     }
     
+    private val snowCapPaint = Paint().apply {
+        style = Paint.Style.FILL
+        isAntiAlias = true
+        color = Color.WHITE
+    }
+    
     private val pathLeft = Path()
     private val pathRight = Path()
+    private val snowCapPath = Path()
     
     private var width = 0f
     private var height = 0f
@@ -75,8 +82,29 @@ class MountainLayer(private val context: Context) : SceneLayer {
     private var mountainBottomOffset = 0f  // Shift mountains up (0-1 of screen height)
     private var randomSeed = 42
     
+    // Seasonal settings (read from terrain settings)
+    private var terrainSeasonOverride = "auto"
+    private var winterSnowEnabled = true
+    private var winterSnowCoverage = 50   // 0-100 how much of mountain tops are covered
+    
     init {
         reloadSettings()
+    }
+    
+    /**
+     * Determines current terrain season based on date or override setting.
+     */
+    private fun getCurrentTerrainSeason(): String {
+        if (terrainSeasonOverride != "auto") {
+            return terrainSeasonOverride
+        }
+        val cal = java.util.Calendar.getInstance()
+        return when (cal.get(java.util.Calendar.MONTH)) {
+            2, 3, 4 -> "spring"
+            5, 6, 7 -> "summer"
+            8, 9, 10 -> "autumn"
+            else -> "winter"
+        }
     }
     
     private fun generateMountains() {
@@ -364,6 +392,53 @@ class MountainLayer(private val context: Context) : SceneLayer {
         
         // Reset shader
         paint.shader = null
+        
+        // Draw snow cap if winter and snow enabled
+        val season = getCurrentTerrainSeason()
+        if (winterSnowEnabled && season == "winter") {
+            // Snow coverage determines how far down the snow extends
+            val snowDepth = (winterSnowCoverage / 100f).coerceIn(0.15f, 0.5f)
+            val snowBottomY = peakY + (baseY - peakY) * snowDepth
+            
+            // Build snow cap shape following the ridge and mountain slopes
+            snowCapPath.reset()
+            
+            // Start at peak
+            snowCapPath.moveTo(ridgePoints[0].first, ridgePoints[0].second)
+            
+            // Left side of snow cap (follow left slope down to snow line)
+            val random = Random(mountain.shapeSeed + 1000)
+            val snowSegments = (segments * snowDepth).toInt().coerceAtLeast(3)
+            for (i in 0 until snowSegments) {
+                val progress = (i + 1).toFloat() / segments
+                if (progress > snowDepth) break
+                val targetX = peakCenterX - halfWidthPx * progress
+                val targetY = peakY + (baseY - peakY) * progress
+                val noise = (random.nextFloat() - 0.5f) * height * 0.008f
+                snowCapPath.lineTo(targetX, targetY + noise)
+            }
+            
+            // Bottom edge of snow (jagged snow line)
+            val snowLineX = peakCenterX - halfWidthPx * snowDepth
+            snowCapPath.lineTo(snowLineX, snowBottomY)
+            
+            // Cross to right side at snow line
+            val snowLineXRight = peakCenterX + halfWidthPx * snowDepth
+            snowCapPath.lineTo(snowLineXRight, snowBottomY)
+            
+            // Right side of snow cap (follow right slope back to peak)
+            for (i in snowSegments - 1 downTo 0) {
+                val progress = (i + 1).toFloat() / segments
+                if (progress > snowDepth) continue
+                val targetX = peakCenterX + halfWidthPx * progress
+                val targetY = peakY + (baseY - peakY) * progress
+                val noise = (random.nextFloat() - 0.5f) * height * 0.008f
+                snowCapPath.lineTo(targetX, targetY + noise)
+            }
+            
+            snowCapPath.close()
+            canvas.drawPath(snowCapPath, snowCapPaint)
+        }
     }
 
     override fun reloadSettings() {
@@ -394,6 +469,11 @@ class MountainLayer(private val context: Context) : SceneLayer {
         // Bottom offset: 0-50 -> 0.0 - 0.5 (shift mountains up by % of screen height)
         val bottomOffsetVal = prefs.getInt("pref_mountain_bottom_offset", 0)
         mountainBottomOffset = bottomOffsetVal / 100f
+        
+        // Seasonal settings (same preferences as TerrainLayer for consistency)
+        terrainSeasonOverride = prefs.getString("pref_terrain_season", "auto") ?: "auto"
+        winterSnowEnabled = prefs.getBoolean("pref_winter_snow_hills", true)
+        winterSnowCoverage = prefs.getInt("pref_winter_snow_coverage", 50)
         
         generateMountains()
     }

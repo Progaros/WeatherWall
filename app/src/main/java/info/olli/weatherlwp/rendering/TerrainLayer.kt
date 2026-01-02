@@ -133,6 +133,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     
     private val flowerPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val snowPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
+    private val treeSnowPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true; color = Color.WHITE }
+    private val treeSnowPath = Path()
 
     init {
         reloadSettings()
@@ -859,6 +861,28 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             treePath.close()
             
             canvas.drawPath(treePath, treePaint)
+            
+            // Draw snow on tree if winter and snow enabled
+            val season = getCurrentTerrainSeason()
+            if (winterSnowEnabled && season == "winter") {
+                // Snow covers the top portion of each tree segment
+                // More coverage on upper segments
+                val snowCoverage = (winterSnowCoverage / 100f).coerceIn(0.1f, 0.8f)
+                val segmentSnowFactor = (1f - baseHeightRatio) * 0.3f + 0.5f  // Upper segments have more snow
+                val snowHeight = segmentHeight * snowCoverage * segmentSnowFactor
+                val snowTipY = segTipY
+                val snowBaseY = segTipY + snowHeight
+                // Snow width tapers from tip (narrower) to snow base (wider)
+                val snowBaseWidth = segWidth * (snowHeight / segmentHeight).coerceIn(0.2f, 0.6f)
+                
+                treeSnowPath.reset()
+                treeSnowPath.moveTo(x + localTipSway, snowTipY)
+                treeSnowPath.lineTo(x - snowBaseWidth + localTipSway * 0.7f, snowBaseY)
+                treeSnowPath.lineTo(x + snowBaseWidth + localTipSway * 0.7f, snowBaseY)
+                treeSnowPath.close()
+                
+                canvas.drawPath(treeSnowPath, treeSnowPaint)
+            }
         }
         
         canvas.restore()

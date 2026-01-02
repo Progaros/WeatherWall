@@ -2,17 +2,33 @@ package info.olli.weatherlwp.rendering
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapShader
 import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.graphics.RectF
+import android.graphics.Shader
+import android.os.Build
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationState
 import kotlin.random.Random
+
+/**
+ * Cloud render mode - determines how clouds are drawn.
+ */
+enum class CloudRenderMode {
+    /** Pre-render cloud groups to bitmaps with blur. Default, best quality. */
+    CACHED,
+    /** Single scrolling noise texture. Fastest, stylized look. */
+    TILED,
+    /** AGSL RuntimeShader for GPU-accelerated procedural clouds (Android 13+). */
+    SHADER
+}
 
 /**
  * Renders clouds with wind-based movement using pre-calculated cloud groups.
@@ -92,6 +108,20 @@ class CloudLayer(private val context: Context) : SceneLayer {
     private var cloudOpacity = 0.4f
     private var cloudSpeedMultiplier = 1.0f  // Controls cloud movement speed (0=frozen, 1=normal, 2=fast)
     private var fluffinessMultiplier = 1.0f  // Controls puffs per cloud (density of each cloud)
+    private var renderMode = CloudRenderMode.CACHED  // Which drawing method to use
+    
+    // Tiled mode resources
+    private var tiledNoiseBitmap: Bitmap? = null
+    private var tiledShader: BitmapShader? = null
+    private val tiledMatrix = Matrix()
+    private val tiledPaint = Paint().apply { isAntiAlias = true }
+    private var tiledOffsetX = 0f
+    private var tiledOffsetY = 0f
+    
+    // AGSL shader (Android 13+)
+    @Suppress("DEPRECATION")
+    private var agslShader: android.graphics.RuntimeShader? = null
+    private val shaderPaint = Paint().apply { isAntiAlias = true }
     private var cloudsEnabled = true
     private var randomSeed = 42
     
@@ -370,6 +400,21 @@ class CloudLayer(private val context: Context) : SceneLayer {
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         if (width <= 0 || height <= 0 || !cloudsEnabled) return
         
+        // Calculate cloud color for this frame (used by all render modes)
+        currentCloudColor = calculateCloudColor(state)
+        
+        // Dispatch to appropriate render mode
+        when (renderMode) {
+            CloudRenderMode.CACHED -> drawCachedMode(canvas, state, parallaxCalculator)
+            CloudRenderMode.TILED -> drawTiledMode(canvas, state, parallaxCalculator)
+            CloudRenderMode.SHADER -> drawShaderMode(canvas, state, parallaxCalculator)
+        }
+    }
+    
+    /**
+     * Original cached bitmap mode - best quality, higher CPU usage.
+     */
+    private fun drawCachedMode(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         // Cloud count comes directly from weather/simulation data
         // Scale cloud count based on aspect ratio to maintain consistent density
         // Taller screens (higher aspect ratio) need more clouds to avoid looking sparse
@@ -389,10 +434,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val currentGroups = cloudGroups
         if (currentGroups.isEmpty()) return
         
-        // Calculate cloud color for this frame and apply as tint filter
         // PERFORMANCE: Clouds are cached as white bitmaps, color applied at draw time
         // This eliminates expensive bitmap regeneration during dawn/dusk transitions
-        currentCloudColor = calculateCloudColor(state)
         drawPaint.colorFilter = PorterDuffColorFilter(currentCloudColor, PorterDuff.Mode.MULTIPLY)
         
         // Draw back layer first, then front layer
@@ -449,6 +492,204 @@ class CloudLayer(private val context: Context) : SceneLayer {
         }
     }
     
+    /**
+     * Tiled texture mode - single scrolling noise texture, very fast.
+     * Uses a pre-generated noise bitmap with BitmapShader for tiling.
+     */
+    private fun drawTiledMode(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
+        // Skip if no clouds
+        if (state.getCloudCount() == 0) return
+        
+        // Generate tiled noise bitmap if needed (once per resize)
+        if (tiledNoiseBitmap == null) {
+            generateTiledNoiseBitmap()
+        }
+        
+        val shader = tiledShader ?: return
+        
+        // Calculate cloud coverage based on cloud count (0-50 maps to alpha 0-200)
+        val coverage = (state.getCloudCount() / 50f).coerceIn(0f, 1f)
+        val alpha = (coverage * 200).toInt()
+        
+        // Apply color tint and alpha
+        tiledPaint.colorFilter = PorterDuffColorFilter(currentCloudColor, PorterDuff.Mode.MULTIPLY)
+        tiledPaint.alpha = alpha
+        tiledPaint.shader = shader
+        
+        // Animate offset based on wind
+        val windSpeed = state.windStrength * cloudSpeedMultiplier * 0.5f
+        tiledOffsetX += windSpeed * 0.3f
+        tiledOffsetY += windSpeed * 0.05f
+        
+        // Wrap offset to prevent overflow
+        if (tiledOffsetX > 10000f) tiledOffsetX -= 10000f
+        if (tiledOffsetY > 10000f) tiledOffsetY -= 10000f
+        
+        // Apply parallax
+        val px = parallaxCalculator.getOffsetXForDepth(0.2f)
+        val py = parallaxCalculator.getOffsetYForDepth(0.2f)
+        
+        tiledMatrix.reset()
+        tiledMatrix.setTranslate(tiledOffsetX + px, tiledOffsetY + py)
+        shader.setLocalMatrix(tiledMatrix)
+        
+        // Draw rectangle covering sky area (top 60% of screen)
+        canvas.drawRect(0f, 0f, width, height * 0.6f, tiledPaint)
+        tiledPaint.shader = null
+    }
+    
+    /**
+     * Generate a simple Perlin-ish noise bitmap for tiled cloud texture.
+     */
+    private fun generateTiledNoiseBitmap() {
+        val size = 256
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val random = Random(42)
+        
+        // Simple multi-octave noise
+        for (y in 0 until size) {
+            for (x in 0 until size) {
+                var value = 0f
+                var amplitude = 1f
+                var frequency = 1f
+                
+                for (octave in 0 until 4) {
+                    val nx = x * frequency / size * 4
+                    val ny = y * frequency / size * 4
+                    // Simple smoothed random (not true Perlin but fast)
+                    val noise = kotlin.math.sin(nx * 12.9898 + ny * 78.233).toFloat()
+                    value += ((noise * 43758.5453).mod(1f)) * amplitude
+                    amplitude *= 0.5f
+                    frequency *= 2f
+                }
+                
+                value = ((value + 1f) / 2f).coerceIn(0f, 1f)
+                // Threshold to create cloud-like blobs
+                value = if (value > 0.4f) ((value - 0.4f) / 0.6f) else 0f
+                
+                val alpha = (value * 255).toInt()
+                bitmap.setPixel(x, y, Color.argb(alpha, 255, 255, 255))
+            }
+        }
+        
+        tiledNoiseBitmap = bitmap
+        tiledShader = BitmapShader(bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
+    }
+    
+    /**
+     * AGSL RuntimeShader mode - GPU procedural clouds (Android 13+).
+     * Falls back to tiled mode on older devices.
+     */
+    private fun drawShaderMode(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
+        // Fall back to tiled mode on older Android versions
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            drawTiledMode(canvas, state, parallaxCalculator)
+            return
+        }
+        
+        // Skip if no clouds
+        if (state.getCloudCount() == 0) return
+        
+        // Create AGSL shader if needed
+        if (agslShader == null) {
+            createAgslShader()
+        }
+        
+        val shader = agslShader ?: run {
+            drawTiledMode(canvas, state, parallaxCalculator)
+            return
+        }
+        
+        // Set shader uniforms
+        val coverage = (state.getCloudCount() / 50f).coerceIn(0f, 1f)
+        val windOffset = tiledOffsetX  // Reuse offset for animation
+        
+        // Update animation offset
+        tiledOffsetX += state.windStrength * cloudSpeedMultiplier * 0.01f
+        if (tiledOffsetX > 1000f) tiledOffsetX -= 1000f
+        
+        shader.setFloatUniform("resolution", width, height)
+        shader.setFloatUniform("time", windOffset)
+        shader.setFloatUniform("coverage", coverage)
+        shader.setFloatUniform("cloudColor", 
+            Color.red(currentCloudColor) / 255f,
+            Color.green(currentCloudColor) / 255f,
+            Color.blue(currentCloudColor) / 255f
+        )
+        
+        shaderPaint.shader = shader
+        canvas.drawRect(0f, 0f, width, height * 0.6f, shaderPaint)
+        shaderPaint.shader = null
+    }
+    
+    /**
+     * Create AGSL RuntimeShader for procedural clouds.
+     */
+    private fun createAgslShader() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        
+        val agslCode = """
+            uniform float2 resolution;
+            uniform float time;
+            uniform float coverage;
+            uniform float3 cloudColor;
+            
+            // Simple 2D noise function
+            float hash(float2 p) {
+                return fract(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
+            }
+            
+            float noise(float2 p) {
+                float2 i = floor(p);
+                float2 f = fract(p);
+                float2 u = f * f * (3.0 - 2.0 * f);
+                return mix(
+                    mix(hash(i), hash(i + float2(1.0, 0.0)), u.x),
+                    mix(hash(i + float2(0.0, 1.0)), hash(i + float2(1.0, 1.0)), u.x),
+                    u.y
+                );
+            }
+            
+            float fbm(float2 p) {
+                float value = 0.0;
+                float amplitude = 0.5;
+                for (int i = 0; i < 5; i++) {
+                    value += amplitude * noise(p);
+                    p *= 2.0;
+                    amplitude *= 0.5;
+                }
+                return value;
+            }
+            
+            half4 main(float2 fragCoord) {
+                float2 uv = fragCoord / resolution;
+                
+                // Animate with time (wind)
+                float2 offset = float2(time * 0.01, time * 0.003);
+                
+                // Multi-scale noise for clouds
+                float n = fbm(uv * 3.0 + offset);
+                
+                // Apply coverage threshold
+                float threshold = 1.0 - coverage * 0.6;
+                float cloud = smoothstep(threshold - 0.1, threshold + 0.2, n);
+                
+                // Fade at edges
+                float edgeFade = smoothstep(0.0, 0.1, uv.y) * smoothstep(0.6, 0.4, uv.y);
+                cloud *= edgeFade;
+                
+                return half4(cloudColor, cloud * 0.7);
+            }
+        """.trimIndent()
+        
+        try {
+            agslShader = android.graphics.RuntimeShader(agslCode)
+        } catch (e: Exception) {
+            android.util.Log.e("CloudLayer", "Failed to create AGSL shader: ${e.message}")
+            agslShader = null
+        }
+    }
+    
     private fun calculateCloudColor(state: SimulationState): Int {
         val hour = state.timeOfDayHours
         return when {
@@ -477,6 +718,16 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val newEnabled = prefs.getBoolean("pref_clouds_enabled", true)
         val enabledChanged = newEnabled != cloudsEnabled
         cloudsEnabled = newEnabled
+        
+        // Cloud render mode
+        val renderModeStr = prefs.getString("pref_cloud_render_mode", "cached") ?: "cached"
+        val newRenderMode = when (renderModeStr) {
+            "tiled" -> CloudRenderMode.TILED
+            "shader" -> CloudRenderMode.SHADER
+            else -> CloudRenderMode.CACHED
+        }
+        val renderModeChanged = newRenderMode != renderMode
+        renderMode = newRenderMode
         
         // Random seed for consistent placement
         val newSeed = prefs.getInt("pref_random_seed", 42)
