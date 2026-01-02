@@ -340,31 +340,34 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     /**
      * Handle gyroscope sensor data (reference app approach).
      * 
-     * Reference app analysis (RotationManager.java + ForestRenderer.java):
-     * - values[0] = X-axis rotation rate (pitch - tilting forward/back)
-     * - values[1] = Y-axis rotation rate (roll - tilting left/right)
-     * - values[2] = Z-axis rotation rate (yaw - twisting)
+     * Reference app RotationManager.java:
+     * - values[0] → lastYaw (Z-axis rotation rate - twisting phone)
+     * - values[1] → lastPitch (X-axis rotation rate - tilting forward/back)
+     * - values[2] → lastRoll (Y-axis rotation rate - tilting left/right)
      * 
-     * Reference output for ROTATION_0:
-     * - tiltX = -values[1] (roll) - tilting left makes scene shift right
-     * - tiltY = values[0] (pitch) - tilting forward makes scene shift down
+     * Reference app ForestRenderer.java for ROTATION_0:
+     * - tiltX = -lastPitch = -accumulated(values[1])
+     * - tiltY = lastYaw = accumulated(values[0])
+     * - setTilt(tiltX, tiltY)
      * 
      * Uses 3-sample averaging, formula: angle += avgRate * deltaTimeNanos * 1e-8 * 6 * DEG_TO_RAD
      * Clamps to ±18° (0.31415927 rad)
      */
     private fun handleGyroscope(values: FloatArray, displayRotation: Int) {
-        // Remap gyroscope values based on display rotation
-        // Reference app ForestRenderer remaps for landscape modes
-        val (pitchRate, rollRate) = when (displayRotation) {
-            Surface.ROTATION_90 -> Pair(-values[1], values[0])
+        // Reference app ForestRenderer remaps for display rotation
+        // ROTATION_0: tiltX = -lastPitch, tiltY = lastYaw
+        // ROTATION_90: tiltX = -lastYaw, tiltY = -lastPitch
+        // ROTATION_270: tiltX = lastYaw, tiltY = lastPitch
+        val (yawRate, pitchRate) = when (displayRotation) {
+            Surface.ROTATION_90 -> Pair(-values[1], -values[0])
             Surface.ROTATION_180 -> Pair(-values[0], -values[1])
-            Surface.ROTATION_270 -> Pair(values[1], -values[0])
-            else -> Pair(values[0], values[1])  // ROTATION_0
+            Surface.ROTATION_270 -> Pair(values[1], values[0])
+            else -> Pair(values[0], values[1])  // ROTATION_0: yaw=v[0], pitch=v[1]
         }
         
         // Add to averagers for smoothing (3-sample average like reference)
+        avgYaw.add(yawRate)
         avgPitch.add(pitchRate)
-        avgRoll.add(rollRate)
         
         // Calculate time delta
         val currentTime = System.nanoTime()
@@ -379,22 +382,15 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         // Reference formula: f = deltaTimeNanos * 1e-8 * 6.0 * DEG_TO_RAD
         val f = deltaTimeNanos * 1e-8f * 6.0f * 0.017453292f
         
-        // Accumulate averaged angular velocity into angle
+        // Accumulate averaged angular velocity into angle (exactly like reference)
+        gyroYaw = (gyroYaw + avgYaw.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
         gyroPitch = (gyroPitch + avgPitch.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
-        gyroRoll = (gyroRoll + avgRoll.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
         
-        // Output tilt matching reference app's setTilt(f2, f) = setTilt(-pitch, yaw)
-        // where pitch = values[1], yaw = values[0]
-        // In our terms: setTilt(-roll, pitch)
-        // 
-        // For intuitive behavior:
-        // - Tilting phone right → scene shifts left (negative tiltX)
-        // - Tilting phone forward → scene shifts up (negative tiltY) to reveal more bottom
-        //
-        // Reference app's Y behavior in OpenGL may differ from our 2D Canvas.
-        // Negate Y for intuitive parallax (tilt forward = see more of bottom = shift up)
-        val tiltX = (-gyroRoll / MAX_TILT_RAD).coerceIn(-1f, 1f)
-        val tiltY = (-gyroPitch / MAX_TILT_RAD).coerceIn(-1f, 1f)  // Negated for intuitive feel
+        // Output exactly matching reference app: setTilt(-lastPitch, lastYaw)
+        // tiltX = -lastPitch / MAX_TILT_RAD (normalized to -1..1)
+        // tiltY = lastYaw / MAX_TILT_RAD (normalized to -1..1)
+        val tiltX = (-gyroPitch / MAX_TILT_RAD).coerceIn(-1f, 1f)
+        val tiltY = (gyroYaw / MAX_TILT_RAD).coerceIn(-1f, 1f)
         
         // Direct output - no additional filtering (reference only uses averaging)
         listener?.onTiltChanged(tiltX, tiltY)

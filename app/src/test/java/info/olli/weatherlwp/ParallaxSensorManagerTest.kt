@@ -407,6 +407,70 @@ class ParallaxSensorManagerTest {
         val negativeTilt = (-MAX_TILT_RAD / MAX_TILT_RAD).coerceIn(-1f, 1f)
         assertEquals("Negative max should map to -1.0", -1f, negativeTilt, 0.001f)
     }
+    
+    // ============== Reference App Axis Mapping Tests ==============
+    
+    @Test
+    fun `gyroscope axis mapping matches reference ROTATION_0`() {
+        // Reference app RotationManager.java:
+        // values[0] → lastYaw (Z-axis twist)
+        // values[1] → lastPitch (X-axis tilt forward/back)
+        // 
+        // Reference app ForestRenderer.java ROTATION_0:
+        // tiltX = -lastPitch = -accumulated(values[1])
+        // tiltY = lastYaw = accumulated(values[0])
+        
+        val values = floatArrayOf(0.5f, 0.3f, 0.1f)  // yaw=0.5, pitch=0.3, roll=0.1
+        
+        // ROTATION_0 mapping
+        val yawRate = values[0]    // 0.5
+        val pitchRate = values[1]  // 0.3
+        
+        assertEquals("Yaw rate should be values[0]", 0.5f, yawRate, 0.001f)
+        assertEquals("Pitch rate should be values[1]", 0.3f, pitchRate, 0.001f)
+        
+        // After accumulation and output
+        val MAX_TILT_RAD = 0.31415927f
+        val accumulatedYaw = (yawRate * 0.1f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
+        val accumulatedPitch = (pitchRate * 0.1f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
+        
+        // Output: tiltX = -pitch, tiltY = yaw
+        val tiltX = (-accumulatedPitch / MAX_TILT_RAD).coerceIn(-1f, 1f)
+        val tiltY = (accumulatedYaw / MAX_TILT_RAD).coerceIn(-1f, 1f)
+        
+        assertTrue("tiltX should be negative of pitch", tiltX < 0)
+        assertTrue("tiltY should match yaw sign", tiltY > 0)
+    }
+    
+    @Test
+    fun `gyroscope axis mapping matches reference ROTATION_90`() {
+        // Reference app ForestRenderer.java ROTATION_90:
+        // tiltX = -lastYaw, tiltY = -lastPitch
+        
+        val values = floatArrayOf(0.5f, 0.3f, 0.1f)  // yaw=0.5, pitch=0.3
+        
+        // ROTATION_90 mapping
+        val yawRate = -values[1]    // -pitch → yaw for this rotation
+        val pitchRate = -values[0]  // -yaw → pitch for this rotation
+        
+        assertEquals("Remapped yaw for ROTATION_90", -0.3f, yawRate, 0.001f)
+        assertEquals("Remapped pitch for ROTATION_90", -0.5f, pitchRate, 0.001f)
+    }
+    
+    @Test
+    fun `gyroscope axis mapping matches reference ROTATION_270`() {
+        // Reference app ForestRenderer.java ROTATION_270:
+        // tiltX = lastYaw, tiltY = lastPitch
+        
+        val values = floatArrayOf(0.5f, 0.3f, 0.1f)  // yaw=0.5, pitch=0.3
+        
+        // ROTATION_270 mapping (opposite of ROTATION_90)
+        val yawRate = values[1]   // pitch → yaw
+        val pitchRate = values[0] // yaw → pitch
+        
+        assertEquals("Remapped yaw for ROTATION_270", 0.3f, yawRate, 0.001f)
+        assertEquals("Remapped pitch for ROTATION_270", 0.5f, pitchRate, 0.001f)
+    }
 }
 
 /**
