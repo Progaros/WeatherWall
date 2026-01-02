@@ -87,6 +87,24 @@ class WeatherLayer : SceneLayer {
         isAntiAlias = true
     }
     
+    // Pre-allocated storm cloud paint to avoid allocations in render loop
+    private val stormCloudPaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.FILL
+    }
+    
+    // Pre-allocated storm cloud layers (y, color, size) to avoid allocations in render loop
+    private val stormCloudLayers = arrayOf(
+        floatArrayOf(RenderConstants.STORM_CLOUD_Y1, RenderConstants.STORM_CLOUD_SIZE_BACK),
+        floatArrayOf(RenderConstants.STORM_CLOUD_Y2, RenderConstants.STORM_CLOUD_SIZE_MID),
+        floatArrayOf(RenderConstants.STORM_CLOUD_Y3, RenderConstants.STORM_CLOUD_SIZE_FRONT)
+    )
+    private val stormCloudColors = intArrayOf(
+        RenderConstants.STORM_CLOUD_COLOR_BACK,
+        RenderConstants.STORM_CLOUD_COLOR_MID,
+        RenderConstants.STORM_CLOUD_COLOR_FRONT
+    )
+    
     private val rainDimPaint = Paint().apply {
         style = Paint.Style.FILL
     }
@@ -105,6 +123,11 @@ class WeatherLayer : SceneLayer {
     
     // Store state for particle updates
     private var cachedWindStrength = 0f
+    
+    // Cached fog gradient state to avoid creating LinearGradient every frame
+    private var cachedFogLightLevel = -1f
+    private var cachedFogGradient: android.graphics.LinearGradient? = null
+    private var cachedFogMidGradient: android.graphics.LinearGradient? = null
 
     private var currentEffect = EffectType.NONE
 
@@ -479,20 +502,14 @@ class WeatherLayer : SceneLayer {
     private fun drawStormClouds(canvas: Canvas, timeSeconds: Float) {
         // Dark, ominous storm clouds covering top of screen
         // Position: -10% (above screen) to 20% from top
-        val stormCloudPaint = Paint().apply {
-            isAntiAlias = true
-            style = Paint.Style.FILL
-        }
+        // Uses pre-allocated paint and layer arrays to avoid GC during storms
         
-        // Multiple layers of dark clouds using centralized constants
-        val cloudLayers = listOf(
-            Triple(RenderConstants.STORM_CLOUD_Y1, RenderConstants.STORM_CLOUD_COLOR_BACK, RenderConstants.STORM_CLOUD_SIZE_BACK),
-            Triple(RenderConstants.STORM_CLOUD_Y2, RenderConstants.STORM_CLOUD_COLOR_MID, RenderConstants.STORM_CLOUD_SIZE_MID),
-            Triple(RenderConstants.STORM_CLOUD_Y3, RenderConstants.STORM_CLOUD_COLOR_FRONT, RenderConstants.STORM_CLOUD_SIZE_FRONT)
-        )
-        
-        for ((baseY, color, sizeMultiplier) in cloudLayers) {
-            stormCloudPaint.color = color
+        // Multiple layers of dark clouds using pre-allocated arrays
+        for (layerIndex in stormCloudLayers.indices) {
+            val layer = stormCloudLayers[layerIndex]
+            val baseY = layer[0]
+            val sizeMultiplier = layer[1]
+            stormCloudPaint.color = stormCloudColors[layerIndex]
             
             // Draw multiple cloud puffs
             val numPuffs = 8
@@ -528,6 +545,7 @@ class WeatherLayer : SceneLayer {
      * Render fog as a smooth gradient overlay with subtle animation.
      * Dense at bottom, fading to transparent at top. Intensity affects opacity.
      * Color adjusts based on light level - darker/bluer at night.
+     * Uses cached gradients to avoid GC pressure - only recreated when light level changes.
      */
     private fun renderFog(canvas: Canvas, state: SimulationState) {
         // Base fog opacity depends on intensity (30-70%)
@@ -537,42 +555,54 @@ class WeatherLayer : SceneLayer {
         // Day: bright gray (210, 215, 225)
         // Night: dark blue-gray (40, 45, 60)
         val lightLevel = state.getLightLevel()
-        val nightR = 40
-        val nightG = 45
-        val nightB = 60
-        val dayR = RenderConstants.FOG_R
-        val dayG = RenderConstants.FOG_G
-        val dayB = RenderConstants.FOG_B
         
-        val fogR = (nightR + (dayR - nightR) * lightLevel).toInt()
-        val fogG = (nightG + (dayG - nightG) * lightLevel).toInt()
-        val fogB = (nightB + (dayB - nightB) * lightLevel).toInt()
+        // Only recreate gradients when light level changes significantly (>5%)
+        // This avoids LinearGradient allocation every frame
+        val needsGradientUpdate = cachedFogGradient == null || 
+            kotlin.math.abs(lightLevel - cachedFogLightLevel) > 0.05f
         
-        // Create a smooth vertical gradient from bottom (dense) to top (clear)
-        // Extend gradient BELOW screen to avoid visible sharp edge at bottom
-        val gradientShader = android.graphics.LinearGradient(
-            0f, screenHeight * 0.20f,  // Start: 20% from top (clear)
-            0f, screenHeight * 1.2f,   // End: 120% height (below screen edge)
-            Color.argb(0, fogR, fogG, fogB),  // Transparent at top
-            Color.argb(baseAlpha, fogR, fogG, fogB),  // Dense below screen
-            android.graphics.Shader.TileMode.CLAMP
-        )
+        if (needsGradientUpdate) {
+            val nightR = 40
+            val nightG = 45
+            val nightB = 60
+            val dayR = RenderConstants.FOG_R
+            val dayG = RenderConstants.FOG_G
+            val dayB = RenderConstants.FOG_B
+            
+            val fogR = (nightR + (dayR - nightR) * lightLevel).toInt()
+            val fogG = (nightG + (dayG - nightG) * lightLevel).toInt()
+            val fogB = (nightB + (dayB - nightB) * lightLevel).toInt()
+            
+            // Create a smooth vertical gradient from bottom (dense) to top (clear)
+            // Extend gradient BELOW screen to avoid visible sharp edge at bottom
+            cachedFogGradient = android.graphics.LinearGradient(
+                0f, screenHeight * 0.20f,  // Start: 20% from top (clear)
+                0f, screenHeight * 1.2f,   // End: 120% height (below screen edge)
+                Color.argb(0, fogR, fogG, fogB),  // Transparent at top
+                Color.argb(baseAlpha, fogR, fogG, fogB),  // Dense below screen
+                android.graphics.Shader.TileMode.CLAMP
+            )
+            
+            // Add a second layer for depth - mid-height concentration
+            val midAlpha = (baseAlpha * 0.5f).toInt()
+            cachedFogMidGradient = android.graphics.LinearGradient(
+                0f, screenHeight * 0.3f,
+                0f, screenHeight * 1.1f,  // End below screen
+                Color.argb(0, fogR, fogG, fogB),
+                Color.argb(midAlpha, fogR + 5, fogG + 5, fogB + 5),
+                android.graphics.Shader.TileMode.CLAMP
+            )
+            
+            cachedFogLightLevel = lightLevel
+        }
         
-        fogPaint.shader = gradientShader
+        // Draw main gradient
+        fogPaint.shader = cachedFogGradient
         canvas.drawRect(0f, 0f, screenWidth.toFloat(), screenHeight.toFloat(), fogPaint)
         fogPaint.shader = null
         
-        // Add a second layer for depth - mid-height concentration
-        // Also extend below screen
-        val midAlpha = (baseAlpha * 0.5f).toInt()
-        val midGradient = android.graphics.LinearGradient(
-            0f, screenHeight * 0.3f,
-            0f, screenHeight * 1.1f,  // End below screen
-            Color.argb(0, fogR, fogG, fogB),
-            Color.argb(midAlpha, fogR + 5, fogG + 5, fogB + 5),
-            android.graphics.Shader.TileMode.CLAMP
-        )
-        fogPaint.shader = midGradient
+        // Draw mid-depth layer
+        fogPaint.shader = cachedFogMidGradient
         canvas.drawRect(0f, screenHeight * 0.3f, screenWidth.toFloat(), screenHeight.toFloat(), fogPaint)
         fogPaint.shader = null
     }
@@ -581,6 +611,10 @@ class WeatherLayer : SceneLayer {
         screenWidth = w.toInt()
         screenHeight = h.toInt()
         initialized = false
+        // Invalidate cached fog gradients on resize
+        cachedFogGradient = null
+        cachedFogMidGradient = null
+        cachedFogLightLevel = -1f
     }
 
     override fun update(state: SimulationState, deltaTimeMs: Long) {

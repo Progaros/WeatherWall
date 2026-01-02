@@ -66,6 +66,10 @@ class ParallaxScene(
     private var weatherEnabled = true
     private var seasonalEnabled = true
     
+    // Battery optimization: throttle SharedPreferences access for spawn triggers
+    private var lastSpawnTriggerCheckMs = 0L
+    private val SPAWN_TRIGGER_CHECK_INTERVAL_MS = 100L  // Only check every 100ms instead of every frame
+    
     init {
         // Add layers in draw order (Background -> Foreground)
         layers.add(skyLayer)
@@ -164,33 +168,39 @@ class ParallaxScene(
             lastState = state
             
             // Check for manual spawn trigger from settings
-            // Use context-specific keys (preview vs wallpaper) to avoid race conditions
-            // Each context reads and clears only its own key, but uses same seed for deterministic events
-            val spawnTriggerKey = "trigger_spawn_event_time$triggerSuffix"
-            val spawnTriggerTime = prefs.getLong(spawnTriggerKey, 0L)
-            val timeSinceSpawnTrigger = System.currentTimeMillis() - spawnTriggerTime
-            if (spawnTriggerTime > 0 && timeSinceSpawnTrigger < 10000) {
-                // Clear only our own key to prevent duplicate spawns
-                prefs.edit().putLong(spawnTriggerKey, 0L).apply()
-                // Use trigger time as seed for deterministic event spawning
-                randomEventLayer.debugSpawnEvent(spawnTriggerTime)
-                Log.d(TAG, "Manual spawn trigger received [${if (isPreview) "preview" else "wallpaper"}] (delay: ${timeSinceSpawnTrigger}ms)")
-            }
-            
-            // Check for specific event spawn trigger from individual toggles
-            val specificEventKey = "trigger_spawn_specific_event$triggerSuffix"
-            val specificEventTimeKey = "trigger_spawn_specific_event_time$triggerSuffix"
-            val specificEventTime = prefs.getLong(specificEventTimeKey, 0L)
-            val specificEvent = prefs.getString(specificEventKey, null)
-            val timeSinceSpecificTrigger = System.currentTimeMillis() - specificEventTime
-            if (specificEvent != null && specificEventTime > 0 && timeSinceSpecificTrigger < 10000) {
-                prefs.edit()
-                    .remove(specificEventKey)
-                    .putLong(specificEventTimeKey, 0L)
-                    .apply()  // Use apply() to avoid blocking render thread
-                // Use trigger time as seed for deterministic event spawning
-                randomEventLayer.spawnSpecificEvent(specificEvent, specificEventTime)
-                Log.d(TAG, "Specific spawn trigger received [${if (isPreview) "preview" else "wallpaper"}]: $specificEvent (delay: ${timeSinceSpecificTrigger}ms)")
+            // Battery optimization: Only check SharedPreferences every 100ms instead of every frame
+            val currentTimeMs = System.currentTimeMillis()
+            if (currentTimeMs - lastSpawnTriggerCheckMs >= SPAWN_TRIGGER_CHECK_INTERVAL_MS) {
+                lastSpawnTriggerCheckMs = currentTimeMs
+                
+                // Use context-specific keys (preview vs wallpaper) to avoid race conditions
+                // Each context reads and clears only its own key, but uses same seed for deterministic events
+                val spawnTriggerKey = "trigger_spawn_event_time$triggerSuffix"
+                val spawnTriggerTime = prefs.getLong(spawnTriggerKey, 0L)
+                val timeSinceSpawnTrigger = currentTimeMs - spawnTriggerTime
+                if (spawnTriggerTime > 0 && timeSinceSpawnTrigger < 10000) {
+                    // Clear only our own key to prevent duplicate spawns
+                    prefs.edit().putLong(spawnTriggerKey, 0L).apply()
+                    // Use trigger time as seed for deterministic event spawning
+                    randomEventLayer.debugSpawnEvent(spawnTriggerTime)
+                    Log.d(TAG, "Manual spawn trigger received [${if (isPreview) "preview" else "wallpaper"}] (delay: ${timeSinceSpawnTrigger}ms)")
+                }
+                
+                // Check for specific event spawn trigger from individual toggles
+                val specificEventKey = "trigger_spawn_specific_event$triggerSuffix"
+                val specificEventTimeKey = "trigger_spawn_specific_event_time$triggerSuffix"
+                val specificEventTime = prefs.getLong(specificEventTimeKey, 0L)
+                val specificEvent = prefs.getString(specificEventKey, null)
+                val timeSinceSpecificTrigger = currentTimeMs - specificEventTime
+                if (specificEvent != null && specificEventTime > 0 && timeSinceSpecificTrigger < 10000) {
+                    prefs.edit()
+                        .remove(specificEventKey)
+                        .putLong(specificEventTimeKey, 0L)
+                        .apply()  // Use apply() to avoid blocking render thread
+                    // Use trigger time as seed for deterministic event spawning
+                    randomEventLayer.spawnSpecificEvent(specificEvent, specificEventTime)
+                    Log.d(TAG, "Specific spawn trigger received [${if (isPreview) "preview" else "wallpaper"}]: $specificEvent (delay: ${timeSinceSpecificTrigger}ms)")
+                }
             }
             
             // Update parallax physics with real frame delta for accurate smoothing

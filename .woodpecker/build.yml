@@ -45,10 +45,35 @@ steps:
         VERSION=$(grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
         echo "Detected version: v$VERSION"
         echo "$VERSION" > .version
-        cp app/build/outputs/apk/debug/app-debug.apk "WeatherWall-v$VERSION.apk"
-        echo "APK built successfully!"
+        cp app/build/outputs/apk/debug/app-debug.apk "WeatherWall-debug-v$VERSION.apk"
+        echo "Debug APK built successfully!"
         ls -la WeatherWall-*.apk
         sha256sum WeatherWall-*.apk
+    when:
+      - event: push
+        branch: develop
+      - event: pull_request
+
+  - name: assembleRelease
+    image: ghcr.io/cirruslabs/android-sdk:35
+    environment:
+      GRADLE_USER_HOME: .gradle
+    commands:
+      - ./gradlew assembleRelease --no-daemon --stacktrace
+      - ls -lah app/build/outputs/apk/release || true
+      - |
+        # Extract version from build.gradle.kts and save for later steps
+        VERSION=$(grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
+        echo "Detected version: v$VERSION"
+        echo "$VERSION" > .version
+        cp app/build/outputs/apk/release/app-release.apk "WeatherWall-v$VERSION.apk"
+        echo "Release APK built successfully (minified + shrunk)!"
+        ls -la WeatherWall-*.apk
+        sha256sum WeatherWall-*.apk
+    when:
+      - event: push
+        branch: main
+      - event: tag
 
   - name: publish-release
     image: ghcr.io/cirruslabs/android-sdk:35

@@ -63,6 +63,10 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
     private var width = 0f
     private var height = 0f
     
+    // Cached vignette gradient to avoid allocations every frame
+    private var cachedVignetteGradient: RadialGradient? = null
+    private var cachedVignetteAlpha = -1
+    
     // Stars - generated once with fixed seed for consistency
     private val stars = ArrayList<FloatArray>()
     
@@ -98,6 +102,9 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         width = w
         height = h
         updateGradient()
+        // Invalidate cached vignette gradient on resize
+        cachedVignetteGradient = null
+        cachedVignetteAlpha = -1
     }
 
     override fun update(state: SimulationState, deltaTimeMs: Long) {
@@ -231,26 +238,31 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
     
     /**
      * Draw a radial vignette (darker corners) for atmospheric effect.
+     * Uses cached gradient to avoid allocations every frame.
      */
     private fun drawVignette(canvas: Canvas, alpha: Int) {
         val centerX = width / 2f
         val centerY = height / 2f
         val radius = kotlin.math.max(width, height) * 0.9f
         
-        // Radial gradient: transparent center, dark edges
-        val vignetteGradient = RadialGradient(
-            centerX, centerY, radius,
-            intArrayOf(
-                Color.TRANSPARENT,
-                Color.TRANSPARENT,
-                Color.argb(alpha / 2, 0, 0, 20),
-                Color.argb(alpha, 5, 5, 30)
-            ),
-            floatArrayOf(0f, 0.5f, 0.8f, 1f),
-            Shader.TileMode.CLAMP
-        )
+        // Only recreate gradient if alpha changed significantly (>10 units)
+        // This avoids RadialGradient allocation every frame
+        if (cachedVignetteGradient == null || kotlin.math.abs(alpha - cachedVignetteAlpha) > 10) {
+            cachedVignetteGradient = RadialGradient(
+                centerX, centerY, radius,
+                intArrayOf(
+                    Color.TRANSPARENT,
+                    Color.TRANSPARENT,
+                    Color.argb(alpha / 2, 0, 0, 20),
+                    Color.argb(alpha, 5, 5, 30)
+                ),
+                floatArrayOf(0f, 0.5f, 0.8f, 1f),
+                Shader.TileMode.CLAMP
+            )
+            cachedVignetteAlpha = alpha
+        }
         
-        vignettePaint.shader = vignetteGradient
+        vignettePaint.shader = cachedVignetteGradient
         canvas.drawRect(0f, 0f, width, height, vignettePaint)
         vignettePaint.shader = null
     }
