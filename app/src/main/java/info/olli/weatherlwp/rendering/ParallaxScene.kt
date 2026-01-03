@@ -129,6 +129,25 @@ class ParallaxScene(
     fun stop() {
         sensor.stop()
     }
+    
+    /**
+     * Check if parallax is currently active (scene is moving due to tilt).
+     * Used for idle mode battery optimization.
+     */
+    fun isParallaxActive(): Boolean {
+        val (x, y) = parallaxCalculator.getOffset()
+        // Consider active if offset is non-zero and changing
+        val magnitude = kotlin.math.sqrt(x * x + y * y)
+        return magnitude > 1f  // More than 1 pixel of offset
+    }
+    
+    /**
+     * Check if there are any active random events playing.
+     * Used for idle mode battery optimization.
+     */
+    fun hasActiveEvents(): Boolean {
+        return randomEventLayer.hasActiveEvents()
+    }
 
     override fun onTiltChanged(tiltX: Float, tiltY: Float) {
         // Pass absolute tilt position to calculator

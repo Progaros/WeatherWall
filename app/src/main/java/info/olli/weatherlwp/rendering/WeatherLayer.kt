@@ -146,6 +146,14 @@ class WeatherLayer : SceneLayer {
     }
     
     /**
+     * Check if weather effects are currently active (any particles or effects).
+     * Used for idle mode battery optimization.
+     */
+    fun isActive(): Boolean {
+        return currentEffect != EffectType.NONE
+    }
+    
+    /**
      * Set weather for backwards compatibility.
      * @deprecated Use SimulationState for weather instead
      */

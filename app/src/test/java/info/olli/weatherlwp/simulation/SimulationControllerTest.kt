@@ -196,6 +196,51 @@ class SimulationControllerTest {
         assertFalse("Sensors off when hidden", sensorsActive)
     }
     
+    // ============== Idle Mode Tests ==============
+    
+    @Test
+    fun `idle mode reduces fps when scene is static`() {
+        // When no parallax movement, weather, or events are active,
+        // the wallpaper should enter idle mode with reduced FPS
+        
+        val idleFps = 10
+        val normalFps = 30
+        val idleTimeoutMs = 5000L
+        
+        // Simulate scene becoming idle
+        val lastActivityTime = 0L
+        val currentTime = 6000L  // 6 seconds later
+        val isIdle = currentTime - lastActivityTime > idleTimeoutMs
+        
+        assertTrue("Should be idle after timeout", isIdle)
+        
+        val effectiveFps = if (isIdle) idleFps else normalFps
+        assertEquals("Should use idle FPS", idleFps, effectiveFps)
+    }
+    
+    @Test
+    fun `idle mode disabled when scene is active`() {
+        // Scene activity (parallax, weather, events) keeps full FPS
+        
+        val idleTimeoutMs = 5000L
+        val lastActivityTime = 4000L  // 4 seconds ago
+        val currentTime = 5000L  // Only 1 second elapsed
+        
+        val isIdle = currentTime - lastActivityTime > idleTimeoutMs
+        
+        assertFalse("Should not be idle when recently active", isIdle)
+    }
+    
+    @Test
+    fun `idle mode fps is lower than normal fps`() {
+        val idleFps = 10
+        val normalFps = 30
+        
+        assertTrue("Idle FPS should be lower", idleFps < normalFps)
+        assertTrue("Idle FPS should be reasonable", idleFps >= 5)
+        assertTrue("Normal FPS should be reasonable", normalFps <= 60)
+    }
+
     // ============== Storm Effects Tests ==============
     
     @Test

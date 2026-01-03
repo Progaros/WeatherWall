@@ -224,8 +224,8 @@ class ParallaxCalculatorTest {
     fun testMaxOffsetPercentDefault() {
         val calculator = ParallaxCalculator()
         
-        // Default max offset should be 10% of screen height
-        assertEquals("Default max offset percent should be 10%", 10f, calculator.maxOffsetPercent, 0.01f)
+        // Default max offset should be 15% of screen height (increased for more movement)
+        assertEquals("Default max offset percent should be 15%", 15f, calculator.maxOffsetPercent, 0.01f)
     }
     
     @Test

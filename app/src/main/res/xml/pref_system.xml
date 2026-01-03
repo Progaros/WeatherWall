@@ -42,6 +42,34 @@
             android:entries="@array/fps_options"
             android:entryValues="@array/fps_values"
             android:defaultValue="30" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_idle_mode_enabled"
+            android:title="Idle Mode"
+            android:summary="Reduce FPS when scene is static (battery saver)"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_idle_fps"
+            android:title="Idle FPS"
+            android:summary="Frame rate when idle (5-20)"
+            android:defaultValue="10"
+            android:max="20"
+            app:min="5"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_idle_mode_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_idle_timeout"
+            android:title="Idle Timeout"
+            android:summary="Seconds before entering idle mode (1-10)"
+            android:defaultValue="5"
+            android:max="10"
+            app:min="1"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_idle_mode_enabled" />
     </PreferenceCategory>
 
     <!-- Simulation Mode -->

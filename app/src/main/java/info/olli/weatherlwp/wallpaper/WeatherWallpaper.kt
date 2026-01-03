@@ -129,6 +129,11 @@ class WeatherWallpaper : WallpaperService() {
                 targetFps = prefs.getString("pref_max_fps", "30")?.toIntOrNull() ?: 30
                 targetFps = targetFps.coerceIn(10, 60)
                 
+                // Idle mode for battery optimization
+                idleModeEnabled = prefs.getBoolean("pref_idle_mode_enabled", true)
+                idleFps = prefs.getInt("pref_idle_fps", 10).coerceIn(5, 20)
+                idleTimeoutMs = prefs.getInt("pref_idle_timeout", 5).toLong() * 1000L  // Convert to ms
+                
                 // Check if debug/simulation mode is enabled
                 val debugEnabled = prefs.getBoolean("pref_debug_enabled", false)
                 
@@ -196,6 +201,26 @@ class WeatherWallpaper : WallpaperService() {
         private var lastLogTime = 0L
         private var maxFrameTimeMs = 0L
         
+        // Idle mode for battery optimization: reduce FPS when scene is static
+        private var idleModeEnabled = true
+        private var idleFps = 10  // Frame rate when idle (minimal updates for time/weather changes)
+        private var lastActivityTimeMs = 0L
+        private var idleTimeoutMs = 5000L  // 5 seconds of no activity before entering idle
+        private var isIdle = false
+        
+        // Check if there's any scene activity (parallax movement, weather, etc.)
+        private fun checkSceneActivity(): Boolean {
+            // Consider active if:
+            // 1. Parallax is moving (sensor input detected)
+            // 2. Weather effects are active
+            // 3. Random events are playing
+            val parallaxActive = scene.isParallaxActive()
+            val weatherActive = weatherEnabled && weather.isActive()
+            val eventsActive = scene.hasActiveEvents()
+            
+            return parallaxActive || weatherActive || eventsActive
+        }
+        
         private fun startRender() {
             if (renderThread != null) return
             frameCount = 0L
@@ -205,12 +230,28 @@ class WeatherWallpaper : WallpaperService() {
             
             renderThread = Thread {
                 try {
-                    val frameTimeMs = (1000L / targetFps.toLong()).coerceAtLeast(16L)
                     while (!Thread.currentThread().isInterrupted) {
                         if (!isVisible) {
                             SystemClock.sleep(250)
                             continue
                         }
+                        
+                        // Idle mode: check for scene activity and adjust FPS
+                        val now = SystemClock.uptimeMillis()
+                        if (idleModeEnabled) {
+                            if (checkSceneActivity()) {
+                                lastActivityTimeMs = now
+                                isIdle = false
+                            } else if (now - lastActivityTimeMs > idleTimeoutMs) {
+                                isIdle = true
+                            }
+                        } else {
+                            isIdle = false
+                        }
+                        
+                        // Use idle FPS when scene is static, otherwise use target FPS
+                        val effectiveFps = if (isIdle) idleFps else targetFps
+                        val frameTimeMs = (1000L / effectiveFps.toLong()).coerceAtLeast(16L)
 
                         val start = SystemClock.uptimeMillis()
                         drawFrame()
@@ -225,7 +266,8 @@ class WeatherWallpaper : WallpaperService() {
                         if (start - lastLogTime > 5000) {
                             val avgFrameMs = if (frameCount > 0) totalDrawTimeMs / frameCount else 0
                             val actualFps = if (avgFrameMs > 0) 1000 / avgFrameMs else 0
-                            Log.d(TAG, "Perf: ${frameCount} frames, avg=${avgFrameMs}ms, max=${maxFrameTimeMs}ms, ~${actualFps}fps")
+                            val idleInfo = if (isIdle) " (IDLE)" else ""
+                            Log.d(TAG, "Perf: ${frameCount} frames, avg=${avgFrameMs}ms, max=${maxFrameTimeMs}ms, ~${actualFps}fps$idleInfo")
                             frameCount = 0L
                             totalDrawTimeMs = 0L
                             maxFrameTimeMs = 0L

@@ -70,6 +70,14 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         reloadSettings()
     }
     
+    /**
+     * Check if there are any active events currently playing.
+     * Used for idle mode battery optimization.
+     */
+    fun hasActiveEvents(): Boolean {
+        return events.isNotEmpty()
+    }
+    
     override fun resize(w: Float, h: Float) {
         width = w
         height = h
