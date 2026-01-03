@@ -336,8 +336,10 @@ class SeasonalEvents(private val context: Context? = null) {
      * Render elements that belong behind the terrain/mountains (e.g. St. Patrick's rainbow, Christmas star).
      * This is called from the scene renderer just before MountainLayer is drawn.
      * These elements appear in the sky layer.
+     * @param parallaxOffsetX X offset from parallax calculator for depth effect (default 0f)
+     * @param parallaxOffsetY Y offset from parallax calculator for depth effect (default 0f)
      */
-    fun renderBehindMountains(canvas: Canvas, enabled: Boolean) {
+    fun renderBehindMountains(canvas: Canvas, enabled: Boolean, parallaxOffsetX: Float = 0f, parallaxOffsetY: Float = 0f) {
         if (!enabled) return
         try {
             // Ensure settings are loaded and screen size is initialized
@@ -356,7 +358,7 @@ class SeasonalEvents(private val context: Context? = null) {
             }
             when (season) {
                 Season.ST_PATRICKS -> renderStPatricksDay(canvas)
-                Season.CHRISTMAS -> renderChristmasStars(canvas)  // Star in sky behind mountains
+                Season.CHRISTMAS -> renderChristmasStars(canvas, parallaxOffsetX, parallaxOffsetY)  // Star in sky behind mountains
                 else -> {}
             }
         } catch (e: Exception) {
@@ -460,7 +462,7 @@ class SeasonalEvents(private val context: Context? = null) {
         }
     }
 
-    private fun renderChristmasStars(canvas: Canvas) {
+    private fun renderChristmasStars(canvas: Canvas, parallaxOffsetX: Float = 0f, parallaxOffsetY: Float = 0f) {
         // Note: Background twinkling stars are now handled by SkyLayer
         // SeasonalEvents only renders the main Christmas star with trail
         // This prevents duplicate star rendering at night during Christmas
@@ -468,6 +470,10 @@ class SeasonalEvents(private val context: Context? = null) {
         // Render the main Christmas star (Bethlehem star) with trail
         val star = christmasStar ?: return
         star.twinkle += star.twinkleSpeed
+        
+        // Apply parallax offset for sky-layer depth effect
+        val starX = star.x + parallaxOffsetX
+        val starY = star.y + parallaxOffsetY
         
         // Apply size multiplier
         val effectiveSize = star.size * starSizeMultiplier
@@ -482,8 +488,8 @@ class SeasonalEvents(private val context: Context? = null) {
         // Only render trail if length > 0
         if (trailLengthMultiplier > 0.01f) {
             // Smooth gradient trail using LinearGradient instead of discrete circles
-            val trailEndX = star.x + (trailLength * kotlin.math.cos(trailAngle)).toFloat()
-            val trailEndY = star.y + (trailLength * kotlin.math.sin(trailAngle)).toFloat()
+            val trailEndX = starX + (trailLength * kotlin.math.cos(trailAngle)).toFloat()
+            val trailEndY = starY + (trailLength * kotlin.math.sin(trailAngle)).toFloat()
             
             // Create a tapered trail path (wider near star, narrower at end)
             val perpAngle = trailAngle + Math.PI / 2
@@ -493,12 +499,12 @@ class SeasonalEvents(private val context: Context? = null) {
             val path = Path()
             // Starting edge (near star) - wider
             path.moveTo(
-                star.x + (startWidth * kotlin.math.cos(perpAngle)).toFloat(),
-                star.y + (startWidth * kotlin.math.sin(perpAngle)).toFloat()
+                starX + (startWidth * kotlin.math.cos(perpAngle)).toFloat(),
+                starY + (startWidth * kotlin.math.sin(perpAngle)).toFloat()
             )
             path.lineTo(
-                star.x - (startWidth * kotlin.math.cos(perpAngle)).toFloat(),
-                star.y - (startWidth * kotlin.math.sin(perpAngle)).toFloat()
+                starX - (startWidth * kotlin.math.cos(perpAngle)).toFloat(),
+                starY - (startWidth * kotlin.math.sin(perpAngle)).toFloat()
             )
             // End edge (far from star) - narrower
             path.lineTo(
@@ -514,7 +520,7 @@ class SeasonalEvents(private val context: Context? = null) {
             // Linear gradient from star (bright gold) to end (transparent)
             val goldColor = Color.parseColor("#FFFFD700")
             trailPaint.shader = LinearGradient(
-                star.x, star.y, trailEndX, trailEndY,
+                starX, starY, trailEndX, trailEndY,
                 intArrayOf(
                     Color.argb((220 * twinkleFactor).toInt(), 255, 215, 0),
                     Color.argb((120 * twinkleFactor).toInt(), 255, 215, 0),
@@ -531,7 +537,7 @@ class SeasonalEvents(private val context: Context? = null) {
         // Outer soft glow - radial gradient
         val glowRadius = effectiveSize * 2.5f * twinkleFactor
         christmasStarPaint.shader = RadialGradient(
-            star.x, star.y, glowRadius,
+            starX, starY, glowRadius,
             intArrayOf(
                 Color.argb(80, 255, 230, 150),
                 Color.argb(40, 255, 215, 0),
@@ -540,7 +546,7 @@ class SeasonalEvents(private val context: Context? = null) {
             floatArrayOf(0f, 0.4f, 1f),
             Shader.TileMode.CLAMP
         )
-        canvas.drawCircle(star.x, star.y, glowRadius, christmasStarPaint)
+        canvas.drawCircle(starX, starY, glowRadius, christmasStarPaint)
         christmasStarPaint.shader = null
         
         // 8-point star rays as filled triangles with alpha falloff
@@ -555,14 +561,14 @@ class SeasonalEvents(private val context: Context? = null) {
             val rad = Math.toRadians(angle)
             val perpRad = rad + Math.PI / 2
             
-            val tipX = star.x + (rayLen * kotlin.math.cos(rad)).toFloat()
-            val tipY = star.y + (rayLen * kotlin.math.sin(rad)).toFloat()
+            val tipX = starX + (rayLen * kotlin.math.cos(rad)).toFloat()
+            val tipY = starY + (rayLen * kotlin.math.sin(rad)).toFloat()
             
             val baseOffset = rayBaseWidth * (if (isPrimary) 1f else 0.7f)
-            val baseX1 = star.x + (baseOffset * kotlin.math.cos(perpRad)).toFloat()
-            val baseY1 = star.y + (baseOffset * kotlin.math.sin(perpRad)).toFloat()
-            val baseX2 = star.x - (baseOffset * kotlin.math.cos(perpRad)).toFloat()
-            val baseY2 = star.y - (baseOffset * kotlin.math.sin(perpRad)).toFloat()
+            val baseX1 = starX + (baseOffset * kotlin.math.cos(perpRad)).toFloat()
+            val baseY1 = starY + (baseOffset * kotlin.math.sin(perpRad)).toFloat()
+            val baseX2 = starX - (baseOffset * kotlin.math.cos(perpRad)).toFloat()
+            val baseY2 = starY - (baseOffset * kotlin.math.sin(perpRad)).toFloat()
             
             rayPath.moveTo(baseX1, baseY1)
             rayPath.lineTo(tipX, tipY)
@@ -572,7 +578,7 @@ class SeasonalEvents(private val context: Context? = null) {
         
         // Fill rays with gradient from center
         christmasStarPaint.shader = RadialGradient(
-            star.x, star.y, primaryRayLength,
+            starX, starY, primaryRayLength,
             intArrayOf(
                 Color.argb(255, 255, 255, 240),
                 Color.argb(220, 255, 220, 100),
@@ -587,7 +593,7 @@ class SeasonalEvents(private val context: Context? = null) {
         // Bright central core with radial gradient
         val coreRadius = effectiveSize * 0.5f * twinkleFactor
         christmasStarPaint.shader = RadialGradient(
-            star.x, star.y, coreRadius,
+            starX, starY, coreRadius,
             intArrayOf(
                 Color.argb(255, 255, 255, 255),
                 Color.argb(255, 255, 240, 200),
@@ -596,7 +602,7 @@ class SeasonalEvents(private val context: Context? = null) {
             floatArrayOf(0f, 0.5f, 1f),
             Shader.TileMode.CLAMP
         )
-        canvas.drawCircle(star.x, star.y, coreRadius, christmasStarPaint)
+        canvas.drawCircle(starX, starY, coreRadius, christmasStarPaint)
         christmasStarPaint.shader = null
     }
 

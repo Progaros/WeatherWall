@@ -91,12 +91,14 @@ class WeatherWallpaper : WallpaperService() {
             this.isVisible = visible
             try {
                 if (visible) {
+                    Log.d(TAG, "Wallpaper visible - starting render loop and sensors")
                     // Reset frame timing to avoid large delta on first frame after resume
                     lastFrameTimeMs = 0L
                     loadPrefs()
                     scene.start()  // Start sensors
                     startRender()
                 } else {
+                    Log.d(TAG, "Wallpaper hidden - stopping render loop and sensors (battery optimization)")
                     stopRender()
                     scene.stop()
                 }

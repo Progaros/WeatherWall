@@ -233,8 +233,11 @@ class ParallaxScene(
                     // Before drawing mountainLayer, draw far sky events and behind-mountain seasonal effects
                     if (layer === mountainLayer) {
                         randomEventLayer.drawFarSkyEvents(canvas, state, parallaxCalculator)
-                        // Draw seasonal background elements that should appear behind mountains (e.g. rainbow)
-                        seasonalEvents.renderBehindMountains(canvas, seasonalEnabled)
+                        // Draw seasonal background elements that should appear behind mountains (e.g. rainbow, Christmas star)
+                        // Use sky-layer parallax depth for Christmas star (matches background stars)
+                        val skyParallaxX = parallaxCalculator.getOffsetXForDepth(RenderConstants.PARALLAX_SKY)
+                        val skyParallaxY = parallaxCalculator.getOffsetYForDepth(RenderConstants.PARALLAX_SKY)
+                        seasonalEvents.renderBehindMountains(canvas, seasonalEnabled, skyParallaxX, skyParallaxY)
                     }
                     
                     // After drawing mountainLayer, draw mid sky events (birds, planes, eagles)
