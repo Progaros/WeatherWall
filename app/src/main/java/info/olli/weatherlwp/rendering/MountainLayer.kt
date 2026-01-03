@@ -281,17 +281,20 @@ class MountainLayer(private val context: Context) : SceneLayer {
         // Left side - connect from ridge to left edge
         // Use slight overlap (1px) past ridge to prevent anti-aliasing gaps
         val overlapPx = 1f
-        pathLeft.moveTo(ridgePoints[0].first + overlapPx, ridgePoints[0].second)
+        // Get actual peak X position (which may be offset from center)
+        val actualPeakX = ridgePoints[0].first
+        pathLeft.moveTo(actualPeakX + overlapPx, ridgePoints[0].second)
         
-        // Draw left slope segments
+        // Draw left slope segments - slopes radiate from the actual peak position
+        // This ensures mountain looks centered even when peak is offset
         for (i in 0 until segments) {
             val progress = (i + 1).toFloat() / segments
-            val targetX = peakCenterX - halfWidthPx * progress
+            val targetX = actualPeakX - halfWidthPx * progress
             val targetY = peakY + (baseY - peakY) * progress
             val noise = (random.nextFloat() - 0.5f) * noiseBase
             pathLeft.lineTo(targetX, targetY + noise)
         }
-        pathLeft.lineTo(peakCenterX - halfWidthPx, baseY)
+        pathLeft.lineTo(actualPeakX - halfWidthPx, baseY)
         
         // Close back along ridge (in reverse) - with overlap into right side
         for (i in ridgePoints.size - 1 downTo 0) {
@@ -300,17 +303,17 @@ class MountainLayer(private val context: Context) : SceneLayer {
         pathLeft.close()
         
         // Right side (shadow side) - connect from ridge to right edge
-        pathRight.moveTo(ridgePoints[0].first, ridgePoints[0].second)
+        pathRight.moveTo(actualPeakX, ridgePoints[0].second)
         
-        // Draw right slope segments
+        // Draw right slope segments - also from actual peak position
         for (i in 0 until segments) {
             val progress = (i + 1).toFloat() / segments
-            val targetX = peakCenterX + halfWidthPx * progress
+            val targetX = actualPeakX + halfWidthPx * progress
             val targetY = peakY + (baseY - peakY) * progress
             val noise = (random.nextFloat() - 0.5f) * noiseBase
             pathRight.lineTo(targetX, targetY + noise)
         }
-        pathRight.lineTo(peakCenterX + halfWidthPx, baseY)
+        pathRight.lineTo(actualPeakX + halfWidthPx, baseY)
         
         // Close back along ridge (in reverse)
         for (i in ridgePoints.size - 1 downTo 0) {
@@ -358,10 +361,10 @@ class MountainLayer(private val context: Context) : SceneLayer {
             (Color.blue(baseAtmoColor) * (1f - leftShadowDarkening * 0.5f)).toInt().coerceIn(0, 255)
         )
         
-        // Three-point vertical gradient for left side
+        // Three-point vertical gradient for left side - use actual peak position
         val gradient = LinearGradient(
-            peakCenterX, peakY,
-            peakCenterX, baseY,
+            actualPeakX, peakY,
+            actualPeakX, baseY,
             intArrayOf(leftPeakColor, leftBaseColor, Color.TRANSPARENT),
             floatArrayOf(0f, 0.75f, 1f),
             Shader.TileMode.CLAMP
@@ -384,8 +387,8 @@ class MountainLayer(private val context: Context) : SceneLayer {
             (Color.blue(baseAtmoColor) * (1f - rightShadowDarkening * 0.5f)).toInt().coerceIn(0, 255)
         )
         val rightGradient = LinearGradient(
-            peakCenterX, peakY,
-            peakCenterX, baseY,
+            actualPeakX, peakY,
+            actualPeakX, baseY,
             intArrayOf(rightPeakColor, rightBaseColor, Color.TRANSPARENT),
             floatArrayOf(0f, 0.75f, 1f),
             Shader.TileMode.CLAMP
@@ -403,44 +406,58 @@ class MountainLayer(private val context: Context) : SceneLayer {
             val snowDepth = (winterSnowCoverage / 100f).coerceIn(0.15f, 0.5f)
             val snowBottomY = peakY + (baseY - peakY) * snowDepth
             
-            // Build snow cap shape following the ridge and mountain slopes
+            // Build snow cap shape following the actual mountain slopes (using actualPeakX)
             snowCapPath.reset()
             
             // Start at peak
             snowCapPath.moveTo(ridgePoints[0].first, ridgePoints[0].second)
             
             // Left side of snow cap (follow left slope down to snow line)
-            val random = Random(mountain.shapeSeed + 1000)
+            val snowRandom = Random(mountain.shapeSeed + 1000)
             val snowSegments = (segments * snowDepth).toInt().coerceAtLeast(3)
             for (i in 0 until snowSegments) {
                 val progress = (i + 1).toFloat() / segments
                 if (progress > snowDepth) break
-                val targetX = peakCenterX - halfWidthPx * progress
+                // Use actualPeakX to match the mountain slopes
+                val targetX = actualPeakX - halfWidthPx * progress
                 val targetY = peakY + (baseY - peakY) * progress
-                val noise = (random.nextFloat() - 0.5f) * height * 0.008f
+                val noise = (snowRandom.nextFloat() - 0.5f) * height * 0.008f
                 snowCapPath.lineTo(targetX, targetY + noise)
             }
             
             // Bottom edge of snow (jagged snow line)
-            val snowLineX = peakCenterX - halfWidthPx * snowDepth
+            val snowLineX = actualPeakX - halfWidthPx * snowDepth
             snowCapPath.lineTo(snowLineX, snowBottomY)
             
             // Cross to right side at snow line
-            val snowLineXRight = peakCenterX + halfWidthPx * snowDepth
+            val snowLineXRight = actualPeakX + halfWidthPx * snowDepth
             snowCapPath.lineTo(snowLineXRight, snowBottomY)
             
             // Right side of snow cap (follow right slope back to peak)
             for (i in snowSegments - 1 downTo 0) {
                 val progress = (i + 1).toFloat() / segments
                 if (progress > snowDepth) continue
-                val targetX = peakCenterX + halfWidthPx * progress
+                // Use actualPeakX to match the mountain slopes
+                val targetX = actualPeakX + halfWidthPx * progress
                 val targetY = peakY + (baseY - peakY) * progress
-                val noise = (random.nextFloat() - 0.5f) * height * 0.008f
+                val noise = (snowRandom.nextFloat() - 0.5f) * height * 0.008f
                 snowCapPath.lineTo(targetX, targetY + noise)
             }
             
             snowCapPath.close()
+            
+            // Use a gradient: pure white at top, fading to original mountain color
+            // Top 30% is fully white, then quickly fades to mountain color by 80%
+            val snowGradient = LinearGradient(
+                actualPeakX, peakY,
+                actualPeakX, snowBottomY,
+                intArrayOf(Color.WHITE, Color.WHITE, peakColor),
+                floatArrayOf(0f, 0.3f, 1f),
+                Shader.TileMode.CLAMP
+            )
+            snowCapPaint.shader = snowGradient
             canvas.drawPath(snowCapPath, snowCapPaint)
+            snowCapPaint.shader = null
         }
     }
 

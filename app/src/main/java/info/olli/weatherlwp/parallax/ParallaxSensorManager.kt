@@ -209,8 +209,10 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         shakeSlopTimeMs = if (s > 0.7f) 250L else 400L
         
         // Gyroscope wiggle: high sensitivity => lower angular velocity threshold
-        gyroAxisThreshold = lerp(1.8f, 0.9f, s)
-        gyroWindowMs = if (s > 0.6f) 1100L else 900L
+        // At default 0.5: threshold = 0.55 rad/s (~31 deg/s), 4 direction changes in 1000ms
+        // Range: 0.8 rad/s (46 deg/s) at low sensitivity to 0.3 rad/s (17 deg/s) at high
+        gyroAxisThreshold = lerp(0.8f, 0.3f, s)
+        gyroWindowMs = if (s > 0.5f) 1200L else 1000L
         gyroTriggerChanges = if (s > 0.7f) 3 else 4
         
         Log.d(TAG, "Shake settings: enabled=$enabled sens=$s gThresh=$shakeThresholdGravity gyroThresh=$gyroAxisThreshold")
@@ -249,7 +251,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         gyroSignChanges = 0
         gyroWiggleStart = 0L
         
-        // Use SENSOR_DELAY_UI for battery efficiency (same as parallax sensors)
+        // Use SENSOR_DELAY_GAME for shake detection (responsive wiggle detection)
         val sensorRate = SensorManager.SENSOR_DELAY_GAME
         
         // ALWAYS register accelerometer for shake - gForce detection is proven reliable
@@ -309,9 +311,8 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             lastShakeTime = 0L
             shakeTimestamp = 0L
             
-            // Use SENSOR_DELAY_UI (~66ms, 15Hz) for battery efficiency
-            // Reference app defaults to this rate - good for smooth parallax
-            // SENSOR_DELAY_GAME (~20ms, 50Hz) is responsive but uses more battery
+            // Use SENSOR_DELAY_GAME (~20ms, 50Hz) for responsive parallax
+            // Battery savings come from unregistering when not visible (done in stop())
             val sensorRate = SensorManager.SENSOR_DELAY_GAME
             val okActive = sensorManager.registerListener(this, activeSensor, sensorRate)
             Log.d(TAG, "Active sensor registered=$okActive type=${activeSensor?.type} name=${activeSensor?.name}")

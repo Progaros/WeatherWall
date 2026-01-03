@@ -91,7 +91,7 @@ class SeasonalEvents(private val context: Context? = null) {
     // Pre-allocated pools
     private val stars = Array(30) { Star() }
     private val fireworks = Array(250) { Firework() }  // Larger pool for multiple simultaneous explosions
-    private val rockets = Array(5) { Rocket() }  // Up to 5 rockets in flight
+    private val rockets = Array(50) { Rocket() }  // Up to 50 rockets in flight for shake fireworks
     private val trailParticles = Array(20) { TrailParticle() }
     private var christmasStar: ChristmasStar? = null
 
@@ -236,9 +236,8 @@ class SeasonalEvents(private val context: Context? = null) {
         
         Log.d(TAG, "Triggering shake fireworks: $actualCount rockets (target: $shakeFireworksCount)")
         
-        // Launch multiple rockets with slight random timing variation
-        // We'll stagger them slightly by adjusting their initial Y positions
-        for (i in 0 until actualCount.coerceAtMost(rockets.size * 3)) {
+        // Launch rockets up to the requested count (capped by available rocket slots)
+        for (i in 0 until actualCount.coerceAtMost(rockets.size)) {
             launchRocket()
         }
     }
