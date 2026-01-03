@@ -45,7 +45,7 @@ class ParallaxCalculator {
     // These are overwritten by loadPrefs() but provide sane defaults before settings load
     var strength = 2.5f                 // Default: (25/50)^2 * 10 = 2.5 (pref_parallax_strength=25)
     var maxOffsetPx = 130f              // Legacy: used when maxOffsetPercent is 0
-    var maxOffsetPercent = 10f          // Default: 10% of screen height (pref_parallax_max_offset_percent)
+    var maxOffsetPercent = 15f          // Default: 15% of screen height (increased for more movement)
     var smoothing = 0.134f              // Default: 0.02 + (30/100)*0.38 (pref_parallax_smoothing=30)
     var depthSeparation = 1.32f         // Default: (33/100)*4.0 = 1.32 (pref_parallax_depth=33)
     
@@ -158,10 +158,26 @@ class ParallaxCalculator {
         val tiltTargetX = tilt.x * effectiveMaxOffset * strength * aspectRatioCompensation
         val tiltTargetY = tilt.y * effectiveMaxOffset * strength
         
-        // Clamp to bounds
+        // Clamp to circular bounds instead of square (prevents corner stretching)
+        // This gives consistent maximum movement in all directions
         val xLimit = effectiveMaxOffset * aspectRatioCompensation
-        targetX = tiltTargetX.coerceIn(-xLimit, xLimit)
-        targetY = tiltTargetY.coerceIn(-effectiveMaxOffset, effectiveMaxOffset)
+        val yLimit = effectiveMaxOffset
+        
+        // Normalize to unit circle bounds then scale back
+        val targetMagnitude = kotlin.math.sqrt(
+            (tiltTargetX / xLimit) * (tiltTargetX / xLimit) + 
+            (tiltTargetY / yLimit) * (tiltTargetY / yLimit)
+        )
+        
+        if (targetMagnitude > 1f) {
+            // Scale down proportionally to fit within circle
+            val scale = 1f / targetMagnitude
+            targetX = tiltTargetX * scale
+            targetY = tiltTargetY * scale
+        } else {
+            targetX = tiltTargetX
+            targetY = tiltTargetY
+        }
         
         // Apply return-to-center force when tilt is near zero
         // This creates a constant drift toward center, controlled by returnSpeed

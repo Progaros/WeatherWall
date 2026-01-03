@@ -38,7 +38,7 @@ class ParallaxCalculatorTest {
         assertTrue("X offset should be near maxOffset", offset >= 35f && offset <= 40f)
     }
 
-    // P2: Test max offset is respected with high strength
+    // P2: Test max offset is respected with high strength (circular clamping)
     @Test
     fun testMaxOffsetIsRespectedWithHighStrength() {
         calculator.strength = 2.0f  // High strength
@@ -49,9 +49,12 @@ class ParallaxCalculatorTest {
         repeat(100) { calculator.update(16) }
         
         val offset = calculator.getOffset()
-        // Target = 1.0 * 50 * 2.0 = 100, but clamped to 50
-        assertTrue("X should be clamped to maxOffset", kotlin.math.abs(offset.first) <= 50f + 1f)
-        assertTrue("Y should be clamped to maxOffset", kotlin.math.abs(offset.second) <= 50f + 1f)
+        // Target = (1.0 * 50 * 2.0, 1.0 * 50 * 2.0) = (100, 100)
+        // With circular clamping, magnitude = sqrt((100/50)^2 + (100/50)^2) = sqrt(8) = 2.83
+        // Scaled to unit circle: each axis = 100 / 2.83 ≈ 35.36
+        // But after lerp they should be within the circle (magnitude <= 50)
+        val magnitude = kotlin.math.sqrt(offset.first * offset.first + offset.second * offset.second)
+        assertTrue("Combined magnitude should be clamped to maxOffset circle", magnitude <= 50f + 5f)
     }
 
     // P3: Test vertical movement works
@@ -88,6 +91,31 @@ class ParallaxCalculatorTest {
         // Position should stay stable (fully converged)
         assertEquals("Position should remain stable when tilt is constant", 
             initialOffset, laterOffset, 0.5f)
+    }
+    
+    // P4b: Test circular clamping consistency
+    @Test
+    fun testCircularClampingConsistency() {
+        calculator.strength = 2.0f
+        calculator.maxOffsetPx = 50f
+        
+        // Test diagonal tilt (45 degrees)
+        calculator.updateFromSensor(1.0f, 1.0f)
+        repeat(100) { calculator.update(16) }
+        val diagonalOffset = calculator.getOffset()
+        
+        // Reset
+        calculator.reset()
+        
+        // Test pure X tilt
+        calculator.updateFromSensor(1.0f, 0f)
+        repeat(100) { calculator.update(16) }
+        val pureXOffset = calculator.getOffsetX()
+        
+        // With circular clamping, diagonal should have smaller X than pure X
+        // because diagonal must share the radius with Y
+        assertTrue("Diagonal X should be less than pure X (circular clamping)", 
+            kotlin.math.abs(diagonalOffset.first) < kotlin.math.abs(pureXOffset))
     }
 
     // P5: Test returning to center when tilt goes to zero
