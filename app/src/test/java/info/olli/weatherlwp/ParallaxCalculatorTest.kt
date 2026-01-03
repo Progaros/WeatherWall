@@ -279,6 +279,7 @@ class ParallaxCalculatorTest {
         calculator.strength = 1.0f
         calculator.maxOffsetPx = 40f
         calculator.returnSpeed = 1.0f  // Fast return for predictable test
+        calculator.smoothing = 0f      // No smoothing for faster convergence
         
         // Move to various positions, then return to center
         val testDirections = listOf(

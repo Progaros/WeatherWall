@@ -249,10 +249,13 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         gyroSignChanges = 0
         gyroWiggleStart = 0L
         
+        // Use SENSOR_DELAY_UI for battery efficiency (same as parallax sensors)
+        val sensorRate = SensorManager.SENSOR_DELAY_GAME
+        
         // ALWAYS register accelerometer for shake - gForce detection is proven reliable
         // We don't use LINEAR_ACCELERATION anymore as it's often too smoothed on some devices
         val okAccel = if (accelerometer != null && accelerometer != activeSensor) {
-            sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME)
+            sensorManager.registerListener(this, accelerometer, sensorRate)
         } else if (accelerometer == activeSensor) {
             true  // Already registered as active sensor
         } else {
@@ -261,7 +264,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         
         // Register gyroscope for wiggle detection (even when rotation vector is active for parallax)
         val okGyro = if (gyroscope != null && gyroscope != activeSensor) {
-            sensorManager.registerListener(this, gyroscope, SensorManager.SENSOR_DELAY_GAME)
+            sensorManager.registerListener(this, gyroscope, sensorRate)
         } else if (gyroscope == activeSensor) {
             true  // Already registered as active sensor
         } else {
@@ -306,8 +309,9 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             lastShakeTime = 0L
             shakeTimestamp = 0L
             
-            // Use SENSOR_DELAY_GAME for both modes (~50Hz) - good balance between responsiveness and battery
-            // SENSOR_DELAY_FASTEST (100-500Hz) causes significant battery drain
+            // Use SENSOR_DELAY_UI (~66ms, 15Hz) for battery efficiency
+            // Reference app defaults to this rate - good for smooth parallax
+            // SENSOR_DELAY_GAME (~20ms, 50Hz) is responsive but uses more battery
             val sensorRate = SensorManager.SENSOR_DELAY_GAME
             val okActive = sensorManager.registerListener(this, activeSensor, sensorRate)
             Log.d(TAG, "Active sensor registered=$okActive type=${activeSensor?.type} name=${activeSensor?.name}")

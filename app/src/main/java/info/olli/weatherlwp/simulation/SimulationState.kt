@@ -211,7 +211,7 @@ data class SimulationState(
             cover < 0.3f -> (2 + (cover - 0.1f) * 30).toInt()        // 10-30% → 2-8 clouds
             cover < 0.6f -> (8 + (cover - 0.3f) * 47).toInt()        // 30-60% → 8-22 clouds
             cover < 0.85f -> (22 + (cover - 0.6f) * 92).toInt()      // 60-85% → 22-45 clouds
-            else -> (45 + (cover - 0.85f) * 33).toInt().coerceAtMost(50)  // 85-100% → 45-50 clouds
+            else -> (45 + (cover - 0.85f) * 33.34f).toInt().coerceAtMost(50)  // 85-100% → 45-50 clouds
         }
     }
     
