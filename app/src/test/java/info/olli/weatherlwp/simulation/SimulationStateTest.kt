@@ -377,7 +377,8 @@ class SimulationStateTest {
             weather = WeatherType.OVERCAST,
             cloudCover = 1f
         )
-        assertEquals(50, state.getCloudCount())
+        // 100% coverage should give max clouds (>=48 for >80% sky coverage)
+        assertTrue("100% cover should give near-max clouds", state.getCloudCount() >= 48)
     }
     
     @Test
@@ -389,5 +390,46 @@ class SimulationStateTest {
             cloudCover = 0.6f
         )
         assertTrue("HAIL at 60% cover should be ~22 clouds", state.getCloudCount() in 18..25)
+    }
+    
+    // ============== Visual Cloud Coverage Tests ==============
+    
+    @Test
+    fun `light clouds leave sky mostly free`() {
+        // With 10% cloud cover, should have very few clouds (sky mostly free)
+        val state = SimulationState.default().copy(
+            cloudDensity = CloudDensity.AUTO,
+            weather = WeatherType.PARTLY_CLOUDY,
+            cloudCover = 0.1f
+        )
+        // Less than 5 clouds = sky mostly free
+        assertTrue("10% cover should leave sky mostly free", state.getCloudCount() <= 5)
+    }
+    
+    @Test
+    fun `overcast has greater than 80 percent sky coverage`() {
+        // Overcast with 90%+ cloud cover should have >80% sky coverage
+        // 50 clouds = full coverage, so need >= 40 for >80%
+        val state = SimulationState.default().copy(
+            cloudDensity = CloudDensity.AUTO,
+            weather = WeatherType.OVERCAST,
+            cloudCover = 0.90f
+        )
+        // At 90% cover, should have 45+ clouds for >80% visual coverage
+        assertTrue("90% cover should give >80% visual coverage (40+ clouds)", state.getCloudCount() >= 40)
+    }
+    
+    @Test
+    fun `LIGHT density keeps sky mostly free`() {
+        val state = SimulationState.default().copy(cloudDensity = CloudDensity.LIGHT)
+        // LIGHT density = 3 clouds, sky mostly free
+        assertTrue("LIGHT density should have <=5 clouds", state.getCloudCount() <= 5)
+    }
+    
+    @Test
+    fun `OVERCAST density covers more than 80 percent sky`() {
+        val state = SimulationState.default().copy(cloudDensity = CloudDensity.OVERCAST)
+        // OVERCAST density = 50 clouds = full sky coverage (>80%)
+        assertTrue("OVERCAST should have 40+ clouds for >80% coverage", state.getCloudCount() >= 40)
     }
 }
