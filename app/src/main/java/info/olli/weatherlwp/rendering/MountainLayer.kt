@@ -285,6 +285,10 @@ class MountainLayer(private val context: Context) : SceneLayer {
         val actualPeakX = ridgePoints[0].first
         pathLeft.moveTo(actualPeakX + overlapPx, ridgePoints[0].second)
         
+        // Store slope points for snow cap reuse
+        val leftSlopePoints = ArrayList<Pair<Float, Float>>()
+        val rightSlopePoints = ArrayList<Pair<Float, Float>>()
+        
         // Draw left slope segments - slopes radiate from the actual peak position
         // This ensures mountain looks centered even when peak is offset
         for (i in 0 until segments) {
@@ -292,7 +296,9 @@ class MountainLayer(private val context: Context) : SceneLayer {
             val targetX = actualPeakX - halfWidthPx * progress
             val targetY = peakY + (baseY - peakY) * progress
             val noise = (random.nextFloat() - 0.5f) * noiseBase
-            pathLeft.lineTo(targetX, targetY + noise)
+            val pointY = targetY + noise
+            leftSlopePoints.add(Pair(targetX, pointY))
+            pathLeft.lineTo(targetX, pointY)
         }
         pathLeft.lineTo(actualPeakX - halfWidthPx, baseY)
         
@@ -311,7 +317,9 @@ class MountainLayer(private val context: Context) : SceneLayer {
             val targetX = actualPeakX + halfWidthPx * progress
             val targetY = peakY + (baseY - peakY) * progress
             val noise = (random.nextFloat() - 0.5f) * noiseBase
-            pathRight.lineTo(targetX, targetY + noise)
+            val pointY = targetY + noise
+            rightSlopePoints.add(Pair(targetX, pointY))
+            pathRight.lineTo(targetX, pointY)
         }
         pathRight.lineTo(actualPeakX + halfWidthPx, baseY)
         
@@ -333,40 +341,60 @@ class MountainLayer(private val context: Context) : SceneLayer {
         // Base blends even more with ambient (atmospheric perspective)
         val baseAtmoColor = RenderConstants.blendWithAmbient(baseColor, ambientColor, blendAmount + 0.2f)
         
-        // Determine shadow side based on light source angle
-        // getLightSourceAngle() returns: π = light from left, 0 = light from right
+        // === REALISTIC CONE-STYLE SHADOW SYSTEM ===
+        // Sun shines from BEHIND the mountains. When sun is low (morning/evening),
+        // both viewer-facing slopes are partially shadowed. At noon, minimal shadow.
+        //
+        // Light angle: 0 = sunrise (right), π/2 = noon (overhead), π = sunset (left)
         val lightAngle = state.getLightSourceAngle()
         val shadowStrength = if (state.mountainShadowsEnabled) state.getEffectiveShadowStrength() else 0f
         
-        // Light from left (angle > π/2) means right side is shadowed
-        // Light from right (angle < π/2) means left side is shadowed
-        val rightIsShadowed = lightAngle > kotlin.math.PI.toFloat() / 2f
+        // Calculate sun elevation (0 = horizon, 1 = overhead)
+        // Using abs distance from π/2 (noon)
+        val noonAngle = kotlin.math.PI.toFloat() / 2f
+        val sunElevation = 1f - kotlin.math.abs(lightAngle - noonAngle) / noonAngle
         
-        // Shadow intensity based on how far from directly overhead the light is
-        // At noon (angle = π/2), minimal shadow difference
-        val angleDiff = kotlin.math.abs(lightAngle - kotlin.math.PI.toFloat() / 2f)
-        val shadowFactor = (angleDiff / (kotlin.math.PI.toFloat() / 2f)).coerceIn(0.1f, 1f)
-        val effectiveShadow = shadowStrength * shadowFactor * 0.25f  // 0-0.25 darkening
+        // Base shadow on viewer-facing slopes (stronger when sun is low behind mountains)
+        // At noon (elevation=1): minimal shadow. At sunrise/sunset (elevation=0): max shadow
+        val frontShadowBase = shadowStrength * (1f - sunElevation) * 0.35f
         
-        // Left side shadow (when light from right)
-        val leftShadowDarkening = if (!rightIsShadowed) effectiveShadow else 0f
+        // Left/right asymmetry based on sun position
+        // Light from left (angle > π/2) means left side catches more light, right is darker
+        // Light from right (angle < π/2) means right side catches more light, left is darker
+        val lightBias = (lightAngle - noonAngle) / noonAngle  // -1 to +1
+        
+        // Shadow intensity for each side (base shadow + directional component)
+        // Both sides always have some shadow when sun is low, but one side is darker
+        val leftShadow = (frontShadowBase - lightBias * frontShadowBase * 0.4f).coerceIn(0f, 0.4f)
+        val rightShadow = (frontShadowBase + lightBias * frontShadowBase * 0.4f).coerceIn(0f, 0.4f)
+        
+        // Cone-style: shadow is STRONGER at base (where mountain blocks more light)
+        // and WEAKER at peak (which catches more direct sunlight)
+        // This creates a natural "lit peak, shadowed base" effect
+        
+        // Left side colors - shadow is stronger at base
         val leftPeakColor = Color.rgb(
-            (Color.red(peakColor) * (1f - leftShadowDarkening)).toInt().coerceIn(0, 255),
-            (Color.green(peakColor) * (1f - leftShadowDarkening)).toInt().coerceIn(0, 255),
-            (Color.blue(peakColor) * (1f - leftShadowDarkening * 0.5f)).toInt().coerceIn(0, 255)
+            (Color.red(peakColor) * (1f - leftShadow * 0.3f)).toInt().coerceIn(0, 255),
+            (Color.green(peakColor) * (1f - leftShadow * 0.35f)).toInt().coerceIn(0, 255),
+            (Color.blue(peakColor) * (1f - leftShadow * 0.1f)).toInt().coerceIn(0, 255)
+        )
+        val leftMidColor = Color.rgb(
+            (Color.red(baseAtmoColor) * (1f - leftShadow * 0.6f)).toInt().coerceIn(0, 255),
+            (Color.green(baseAtmoColor) * (1f - leftShadow * 0.65f)).toInt().coerceIn(0, 255),
+            (Color.blue(baseAtmoColor) * (1f - leftShadow * 0.3f)).toInt().coerceIn(0, 255)
         )
         val leftBaseColor = Color.rgb(
-            (Color.red(baseAtmoColor) * (1f - leftShadowDarkening * 0.7f)).toInt().coerceIn(0, 255),
-            (Color.green(baseAtmoColor) * (1f - leftShadowDarkening * 0.7f)).toInt().coerceIn(0, 255),
-            (Color.blue(baseAtmoColor) * (1f - leftShadowDarkening * 0.5f)).toInt().coerceIn(0, 255)
+            (Color.red(baseAtmoColor) * (1f - leftShadow * 0.8f)).toInt().coerceIn(0, 255),
+            (Color.green(baseAtmoColor) * (1f - leftShadow * 0.85f)).toInt().coerceIn(0, 255),
+            (Color.blue(baseAtmoColor) * (1f - leftShadow * 0.5f)).toInt().coerceIn(0, 255)
         )
         
-        // Three-point vertical gradient for left side - use actual peak position
+        // Four-point vertical gradient for left side: peak (light) -> mid -> base (darker) -> transparent
         val gradient = LinearGradient(
             actualPeakX, peakY,
             actualPeakX, baseY,
-            intArrayOf(leftPeakColor, leftBaseColor, Color.TRANSPARENT),
-            floatArrayOf(0f, 0.75f, 1f),
+            intArrayOf(leftPeakColor, leftMidColor, leftBaseColor, Color.TRANSPARENT),
+            floatArrayOf(0f, 0.4f, 0.75f, 1f),
             Shader.TileMode.CLAMP
         )
         
@@ -374,23 +402,28 @@ class MountainLayer(private val context: Context) : SceneLayer {
         paint.shader = gradient
         canvas.drawPath(pathLeft, paint)
         
-        // Right side shadow (when light from left)
-        val rightShadowDarkening = if (rightIsShadowed) effectiveShadow else 0f
+        // Right side colors - shadow is stronger at base  
         val rightPeakColor = Color.rgb(
-            (Color.red(peakColor) * (1f - rightShadowDarkening)).toInt().coerceIn(0, 255),
-            (Color.green(peakColor) * (1f - rightShadowDarkening)).toInt().coerceIn(0, 255),
-            (Color.blue(peakColor) * (1f - rightShadowDarkening * 0.5f)).toInt().coerceIn(0, 255)
+            (Color.red(peakColor) * (1f - rightShadow * 0.3f)).toInt().coerceIn(0, 255),
+            (Color.green(peakColor) * (1f - rightShadow * 0.35f)).toInt().coerceIn(0, 255),
+            (Color.blue(peakColor) * (1f - rightShadow * 0.1f)).toInt().coerceIn(0, 255)
+        )
+        val rightMidColor = Color.rgb(
+            (Color.red(baseAtmoColor) * (1f - rightShadow * 0.6f)).toInt().coerceIn(0, 255),
+            (Color.green(baseAtmoColor) * (1f - rightShadow * 0.65f)).toInt().coerceIn(0, 255),
+            (Color.blue(baseAtmoColor) * (1f - rightShadow * 0.3f)).toInt().coerceIn(0, 255)
         )
         val rightBaseColor = Color.rgb(
-            (Color.red(baseAtmoColor) * (1f - rightShadowDarkening * 0.7f)).toInt().coerceIn(0, 255),
-            (Color.green(baseAtmoColor) * (1f - rightShadowDarkening * 0.7f)).toInt().coerceIn(0, 255),
-            (Color.blue(baseAtmoColor) * (1f - rightShadowDarkening * 0.5f)).toInt().coerceIn(0, 255)
+            (Color.red(baseAtmoColor) * (1f - rightShadow * 0.8f)).toInt().coerceIn(0, 255),
+            (Color.green(baseAtmoColor) * (1f - rightShadow * 0.85f)).toInt().coerceIn(0, 255),
+            (Color.blue(baseAtmoColor) * (1f - rightShadow * 0.5f)).toInt().coerceIn(0, 255)
         )
+        
         val rightGradient = LinearGradient(
             actualPeakX, peakY,
             actualPeakX, baseY,
-            intArrayOf(rightPeakColor, rightBaseColor, Color.TRANSPARENT),
-            floatArrayOf(0f, 0.75f, 1f),
+            intArrayOf(rightPeakColor, rightMidColor, rightBaseColor, Color.TRANSPARENT),
+            floatArrayOf(0f, 0.4f, 0.75f, 1f),
             Shader.TileMode.CLAMP
         )
         paint.shader = rightGradient
@@ -402,57 +435,63 @@ class MountainLayer(private val context: Context) : SceneLayer {
         // Draw snow cap if winter and snow enabled
         val season = getCurrentTerrainSeason()
         if (winterSnowEnabled && season == "winter") {
-            // Snow coverage determines how far down the snow extends
+            // Snow coverage determines how far down the snow extends (as fraction of mountain height)
             val snowDepth = (winterSnowCoverage / 100f).coerceIn(0.15f, 0.5f)
-            val snowBottomY = peakY + (baseY - peakY) * snowDepth
             
-            // Build snow cap shape following the actual mountain slopes (using actualPeakX)
+            // How many slope segments are covered by snow
+            val snowSegmentCount = (segments * snowDepth).toInt().coerceIn(1, leftSlopePoints.size)
+            
+            // Build snow cap shape using exact mountain slope points (prevents edge gaps)
             snowCapPath.reset()
             
-            // Start at peak
-            snowCapPath.moveTo(ridgePoints[0].first, ridgePoints[0].second)
+            // Start at peak (with slight inset to ensure overlap)
+            val peakInset = 2f
+            snowCapPath.moveTo(ridgePoints[0].first, ridgePoints[0].second + peakInset)
             
-            // Left side of snow cap (follow left slope down to snow line)
-            val snowRandom = Random(mountain.shapeSeed + 1000)
-            val snowSegments = (segments * snowDepth).toInt().coerceAtLeast(3)
-            for (i in 0 until snowSegments) {
-                val progress = (i + 1).toFloat() / segments
-                if (progress > snowDepth) break
-                // Use actualPeakX to match the mountain slopes
-                val targetX = actualPeakX - halfWidthPx * progress
-                val targetY = peakY + (baseY - peakY) * progress
-                val noise = (snowRandom.nextFloat() - 0.5f) * height * 0.008f
-                snowCapPath.lineTo(targetX, targetY + noise)
+            // Left side of snow - follow the exact mountain slope points
+            for (i in 0 until snowSegmentCount) {
+                val point = leftSlopePoints[i]
+                snowCapPath.lineTo(point.first, point.second)
             }
             
-            // Bottom edge of snow (jagged snow line)
-            val snowLineX = actualPeakX - halfWidthPx * snowDepth
-            snowCapPath.lineTo(snowLineX, snowBottomY)
+            // Bottom edge - jagged snow line with some randomness
+            val snowRandom = Random(mountain.shapeSeed + 2000)
+            val lastLeftPoint = leftSlopePoints[snowSegmentCount - 1]
+            val lastRightPoint = rightSlopePoints[snowSegmentCount - 1]
             
-            // Cross to right side at snow line
-            val snowLineXRight = actualPeakX + halfWidthPx * snowDepth
-            snowCapPath.lineTo(snowLineXRight, snowBottomY)
+            // Add a few jagged points along the bottom snow line
+            val jaggedSteps = 5
+            for (j in 0..jaggedSteps) {
+                val t = j.toFloat() / jaggedSteps
+                val x = lastLeftPoint.first + (lastRightPoint.first - lastLeftPoint.first) * t
+                val baseY = lastLeftPoint.second + (lastRightPoint.second - lastLeftPoint.second) * t
+                // Add downward jaggedness (snow drips down)
+                val jag = snowRandom.nextFloat() * height * 0.015f
+                snowCapPath.lineTo(x, baseY + jag)
+            }
             
-            // Right side of snow cap (follow right slope back to peak)
-            for (i in snowSegments - 1 downTo 0) {
-                val progress = (i + 1).toFloat() / segments
-                if (progress > snowDepth) continue
-                // Use actualPeakX to match the mountain slopes
-                val targetX = actualPeakX + halfWidthPx * progress
-                val targetY = peakY + (baseY - peakY) * progress
-                val noise = (snowRandom.nextFloat() - 0.5f) * height * 0.008f
-                snowCapPath.lineTo(targetX, targetY + noise)
+            // Right side of snow - follow the exact mountain slope points in reverse
+            for (i in snowSegmentCount - 1 downTo 0) {
+                val point = rightSlopePoints[i]
+                snowCapPath.lineTo(point.first, point.second)
             }
             
             snowCapPath.close()
             
-            // Use a gradient: pure white at top, fading to original mountain color
-            // Top 30% is fully white, then quickly fades to mountain color by 80%
+            // Gradient: pure white at peak, fading to semi-transparent white at bottom
+            // This blends naturally with the mountain color underneath
+            val snowTopY = ridgePoints[0].second
+            val snowBottomY = lastLeftPoint.second + height * 0.01f
             val snowGradient = LinearGradient(
-                actualPeakX, peakY,
+                actualPeakX, snowTopY,
                 actualPeakX, snowBottomY,
-                intArrayOf(Color.WHITE, Color.WHITE, peakColor),
-                floatArrayOf(0f, 0.3f, 1f),
+                intArrayOf(
+                    Color.WHITE,
+                    Color.WHITE,
+                    Color.argb(180, 255, 255, 255),
+                    Color.argb(40, 255, 255, 255)
+                ),
+                floatArrayOf(0f, 0.4f, 0.75f, 1f),
                 Shader.TileMode.CLAMP
             )
             snowCapPaint.shader = snowGradient
