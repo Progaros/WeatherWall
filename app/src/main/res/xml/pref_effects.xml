@@ -369,4 +369,91 @@
             android:dependency="pref_winter_snow_hills" />
     </PreferenceCategory>
 
+    <!-- Vignette / Edge Darkening -->
+    <PreferenceCategory android:title="Edge Vignette">
+        <!-- Bottom (for app dock) -->
+        <SeekBarPreference
+            android:key="pref_vignette_bottom_strength"
+            android:title="Bottom Darkening"
+            android:summary="Darken bottom edge for app icons (0=off, 100=black)"
+            android:defaultValue="30"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_vignette_bottom_size"
+            android:title="Bottom Size"
+            android:summary="How far darkening extends up (5-50% of screen)"
+            android:defaultValue="20"
+            android:max="50"
+            app:min="5"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <!-- Top -->
+        <SeekBarPreference
+            android:key="pref_vignette_top_strength"
+            android:title="Top Darkening"
+            android:summary="Darken top edge for status bar (0=off, 100=black)"
+            android:defaultValue="0"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_vignette_top_size"
+            android:title="Top Size"
+            android:summary="How far darkening extends down (5-50% of screen)"
+            android:defaultValue="15"
+            android:max="50"
+            app:min="5"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <!-- Left -->
+        <SeekBarPreference
+            android:key="pref_vignette_left_strength"
+            android:title="Left Darkening"
+            android:summary="Darken left edge (0=off, 100=black)"
+            android:defaultValue="0"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_vignette_left_size"
+            android:title="Left Size"
+            android:summary="How far darkening extends right (5-50% of screen)"
+            android:defaultValue="10"
+            android:max="50"
+            app:min="5"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <!-- Right -->
+        <SeekBarPreference
+            android:key="pref_vignette_right_strength"
+            android:title="Right Darkening"
+            android:summary="Darken right edge (0=off, 100=black)"
+            android:defaultValue="0"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_vignette_right_size"
+            android:title="Right Size"
+            android:summary="How far darkening extends left (5-50% of screen)"
+            android:defaultValue="10"
+            android:max="50"
+            app:min="5"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
 </PreferenceScreen>

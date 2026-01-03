@@ -51,6 +51,7 @@ class ParallaxScene(
     private val cloudLayer = CloudLayer(context)
     private val terrainLayer = TerrainLayer(context)
     private val randomEventLayer = RandomEventLayer(context)
+    private val vignetteLayer = VignetteLayer(context)
     
     // Overlays
     private val weatherLayer = WeatherLayer()
@@ -272,6 +273,13 @@ class ParallaxScene(
                 }
             }
             
+            // Draw Vignette Overlay (always last - on top of everything)
+            try {
+                vignetteLayer.draw(canvas, state, parallaxCalculator)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error drawing vignette", e)
+            }
+            
             DebugTracer.traceEnd("render")
         } catch (e: Exception) {
             Log.e(TAG, "Error rendering scene", e)
@@ -283,6 +291,7 @@ class ParallaxScene(
             layer.resize(w, h)
         }
         weatherLayer.resize(w, h)
+        vignetteLayer.resize(w, h)
     }
 
     fun loadPrefs() {
@@ -387,6 +396,7 @@ class ParallaxScene(
             }
             weatherLayer.reloadSettings()
             seasonalEvents.loadSettings()
+            vignetteLayer.reloadSettings()
             
             // Configure shake detection based on settings
             val shakeEnabled = prefs.getBoolean("pref_shake_fireworks_enabled", true)
@@ -403,6 +413,7 @@ class ParallaxScene(
             layer.destroy()
         }
         weatherLayer.destroy()
+        vignetteLayer.destroy()
     }
     
     /**
