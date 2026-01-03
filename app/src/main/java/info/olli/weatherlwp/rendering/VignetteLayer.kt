@@ -16,9 +16,15 @@ import info.olli.weatherlwp.simulation.SimulationState
  * Useful for darkening areas where app icons are placed (typically bottom edge)
  * to improve icon visibility against bright backgrounds.
  * 
- * Each edge (top, bottom, left, right) can be independently configured:
- * - Strength: 0-100 (0 = no vignette, 100 = fully black)
- * - Size: 0-50% of screen dimension
+ * Each edge (top, bottom, left, right) has three controls:
+ * - Distance: How far the vignette extends into screen (0-50% of dimension, 0=off)
+ * - Fade: Percentage of the vignette that fades to transparent (5-50%)
+ * - Alpha: Opacity of the solid/dark part (0-100%)
+ * 
+ * Example: distance=30%, fade=20%, alpha=80%
+ * - Vignette extends 30% into screen
+ * - Bottom 80% of vignette (24% of screen) is at 80% opacity (solid dark)
+ * - Top 20% of vignette (6% of screen) fades from 80% to 0% opacity
  */
 class VignetteLayer(private val context: Context) : SceneLayer {
 
@@ -29,15 +35,22 @@ class VignetteLayer(private val context: Context) : SceneLayer {
     private var width = 0f
     private var height = 0f
 
-    // Edge settings: strength (0-100) and size (0-50% of dimension)
-    private var topStrength = 0
-    private var topSize = 15
-    private var bottomStrength = 30  // Default for app dock area
-    private var bottomSize = 20
-    private var leftStrength = 0
-    private var leftSize = 10
-    private var rightStrength = 0
-    private var rightSize = 10
+    // Edge settings: distance (0-50% of dimension), fade (5-50%), alpha (0-100%)
+    private var topDistance = 0      // 0 = off
+    private var topFade = 20
+    private var topAlpha = 60
+    
+    private var bottomDistance = 25  // Default for app dock area
+    private var bottomFade = 15
+    private var bottomAlpha = 70
+    
+    private var leftDistance = 0
+    private var leftFade = 20
+    private var leftAlpha = 50
+    
+    private var rightDistance = 0
+    private var rightFade = 20
+    private var rightAlpha = 50
 
     // Cached gradients (recreated on resize or settings change)
     private var topGradient: LinearGradient? = null
@@ -64,29 +77,29 @@ class VignetteLayer(private val context: Context) : SceneLayer {
         }
 
         // Draw top vignette
-        if (topStrength > 0 && topGradient != null) {
-            val topHeight = height * (topSize / 100f)
+        if (topDistance > 0 && topGradient != null) {
+            val topHeight = height * (topDistance / 100f)
             paint.shader = topGradient
             canvas.drawRect(0f, 0f, width, topHeight, paint)
         }
 
         // Draw bottom vignette
-        if (bottomStrength > 0 && bottomGradient != null) {
-            val bottomHeight = height * (bottomSize / 100f)
+        if (bottomDistance > 0 && bottomGradient != null) {
+            val bottomHeight = height * (bottomDistance / 100f)
             paint.shader = bottomGradient
             canvas.drawRect(0f, height - bottomHeight, width, height, paint)
         }
 
         // Draw left vignette
-        if (leftStrength > 0 && leftGradient != null) {
-            val leftWidth = width * (leftSize / 100f)
+        if (leftDistance > 0 && leftGradient != null) {
+            val leftWidth = width * (leftDistance / 100f)
             paint.shader = leftGradient
             canvas.drawRect(0f, 0f, leftWidth, height, paint)
         }
 
         // Draw right vignette
-        if (rightStrength > 0 && rightGradient != null) {
-            val rightWidth = width * (rightSize / 100f)
+        if (rightDistance > 0 && rightGradient != null) {
+            val rightWidth = width * (rightDistance / 100f)
             paint.shader = rightGradient
             canvas.drawRect(width - rightWidth, 0f, width, height, paint)
         }
@@ -94,62 +107,105 @@ class VignetteLayer(private val context: Context) : SceneLayer {
         paint.shader = null
     }
 
-    private fun buildGradients() {
-        // Top gradient: black at top fading to transparent
-        if (topStrength > 0) {
-            val topHeight = height * (topSize / 100f)
-            val alpha = (topStrength * 2.55f).toInt().coerceIn(0, 255)
-            topGradient = LinearGradient(
-                0f, 0f,
-                0f, topHeight,
-                Color.argb(alpha, 0, 0, 0),
-                Color.TRANSPARENT,
+    /**
+     * Build gradient for an edge.
+     * 
+     * @param distance Total vignette distance in pixels
+     * @param fadePercent Percentage of distance that fades (5-50)
+     * @param alpha Opacity of solid part (0-255)
+     * @param startX Start X of gradient
+     * @param startY Start Y of gradient
+     * @param endX End X of gradient
+     * @param endY End Y of gradient
+     * @param inward If true, gradient goes from transparent to solid (top/left edges)
+     *               If false, gradient goes from solid to transparent (bottom/right edges)
+     */
+    private fun buildEdgeGradient(
+        distance: Float,
+        fadePercent: Int,
+        alpha: Int,
+        startX: Float, startY: Float,
+        endX: Float, endY: Float,
+        inward: Boolean
+    ): LinearGradient {
+        // fadePercent of the distance fades, rest is solid
+        val fadeRatio = (fadePercent / 100f).coerceIn(0.05f, 0.95f)
+        val solidRatio = 1f - fadeRatio
+        
+        val solidColor = Color.argb(alpha, 0, 0, 0)
+        val transparent = Color.TRANSPARENT
+        
+        return if (inward) {
+            // For top/left: starts transparent (at screen edge fade zone), becomes solid
+            // Gradient: transparent -> solid (at fade boundary) -> solid (at inner edge)
+            LinearGradient(
+                startX, startY, endX, endY,
+                intArrayOf(transparent, solidColor, solidColor),
+                floatArrayOf(0f, fadeRatio, 1f),
                 Shader.TileMode.CLAMP
+            )
+        } else {
+            // For bottom/right: starts solid (at screen edge), fades to transparent
+            // Gradient: solid -> solid (at solid boundary) -> transparent
+            LinearGradient(
+                startX, startY, endX, endY,
+                intArrayOf(solidColor, solidColor, transparent),
+                floatArrayOf(0f, solidRatio, 1f),
+                Shader.TileMode.CLAMP
+            )
+        }
+    }
+
+    private fun buildGradients() {
+        // Top: gradient goes DOWN from screen top, fade is at TOP of vignette region
+        if (topDistance > 0) {
+            val topHeight = height * (topDistance / 100f)
+            val alpha = (topAlpha * 2.55f).toInt().coerceIn(0, 255)
+            // Top vignette: dark at screen top, fades to transparent as it goes down
+            topGradient = buildEdgeGradient(
+                topHeight, topFade, alpha,
+                0f, 0f, 0f, topHeight,
+                inward = false  // solid at top (screen edge), transparent toward center
             )
         } else {
             topGradient = null
         }
 
-        // Bottom gradient: transparent at top fading to black at bottom
-        if (bottomStrength > 0) {
-            val bottomHeight = height * (bottomSize / 100f)
-            val alpha = (bottomStrength * 2.55f).toInt().coerceIn(0, 255)
-            bottomGradient = LinearGradient(
-                0f, height - bottomHeight,
-                0f, height,
-                Color.TRANSPARENT,
-                Color.argb(alpha, 0, 0, 0),
-                Shader.TileMode.CLAMP
+        // Bottom: gradient goes UP from screen bottom, fade is at TOP of vignette region
+        if (bottomDistance > 0) {
+            val bottomHeight = height * (bottomDistance / 100f)
+            val alpha = (bottomAlpha * 2.55f).toInt().coerceIn(0, 255)
+            // Bottom vignette: dark at screen bottom, fades to transparent as it goes up
+            bottomGradient = buildEdgeGradient(
+                bottomHeight, bottomFade, alpha,
+                0f, height, 0f, height - bottomHeight,
+                inward = false  // solid at bottom (screen edge), transparent toward center
             )
         } else {
             bottomGradient = null
         }
 
-        // Left gradient: black at left fading to transparent
-        if (leftStrength > 0) {
-            val leftWidth = width * (leftSize / 100f)
-            val alpha = (leftStrength * 2.55f).toInt().coerceIn(0, 255)
-            leftGradient = LinearGradient(
-                0f, 0f,
-                leftWidth, 0f,
-                Color.argb(alpha, 0, 0, 0),
-                Color.TRANSPARENT,
-                Shader.TileMode.CLAMP
+        // Left: gradient goes RIGHT from screen left, fade is at RIGHT of vignette region
+        if (leftDistance > 0) {
+            val leftWidth = width * (leftDistance / 100f)
+            val alpha = (leftAlpha * 2.55f).toInt().coerceIn(0, 255)
+            leftGradient = buildEdgeGradient(
+                leftWidth, leftFade, alpha,
+                0f, 0f, leftWidth, 0f,
+                inward = false  // solid at left (screen edge), transparent toward center
             )
         } else {
             leftGradient = null
         }
 
-        // Right gradient: transparent fading to black at right
-        if (rightStrength > 0) {
-            val rightWidth = width * (rightSize / 100f)
-            val alpha = (rightStrength * 2.55f).toInt().coerceIn(0, 255)
-            rightGradient = LinearGradient(
-                width - rightWidth, 0f,
-                width, 0f,
-                Color.TRANSPARENT,
-                Color.argb(alpha, 0, 0, 0),
-                Shader.TileMode.CLAMP
+        // Right: gradient goes LEFT from screen right, fade is at LEFT of vignette region
+        if (rightDistance > 0) {
+            val rightWidth = width * (rightDistance / 100f)
+            val alpha = (rightAlpha * 2.55f).toInt().coerceIn(0, 255)
+            rightGradient = buildEdgeGradient(
+                rightWidth, rightFade, alpha,
+                width, 0f, width - rightWidth, 0f,
+                inward = false  // solid at right (screen edge), transparent toward center
             )
         } else {
             rightGradient = null
@@ -165,18 +221,25 @@ class VignetteLayer(private val context: Context) : SceneLayer {
     override fun reloadSettings() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         
-        // Edge vignette settings (strength 0-100, size 0-50)
-        topStrength = prefs.getInt("pref_vignette_top_strength", 0)
-        topSize = prefs.getInt("pref_vignette_top_size", 15).coerceIn(5, 50)
+        // Top edge vignette
+        topDistance = prefs.getInt("pref_vignette_top_distance", 0).coerceIn(0, 50)
+        topFade = prefs.getInt("pref_vignette_top_fade", 20).coerceIn(5, 50)
+        topAlpha = prefs.getInt("pref_vignette_top_alpha", 60).coerceIn(0, 100)
         
-        bottomStrength = prefs.getInt("pref_vignette_bottom_strength", 30)
-        bottomSize = prefs.getInt("pref_vignette_bottom_size", 20).coerceIn(5, 50)
+        // Bottom edge vignette (default for app dock)
+        bottomDistance = prefs.getInt("pref_vignette_bottom_distance", 25).coerceIn(0, 50)
+        bottomFade = prefs.getInt("pref_vignette_bottom_fade", 15).coerceIn(5, 50)
+        bottomAlpha = prefs.getInt("pref_vignette_bottom_alpha", 70).coerceIn(0, 100)
         
-        leftStrength = prefs.getInt("pref_vignette_left_strength", 0)
-        leftSize = prefs.getInt("pref_vignette_left_size", 10).coerceIn(5, 50)
+        // Left edge vignette
+        leftDistance = prefs.getInt("pref_vignette_left_distance", 0).coerceIn(0, 50)
+        leftFade = prefs.getInt("pref_vignette_left_fade", 20).coerceIn(5, 50)
+        leftAlpha = prefs.getInt("pref_vignette_left_alpha", 50).coerceIn(0, 100)
         
-        rightStrength = prefs.getInt("pref_vignette_right_strength", 0)
-        rightSize = prefs.getInt("pref_vignette_right_size", 10).coerceIn(5, 50)
+        // Right edge vignette
+        rightDistance = prefs.getInt("pref_vignette_right_distance", 0).coerceIn(0, 50)
+        rightFade = prefs.getInt("pref_vignette_right_fade", 20).coerceIn(5, 50)
+        rightAlpha = prefs.getInt("pref_vignette_right_alpha", 50).coerceIn(0, 100)
         
         gradientsDirty = true
     }

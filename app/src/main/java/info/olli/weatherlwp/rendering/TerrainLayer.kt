@@ -111,6 +111,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private var hillAmplitude = 1.0f  // Controls hill vertical height (0-10 range)
     private var hillFrequency = 2.0f  // Controls how many hills visible per layer (0-10 range)
     
+    // Hill layer depth settings
+    private var hillDistance = 0f         // 0-1: How far back hills start (0=at camera, 1=near mountains)
+    private var hillDepthSpread = 0.5f    // 0-1: Spread of hills along z-axis (0=flat, 1=deep)
+    
     // Seasonal settings
     private var terrainSeasonOverride = "auto"  // "auto", "spring", "summer", "autumn", "winter"
     private var springFlowersEnabled = true
@@ -222,20 +226,33 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val random = Random(randomSeed.toLong() + 1000)  // Offset from mountains
         
         for (i in 0 until hillCount) {
-            val depth = i.toFloat() / hillCount.coerceAtLeast(1)
+            // Base depth from 0 (background) to 1 (foreground)
+            val baseDepth = i.toFloat() / hillCount.coerceAtLeast(1)
+            
+            // Apply hillDistance and hillDepthSpread:
+            // - hillDistance (0-1): shifts all hills back (0=at camera, 1=near mountains)
+            // - hillDepthSpread (0-1): controls spread along z-axis (0=flat, 1=deep)
+            // 
+            // At distance=0, spread=0.5: hills range from 0.5 to 1.0 (default behavior)
+            // At distance=0.5, spread=0.3: hills range from 0.35 to 0.65
+            // At distance=1, spread=0: all hills at depth 0 (very far, near mountains)
+            val effectiveSpread = hillDepthSpread * (1f - hillDistance)
+            val minDepth = 1f - hillDistance - effectiveSpread
+            val maxDepth = 1f - hillDistance
+            val depth = minDepth + baseDepth * (maxDepth - minDepth)
             
             // Parallax depth factor using normalized 0-1 range from RenderConstants
             // - Background hills (depth=0): lower factor = less movement
             // - Foreground hills (depth=1): higher factor = more movement  
             // Range: PARALLAX_HILLS_MIN (0.50) to PARALLAX_HILLS_MAX (0.80)
             val depthFactor = RenderConstants.PARALLAX_HILLS_MIN + 
-                depth * (RenderConstants.PARALLAX_HILLS_MAX - RenderConstants.PARALLAX_HILLS_MIN)
+                depth.coerceIn(0f, 1f) * (RenderConstants.PARALLAX_HILLS_MAX - RenderConstants.PARALLAX_HILLS_MIN)
             
-            val heightOffset = hillStartY + depth * (hillEndY - hillStartY)
+            val heightOffset = hillStartY + baseDepth * (hillEndY - hillStartY)
             
             // Depth-based amplitude scaling: background hills have smaller amplitude
             // depth=0 (background): 40% amplitude, depth=1 (foreground): 100% amplitude
-            val depthAmplitudeScale = 0.4f + depth * 0.6f
+            val depthAmplitudeScale = 0.4f + depth.coerceIn(0f, 1f) * 0.6f
             
             // More points for smoother curves
             val numPoints = RenderConstants.HILL_CURVE_POINTS_MIN + random.nextInt(RenderConstants.HILL_CURVE_POINTS_RANGE)
@@ -987,6 +1004,14 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val freqVal = prefs.getInt("pref_hill_frequency", 100)
         hillFrequency = freqVal / 100f
         
+        // Hill distance: pushes hills away from camera (0=at camera, 100=near mountains)
+        val distVal = prefs.getInt("pref_hill_distance", 0)
+        hillDistance = distVal / 100f
+        
+        // Hill depth spread: controls z-axis spread (0=flat layer, 100=deep range)
+        val spreadVal = prefs.getInt("pref_hill_depth_spread", 50)
+        hillDepthSpread = spreadVal / 100f
+        
         val sizeVal = prefs.getInt("pref_tree_size", 200)
         treeSizeScale = sizeVal / 200f
         
@@ -1008,7 +1033,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         // Wind is now from SimulationState, not a separate setting
         
-        android.util.Log.d("TerrainLayer", "Reloaded: hills=$hillCount, density=$treeDensity%, freq=$hillFrequency, amp=$hillAmplitude")
+        android.util.Log.d("TerrainLayer", "Reloaded: hills=$hillCount, density=$treeDensity%, freq=$hillFrequency, amp=$hillAmplitude, dist=$hillDistance, spread=$hillDepthSpread")
         generateTerrain()
     }
 

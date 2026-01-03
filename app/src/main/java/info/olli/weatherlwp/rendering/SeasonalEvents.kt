@@ -317,7 +317,8 @@ class SeasonalEvents(private val context: Context? = null) {
             }
 
             when (season) {
-                Season.CHRISTMAS -> renderChristmasStars(canvas)
+                // Christmas star is now drawn in renderBehindMountains() to appear in the sky
+                Season.CHRISTMAS -> {}  // handled by renderBehindMountains
                 // NEW_YEAR and CN_NEW_YEAR fireworks are now drawn via renderBehindTerrain()
                 // to appear behind hills but in front of mountains
                 Season.NEW_YEAR -> {}  // handled by renderBehindTerrain
@@ -332,8 +333,9 @@ class SeasonalEvents(private val context: Context? = null) {
     }
 
     /**
-     * Render elements that belong behind the terrain/mountains (e.g. St. Patrick's rainbow).
+     * Render elements that belong behind the terrain/mountains (e.g. St. Patrick's rainbow, Christmas star).
      * This is called from the scene renderer just before MountainLayer is drawn.
+     * These elements appear in the sky layer.
      */
     fun renderBehindMountains(canvas: Canvas, enabled: Boolean) {
         if (!enabled) return
@@ -352,8 +354,10 @@ class SeasonalEvents(private val context: Context? = null) {
                 initParticles()
                 initialized = true
             }
-            if (season == Season.ST_PATRICKS) {
-                renderStPatricksDay(canvas)
+            when (season) {
+                Season.ST_PATRICKS -> renderStPatricksDay(canvas)
+                Season.CHRISTMAS -> renderChristmasStars(canvas)  // Star in sky behind mountains
+                else -> {}
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error rendering behind-mountain seasonal events", e)
@@ -946,6 +950,7 @@ class SeasonalEvents(private val context: Context? = null) {
         }
         
         // Draw dragon head (first segment, larger and more detailed)
+        // Dragon is moving LEFT, so face points LEFT (negative X direction)
         val (headX, headY) = segmentPositions[0]
         val headRadius = segmentRadius * 1.8f
         
@@ -953,23 +958,29 @@ class SeasonalEvents(private val context: Context? = null) {
         dragonPaint.color = dragonColors[0]
         canvas.drawCircle(headX, headY, headRadius, dragonPaint)
         
-        // Snout/muzzle (elongated forward)
+        // Snout/muzzle (elongated to the LEFT - direction of movement)
         val snoutLength = headRadius * 1.2f
         dragonPaint.color = dragonColors[0]
         canvas.drawOval(
-            headX + headRadius * 0.3f, headY - headRadius * 0.4f,
-            headX + headRadius * 0.3f + snoutLength, headY + headRadius * 0.4f,
+            headX - headRadius * 0.3f - snoutLength, headY - headRadius * 0.4f,
+            headX - headRadius * 0.3f, headY + headRadius * 0.4f,
             dragonPaint
         )
         
-        // Gold whiskers/mane
+        // Nostrils on snout
+        dragonPaint.color = dragonColors[3]
+        val nostrilRadius = headRadius * 0.1f
+        canvas.drawCircle(headX - headRadius * 0.3f - snoutLength * 0.7f, headY - headRadius * 0.15f, nostrilRadius, dragonPaint)
+        canvas.drawCircle(headX - headRadius * 0.3f - snoutLength * 0.7f, headY + headRadius * 0.15f, nostrilRadius, dragonPaint)
+        
+        // Gold whiskers/mane (flowing back from face, toward the RIGHT/behind)
         dragonPaint.color = dragonColors[1]
         val whiskerLength = headRadius * 0.8f
         for (angle in listOf(-30f, -60f, 30f, 60f)) {
             val rad = Math.toRadians(angle.toDouble())
-            val wx = headX - headRadius * 0.3f
+            val wx = headX + headRadius * 0.3f  // Start from back of head
             val wy = headY + kotlin.math.sin(rad).toFloat() * headRadius * 0.5f
-            val wxEnd = wx - whiskerLength
+            val wxEnd = wx + whiskerLength  // Flow to the right (behind dragon)
             val wyEnd = wy + kotlin.math.sin(rad).toFloat() * whiskerLength * 0.5f
             dragonOutlinePaint.color = dragonColors[1]
             dragonOutlinePaint.strokeWidth = 3f * scale
@@ -978,42 +989,44 @@ class SeasonalEvents(private val context: Context? = null) {
         dragonOutlinePaint.color = dragonColors[3]
         dragonOutlinePaint.strokeWidth = 2f * scale
         
-        // Eyes (white with black pupils, gold outline)
-        val eyeRadius = headRadius * 0.25f
-        val eyeOffsetX = headRadius * 0.4f
-        val eyeOffsetY = headRadius * 0.35f
+        // Eyes (sideways profile view - only one eye visible, on top side of head)
+        val eyeRadius = headRadius * 0.3f
+        val eyeOffsetX = -headRadius * 0.3f  // Toward the front (left)
+        val eyeOffsetY = -headRadius * 0.25f  // Above center
         
-        // Left eye
+        // Single visible eye (profile view)
         dragonPaint.color = Color.WHITE
-        canvas.drawCircle(headX + eyeOffsetX, headY - eyeOffsetY, eyeRadius, dragonPaint)
+        canvas.drawCircle(headX + eyeOffsetX, headY + eyeOffsetY, eyeRadius, dragonPaint)
+        // Pupil looking forward (left)
         dragonPaint.color = Color.BLACK
-        canvas.drawCircle(headX + eyeOffsetX + eyeRadius * 0.2f, headY - eyeOffsetY, eyeRadius * 0.5f, dragonPaint)
+        canvas.drawCircle(headX + eyeOffsetX - eyeRadius * 0.2f, headY + eyeOffsetY, eyeRadius * 0.5f, dragonPaint)
+        // Gold outline
         dragonOutlinePaint.color = dragonColors[1]
-        canvas.drawCircle(headX + eyeOffsetX, headY - eyeOffsetY, eyeRadius, dragonOutlinePaint)
+        canvas.drawCircle(headX + eyeOffsetX, headY + eyeOffsetY, eyeRadius, dragonOutlinePaint)
         
-        // Right eye (slightly lower due to perspective)
-        dragonPaint.color = Color.WHITE
-        canvas.drawCircle(headX + eyeOffsetX, headY + eyeOffsetY * 0.3f, eyeRadius * 0.8f, dragonPaint)
-        dragonPaint.color = Color.BLACK
-        canvas.drawCircle(headX + eyeOffsetX + eyeRadius * 0.15f, headY + eyeOffsetY * 0.3f, eyeRadius * 0.4f, dragonPaint)
-        dragonOutlinePaint.color = dragonColors[1]
-        canvas.drawCircle(headX + eyeOffsetX, headY + eyeOffsetY * 0.3f, eyeRadius * 0.8f, dragonOutlinePaint)
+        // Brow ridge above eye
+        dragonPaint.color = dragonColors[2]
+        canvas.drawArc(
+            headX + eyeOffsetX - eyeRadius * 1.2f, headY + eyeOffsetY - eyeRadius * 1.5f,
+            headX + eyeOffsetX + eyeRadius * 1.2f, headY + eyeOffsetY - eyeRadius * 0.3f,
+            180f, 180f, true, dragonPaint
+        )
         
-        // Horns/antlers (gold)
+        // Horns/antlers (gold) - pointing up and back
         dragonPaint.color = dragonColors[1]
         val hornPath = Path()
-        // Left horn
-        hornPath.moveTo(headX - headRadius * 0.2f, headY - headRadius * 0.8f)
-        hornPath.lineTo(headX - headRadius * 0.5f, headY - headRadius * 1.6f)
-        hornPath.lineTo(headX, headY - headRadius * 0.9f)
+        // Main horn
+        hornPath.moveTo(headX, headY - headRadius * 0.8f)
+        hornPath.lineTo(headX + headRadius * 0.3f, headY - headRadius * 1.6f)
+        hornPath.lineTo(headX + headRadius * 0.5f, headY - headRadius * 0.9f)
         hornPath.close()
         canvas.drawPath(hornPath, dragonPaint)
         
-        // Right horn  
+        // Secondary horn (smaller, behind)
         hornPath.reset()
-        hornPath.moveTo(headX - headRadius * 0.2f, headY + headRadius * 0.2f)
-        hornPath.lineTo(headX - headRadius * 0.4f, headY + headRadius * 0.9f)
-        hornPath.lineTo(headX + headRadius * 0.1f, headY + headRadius * 0.3f)
+        hornPath.moveTo(headX + headRadius * 0.4f, headY - headRadius * 0.6f)
+        hornPath.lineTo(headX + headRadius * 0.7f, headY - headRadius * 1.2f)
+        hornPath.lineTo(headX + headRadius * 0.8f, headY - headRadius * 0.7f)
         hornPath.close()
         canvas.drawPath(hornPath, dragonPaint)
         

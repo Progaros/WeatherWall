@@ -137,6 +137,26 @@
             app:min="25"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_hill_distance"
+            android:title="Hill Distance"
+            android:summary="Pushes hills away (0=at camera, 100=near mountains)"
+            android:defaultValue="0"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_hill_depth_spread"
+            android:title="Hill Depth Spread"
+            android:summary="Z-axis spread (0=flat layer, 100=deep range)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
     </PreferenceCategory>
 
     <PreferenceCategory android:title="Trees">

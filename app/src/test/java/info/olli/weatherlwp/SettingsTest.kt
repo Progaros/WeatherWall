@@ -70,6 +70,67 @@ class SettingsTest {
         assertEquals("Hill end should be 0.8", 0.8f, hillEndY, 0.001f)
         assertTrue("Start should be less than end", hillStartY < hillEndY)
     }
+    
+    // T3b: Test hill distance settings
+    @Test
+    fun testHillDistanceSettings() {
+        // Default: distance=0 (at camera)
+        `when`(mockPrefs.getInt("pref_hill_distance", 0)).thenReturn(0)
+        val distanceNear = mockPrefs.getInt("pref_hill_distance", 0) / 100f
+        assertEquals("Distance 0 should be at camera", 0f, distanceNear, 0.001f)
+        
+        // Max: distance=100 (near mountains)
+        `when`(mockPrefs.getInt("pref_hill_distance", 0)).thenReturn(100)
+        val distanceFar = mockPrefs.getInt("pref_hill_distance", 0) / 100f
+        assertEquals("Distance 100 should be near mountains", 1f, distanceFar, 0.001f)
+        
+        // Mid: distance=50
+        `when`(mockPrefs.getInt("pref_hill_distance", 0)).thenReturn(50)
+        val distanceMid = mockPrefs.getInt("pref_hill_distance", 0) / 100f
+        assertEquals("Distance 50 should be midway", 0.5f, distanceMid, 0.001f)
+    }
+    
+    // T3c: Test hill depth spread settings
+    @Test
+    fun testHillDepthSpreadSettings() {
+        // Default: spread=50 (half depth)
+        `when`(mockPrefs.getInt("pref_hill_depth_spread", 50)).thenReturn(50)
+        val spreadHalf = mockPrefs.getInt("pref_hill_depth_spread", 50) / 100f
+        assertEquals("Spread 50 should be 0.5", 0.5f, spreadHalf, 0.001f)
+        
+        // Min: spread=0 (flat layer)
+        `when`(mockPrefs.getInt("pref_hill_depth_spread", 50)).thenReturn(0)
+        val spreadFlat = mockPrefs.getInt("pref_hill_depth_spread", 50) / 100f
+        assertEquals("Spread 0 should be flat", 0f, spreadFlat, 0.001f)
+        
+        // Max: spread=100 (deep range)
+        `when`(mockPrefs.getInt("pref_hill_depth_spread", 50)).thenReturn(100)
+        val spreadFull = mockPrefs.getInt("pref_hill_depth_spread", 50) / 100f
+        assertEquals("Spread 100 should be full", 1f, spreadFull, 0.001f)
+    }
+    
+    // T3d: Test hill distance and depth spread interaction
+    @Test
+    fun testHillDepthCalculation() {
+        // Test the depth calculation formula
+        val hillDistance = 0.5f
+        val hillDepthSpread = 0.3f
+        val baseDepth = 0.5f // Middle hill
+        
+        // Calculate effective depth using same formula as TerrainLayer
+        val effectiveSpread = hillDepthSpread * (1f - hillDistance)
+        val minDepth = 1f - hillDistance - effectiveSpread
+        val maxDepth = 1f - hillDistance
+        val depth = minDepth + baseDepth * (maxDepth - minDepth)
+        
+        // At distance=0.5, spread=0.3: effectiveSpread = 0.3 * 0.5 = 0.15
+        // minDepth = 1 - 0.5 - 0.15 = 0.35, maxDepth = 1 - 0.5 = 0.5
+        // depth for baseDepth=0.5: 0.35 + 0.5 * (0.5 - 0.35) = 0.35 + 0.075 = 0.425
+        assertEquals("Effective spread calculation", 0.15f, effectiveSpread, 0.001f)
+        assertEquals("Min depth calculation", 0.35f, minDepth, 0.001f)
+        assertEquals("Max depth calculation", 0.5f, maxDepth, 0.001f)
+        assertEquals("Depth for middle hill", 0.425f, depth, 0.001f)
+    }
 
     // T5: Test color variation range
     @Test

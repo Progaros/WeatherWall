@@ -12,7 +12,7 @@ import kotlin.random.Random
 /**
  * Shooting Star - Night only, fast diagonal streak with gradient tail.
  * Uses absolute time for deterministic position across preview/wallpaper.
- * Spawns off-screen (top-left) and moves through the visible field.
+ * Spawns off-screen (top-left) and fades out near end (burning up effect).
  */
 class ShootingStarEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
     override val layer = EventLayer.FAR_SKY  // Draw behind mountains
@@ -21,13 +21,19 @@ class ShootingStarEvent(random: Random, override val spawnTimeMs: Long = System.
     private val startX = -0.15f + random.nextFloat() * 0.3f  // -0.15 to 0.15 (mostly off-screen left)
     private val startY = -0.1f + random.nextFloat() * 0.1f   // -0.1 to 0.0 (off-screen top)
     private val angle = 0.4f + random.nextFloat() * 0.3f     // ~23-40 degrees down-right
-    private val speed = 0.0005f + random.nextFloat() * 0.00025f  // Slowed 4x - more graceful streak
+    private val speed = 0.00025f + random.nextFloat() * 0.00015f  // Slowed further - more graceful
     private val length = 0.08f + random.nextFloat() * 0.06f
     
     // Delay before the shooting star becomes visible (~1 second)
     private val spawnDelayMs = 800L + (random.nextFloat() * 400).toLong()  // 0.8-1.2 sec
     
-    override val durationMs: Long = spawnDelayMs + ((1.2f + length) / speed).toLong()
+    // Total travel distance before fade-out completes (travel across 80-100% of screen width)
+    private val totalTravel = 0.8f + random.nextFloat() * 0.2f
+    
+    // Fade out during last 20% of journey
+    private val fadeStartProgress = totalTravel * 0.8f
+    
+    override val durationMs: Long = spawnDelayMs + (totalTravel / speed).toLong()
     
     private val trailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -47,6 +53,17 @@ class ShootingStarEvent(random: Random, override val spawnTimeMs: Long = System.
         val activeElapsedMs = elapsedMs - spawnDelayMs
         val progress = speed * activeElapsedMs
         
+        // Calculate fade-out alpha (1.0 -> 0.0 during last 20% of journey)
+        val fadeAlpha = if (progress >= fadeStartProgress) {
+            val fadeProgress = (progress - fadeStartProgress) / (totalTravel - fadeStartProgress)
+            (1f - fadeProgress).coerceIn(0f, 1f)
+        } else {
+            1f
+        }
+        
+        // Skip drawing if fully faded
+        if (fadeAlpha <= 0f) return
+        
         // Scale size to 0.5% of height - thin elegant streak
         val unit = height * 0.005f
         
@@ -57,13 +74,20 @@ class ShootingStarEvent(random: Random, override val spawnTimeMs: Long = System.
         
         val headX = (startX + cos(angle) * progress * 0.5f) * width - extendedOffset
         val headY = (startY + sin(angle) * progress * 0.5f) * height
-        val tailX = (startX + cos(angle) * (progress - length) * 0.5f) * width - extendedOffset
-        val tailY = (startY + sin(angle) * (progress - length) * 0.5f) * height
+        
+        // Tail length shrinks during fade-out (meteor burning up)
+        val effectiveLength = length * (0.3f + 0.7f * fadeAlpha)
+        val tailX = (startX + cos(angle) * (progress - effectiveLength) * 0.5f) * width - extendedOffset
+        val tailY = (startY + sin(angle) * (progress - effectiveLength) * 0.5f) * height
+        
+        // Apply fade alpha to all colors
+        val headAlpha = (255 * fadeAlpha).toInt()
+        val glowAlpha = (200 * fadeAlpha).toInt()
         
         trailPaint.shader = android.graphics.LinearGradient(
             tailX, tailY, headX, headY,
             Color.argb(0, 255, 255, 255),
-            Color.argb(255, 255, 255, 240),
+            Color.argb(headAlpha, 255, 255, 240),
             android.graphics.Shader.TileMode.CLAMP
         )
         trailPaint.strokeWidth = 3f * unit
@@ -72,14 +96,16 @@ class ShootingStarEvent(random: Random, override val spawnTimeMs: Long = System.
         trailPaint.shader = android.graphics.LinearGradient(
             tailX, tailY, headX, headY,
             Color.argb(0, 255, 255, 255),
-            Color.argb(200, 255, 255, 200),
+            Color.argb(glowAlpha, 255, 255, 200),
             android.graphics.Shader.TileMode.CLAMP
         )
         trailPaint.strokeWidth = 1.5f * unit
         canvas.drawLine(tailX + (headX-tailX)*0.5f, tailY + (headY-tailY)*0.5f, headX, headY, trailPaint)
         
-        paint.color = Color.WHITE
-        canvas.drawCircle(headX, headY, 2.5f * unit, paint)
+        paint.color = Color.argb(headAlpha, 255, 255, 255)
+        // Head shrinks during fade-out
+        val headSize = 2.5f * unit * (0.5f + 0.5f * fadeAlpha)
+        canvas.drawCircle(headX, headY, headSize, paint)
         
         trailPaint.shader = null
         canvas.restore()

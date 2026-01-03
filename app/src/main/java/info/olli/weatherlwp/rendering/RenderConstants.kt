@@ -257,7 +257,7 @@ object RenderConstants {
     const val EVENT_DURATION_AIRPLANE = 25000L
     const val EVENT_DURATION_BIRD_FLOCK = 12000L
     const val EVENT_DURATION_EAGLE = 18000L
-    const val EVENT_DURATION_SHOOTING_STAR = 2000L
+    const val EVENT_DURATION_SHOOTING_STAR = 4000L  // Reference only - actual is calculated (fade-out effect)
     const val EVENT_DURATION_BALLOON = 40000L
     const val EVENT_DURATION_BUTTERFLY = 15000L
     const val EVENT_DURATION_RABBIT = 8000L
