@@ -178,6 +178,9 @@ data class SimulationState(
      * 
      * CloudLayer uses cloud groups (each group is one visual cloud blob).
      * Groups have internal puffs controlled by fluffiness setting.
+     * 
+     * AUTO mode uses cloudCover data from weather API.
+     * Only THUNDERSTORM forces storm clouds; rain/snow use cloudCover.
      */
     fun getCloudCount(): Int = when (cloudDensity) {
         CloudDensity.NONE -> 0
@@ -186,14 +189,29 @@ data class SimulationState(
         CloudDensity.HEAVY -> 25        // Significant coverage
         CloudDensity.OVERCAST -> 50     // Full sky coverage (increased from 35)
         CloudDensity.AUTO -> when (weather) {
-            WeatherType.CLEAR -> 2              // Maybe one wispy cloud
-            WeatherType.PARTLY_CLOUDY -> 8      // A few clouds
-            WeatherType.CLOUDY -> 22            // Good coverage
-            WeatherType.OVERCAST -> 50          // Full coverage (increased from 35)
-            WeatherType.RAIN, WeatherType.THUNDERSTORM -> 45  // Near full coverage
-            WeatherType.SNOW -> 30              // Moderate-heavy
-            WeatherType.HAIL -> 40              // Heavy
-            WeatherType.FOG -> 50               // Full coverage
+            // Thunderstorm ALWAYS forces storm clouds (45+)
+            WeatherType.THUNDERSTORM -> 45
+            // Fog still needs full coverage for atmospheric effect
+            WeatherType.FOG -> 50
+            // All other weather types: use cloudCover data from Breezy Weather
+            // This includes RAIN, SNOW, HAIL - they don't automatically create clouds
+            else -> cloudCoverToCloudCount(cloudCover)
+        }
+    }
+    
+    /**
+     * Convert cloudCover percentage (0-1) to cloud count.
+     * Maps weather API cloud cover data to visual cloud density.
+     */
+    private fun cloudCoverToCloudCount(cover: Float): Int {
+        // Map 0-100% cloud cover to 0-50 clouds
+        // Use non-linear mapping so low cover doesn't create too many clouds
+        return when {
+            cover < 0.1f -> (cover * 20).toInt().coerceIn(0, 2)      // 0-10% → 0-2 clouds
+            cover < 0.3f -> (2 + (cover - 0.1f) * 30).toInt()        // 10-30% → 2-8 clouds
+            cover < 0.6f -> (8 + (cover - 0.3f) * 47).toInt()        // 30-60% → 8-22 clouds
+            cover < 0.85f -> (22 + (cover - 0.6f) * 92).toInt()      // 60-85% → 22-45 clouds
+            else -> (45 + (cover - 0.85f) * 33).toInt().coerceAtMost(50)  // 85-100% → 45-50 clouds
         }
     }
     

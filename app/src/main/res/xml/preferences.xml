@@ -67,7 +67,7 @@
             android:key="pref_mountain_bottom_offset"
             android:title="Mountain Bottom Offset"
             android:summary="Shift mountains up (0=at bottom, 50=halfway up screen)"
-            android:defaultValue="0"
+            android:defaultValue="7"
             android:max="50"
             app:min="0"
             app:showSeekBarValue="true"

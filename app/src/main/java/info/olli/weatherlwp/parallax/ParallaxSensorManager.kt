@@ -32,6 +32,12 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         private const val FULL_TILT_RADIANS = (45f * PI / 180f).toFloat()
         private const val DEADZONE = 0.03f
         
+        // Gyroscope drift prevention: ignore very small angular velocities
+        // Typical gyro noise is ~0.01 rad/s, so 0.03 rad/s (~1.7°/s) filters noise
+        private const val GYRO_DEADZONE_RADS = 0.03f
+        // Gyro accumulated angle decay (prevents drift buildup)
+        private const val GYRO_DECAY_RATE = 0.998f  // Slowly decay to center
+        
         // Hysteresis thresholds for isScreenDown to prevent flip-flopping at vertical
         // When |z| is small (near vertical), we freeze the current state
         private const val SCREEN_DOWN_ON = -0.25f   // Enter "screen down" when z drops below this
@@ -51,6 +57,11 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         private const val WIGGLE_ROLL_THRESHOLD_RAD = 0.2f  // Minimum roll angle change (~11 degrees)
         private const val WIGGLE_TIME_WINDOW_MS = 800L     // Time window to detect wiggles
         private const val WIGGLE_TRIGGER_COUNT = 4         // Direction changes to trigger (4 = 2 back-and-forth)
+        
+        // Default gyro wiggle thresholds (tuned via sensitivity)
+        private const val DEFAULT_GYRO_AXIS_THRESHOLD = 1.3f  // rad/s angular velocity threshold
+        private const val DEFAULT_GYRO_WINDOW_MS = 900L       // Time window for wiggle detection
+        private const val DEFAULT_GYRO_TRIGGER_CHANGES = 4    // Direction changes to trigger
     }
     
     interface Listener {
@@ -148,6 +159,19 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     private var rollDirectionChanges = 0
     private var lastRollDirection = 0  // -1=left, 0=none, 1=right
     private var rollWiggleStartTime = 0L
+    
+    // Gyroscope wiggle detection state - detects wrist wiggle via angular velocity
+    private var gyroLastSign = 0
+    private var gyroSignChanges = 0
+    private var gyroWiggleStart = 0L
+    
+    // Configurable thresholds (tuned by sensitivity)
+    private var shakeThresholdGravity = SHAKE_THRESHOLD_GRAVITY
+    private var shakeTriggerCount = SHAKE_TRIGGER_COUNT
+    private var shakeSlopTimeMs = SHAKE_SLOP_TIME_MS
+    private var gyroAxisThreshold = DEFAULT_GYRO_AXIS_THRESHOLD
+    private var gyroWindowMs = DEFAULT_GYRO_WINDOW_MS
+    private var gyroTriggerChanges = DEFAULT_GYRO_TRIGGER_CHANGES
 
     fun setListener(l: Listener) { listener = l }
     
@@ -171,15 +195,31 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     /**
      * Configure shake detection.
      * @param enabled Whether shake detection is enabled
-     * @param sensitivity Not used - gForce threshold is fixed at 2.7g for reliability
+     * @param sensitivity 0.0 = hard shake only, 1.0 = sensitive wiggle detection
      */
     fun setShakeSettings(enabled: Boolean, sensitivity: Float = 0.5f) {
         shakeEnabled = enabled
         
+        // Map sensitivity to thresholds: higher sensitivity = lower thresholds, fewer required changes
+        val s = sensitivity.coerceIn(0f, 1f)
+        
+        // Accelerometer: high sensitivity => lower g-force threshold, fewer shakes needed
+        shakeThresholdGravity = lerp(2.9f, 1.8f, s)
+        shakeTriggerCount = if (s > 0.7f) 2 else 3
+        shakeSlopTimeMs = if (s > 0.7f) 250L else 400L
+        
+        // Gyroscope wiggle: high sensitivity => lower angular velocity threshold
+        gyroAxisThreshold = lerp(1.8f, 0.9f, s)
+        gyroWindowMs = if (s > 0.6f) 1100L else 900L
+        gyroTriggerChanges = if (s > 0.7f) 3 else 4
+        
+        Log.d(TAG, "Shake settings: enabled=$enabled sens=$s gThresh=$shakeThresholdGravity gyroThresh=$gyroAxisThreshold")
+        
         // If manager is already started, re-register shake sensors to handle runtime toggle
         if (isStarted) {
-            // Unregister accelerometer if it's not the active parallax sensor
+            // Unregister sensors if not the active parallax sensor
             accelerometer?.let { if (it != activeSensor) sensorManager.unregisterListener(this, it) }
+            gyroscope?.let { if (it != activeSensor) sensorManager.unregisterListener(this, it) }
             
             // Re-register if shake is now enabled
             registerShakeSensors()
@@ -188,9 +228,12 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         }
     }
     
+    /** Linear interpolation between a and b */
+    private fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
+    
     /**
      * Register shake detection sensors.
-     * Uses only accelerometer with gForce detection (proven reliable across devices).
+     * Uses accelerometer with gForce detection and gyroscope for wiggle detection.
      */
     private fun registerShakeSensors() {
         if (!shakeEnabled) {
@@ -200,6 +243,11 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         // Reset shake state
         shakeTimestamp = 0L
         shakeCount = 0
+        
+        // Reset gyro wiggle state
+        gyroLastSign = 0
+        gyroSignChanges = 0
+        gyroWiggleStart = 0L
         
         // ALWAYS register accelerometer for shake - gForce detection is proven reliable
         // We don't use LINEAR_ACCELERATION anymore as it's often too smoothed on some devices
@@ -211,7 +259,16 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             false
         }
         
-        Log.d(TAG, "Shake sensor registered: accel=$okAccel")
+        // Register gyroscope for wiggle detection (even when rotation vector is active for parallax)
+        val okGyro = if (gyroscope != null && gyroscope != activeSensor) {
+            sensorManager.registerListener(this, gyroscope, SensorManager.SENSOR_DELAY_GAME)
+        } else if (gyroscope == activeSensor) {
+            true  // Already registered as active sensor
+        } else {
+            false
+        }
+        
+        Log.d(TAG, "Shake sensors registered: accel=$okAccel gyro=$okGyro")
     }
 
     fun start() {
@@ -318,6 +375,17 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
                     return
                 }
             }
+            
+            // Process gyro wiggle detection when gyroscope events come in
+            // This runs when shake is enabled, even if gyro is not the active parallax sensor
+            if (event.sensor.type == Sensor.TYPE_GYROSCOPE && shakeEnabled) {
+                detectGyroWiggle(event.values)
+                
+                // Only use gyroscope for parallax if it's the active sensor
+                if (activeSensor?.type != Sensor.TYPE_GYROSCOPE) {
+                    return
+                }
+            }
 
             when (event.sensor.type) {
                 Sensor.TYPE_GYROSCOPE -> {
@@ -370,10 +438,15 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             else -> Triple(values[0], values[1], values[2])
         }
         
-        // Add remapped values to averagers for smoothing
-        avgPitch.add(rateX)
-        avgRoll.add(rateY)
-        avgYaw.add(rateZ)
+        // Apply dead zone to filter sensor noise (prevents jitter buildup on flat surfaces)
+        val filteredRateX = if (abs(rateX) < GYRO_DEADZONE_RADS) 0f else rateX
+        val filteredRateY = if (abs(rateY) < GYRO_DEADZONE_RADS) 0f else rateY
+        val filteredRateZ = if (abs(rateZ) < GYRO_DEADZONE_RADS) 0f else rateZ
+        
+        // Add filtered values to averagers for smoothing
+        avgPitch.add(filteredRateX)
+        avgRoll.add(filteredRateY)
+        avgYaw.add(filteredRateZ)
         
         // Calculate time delta
         val currentTime = System.nanoTime()
@@ -388,9 +461,24 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         // Reference formula: f = deltaTimeNanos * 1e-8 * 6.0 * DEG_TO_RAD
         val f = deltaTimeNanos * 1e-8f * 6.0f * 0.017453292f
         
-        // Accumulate averaged angular velocity into angle
-        gyroPitch = (gyroPitch + avgPitch.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
-        gyroRoll = (gyroRoll + avgRoll.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
+        // Get averaged rates
+        val avgPitchRate = avgPitch.calc()
+        val avgRollRate = avgRoll.calc()
+        
+        // Accumulate averaged angular velocity into angle (only if above noise floor)
+        if (abs(avgPitchRate) >= GYRO_DEADZONE_RADS) {
+            gyroPitch = (gyroPitch + avgPitchRate * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
+        } else {
+            // Decay toward zero when no significant motion (prevents drift buildup)
+            gyroPitch *= GYRO_DECAY_RATE
+        }
+        
+        if (abs(avgRollRate) >= GYRO_DEADZONE_RADS) {
+            gyroRoll = (gyroRoll + avgRollRate * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
+        } else {
+            gyroRoll *= GYRO_DECAY_RATE
+        }
+        
         gyroYaw = (gyroYaw + avgYaw.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
         
         // Update time AFTER accumulation
@@ -415,7 +503,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
      * 
      * At rest, gForce ≈ 1.0 (gravity only)
      * During shake, gForce exceeds 2.0+ (additional acceleration)
-     * Threshold of 2.7g filters out normal movements while detecting real shakes.
+     * Threshold is tuned by sensitivity setting.
      */
     private fun detectShakeFromAccelerometer(values: FloatArray) {
         val g = SensorManager.GRAVITY_EARTH
@@ -424,8 +512,8 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         val gZ = values[2] / g
         val gForce = sqrt(gX * gX + gY * gY + gZ * gZ)
         
-        // Only process if gForce exceeds threshold (2.7g = significant shake)
-        if (gForce < SHAKE_THRESHOLD_GRAVITY) return
+        // Only process if gForce exceeds threshold (tuned by sensitivity)
+        if (gForce < shakeThresholdGravity) return
         
         val now = System.currentTimeMillis()
         
@@ -433,7 +521,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         if (now - lastShakeTime < SHAKE_COOLDOWN_MS) return
         
         // Ignore shakes too close to each other (debounce)
-        if (shakeTimestamp + SHAKE_SLOP_TIME_MS > now) return
+        if (shakeTimestamp + shakeSlopTimeMs > now) return
         
         // Reset count if no shakes for a while
         if (shakeTimestamp + SHAKE_COUNT_RESET_TIME_MS < now) {
@@ -445,11 +533,68 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         
         Log.d(TAG, "Shake count=$shakeCount gForce=${"%.2f".format(gForce)}")
         
-        if (shakeCount >= SHAKE_TRIGGER_COUNT) {
+        if (shakeCount >= shakeTriggerCount) {
             shakeCount = 0
             lastShakeTime = now
             Log.d(TAG, "Shake gesture detected! Triggering listener")
             shakeListener?.onShake()
+        }
+    }
+    
+    /**
+     * Detect wrist wiggle from gyroscope angular velocity.
+     * This is the recommended rocket trigger for "wiggle in hand" gesture.
+     * 
+     * Uses yaw (Z-axis) angular velocity sign changes to detect quick wrist turns.
+     * Works better than accelerometer gForce for subtle hand movements.
+     * 
+     * @param values Gyroscope sensor values [x=pitch rate, y=roll rate, z=yaw rate] in rad/s
+     */
+    private fun detectGyroWiggle(values: FloatArray) {
+        val now = System.currentTimeMillis()
+        
+        // Check cooldown after a successful shake trigger (shared with other detectors)
+        if (now - lastShakeTime < SHAKE_COOLDOWN_MS) return
+        
+        // Use yaw (Z-axis) for wrist wiggle detection - rotates when you twist your wrist
+        val yawRate = values[2]
+        
+        // Ignore small movements below threshold
+        if (abs(yawRate) < gyroAxisThreshold) return
+        
+        // Determine direction: positive = right, negative = left
+        val sign = if (yawRate > 0) 1 else -1
+        
+        // Check if direction changed from last movement
+        if (gyroLastSign != 0 && sign != gyroLastSign) {
+            // Direction changed! This is a wiggle
+            if (gyroSignChanges == 0) {
+                gyroWiggleStart = now
+            }
+            gyroSignChanges++
+            
+            Log.d(TAG, "Gyro wiggle change=$gyroSignChanges yawRate=${"%.2f".format(yawRate)}")
+            
+            // Check if enough changes within time window
+            if (now - gyroWiggleStart <= gyroWindowMs && gyroSignChanges >= gyroTriggerChanges) {
+                gyroSignChanges = 0
+                gyroWiggleStart = 0L
+                gyroLastSign = 0
+                lastShakeTime = now
+                Log.d(TAG, "Gyro wiggle gesture detected! Triggering listener")
+                shakeListener?.onShake()
+                return
+            }
+        }
+        
+        // Reset if too much time passed since first wiggle
+        if (gyroSignChanges > 0 && now - gyroWiggleStart > gyroWindowMs) {
+            gyroSignChanges = 0
+            gyroWiggleStart = 0L
+            gyroLastSign = 0
+            Log.d(TAG, "Gyro wiggle reset - timeout")
+        } else {
+            gyroLastSign = sign
         }
     }
     

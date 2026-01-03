@@ -132,6 +132,11 @@ class ParallaxCalculator {
     /**
      * Update parallax state each frame.
      * Call this every frame before rendering.
+     * 
+     * Return-to-center behavior:
+     * - returnSpeed controls constant movement toward center (0 = no return, 1 = fast return)
+     * - Movement is proportional to distance from center (slower when close)
+     * - When tilt is active, position follows tilt; when tilt is released, position drifts to center
      */
     fun update(deltaTimeMs: Long = 16L) {
         val deltaScale = deltaTimeMs / 16f  // Normalize to ~60fps
@@ -142,8 +147,6 @@ class ParallaxCalculator {
         
         // Calculate effective max offset based on canvas height percentage
         // This ensures movement is proportional to screen size (e.g., 10% = 192px on 1920p screen)
-        // For vertical movement: use maxOffsetPercent of canvas height
-        // For horizontal movement: use same pixel value (height-based) * aspectRatioCompensation
         val effectiveMaxOffset = if (maxOffsetPercent > 0) {
             canvasHeight * (maxOffsetPercent / 100f)
         } else {
@@ -151,63 +154,54 @@ class ParallaxCalculator {
             maxOffsetPx * scaleFactor
         }
         
-        // Calculate target position from tilt
-        // Tilt values are -1 to 1, map to pixel offset
-        // Both axes use the same base offset (height-based) for consistent movement
-        // Aspect ratio compensation only affects horizontal for fine-tuning
-        targetX = tilt.x * effectiveMaxOffset * strength * aspectRatioCompensation
-        targetY = tilt.y * effectiveMaxOffset * strength
+        // Calculate target position from tilt (where tilt alone would put us)
+        val tiltTargetX = tilt.x * effectiveMaxOffset * strength * aspectRatioCompensation
+        val tiltTargetY = tilt.y * effectiveMaxOffset * strength
         
-        // Clamp target to bounds
-        // X limit uses aspect ratio compensation for horizontal adjustment
+        // Clamp to bounds
         val xLimit = effectiveMaxOffset * aspectRatioCompensation
-        targetX = targetX.coerceIn(-xLimit, xLimit)
-        targetY = targetY.coerceIn(-effectiveMaxOffset, effectiveMaxOffset)
+        targetX = tiltTargetX.coerceIn(-xLimit, xLimit)
+        targetY = tiltTargetY.coerceIn(-effectiveMaxOffset, effectiveMaxOffset)
         
-        // Handle return-to-center behavior when tilt is near zero
-        if (tiltMagnitude < RETURN_TILT_THRESHOLD) {
-            if (returnSpeed > 0.01f) {
-                // returnSpeed > 0: Apply return-to-center with logarithmic scaling
-                // Calculate return rate using logarithmic scale for natural feel
-                // ln(1+x)/ln(2) gives 0 at x=0, 1 at x=1, with more weight to higher values
-                val logScale = kotlin.math.ln(1f + returnSpeed) / kotlin.math.ln(2f)
-                
-                // Base return rate from logarithmic scale (0 to ~0.15 per frame at max)
-                val baseReturnRate = logScale * 0.15f
-                
-                // Calculate current distance from center
-                val distFromCenter = kotlin.math.sqrt(positionX * positionX + positionY * positionY)
-                
-                // Slow down return speed when close to center (proportional to distance)
-                // This prevents jitter at center and gives a more natural deceleration
-                val distanceFactor = (distFromCenter / effectiveMaxOffset).coerceIn(0.1f, 1f)
-                
-                // Apply constant movement toward center (not percentage-based)
-                // Movement amount = rate * distance factor * delta time
-                val movementAmount = baseReturnRate * distanceFactor * deltaScale
-                
-                // Calculate direction to center and apply movement
-                if (distFromCenter > 0.1f) {
-                    val moveX = (positionX / distFromCenter) * movementAmount * effectiveMaxOffset
-                    val moveY = (positionY / distFromCenter) * movementAmount * effectiveMaxOffset
-                    targetX = positionX - moveX
-                    targetY = positionY - moveY
-                } else {
-                    targetX = 0f
-                    targetY = 0f
-                }
+        // Apply return-to-center force when tilt is near zero
+        // This creates a constant drift toward center, controlled by returnSpeed
+        // returnSpeed: 0.0 = no return (position holds), 1.0 = fast return
+        if (tiltMagnitude < RETURN_TILT_THRESHOLD && returnSpeed > 0.001f) {
+            // Calculate return rate using logarithmic scale for natural feel
+            // ln(1+x)/ln(2) gives 0 at x=0, 1 at x=1
+            val logScale = kotlin.math.ln(1f + returnSpeed) / kotlin.math.ln(2f)
+            
+            // Calculate current distance from center
+            val distFromCenter = kotlin.math.sqrt(positionX * positionX + positionY * positionY)
+            
+            // Movement is proportional to distance (slower when close to center)
+            // This gives natural deceleration and prevents jitter
+            val distanceFactor = (distFromCenter / effectiveMaxOffset).coerceIn(0.05f, 1f)
+            
+            // Base movement per frame: logScale * 0.2 gives good range
+            // At returnSpeed=1: move ~20% of scaled distance per frame
+            // At returnSpeed=0.15 (default): move ~3% of scaled distance per frame
+            val moveRate = logScale * 0.2f * distanceFactor * deltaScale
+            
+            if (distFromCenter > 0.5f) {
+                // Move toward center by a fixed amount based on current position
+                val moveX = positionX * moveRate
+                val moveY = positionY * moveRate
+                targetX = positionX - moveX
+                targetY = positionY - moveY
             } else {
-                // returnSpeed = 0: Hold current position (no return to center)
-                targetX = positionX
-                targetY = positionY
+                // Very close to center - snap to center
+                targetX = 0f
+                targetY = 0f
             }
+        } else if (tiltMagnitude < RETURN_TILT_THRESHOLD && returnSpeed <= 0.001f) {
+            // returnSpeed = 0: Hold current position (no return to center)
+            targetX = positionX
+            targetY = positionY
         }
         
         // Calculate effective lerp rate based on smoothing setting
         // Higher smoothing = slower response (smaller lerp rate)
-        // At smoothing=0: full lerp rate for instant response
-        // At smoothing=1: reduced lerp rate for smooth motion
-        // Clamp to max 1.0 to prevent overshoot after stalls (e.g., GC, doze)
         val effectiveLerpRate = (POSITION_LERP_RATE * (1f - smoothing * 0.6f) * deltaScale).coerceAtMost(1f)
         
         // Smoothly interpolate position toward target

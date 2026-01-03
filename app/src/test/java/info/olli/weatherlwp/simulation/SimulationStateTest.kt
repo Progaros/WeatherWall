@@ -80,70 +80,96 @@ class SimulationStateTest {
     }
 
     @Test
-    fun `getCloudCount for AUTO depends on weather - CLEAR`() {
+    fun `getCloudCount for AUTO depends on weather - CLEAR with cloudCover`() {
+        // CLEAR with 10% cloud cover = 2 clouds
         val state = SimulationState.default().copy(
             cloudDensity = CloudDensity.AUTO,
-            weather = WeatherType.CLEAR
+            weather = WeatherType.CLEAR,
+            cloudCover = 0.1f
         )
         assertEquals(2, state.getCloudCount())
     }
 
     @Test
-    fun `getCloudCount for AUTO depends on weather - PARTLY_CLOUDY`() {
+    fun `getCloudCount for AUTO depends on weather - PARTLY_CLOUDY uses cloudCover`() {
+        // PARTLY_CLOUDY with 40% cloud cover = ~11 clouds
         val state = SimulationState.default().copy(
             cloudDensity = CloudDensity.AUTO,
-            weather = WeatherType.PARTLY_CLOUDY
+            weather = WeatherType.PARTLY_CLOUDY,
+            cloudCover = 0.4f
         )
-        assertEquals(8, state.getCloudCount())
+        assertTrue(state.getCloudCount() in 10..14)
     }
 
     @Test
-    fun `getCloudCount for AUTO depends on weather - CLOUDY`() {
+    fun `getCloudCount for AUTO depends on weather - CLOUDY uses cloudCover`() {
+        // CLOUDY with 70% cloud cover = ~31 clouds
         val state = SimulationState.default().copy(
             cloudDensity = CloudDensity.AUTO,
-            weather = WeatherType.CLOUDY
+            weather = WeatherType.CLOUDY,
+            cloudCover = 0.7f
         )
-        assertEquals(22, state.getCloudCount())
+        assertTrue(state.getCloudCount() in 28..35)
     }
 
     @Test
-    fun `getCloudCount for AUTO depends on weather - OVERCAST`() {
+    fun `getCloudCount for AUTO depends on weather - OVERCAST uses cloudCover`() {
+        // OVERCAST with 95% cloud cover = ~48 clouds
         val state = SimulationState.default().copy(
             cloudDensity = CloudDensity.AUTO,
-            weather = WeatherType.OVERCAST
+            weather = WeatherType.OVERCAST,
+            cloudCover = 0.95f
         )
-        assertEquals(50, state.getCloudCount())
+        assertTrue(state.getCloudCount() in 45..50)
     }
 
     @Test
-    fun `getCloudCount for AUTO depends on weather - RAIN`() {
+    fun `getCloudCount for AUTO - RAIN uses cloudCover not forced clouds`() {
+        // RAIN with 80% cloud cover uses cloudCover, not forced 45
         val state = SimulationState.default().copy(
             cloudDensity = CloudDensity.AUTO,
-            weather = WeatherType.RAIN
+            weather = WeatherType.RAIN,
+            cloudCover = 0.8f
+        )
+        assertTrue(state.getCloudCount() in 36..42)
+    }
+    
+    @Test
+    fun `getCloudCount for AUTO - RAIN with low cloudCover has few clouds`() {
+        // RAIN with only 20% cloud cover = few clouds (not forced 45)
+        val state = SimulationState.default().copy(
+            cloudDensity = CloudDensity.AUTO,
+            weather = WeatherType.RAIN,
+            cloudCover = 0.2f
+        )
+        assertTrue(state.getCloudCount() in 4..6)
+    }
+
+    @Test
+    fun `getCloudCount for AUTO depends on weather - THUNDERSTORM always forces clouds`() {
+        // THUNDERSTORM always forces 45 clouds regardless of cloudCover
+        val state = SimulationState.default().copy(
+            cloudDensity = CloudDensity.AUTO,
+            weather = WeatherType.THUNDERSTORM,
+            cloudCover = 0.1f  // Low cloudCover, but THUNDERSTORM ignores it
         )
         assertEquals(45, state.getCloudCount())
     }
 
     @Test
-    fun `getCloudCount for AUTO depends on weather - THUNDERSTORM`() {
+    fun `getCloudCount for AUTO - SNOW uses cloudCover not forced clouds`() {
+        // SNOW with 50% cloud cover uses cloudCover, not forced 30
         val state = SimulationState.default().copy(
             cloudDensity = CloudDensity.AUTO,
-            weather = WeatherType.THUNDERSTORM
+            weather = WeatherType.SNOW,
+            cloudCover = 0.5f
         )
-        assertEquals(45, state.getCloudCount())
+        assertTrue(state.getCloudCount() in 14..18)
     }
 
     @Test
-    fun `getCloudCount for AUTO depends on weather - SNOW`() {
-        val state = SimulationState.default().copy(
-            cloudDensity = CloudDensity.AUTO,
-            weather = WeatherType.SNOW
-        )
-        assertEquals(30, state.getCloudCount())
-    }
-
-    @Test
-    fun `getCloudCount for AUTO depends on weather - FOG`() {
+    fun `getCloudCount for AUTO depends on weather - FOG always forces clouds`() {
+        // FOG always forces 50 clouds for atmospheric effect
         val state = SimulationState.default().copy(
             cloudDensity = CloudDensity.AUTO,
             weather = WeatherType.FOG
@@ -310,5 +336,58 @@ class SimulationStateTest {
     fun `moonPhase of 1 is also new moon (cycle end)`() {
         val state = SimulationState.default().copy(moonPhase = 1f)
         assertEquals(1f, state.moonPhase, 0.01f)
+    }
+    
+    // ============== CloudCover to CloudCount Mapping Tests ==============
+    
+    @Test
+    fun `cloudCover 0 percent gives 0 clouds`() {
+        val state = SimulationState.default().copy(
+            cloudDensity = CloudDensity.AUTO,
+            weather = WeatherType.CLEAR,
+            cloudCover = 0f
+        )
+        assertEquals(0, state.getCloudCount())
+    }
+    
+    @Test
+    fun `cloudCover 5 percent gives 1 cloud`() {
+        val state = SimulationState.default().copy(
+            cloudDensity = CloudDensity.AUTO,
+            weather = WeatherType.CLEAR,
+            cloudCover = 0.05f
+        )
+        assertEquals(1, state.getCloudCount())
+    }
+    
+    @Test
+    fun `cloudCover 25 percent gives moderate clouds`() {
+        val state = SimulationState.default().copy(
+            cloudDensity = CloudDensity.AUTO,
+            weather = WeatherType.PARTLY_CLOUDY,
+            cloudCover = 0.25f
+        )
+        assertTrue("25% cover should give 5-7 clouds", state.getCloudCount() in 5..7)
+    }
+    
+    @Test
+    fun `cloudCover 100 percent gives maximum clouds`() {
+        val state = SimulationState.default().copy(
+            cloudDensity = CloudDensity.AUTO,
+            weather = WeatherType.OVERCAST,
+            cloudCover = 1f
+        )
+        assertEquals(50, state.getCloudCount())
+    }
+    
+    @Test
+    fun `HAIL uses cloudCover like rain and snow`() {
+        // HAIL with 60% cloud cover uses cloudCover, not forced clouds
+        val state = SimulationState.default().copy(
+            cloudDensity = CloudDensity.AUTO,
+            weather = WeatherType.HAIL,
+            cloudCover = 0.6f
+        )
+        assertTrue("HAIL at 60% cover should be ~22 clouds", state.getCloudCount() in 18..25)
     }
 }
