@@ -873,7 +873,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val newOpacity = opacityVal / 100f
         
         // Cloud speed setting: 0-100 -> 0.0-2.0 (50 = normal 1.0)
-        val speedVal = prefs.getInt("pref_cloud_speed", 50)
+        val speedVal = prefs.getInt("pref_cloud_speed", 5)
         cloudSpeedMultiplier = speedVal / 50f  // 0=frozen, 50=normal, 100=2x speed
         
         // Fluffiness/density multiplier: 50-300 -> 0.5-3.0 (controls puffs per cloud)

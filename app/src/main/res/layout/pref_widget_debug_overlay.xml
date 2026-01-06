@@ -6,7 +6,9 @@
     android:orientation="horizontal">
 
     <!-- Vertical divider to visually separate from preference text -->
+    <!-- Taps left of this: open configure dialog. Taps right: toggle switch. -->
     <View
+        android:id="@+id/debug_overlay_divider"
         android:layout_width="1dp"
         android:layout_height="32dp"
         android:layout_marginEnd="12dp"

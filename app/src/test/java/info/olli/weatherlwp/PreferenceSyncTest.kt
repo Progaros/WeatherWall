@@ -71,6 +71,12 @@ class PreferenceSyncTest {
                 defaultValue = "35",
                 min = 0,
                 max = 100
+            ),
+            SyncedPreference(
+                key = "pref_cloud_speed",
+                defaultValue = "5",
+                min = 0,
+                max = 100
             )
         )
     }

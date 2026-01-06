@@ -81,8 +81,8 @@
         <ListPreference
             android:key="pref_parallax_sensor_mode"
             android:title="Sensor Mode"
-            android:summary="gyroscope=smooth (default), rotation_vector=robust (any orientation)"
-            android:defaultValue="gyroscope"
+            android:summary="rotation_vector=robust (default), gyroscope=smooth"
+            android:defaultValue="rotation_vector"
             android:entries="@array/parallax_sensor_mode_entries"
             android:entryValues="@array/parallax_sensor_mode_values"
             android:dependency="pref_parallax_enabled" />
@@ -212,8 +212,8 @@
         <SeekBarPreference
             android:key="pref_cloud_opacity"
             android:title="Cloud Opacity"
-            android:summary="Transparency (10=faint, 50=normal, 100=solid)"
-            android:defaultValue="60"
+            android:summary="Transparency (10=faint, 40=normal, 100=solid)"
+            android:defaultValue="40"
             android:max="100"
             app:min="10"
             app:showSeekBarValue="true"
@@ -224,7 +224,7 @@
             android:key="pref_cloud_speed"
             android:title="Cloud Speed"
             android:summary="Movement speed (0=frozen, 50=normal, 100=fast)"
-            android:defaultValue="10"
+            android:defaultValue="5"
             android:max="100"
             app:min="0"
             app:showSeekBarValue="true"

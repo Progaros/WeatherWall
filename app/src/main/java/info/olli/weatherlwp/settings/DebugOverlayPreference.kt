@@ -4,6 +4,8 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.AttributeSet
+import android.view.MotionEvent
+import android.view.View
 import android.widget.Switch
 import androidx.appcompat.app.AlertDialog
 import androidx.preference.Preference
@@ -16,6 +18,10 @@ import info.olli.weatherlwp.rendering.DebugOverlayLayer
  * Custom preference for debug overlay settings.
  * Shows a switch on the right to enable/disable, and clicking the main area
  * opens a multi-select dialog to choose which debug items to display.
+ * 
+ * Touch behavior:
+ * - Tapping LEFT of the divider line: Opens the configure items dialog
+ * - Tapping RIGHT of the divider line (switch area): Toggles the switch
  */
 class DebugOverlayPreference @JvmOverloads constructor(
     context: Context,
@@ -42,33 +48,58 @@ class DebugOverlayPreference @JvmOverloads constructor(
         super.onBindViewHolder(holder)
         
         val switch = holder.findViewById(R.id.debug_overlay_switch) as? Switch
+        val divider = holder.findViewById(R.id.debug_overlay_divider) as? View
         switch?.isChecked = prefs.getBoolean(key, false)
         
-        // Switch click toggles enabled state
-        switch?.setOnCheckedChangeListener { _, isChecked ->
-            prefs.edit().putBoolean(key, isChecked).apply()
-            // Post to avoid RecyclerView layout issues
+        // Remove default listeners - we'll handle everything via touch
+        switch?.setOnCheckedChangeListener(null)
+        
+        // Use touch listener to determine which zone was tapped
+        holder.itemView.setOnTouchListener { view, event ->
+            if (event.action == MotionEvent.ACTION_UP) {
+                val dividerLeft = divider?.let { getDividerLeftPosition(holder.itemView, it) } 
+                    ?: (view.width - 100)  // Fallback: rightmost 100px is switch zone
+                
+                if (event.x >= dividerLeft) {
+                    // Tapped on switch area (right of divider) - toggle the switch
+                    toggleSwitch(switch)
+                } else {
+                    // Tapped on main area (left of divider) - open configure dialog
+                    showItemSelectionDialog()
+                }
+                true
+            } else {
+                false
+            }
+        }
+        
+        // Switch direct click also toggles
+        switch?.setOnClickListener {
+            toggleSwitch(switch)
+        }
+    }
+    
+    /**
+     * Get the left position of the divider relative to the parent itemView.
+     */
+    private fun getDividerLeftPosition(itemView: View, divider: View): Int {
+        val dividerLocation = IntArray(2)
+        val itemLocation = IntArray(2)
+        divider.getLocationOnScreen(dividerLocation)
+        itemView.getLocationOnScreen(itemLocation)
+        return dividerLocation[0] - itemLocation[0]
+    }
+    
+    private fun toggleSwitch(switch: Switch?) {
+        switch?.let { sw ->
+            val newState = !sw.isChecked
+            sw.isChecked = newState
+            prefs.edit().putBoolean(key, newState).apply()
             mainHandler.post { 
                 updateSummaryText()
                 notifyChanged()
             }
-            callChangeListener(isChecked)
-        }
-        
-        // Clicking the preference opens the item selection dialog
-        holder.itemView.setOnClickListener {
-            showItemSelectionDialog()
-        }
-        
-        // Prevent switch from intercepting all clicks
-        switch?.setOnClickListener { view ->
-            val sw = view as Switch
-            prefs.edit().putBoolean(key, sw.isChecked).apply()
-            mainHandler.post { 
-                updateSummaryText()
-                notifyChanged()
-            }
-            callChangeListener(sw.isChecked)
+            callChangeListener(newState)
         }
     }
     

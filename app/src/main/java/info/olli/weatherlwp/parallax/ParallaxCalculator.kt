@@ -24,9 +24,6 @@ class ParallaxCalculator {
     companion object {
         /** How fast position approaches target (per frame, 0-1) - increased for faster response */
         private const val POSITION_LERP_RATE = 0.5f
-        
-        /** Tilt magnitude below which return-to-center kicks in */
-        private const val RETURN_TILT_THRESHOLD = 0.05f
     }
     
     // Tilt holder for atomic operations (lock-free)
@@ -88,14 +85,13 @@ class ParallaxCalculator {
     }
     
     /**
-     * Return speed: how fast position drifts back to center when tilt is zero.
-     * 0.0 = no return (scene stays where it is)
-     * 0.5 = slow constant return
-     * 1.0 = fast constant return
-     * Uses logarithmic scale for natural feel.
-     * Maps from pref setting: 0=no return, 1-99=slow to fast, 100=instant
+     * Return speed: continuous pull toward center that dampens tilt effect.
+     * 0.0 = no return (position fully follows tilt)
+     * 0.5 = moderate dampening (scene drifts toward center)
+     * 1.0 = strong dampening (scene resists tilt, quickly returns to center)
+     * Works continuously at all tilt angles, not just when phone is flat.
      */
-    var returnSpeed = 0.15f             // Default: slow return (pref_parallax_return_speed=15)
+    var returnSpeed = 0.15f             // Default: moderate pull (pref_parallax_return_speed=15)
     
     /**
      * Parallax perspective: controls which layers move more.
@@ -136,9 +132,10 @@ class ParallaxCalculator {
      * Call this every frame before rendering.
      * 
      * Return-to-center behavior:
-     * - returnSpeed controls constant movement toward center (0 = no return, 1 = fast return)
-     * - Movement is proportional to distance from center (slower when close)
-     * - When tilt is active, position follows tilt; when tilt is released, position drifts to center
+     * - returnSpeed applies a continuous force pulling position toward center
+     * - At 0: position fully follows tilt (no return)
+     * - At 1: strong dampening, scene resists tilt and drifts toward center
+     * - Works at all tilt angles, not just when phone is flat
      */
     fun update(deltaTimeMs: Long = 16L) {
         val deltaScale = deltaTimeMs / 16f  // Normalize to ~60fps
@@ -181,31 +178,28 @@ class ParallaxCalculator {
             targetY = tiltTargetY
         }
         
-        // Apply return-to-center force when tilt is near zero
-        // This creates a smooth drift toward center, controlled by returnSpeed
-        // returnSpeed: 0.0 = no return (position holds), 1.0 = fast smooth return
-        var returnLerpBoost = 1f  // Multiplier for lerp rate during return
-        if (tiltMagnitude < RETURN_TILT_THRESHOLD && returnSpeed > 0.001f) {
-            // Set target to center
-            targetX = 0f
-            targetY = 0f
-            
-            // Boost the lerp rate based on returnSpeed for faster but still smooth return
-            // returnSpeed=0.15 (default): boost=1.5x → ~1.5s to center
-            // returnSpeed=0.50: boost=4x → ~0.4s to center
-            // returnSpeed=1.00: boost=8x → ~0.2s to center (still smooth)
-            returnLerpBoost = 1f + returnSpeed * 7f
-        } else if (tiltMagnitude < RETURN_TILT_THRESHOLD && returnSpeed <= 0.001f) {
-            // returnSpeed = 0: Hold current position (no return to center)
+        // Apply continuous return-to-center force that competes with tilt
+        // Higher returnSpeed means stronger constant pull toward center
+        // Special case: when returnSpeed=0 AND tilt is near zero, hold current position
+        if (returnSpeed <= 0.001f && tiltMagnitude < 0.05f) {
+            // returnSpeed=0 with no tilt: hold current position (don't move to center)
             targetX = positionX
             targetY = positionY
+        } else if (returnSpeed > 0.001f) {
+            // Apply return force proportional to returnSpeed
+            // returnSpeed=0.5: moderate bias toward center
+            // returnSpeed=1.0: strong pull toward center (tilt effect is dampened)
+            val returnForce = returnSpeed * 0.2f * deltaScale  // Max 20% pull per 16ms at returnSpeed=1
+            
+            // Blend target toward center based on return force
+            targetX = targetX * (1f - returnForce)
+            targetY = targetY * (1f - returnForce)
         }
         
         // Calculate effective lerp rate based on smoothing setting
         // Higher smoothing = slower response (smaller lerp rate)
-        // Apply returnLerpBoost when returning to center
         val baseLerpRate = POSITION_LERP_RATE * (1f - smoothing * 0.6f) * deltaScale
-        val effectiveLerpRate = (baseLerpRate * returnLerpBoost).coerceAtMost(0.9f)  // Cap at 0.9 for smooth animation
+        val effectiveLerpRate = baseLerpRate.coerceAtMost(0.9f)  // Cap at 0.9 for smooth animation
         
         // Smoothly interpolate position toward target
         positionX += (targetX - positionX) * effectiveLerpRate
