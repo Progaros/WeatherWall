@@ -345,8 +345,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         for (event in currentEvents) {
             if (event.layer == EventLayer.GROUND && 
                 event.depthFactor >= minDepth && event.depthFactor < maxDepth) {
-                // Calculate the event's Y position using the same logic as draw()
-                val elapsedMs = state.absoluteTimeMs - event.spawnTimeMs
+                // Get the event's current Y position for depth sorting
                 val eventY = event.getCurrentYRatio(state.absoluteTimeMs, hillHeightProvider)
                 
                 result.add(Pair(eventY) {

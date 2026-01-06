@@ -121,7 +121,7 @@ docker run --rm -v "$PWD":/workspace -w /workspace ghcr.io/cirruslabs/android-sd
 
 ## 🧪 Testing
 
-The project includes 290+ unit tests covering all major features:
+The project includes 528+ unit tests covering all major features:
 
 ```bash
 # Run all tests locally
@@ -130,9 +130,18 @@ The project includes 290+ unit tests covering all major features:
 # Run tests in Docker
 docker run --rm -v "$PWD":/workspace -w /workspace weatherwall-builder "./gradlew test --no-daemon"
 
+# Run lint checks
+./gradlew lintDebug
+
 # View test report
 open app/build/reports/tests/testDebugUnitTest/index.html
 ```
+
+**CI Pipeline:**
+- Lint checks (Android Lint)
+- Unit tests (528+ tests)
+- Debug APK build
+- Release publishing (on version bump)
 
 **Test Coverage:**
 - `ParallaxSceneTest` - Terrain baseline, parallax factors, color transitions

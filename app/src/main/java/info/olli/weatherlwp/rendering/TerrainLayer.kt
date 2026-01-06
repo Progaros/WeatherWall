@@ -333,7 +333,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             // Formula: density / 8 gives even distribution across hills
             val flowersPerHill = (springFlowerDensity / 8).coerceIn(5, 200)
             
-            for ((index, hill) in currentHills.withIndex()) {
+            for (index in currentHills.indices) {
                 val hillFlowers = mutableListOf<FlowerData>()
                 for (f in 0 until flowersPerHill) {
                     val xRatio = random.nextFloat()
@@ -848,7 +848,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         // Get shadow offset from light source (sun/moon position)
         val shadowStrength = if (state.treeShadowsEnabled) state.getEffectiveShadowStrength() else 0f
-        val (shadowDx, shadowDy) = state.getShadowOffset(tree.scale)
+        val (shadowDx, _) = state.getShadowOffset(tree.scale)  // shadowDy unused, shadows are ground-cast
         
         // Draw shadow first (if shadows enabled)
         if (shadowStrength > 0.01f) {

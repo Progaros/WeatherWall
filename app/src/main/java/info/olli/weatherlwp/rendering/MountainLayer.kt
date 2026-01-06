@@ -461,10 +461,10 @@ class MountainLayer(private val context: Context) : SceneLayer {
             for (j in 0..jaggedSteps) {
                 val t = j.toFloat() / jaggedSteps
                 val x = lastLeftPoint.first + (lastRightPoint.first - lastLeftPoint.first) * t
-                val baseY = lastLeftPoint.second + (lastRightPoint.second - lastLeftPoint.second) * t
+                val snowBaseY = lastLeftPoint.second + (lastRightPoint.second - lastLeftPoint.second) * t
                 // Add downward jaggedness (snow drips down)
                 val jag = snowRandom.nextFloat() * height * 0.015f
-                snowCapPath.lineTo(x, baseY + jag)
+                snowCapPath.lineTo(x, snowBaseY + jag)
             }
             
             // Right side of snow - follow the exact mountain slope points in reverse

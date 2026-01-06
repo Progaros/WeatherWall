@@ -149,6 +149,14 @@ class ParallaxScene(
     fun hasActiveEvents(): Boolean {
         return randomEventLayer.hasActiveEvents()
     }
+    
+    /**
+     * Check if weather effects are currently active.
+     * Used for idle mode battery optimization.
+     */
+    fun isWeatherActive(): Boolean {
+        return weatherEnabled && weatherLayer.isActive()
+    }
 
     override fun onTiltChanged(tiltX: Float, tiltY: Float) {
         // Pass absolute tilt position to calculator

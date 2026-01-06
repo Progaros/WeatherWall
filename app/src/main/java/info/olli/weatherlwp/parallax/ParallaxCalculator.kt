@@ -81,7 +81,9 @@ class ParallaxCalculator {
      * Update canvas dimensions for scaling parallax offset.
      * Call this when canvas size changes.
      */
+    @Suppress("UNUSED_PARAMETER")
     fun setCanvasSize(width: Float, height: Float) {
+        // width kept for API consistency, height used for scaling
         canvasHeight = height.coerceAtLeast(1f)
     }
     

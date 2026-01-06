@@ -67,7 +67,7 @@ class VignetteLayer(private val context: Context) : SceneLayer {
         // No animation needed
     }
 
-    override fun draw(canvas: Canvas, state: SimulationState, parallax: ParallaxCalculator) {
+    override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         if (width <= 0 || height <= 0) return
         
         // Rebuild gradients if needed
@@ -110,7 +110,6 @@ class VignetteLayer(private val context: Context) : SceneLayer {
     /**
      * Build gradient for an edge.
      * 
-     * @param distance Total vignette distance in pixels
      * @param fadePercent Percentage of distance that fades (5-50)
      * @param alpha Opacity of solid part (0-255)
      * @param startX Start X of gradient
@@ -120,8 +119,9 @@ class VignetteLayer(private val context: Context) : SceneLayer {
      * @param inward If true, gradient goes from transparent to solid (top/left edges)
      *               If false, gradient goes from solid to transparent (bottom/right edges)
      */
+    @Suppress("UNUSED_PARAMETER")
     private fun buildEdgeGradient(
-        distance: Float,
+        distance: Float,  // Kept for API consistency with potential future use
         fadePercent: Int,
         alpha: Int,
         startX: Float, startY: Float,

@@ -476,7 +476,9 @@ class WeatherLayer : SceneLayer {
         }
     }
 
+    @Suppress("UNUSED_PARAMETER")
     private fun renderSnow(canvas: Canvas, state: SimulationState) {
+        // state kept for API consistency with other render methods
         // Active particle count based on intensity (20% to 100% of pool)
         val activeCount = (snowParticles.size * (0.2f + intensity * 0.8f)).toInt()
         
@@ -492,7 +494,9 @@ class WeatherLayer : SceneLayer {
      * Render hail as icy spheres falling faster than rain/snow.
      * Hail has a slight bounce/irregular motion and is larger.
      */
+    @Suppress("UNUSED_PARAMETER")
     private fun renderHail(canvas: Canvas, state: SimulationState) {
+        // state kept for API consistency with other render methods
         // Dim the world during hail (similar to rain but slightly darker)
         val dimAlpha = (25 + intensity * 50).toInt()
         rainDimPaint.color = Color.argb(dimAlpha, 90, 95, 110)

@@ -517,7 +517,6 @@ class SeasonalEvents(private val context: Context? = null) {
             path.close()
             
             // Linear gradient from star (bright gold) to end (transparent)
-            val goldColor = Color.parseColor("#FFFFD700")
             trailPaint.shader = LinearGradient(
                 starX, starY, trailEndX, trailEndY,
                 intArrayOf(

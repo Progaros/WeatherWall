@@ -9,10 +9,7 @@ import android.util.Log
 import android.view.SurfaceHolder
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.rendering.ParallaxScene
-import info.olli.weatherlwp.rendering.SeasonalEvents
-import info.olli.weatherlwp.rendering.WeatherLayer
 import info.olli.weatherlwp.weather.WeatherRepository
-import info.olli.weatherlwp.weather.WeatherType
 import info.olli.weatherlwp.parallax.ParallaxSensorManager
 
 class WeatherWallpaper : WallpaperService() {
@@ -27,17 +24,11 @@ class WeatherWallpaper : WallpaperService() {
         @Volatile private var isVisible: Boolean = false
 
         private lateinit var scene: ParallaxScene
-        private lateinit var seasonal: SeasonalEvents
         private val sensorManager = ParallaxSensorManager(this@WeatherWallpaper)
         private val weatherRepo = WeatherRepository
-        private val weather = WeatherLayer()
 
         // Preferences
         private var targetFps = 30
-        private var weatherEnabled = true
-        private var seasonalEnabled = true
-        private var currentWeather = "none"
-        private var useBreezyWeather = true
         
         // Preference change listener - responds to ALL setting changes
         private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -50,7 +41,6 @@ class WeatherWallpaper : WallpaperService() {
             super.onCreate(surfaceHolder)
             try {
                 scene = ParallaxScene(this@WeatherWallpaper, sensorManager, weatherRepo)
-                seasonal = SeasonalEvents(this@WeatherWallpaper)
                 loadPrefs()
                 // Register for live weather updates from Breezy Weather
                 val prefs = PreferenceManager.getDefaultSharedPreferences(this@WeatherWallpaper)
@@ -123,9 +113,6 @@ class WeatherWallpaper : WallpaperService() {
         private fun loadPrefs() {
             try {
                 val prefs = PreferenceManager.getDefaultSharedPreferences(this@WeatherWallpaper)
-                weatherEnabled = prefs.getBoolean("pref_weather_enabled", true)
-                seasonalEnabled = prefs.getBoolean("pref_seasonal_enabled", true)
-                useBreezyWeather = prefs.getBoolean("pref_use_breezy_weather", true)
                 targetFps = prefs.getString("pref_max_fps", "30")?.toIntOrNull() ?: 30
                 targetFps = targetFps.coerceIn(10, 60)
                 
@@ -135,62 +122,9 @@ class WeatherWallpaper : WallpaperService() {
                 // Idle timeout is now a ListPreference (String) with values in seconds
                 idleTimeoutMs = (prefs.getString("pref_idle_timeout", "5")?.toLongOrNull() ?: 5L) * 1000L
                 
-                // Check if debug/simulation mode is enabled
-                val debugEnabled = prefs.getBoolean("pref_debug_enabled", false)
-                
-                // Reload scene settings (handles parallax, clouds, day/night, terrain)
+                // Reload scene settings (handles parallax, clouds, day/night, terrain, weather, seasonal)
+                // ParallaxScene internally manages WeatherLayer and SeasonalEvents
                 scene.loadPrefs()
-                
-                // Reload seasonal settings (Christmas star size/trail, etc.)
-                seasonal.loadSettings()
-
-                // Weather type - check debug override first, then auto/manual
-                currentWeather = prefs.getString("pref_weather_type", "auto") ?: "auto"
-                
-                val effectiveWeather = when {
-                    // Debug mode: use the weather type setting directly (even if it's not "auto")
-                    debugEnabled && currentWeather != "auto" -> {
-                        when (currentWeather) {
-                            "rain" -> WeatherLayer.WeatherType.RAIN
-                            "snow" -> WeatherLayer.WeatherType.SNOW
-                            "lightning" -> WeatherLayer.WeatherType.LIGHTNING
-                            "fog" -> WeatherLayer.WeatherType.FOG
-                            else -> WeatherLayer.WeatherType.NONE
-                        }
-                    }
-                    // Auto mode with Breezy Weather
-                    currentWeather == "auto" && useBreezyWeather -> {
-                        val breezyType = WeatherRepository.getWeatherType(this@WeatherWallpaper)
-                        when (breezyType) {
-                            WeatherType.RAIN -> WeatherLayer.WeatherType.RAIN
-                            WeatherType.SNOW -> WeatherLayer.WeatherType.SNOW
-                            WeatherType.THUNDERSTORM -> WeatherLayer.WeatherType.LIGHTNING
-                            WeatherType.FOG -> WeatherLayer.WeatherType.FOG
-                            else -> WeatherLayer.WeatherType.NONE
-                        }
-                    }
-                    // Manual selection (not in debug mode)
-                    else -> {
-                        when (currentWeather) {
-                            "rain" -> WeatherLayer.WeatherType.RAIN
-                            "snow" -> WeatherLayer.WeatherType.SNOW
-                            "lightning" -> WeatherLayer.WeatherType.LIGHTNING
-                            "fog" -> WeatherLayer.WeatherType.FOG
-                            else -> WeatherLayer.WeatherType.NONE
-                        }
-                    }
-                }
-                weather.setWeather(effectiveWeather)
-                
-                // Set precipitation intensity based on wind speed (as proxy for storm intensity)
-                // Higher wind = heavier precipitation
-                val windIntensity = if (useBreezyWeather) {
-                    WeatherRepository.getNormalizedWindStrength(this@WeatherWallpaper)
-                } else {
-                    0.5f // Default medium
-                }
-                // Map wind to precipitation: 0.3 base + 0.7 * wind (so light rain at calm, heavy at windy)
-                weather.setIntensity(0.3f + windIntensity * 0.7f)
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading prefs", e)
             }
@@ -216,7 +150,7 @@ class WeatherWallpaper : WallpaperService() {
             // 2. Weather effects are active
             // 3. Random events are playing
             val parallaxActive = scene.isParallaxActive()
-            val weatherActive = weatherEnabled && weather.isActive()
+            val weatherActive = scene.isWeatherActive()
             val eventsActive = scene.hasActiveEvents()
             
             return parallaxActive || weatherActive || eventsActive

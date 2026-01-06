@@ -60,12 +60,13 @@ class EventPreviewView @JvmOverloads constructor(
         val h = height.toFloat()
         val centerX = w / 2f
         val centerY = h / 2f
-        val unit = minOf(w, h) * 0.1f
+        val size = minOf(w, h)
+        val unit = size * 0.15f  // Larger unit for bigger previews
 
-        // Draw background circle
+        // Draw background circle using nearly full height
         paint.color = Color.argb(40, 128, 128, 128)
         paint.style = Paint.Style.FILL
-        canvas.drawCircle(centerX, centerY, minOf(w, h) * 0.4f, paint)
+        canvas.drawCircle(centerX, centerY, size * 0.48f, paint)
 
         when (eventType) {
             // Sky events

@@ -26,6 +26,14 @@ steps:
         fi
       - chmod +x ./gradlew
 
+  - name: lint
+    image: ghcr.io/cirruslabs/android-sdk:35
+    environment:
+      GRADLE_USER_HOME: .gradle
+    commands:
+      - ./gradlew lintDebug --no-daemon --stacktrace
+      - echo "Lint report at app/build/reports/lint-results-debug.html"
+
   - name: test
     image: ghcr.io/cirruslabs/android-sdk:35
     environment:

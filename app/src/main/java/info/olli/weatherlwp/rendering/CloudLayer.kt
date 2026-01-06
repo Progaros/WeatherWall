@@ -529,7 +529,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         }
         
         val shader = tiledShader ?: return
-        val bitmap = tiledNoiseBitmap ?: return
+        if (tiledNoiseBitmap == null) return  // Ensure bitmap exists for shader
         
         // Calculate cloud coverage based on cloud count (0-50 maps to alpha 0-255)
         val coverage = (state.getCloudCount() / 50f).coerceIn(0f, 1f)
@@ -856,7 +856,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
             "shader" -> CloudRenderMode.SHADER
             else -> CloudRenderMode.CACHED
         }
-        val renderModeChanged = newRenderMode != renderMode
+        // Note: renderModeChanged was used for cache invalidation, now handled by mode comparison
         renderMode = newRenderMode
         
         // Random seed for consistent placement
