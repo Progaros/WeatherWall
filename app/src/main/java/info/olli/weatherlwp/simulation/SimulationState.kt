@@ -22,6 +22,12 @@ data class SimulationState(
     val smoothedTimeOfDayHours: Float = timeOfDayHours,
     val smoothedProgress: Float = dayProgress,
     
+    // Dynamic sun times from weather data
+    val sunriseHours: Float = 6.0f,     // e.g., 7.05 (7:03 AM) - default 6:00
+    val sunsetHours: Float = 20.0f,     // e.g., 15.58 (3:35 PM) - default 20:00
+    val isGoldenHour: Boolean = false,  // True during golden hour (sunrise/sunset ±45min)
+    val isBlueHour: Boolean = false,    // True during blue hour (pre-dawn/post-dusk ±30min)
+    
     // Weather
     val weather: WeatherType,
     val cloudDensity: CloudDensity,
@@ -71,24 +77,85 @@ data class SimulationState(
     
     /**
      * Get ambient light level (0.0 = deep night, 1.0 = bright day).
-     * Used to adjust colors of fog, rain, and other weather effects.
+     * Uses actual sunrise/sunset times with SmoothStep for natural transitions.
      * 
-     * Timeline:
-     * - 0:00-5:00: Night (0.15)
-     * - 5:00-7:00: Dawn transition (0.15 -> 1.0)
-     * - 7:00-17:00: Day (1.0)
-     * - 17:00-20:00: Dusk transition (1.0 -> 0.15)
-     * - 20:00-24:00: Night (0.15)
+     * Timeline (with default 6:00 sunrise, 20:00 sunset):
+     * - Night: before dawn, after dusk
+     * - Dawn: sunrise-1h to sunrise (smooth transition)
+     * - Day: sunrise to sunset
+     * - Dusk: sunset to sunset+1h (smooth transition)
      */
     fun getLightLevel(): Float {
         val hour = timeOfDayHours
-        return when {
-            hour < 5f -> 0.15f  // Night
-            hour < 7f -> 0.15f + (hour - 5f) / 2f * 0.85f  // Dawn transition
-            hour < 17f -> 1f  // Day
-            hour < 20f -> 1f - (hour - 17f) / 3f * 0.85f  // Dusk transition  
-            else -> 0.15f  // Night
+        val transitionDuration = 1.0f  // 1 hour for full transition
+        
+        // 1. Dawn Calculation (Night -> Day)
+        // Starts 1 hour before sunrise, ends at sunrise
+        val dawnStart = sunriseHours - transitionDuration
+        if (hour in dawnStart..sunriseHours) {
+            val progress = (hour - dawnStart) / transitionDuration
+            return smoothStep(0.15f, 1.0f, progress)
         }
+        
+        // 2. Dusk Calculation (Day -> Night)
+        // Starts at sunset, ends 1 hour after
+        val duskEnd = sunsetHours + transitionDuration
+        if (hour in sunsetHours..duskEnd) {
+            val progress = (hour - sunsetHours) / transitionDuration
+            return smoothStep(1.0f, 0.15f, progress)
+        }
+        
+        // 3. Static States
+        return when {
+            hour in sunriseHours..sunsetHours -> 1.0f  // Day
+            else -> 0.15f                               // Night
+        }
+    }
+    
+    /**
+     * Returns an "Atmosphere Phase" value (-1 to 1) to drive gradient mixing.
+     * -1.0 = Deep Night
+     * -0.5 = Blue Hour (Pre-dawn / Post-dusk)
+     *  0.0 = Golden Hour (Sunrise / Sunset)
+     *  1.0 = Day
+     *  
+     * Use this to blend between day/night color palettes with natural transitions.
+     */
+    fun getAtmospherePhase(): Float {
+        val hour = timeOfDayHours
+        val goldenHourDuration = 0.75f  // ~45 mins
+        val blueHourDuration = 0.5f     // ~30 mins
+        
+        return when {
+            // Day: after morning golden hour, before evening golden hour
+            hour > (sunriseHours + goldenHourDuration) && 
+            hour < (sunsetHours - goldenHourDuration) -> 1.0f
+            
+            // Golden Hour at sunrise (0 to 45min after sunrise)
+            hour in sunriseHours..(sunriseHours + goldenHourDuration) -> 0.0f
+            
+            // Golden Hour at sunset (45min before to sunset)
+            hour in (sunsetHours - goldenHourDuration)..sunsetHours -> 0.0f
+            
+            // Blue Hour before sunrise (30min before to sunrise)
+            hour in (sunriseHours - blueHourDuration)..sunriseHours -> -0.5f
+            
+            // Blue Hour after sunset (sunset to 30min after)
+            hour in sunsetHours..(sunsetHours + blueHourDuration) -> -0.5f
+            
+            // Night
+            else -> -1.0f
+        }
+    }
+    
+    /**
+     * SmoothStep interpolation for natural easing.
+     * Uses cubic Hermite interpolation for smooth acceleration/deceleration.
+     */
+    private fun smoothStep(start: Float, end: Float, amount: Float): Float {
+        val t = amount.coerceIn(0f, 1f)
+        val smoothed = t * t * (3.0f - 2.0f * t)  // Cubic Hermite interpolation
+        return start + smoothed * (end - start)
     }
     
     /**
@@ -227,6 +294,10 @@ data class SimulationState(
             isDawn = false,
             isDusk = false,
             dayProgress = 0.5f,
+            sunriseHours = 6.0f,
+            sunsetHours = 20.0f,
+            isGoldenHour = false,
+            isBlueHour = false,
             weather = WeatherType.CLEAR,
             cloudDensity = CloudDensity.AUTO,
             precipProbability = 0f,

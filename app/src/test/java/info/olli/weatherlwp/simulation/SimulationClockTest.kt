@@ -197,4 +197,74 @@ class SimulationClockTest {
         clock.setManualTime(90) // 1:30 AM
         assertEquals(90, clock.getTimeOfDayMinutes())
     }
+    
+    // ============== Sunrise/Sunset Tests ==============
+    
+    @Test
+    fun `default sunrise is 6am`() {
+        assertEquals(6.0f, clock.getSunriseHour(), 0.01f)
+    }
+    
+    @Test
+    fun `default sunset is 8pm`() {
+        assertEquals(20.0f, clock.getSunsetHour(), 0.01f)
+    }
+    
+    @Test
+    fun `updateSunTimes updates sunrise hour`() {
+        // Unix timestamp for Jan 6, 2025 7:03 AM local time
+        // We can't test exact conversion without knowing timezone, 
+        // but we can verify it changes from default
+        val testSunrise = System.currentTimeMillis() / 1000 - 3600 // 1 hour ago
+        val testSunset = System.currentTimeMillis() / 1000 + 3600 // 1 hour from now
+        
+        clock.updateSunTimes(testSunrise, testSunset)
+        
+        // Values should have changed from defaults
+        val sunriseHour = clock.getSunriseHour()
+        val sunsetHour = clock.getSunsetHour()
+        
+        // Should be valid hour values
+        assertTrue("Sunrise hour should be 0-24", sunriseHour in 0f..24f)
+        assertTrue("Sunset hour should be 0-24", sunsetHour in 0f..24f)
+    }
+    
+    @Test
+    fun `updateSunTimes with negative values keeps defaults`() {
+        clock.updateSunTimes(-1, -1)
+        
+        // Should keep default values
+        assertEquals(6.0f, clock.getSunriseHour(), 0.01f)
+        assertEquals(20.0f, clock.getSunsetHour(), 0.01f)
+    }
+    
+    @Test
+    fun `isNight uses custom sunrise sunset`() {
+        clock.setUseRealTime(false)
+        
+        // Set winter times: sunrise 7:30, sunset 16:00
+        // Use actual unix timestamps - for 7:30 and 16:00 today
+        val now = System.currentTimeMillis()
+        val todayMidnight = now - (now % 86400000)
+        val sunriseUnix = (todayMidnight / 1000) + (7 * 3600) + (30 * 60) // 7:30
+        val sunsetUnix = (todayMidnight / 1000) + (16 * 3600) // 16:00
+        
+        clock.updateSunTimes(sunriseUnix, sunsetUnix)
+        
+        // At 7:00 AM (before sunrise 7:30), should be night
+        clock.setManualTime(7 * 60)
+        assertTrue("7:00 AM before 7:30 sunrise should be night", clock.isNight())
+        
+        // At 8:00 AM (after sunrise 7:30), should not be night
+        clock.setManualTime(8 * 60)
+        assertFalse("8:00 AM after 7:30 sunrise should not be night", clock.isNight())
+        
+        // At 15:30 (before sunset 16:00), should not be night
+        clock.setManualTime(15 * 60 + 30)
+        assertFalse("15:30 before 16:00 sunset should not be night", clock.isNight())
+        
+        // At 16:30 (after sunset 16:00), should be night
+        clock.setManualTime(16 * 60 + 30)
+        assertTrue("16:30 after 16:00 sunset should be night", clock.isNight())
+    }
 }

@@ -60,15 +60,13 @@
             app:updatesContinuously="true"
             android:dependency="pref_idle_mode_enabled" />
 
-        <SeekBarPreference
+        <ListPreference
             android:key="pref_idle_timeout"
             android:title="Idle Timeout"
-            android:summary="Seconds before entering idle mode (1-10)"
+            android:summary="Time before entering idle mode"
             android:defaultValue="5"
-            android:max="10"
-            app:min="1"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
+            android:entries="@array/idle_timeout_entries"
+            android:entryValues="@array/idle_timeout_values"
             android:dependency="pref_idle_mode_enabled" />
     </PreferenceCategory>
 

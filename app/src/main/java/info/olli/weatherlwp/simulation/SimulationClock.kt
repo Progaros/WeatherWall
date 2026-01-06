@@ -165,4 +165,16 @@ class SimulationClock {
     
     fun isUsingRealTime(): Boolean = useRealTime
     fun getManualTimeMinutes(): Int = manualTimeMinutes
+    
+    /**
+     * Get current sunrise hour (0-24).
+     * This can be from weather data or default value.
+     */
+    fun getSunriseHour(): Float = sunriseHour
+    
+    /**
+     * Get current sunset hour (0-24).
+     * This can be from weather data or default value.
+     */
+    fun getSunsetHour(): Float = sunsetHour
 }

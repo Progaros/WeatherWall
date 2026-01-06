@@ -199,11 +199,25 @@ class DebugOverlayLayer(private val context: Context) : SceneLayer {
         
         if (lines.isEmpty()) return
         
-        // Calculate background size
+        // Calculate background size dynamically based on content
         val padding = 16f
         val lineHeight = textPaint.textSize * 1.4f
         val bgHeight = lines.size * lineHeight + padding * 2
-        val bgWidth = 350f * (textPaint.textSize / 28f)  // Scale with text size
+        
+        // Calculate minimum width needed for label + gap + value
+        var maxContentWidth = 0f
+        val labelValueGap = textPaint.textSize * 2f  // Gap between label and value
+        for ((label, value, isWarning) in lines) {
+            val labelWidth = textPaint.measureText("$label:")
+            val paint = if (isWarning) warningPaint else valuePaint
+            val valueWidth = paint.measureText(value)
+            val totalWidth = labelWidth + labelValueGap + valueWidth
+            if (totalWidth > maxContentWidth) maxContentWidth = totalWidth
+        }
+        
+        // Minimum width to avoid overlapping (at least 400 scaled, or content width + padding)
+        val minWidth = 400f * (textPaint.textSize / 28f)
+        val bgWidth = maxOf(maxContentWidth + padding * 2, minWidth)
         
         // Position at bottom-left, above vignette
         val bgLeft = padding

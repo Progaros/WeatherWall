@@ -124,6 +124,18 @@ class SimulationController(private val context: Context) {
         val rawTime = clock.getTimeOfDayHours()
         val smoothedTime = smoothTimeTransitions(rawTime)
         
+        // Get dynamic sun times from clock (set from weather data or defaults)
+        val sunriseHours = clock.getSunriseHour()
+        val sunsetHours = clock.getSunsetHour()
+        
+        // Calculate golden hour and blue hour flags
+        val goldenHourDuration = 0.75f  // ~45 mins
+        val blueHourDuration = 0.5f     // ~30 mins
+        val isGoldenHour = rawTime in sunriseHours..(sunriseHours + goldenHourDuration) ||
+                           rawTime in (sunsetHours - goldenHourDuration)..sunsetHours
+        val isBlueHour = rawTime in (sunriseHours - blueHourDuration)..sunriseHours ||
+                         rawTime in sunsetHours..(sunsetHours + blueHourDuration)
+        
         return SimulationState(
             timeOfDayHours = rawTime,
             timeSeconds = clock.getTimeSeconds(),
@@ -134,6 +146,10 @@ class SimulationController(private val context: Context) {
             dayProgress = clock.getDayProgress(),
             smoothedTimeOfDayHours = smoothedTime,
             smoothedProgress = smoothedTime / 24f,
+            sunriseHours = sunriseHours,
+            sunsetHours = sunsetHours,
+            isGoldenHour = isGoldenHour,
+            isBlueHour = isBlueHour,
             weather = effectiveWeather,
             cloudDensity = settings.cloudDensity,
             precipProbability = precipProbability.coerceIn(0f, 1f),

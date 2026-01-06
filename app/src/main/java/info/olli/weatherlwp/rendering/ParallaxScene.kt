@@ -170,7 +170,7 @@ class ParallaxScene(
     private val SLOW_FRAME_THRESHOLD_MS = 16L  // 60 FPS target
     private val FRAME_LOG_INTERVAL = 300  // Log stats every 300 frames (~5 seconds at 60fps)
 
-    fun render(canvas: Canvas, deltaTimeMs: Long = 16L) {
+    fun render(canvas: Canvas, deltaTimeMs: Long = 16L, isIdleMode: Boolean = false) {
         val frameStartTime = if (frameTimeLoggingEnabled) System.nanoTime() else 0L
         DebugTracer.traceStart("render")
         try {
@@ -315,7 +315,7 @@ class ParallaxScene(
             try {
                 // Update debug overlay with current state info
                 debugOverlayLayer.activeEventCount = randomEventLayer.getActiveEventCount()
-                debugOverlayLayer.isIdleMode = false  // This will be set by wallpaper engine
+                debugOverlayLayer.isIdleMode = isIdleMode
                 val (px, py) = parallaxCalculator.getOffset()
                 debugOverlayLayer.parallaxOffsetX = px
                 debugOverlayLayer.parallaxOffsetY = py

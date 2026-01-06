@@ -132,7 +132,8 @@ class WeatherWallpaper : WallpaperService() {
                 // Idle mode for battery optimization
                 idleModeEnabled = prefs.getBoolean("pref_idle_mode_enabled", true)
                 idleFps = prefs.getInt("pref_idle_fps", 10).coerceIn(5, 20)
-                idleTimeoutMs = prefs.getInt("pref_idle_timeout", 5).toLong() * 1000L  // Convert to ms
+                // Idle timeout is now a ListPreference (String) with values in seconds
+                idleTimeoutMs = (prefs.getString("pref_idle_timeout", "5")?.toLongOrNull() ?: 5L) * 1000L
                 
                 // Check if debug/simulation mode is enabled
                 val debugEnabled = prefs.getBoolean("pref_debug_enabled", false)
@@ -340,7 +341,7 @@ class WeatherWallpaper : WallpaperService() {
 
                 // Parallax scene (sky, clouds, mountains, trees, weather overlays, seasonal)
                 // Pass actual frame delta for accurate physics/smoothing
-                scene.render(canvas, deltaTimeMs)
+                scene.render(canvas, deltaTimeMs, isIdle)
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error drawing frame", e)
