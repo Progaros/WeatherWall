@@ -390,11 +390,13 @@ class ParallaxScene(
                 }
             }
             
-            // Input sensitivity: slider 0-5 with LINEAR curve
-            // 0 = off, 2.5 = normal, 5 = high
-            // Direct mapping: slider value = strength multiplier
+            // Input sensitivity: slider 0-5, using quadratic curve matched to OLD 0-50 scale
+            // OLD scale: values 2-3 were ideal (gave 0.016-0.036 strength)
+            // NEW scale: middle (2.5) should feel like OLD 2.5, max (5) like OLD 5
+            // Formula: (val/50)^2 * 10 — same as old but new slider only goes 0-5
             val sensitivityVal = prefs.getInt("pref_parallax_strength", 3).coerceIn(0, 5)
-            val rawStrength = sensitivityVal.toFloat()  // Direct: 0=0x, 2.5=2.5x, 5=5x
+            val normalized = sensitivityVal / 50f  // Treat 0-5 as if it were 0-50 range
+            val rawStrength = normalized * normalized * 10f  // Quadratic: 2.5→0.025, 5→0.1
             parallaxStrength = if (parallaxEnabled) rawStrength else 0f
             
             // Max offset as percentage of screen height: 2..20% (default 10%)
