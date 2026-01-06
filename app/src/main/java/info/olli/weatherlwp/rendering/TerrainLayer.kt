@@ -502,7 +502,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         newTrees.sortBy { it.depthFactor }
         
         // Build pre-grouped tree map (avoids per-frame filter allocations)
+        // Also pre-sort each group by yRatio for correct Y-based draw order
         val groupedByDepth = newTrees.groupBy { it.depthFactor }
+            .mapValues { (_, trees) -> trees.sortedBy { it.yRatio } }
         
         // Atomic reference swap (volatile ensures visibility to render thread)
         trees = newTrees
@@ -579,12 +581,18 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // Animation state comes from SimulationState.timeSeconds
     }
 
+    // Cached season to avoid repeated calls per-frame
+    @Volatile private var cachedSeason: String = "summer"
+    
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         if (width <= 0 || height <= 0) return
         
         // Take local snapshots for thread-safe iteration
         val currentHills = hills
         val currentTreesByDepth = treesByDepth  // Use pre-grouped map instead of per-frame filter
+        
+        // Cache current season once per frame (avoid repeated lookups in loops)
+        cachedSeason = getCurrentTerrainSeason()
         
         // Get ambient color for current time of day (global tint system)
         val ambientColor = RenderConstants.getAmbientColor(
@@ -617,46 +625,58 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             val nextDepth = currentHills.getOrNull(index + 1)?.depthFactor ?: Float.MAX_VALUE
             val hillTrees = currentTreesByDepth[hill.depthFactor] ?: emptyList()
             
-            // Collect all drawables (trees + animals) with their Y positions for Y-based sorting
-            val drawables = mutableListOf<Pair<Float, () -> Unit>>()
+            // Get animals for this depth range (may be empty)
+            val animals = groundEventDrawer?.getEventsInRange(hill.depthFactor, nextDepth) ?: emptyList()
             
-            // Add trees as drawables
-            for (tree in hillTrees) {
-                drawables.add(Pair(tree.yRatio) {
+            // Optimization: if no animals, just draw trees directly (already Y-sorted during generation)
+            if (animals.isEmpty()) {
+                for (tree in hillTrees) {
                     val treePx = parallaxCalculator.getOffsetXForDepth(tree.depthFactor)
                     val treePy = parallaxCalculator.getOffsetYForDepth(tree.depthFactor)
                     canvas.save()
                     canvas.translate(treePx, treePy)
                     
-                    // Color variation based on Y position (actual depth on screen)
-                    // yRatio ~0.6-0.7 = background trees (top of hills), yRatio ~0.85-0.95 = foreground trees
-                    // Map yRatio to 0-1 depth: lower Y = distant (less variation), higher Y = near (more variation)
                     val yBasedDepth = ((tree.yRatio - 0.6f) / 0.35f).coerceIn(0f, 1f)
-                    
-                    val timeMultiplier = if (!state.isNight && !state.isDawn && !state.isDusk) {
-                        0.15f
-                    } else {
-                        1.0f
-                    }
+                    val timeMultiplier = if (!state.isNight && !state.isDawn && !state.isDusk) 0.15f else 1.0f
                     val treeBlendAmount = RenderConstants.applyAmbientTint(tree.dayColor, ambientColor, yBasedDepth) * timeMultiplier
                     treePaint.color = RenderConstants.blendWithAmbient(tree.dayColor, ambientColor, treeBlendAmount)
                     drawTree(canvas, tree, state)
                     
                     canvas.restore()
-                })
-            }
-            
-            // Add animals as drawables (if event drawer supports it)
-            groundEventDrawer?.let { drawer ->
-                drawables.addAll(drawer.getEventsInRange(hill.depthFactor, nextDepth))
-            }
-            
-            // Sort by Y (lower Y = further away, drawn first; higher Y = closer, drawn last)
-            drawables.sortBy { it.first }
-            
-            // Draw all elements in Y-sorted order
-            for ((_, drawFunc) in drawables) {
-                drawFunc()
+                }
+            } else {
+                // Animals present: merge trees and animals by Y position for correct draw order
+                // Trees are already sorted by yRatio; use merge sort approach
+                val drawables = mutableListOf<Pair<Float, () -> Unit>>()
+                
+                // Add trees as drawables
+                for (tree in hillTrees) {
+                    drawables.add(Pair(tree.yRatio) {
+                        val treePx = parallaxCalculator.getOffsetXForDepth(tree.depthFactor)
+                        val treePy = parallaxCalculator.getOffsetYForDepth(tree.depthFactor)
+                        canvas.save()
+                        canvas.translate(treePx, treePy)
+                        
+                        val yBasedDepth = ((tree.yRatio - 0.6f) / 0.35f).coerceIn(0f, 1f)
+                        val timeMultiplier = if (!state.isNight && !state.isDawn && !state.isDusk) 0.15f else 1.0f
+                        val treeBlendAmount = RenderConstants.applyAmbientTint(tree.dayColor, ambientColor, yBasedDepth) * timeMultiplier
+                        treePaint.color = RenderConstants.blendWithAmbient(tree.dayColor, ambientColor, treeBlendAmount)
+                        drawTree(canvas, tree, state)
+                        
+                        canvas.restore()
+                    })
+                }
+                
+                // Add animals
+                drawables.addAll(animals)
+                
+                // Sort by Y (lower Y = further away, drawn first; higher Y = closer, drawn last)
+                drawables.sortBy { it.first }
+                
+                // Draw all elements in Y-sorted order
+                for ((_, drawFunc) in drawables) {
+                    drawFunc()
+                }
             }
         }
     }
@@ -689,9 +709,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         hillPath.lineTo(endX, bottomY)
         hillPath.close()
         
-        // Check if we should apply snow cap effect
-        val season = getCurrentTerrainSeason()
-        val applySnow = winterSnowEnabled && season == "winter"
+        // Check if we should apply snow cap effect (use cached season)
+        val applySnow = winterSnowEnabled && cachedSeason == "winter"
         
         // Apply linear gradient from top to bottom
         val gradient = if (applySnow) {
@@ -935,9 +954,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             
             canvas.drawPath(treePath, treePaint)
             
-            // Draw snow on tree if winter and snow enabled
-            val season = getCurrentTerrainSeason()
-            if (winterSnowEnabled && season == "winter") {
+            // Draw snow on tree if winter and snow enabled (use cached season)
+            if (winterSnowEnabled && cachedSeason == "winter") {
                 // Snow covers the top portion of each tree segment
                 // More coverage on upper segments
                 val snowCoverage = (winterSnowCoverage / 100f).coerceIn(0.1f, 0.8f)

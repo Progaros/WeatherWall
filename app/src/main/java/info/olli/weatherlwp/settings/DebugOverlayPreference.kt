@@ -1,8 +1,9 @@
 package info.olli.weatherlwp.settings
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.AttributeSet
-import android.view.View
 import android.widget.Switch
 import androidx.appcompat.app.AlertDialog
 import androidx.preference.Preference
@@ -24,6 +25,7 @@ class DebugOverlayPreference @JvmOverloads constructor(
 ) : Preference(context, attrs, defStyleAttr, defStyleRes) {
     
     private val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+    private val mainHandler = Handler(Looper.getMainLooper())
     
     // All available debug items
     private val allItems = DebugOverlayLayer.DebugItem.entries.toTypedArray()
@@ -32,6 +34,8 @@ class DebugOverlayPreference @JvmOverloads constructor(
     
     init {
         widgetLayoutResource = R.layout.pref_widget_debug_overlay
+        // Set initial summary without triggering RecyclerView issues
+        updateSummaryText()
     }
     
     override fun onBindViewHolder(holder: PreferenceViewHolder) {
@@ -43,7 +47,11 @@ class DebugOverlayPreference @JvmOverloads constructor(
         // Switch click toggles enabled state
         switch?.setOnCheckedChangeListener { _, isChecked ->
             prefs.edit().putBoolean(key, isChecked).apply()
-            notifyChanged()
+            // Post to avoid RecyclerView layout issues
+            mainHandler.post { 
+                updateSummaryText()
+                notifyChanged()
+            }
             callChangeListener(isChecked)
         }
         
@@ -56,12 +64,12 @@ class DebugOverlayPreference @JvmOverloads constructor(
         switch?.setOnClickListener { view ->
             val sw = view as Switch
             prefs.edit().putBoolean(key, sw.isChecked).apply()
-            notifyChanged()
+            mainHandler.post { 
+                updateSummaryText()
+                notifyChanged()
+            }
             callChangeListener(sw.isChecked)
         }
-        
-        // Update summary based on enabled items
-        updateSummary()
     }
     
     private fun showItemSelectionDialog() {
@@ -87,14 +95,17 @@ class DebugOverlayPreference @JvmOverloads constructor(
                 prefs.edit()
                     .putStringSet("pref_debug_overlay_items", selectedItems)
                     .apply()
-                updateSummary()
-                notifyChanged()
+                // Post to avoid RecyclerView layout issues
+                mainHandler.post {
+                    updateSummaryText()
+                    notifyChanged()
+                }
             }
             .setNegativeButton("Cancel", null)
             .show()
     }
     
-    private fun updateSummary() {
+    private fun updateSummaryText() {
         val enabled = prefs.getBoolean(key, false)
         val items = prefs.getStringSet("pref_debug_overlay_items", null)
             ?: setOf("fps", "frame_time")
