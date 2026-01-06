@@ -11,6 +11,7 @@ import info.olli.weatherlwp.parallax.ParallaxSensorManager
 import info.olli.weatherlwp.simulation.SimulationController
 import info.olli.weatherlwp.simulation.SimulationState
 import info.olli.weatherlwp.weather.WeatherRepository
+import kotlin.math.pow
 
 /**
  * Main scene renderer that coordinates all layers.
@@ -399,7 +400,7 @@ class ParallaxScene(
             val maxStrength = 5.0f
             val logBase = maxStrength / minStrength  // 500
             val exponent = (sensitivityVal - 1) / 99f  // 0..1
-            val rawStrength = minStrength * kotlin.math.pow(logBase.toDouble(), exponent.toDouble()).toFloat()
+            val rawStrength = minStrength * logBase.toDouble().pow(exponent.toDouble()).toFloat()
             parallaxStrength = if (parallaxEnabled) rawStrength else 0f
             
             // Max offset as percentage of screen height: 2..20% (default 10%)
