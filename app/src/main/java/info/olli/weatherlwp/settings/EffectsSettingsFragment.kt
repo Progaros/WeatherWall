@@ -15,29 +15,30 @@ class EffectsSettingsFragment : PreferenceFragmentCompat() {
     }
     
     /**
-     * Migrate parallax strength from old 0-50 scale to new 0-5 scale.
-     * Old default was 10 (on 0-50), new default is 3 (on 0-5).
-     * Scale factor: divide by 10.
+     * Migrate parallax strength to new 1-100% scale with log mapping.
+     * - Old 0-50 scale: divide by 2, then clamp 1-100
+     * - Old 0-5 scale: multiply by 5, then clamp 1-100
+     * - New scale: 1-100%, default 25%
      */
     private fun migrateParallaxStrengthPreference() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
         val key = "pref_parallax_strength"
-        val migrationKey = "pref_parallax_strength_migrated_v175"
+        val migrationKey = "pref_parallax_strength_migrated_v178"
         
         // Only migrate once
         if (prefs.getBoolean(migrationKey, false)) return
         
         val currentValue = prefs.getInt(key, -1)
-        if (currentValue > 5) {
-            // Old scale value detected, migrate by dividing by 10
-            val newValue = (currentValue / 10).coerceIn(0, 5)
-            prefs.edit()
-                .putInt(key, newValue)
-                .putBoolean(migrationKey, true)
-                .apply()
-        } else {
-            // Already on new scale or never set
-            prefs.edit().putBoolean(migrationKey, true).apply()
+        val newValue = when {
+            currentValue <= 0 -> 1  // Off → minimum (1%)
+            currentValue > 50 -> currentValue.coerceIn(1, 100)  // Already 1-100 scale
+            currentValue > 5 -> (currentValue / 2).coerceIn(1, 100)  // Old 0-50 → halve it
+            else -> (currentValue * 5).coerceIn(1, 100)  // Old 0-5 → multiply by 5
         }
+        
+        prefs.edit()
+            .putInt(key, newValue)
+            .putBoolean(migrationKey, true)
+            .apply()
     }
 }

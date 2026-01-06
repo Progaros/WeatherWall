@@ -63,7 +63,7 @@ class ParallaxScene(
     private var height = 0f
     
     // Settings - defaults match pref_effects.xml
-    private var parallaxStrength = 3.0f  // Default: pref_parallax_strength=3
+    private var parallaxStrength = 0.075f  // Default: 25% on log scale → ~0.075
     private var parallaxMaxOffsetPx = 130f  // pref_parallax_max_offset=130
     private var weatherEnabled = true
     private var seasonalEnabled = true
@@ -390,13 +390,16 @@ class ParallaxScene(
                 }
             }
             
-            // Input sensitivity: slider 0-5, using quadratic curve matched to OLD 0-50 scale
-            // OLD scale: values 2-3 were ideal (gave 0.016-0.036 strength)
-            // NEW scale: middle (2.5) should feel like OLD 2.5, max (5) like OLD 5
-            // Formula: (val/50)^2 * 10 — same as old but new slider only goes 0-5
-            val sensitivityVal = prefs.getInt("pref_parallax_strength", 3).coerceIn(0, 5)
-            val normalized = sensitivityVal / 50f  // Treat 0-5 as if it were 0-50 range
-            val rawStrength = normalized * normalized * 10f  // Quadratic: 2.5→0.025, 5→0.1
+            // Input sensitivity: slider 1-100% with LOGARITHMIC curve
+            // Fine control at low values (~1 old scale), high values reach ~5 old scale
+            // Log formula: min * (max/min)^((slider-1)/99)
+            // At 1% → 0.01, at 25% → ~0.075, at 50% → ~0.22, at 100% → 5.0
+            val sensitivityVal = prefs.getInt("pref_parallax_strength", 25).coerceIn(1, 100)
+            val minStrength = 0.01f
+            val maxStrength = 5.0f
+            val logBase = maxStrength / minStrength  // 500
+            val exponent = (sensitivityVal - 1) / 99f  // 0..1
+            val rawStrength = minStrength * kotlin.math.pow(logBase.toDouble(), exponent.toDouble()).toFloat()
             parallaxStrength = if (parallaxEnabled) rawStrength else 0f
             
             // Max offset as percentage of screen height: 2..20% (default 10%)

@@ -90,10 +90,10 @@
         <SeekBarPreference
             android:key="pref_parallax_strength"
             android:title="Tilt Sensitivity"
-            android:summary="Response to phone tilt (0=off, 2.5=normal, 5=high)"
-            android:defaultValue="3"
-            android:max="5"
-            app:min="0"
+            android:summary="Response to phone tilt (1%=subtle, 100%=high)"
+            android:defaultValue="25"
+            android:max="100"
+            app:min="1"
             app:showSeekBarValue="true"
             app:updatesContinuously="true"
             android:dependency="pref_parallax_enabled" />

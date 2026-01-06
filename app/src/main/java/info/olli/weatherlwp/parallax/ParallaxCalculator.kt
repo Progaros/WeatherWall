@@ -43,7 +43,7 @@ class ParallaxCalculator {
     
     // User-configurable settings - defaults match pref_effects.xml
     // These are overwritten by loadPrefs() but provide sane defaults before settings load
-    var strength = 3.0f                 // Default: pref_parallax_strength=3
+    var strength = 0.075f               // Default: 25% on log scale → ~0.075
     var maxOffsetPx = 130f              // Legacy: used when maxOffsetPercent is 0
     var maxOffsetPercent = 15f          // Default: 15% of screen height (increased for more movement)
     var smoothing = 0.134f              // Default: 0.02 + (30/100)*0.38 (pref_parallax_smoothing=30)
