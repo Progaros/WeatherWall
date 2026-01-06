@@ -90,9 +90,9 @@
         <SeekBarPreference
             android:key="pref_parallax_strength"
             android:title="Tilt Sensitivity"
-            android:summary="Response to phone tilt (0=off, 25=normal, 50=high)"
-            android:defaultValue="10"
-            android:max="50"
+            android:summary="Response to phone tilt (0=off, 2.5=normal, 5=high)"
+            android:defaultValue="3"
+            android:max="5"
             app:min="0"
             app:showSeekBarValue="true"
             app:updatesContinuously="true"
@@ -112,7 +112,7 @@
         <SeekBarPreference
             android:key="pref_parallax_return_speed"
             android:title="Return Speed"
-            android:summary="Recenter speed (0=stay, 15=slow, 100=fast)"
+            android:summary="Recenter speed (0=stay, 50=~0.3s, 100=instant)"
             android:defaultValue="15"
             android:max="100"
             app:min="0"

@@ -63,7 +63,7 @@ class ParallaxScene(
     private var height = 0f
     
     // Settings - defaults match pref_effects.xml
-    private var parallaxStrength = 2.5f  // (25/50)^2 * 10 = 2.5 (pref_parallax_strength=25)
+    private var parallaxStrength = 3.0f  // Default: pref_parallax_strength=3
     private var parallaxMaxOffsetPx = 130f  // pref_parallax_max_offset=130
     private var weatherEnabled = true
     private var seasonalEnabled = true
@@ -382,12 +382,11 @@ class ParallaxScene(
                 }
             }
             
-            // Input sensitivity: slider 0-50 with QUADRATIC curve
-            // 0 = off, 25 = normal (2.5x), 50 = high (10x)
-            // Quadratic: (val/50)^2 * 10 gives 0->0, 25->2.5, 50->10
-            val sensitivityVal = prefs.getInt("pref_parallax_strength", 25).coerceIn(0, 50)
-            val normalized = sensitivityVal / 50f
-            val rawStrength = normalized * normalized * 10f  // Quadratic: 25->2.5x, 50->10x
+            // Input sensitivity: slider 0-5 with LINEAR curve
+            // 0 = off, 2.5 = normal, 5 = high
+            // Direct mapping: slider value = strength multiplier
+            val sensitivityVal = prefs.getInt("pref_parallax_strength", 3).coerceIn(0, 5)
+            val rawStrength = sensitivityVal.toFloat()  // Direct: 0=0x, 2.5=2.5x, 5=5x
             parallaxStrength = if (parallaxEnabled) rawStrength else 0f
             
             // Max offset as percentage of screen height: 2..20% (default 10%)

@@ -44,9 +44,9 @@ class PreferenceSyncTest {
             ),
             SyncedPreference(
                 key = "pref_parallax_strength",
-                defaultValue = "10",
+                defaultValue = "3",
                 min = 0,
-                max = 50
+                max = 5
             ),
             SyncedPreference(
                 key = "pref_parallax_max_offset",
@@ -96,9 +96,9 @@ class PreferenceSyncTest {
     fun `parallax strength has consistent defaults`() {
         val pref = SYNCED_PREFERENCES.find { it.key == "pref_parallax_strength" }
         assertNotNull("pref_parallax_strength should be documented", pref)
-        assertEquals("Default should be 10", "10", pref?.defaultValue)
+        assertEquals("Default should be 3", "3", pref?.defaultValue)
         assertEquals("Min should be 0", 0, pref?.min)
-        assertEquals("Max should be 50", 50, pref?.max)
+        assertEquals("Max should be 5", 5, pref?.max)
     }
     
     @Test

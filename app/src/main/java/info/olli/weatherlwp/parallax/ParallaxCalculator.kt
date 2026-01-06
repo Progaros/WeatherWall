@@ -43,7 +43,7 @@ class ParallaxCalculator {
     
     // User-configurable settings - defaults match pref_effects.xml
     // These are overwritten by loadPrefs() but provide sane defaults before settings load
-    var strength = 2.5f                 // Default: (25/50)^2 * 10 = 2.5 (pref_parallax_strength=25)
+    var strength = 3.0f                 // Default: pref_parallax_strength=3
     var maxOffsetPx = 130f              // Legacy: used when maxOffsetPercent is 0
     var maxOffsetPercent = 15f          // Default: 15% of screen height (increased for more movement)
     var smoothing = 0.134f              // Default: 0.02 + (30/100)*0.38 (pref_parallax_smoothing=30)
@@ -180,36 +180,19 @@ class ParallaxCalculator {
         }
         
         // Apply return-to-center force when tilt is near zero
-        // This creates a constant drift toward center, controlled by returnSpeed
-        // returnSpeed: 0.0 = no return (position holds), 1.0 = fast return
+        // This creates a smooth drift toward center, controlled by returnSpeed
+        // returnSpeed: 0.0 = no return (position holds), 1.0 = fast smooth return
+        var returnLerpBoost = 1f  // Multiplier for lerp rate during return
         if (tiltMagnitude < RETURN_TILT_THRESHOLD && returnSpeed > 0.001f) {
-            // Calculate return rate using logarithmic scale for natural feel
-            // ln(1+x)/ln(2) gives 0 at x=0, 1 at x=1
-            val logScale = kotlin.math.ln(1f + returnSpeed) / kotlin.math.ln(2f)
+            // Set target to center
+            targetX = 0f
+            targetY = 0f
             
-            // Calculate current distance from center
-            val distFromCenter = kotlin.math.sqrt(positionX * positionX + positionY * positionY)
-            
-            // Movement is proportional to distance (slower when close to center)
-            // This gives natural deceleration and prevents jitter
-            val distanceFactor = (distFromCenter / effectiveMaxOffset).coerceIn(0.05f, 1f)
-            
-            // Base movement per frame: logScale * 0.2 gives good range
-            // At returnSpeed=1: move ~20% of scaled distance per frame
-            // At returnSpeed=0.15 (default): move ~3% of scaled distance per frame
-            val moveRate = logScale * 0.2f * distanceFactor * deltaScale
-            
-            if (distFromCenter > 0.5f) {
-                // Move toward center by a fixed amount based on current position
-                val moveX = positionX * moveRate
-                val moveY = positionY * moveRate
-                targetX = positionX - moveX
-                targetY = positionY - moveY
-            } else {
-                // Very close to center - snap to center
-                targetX = 0f
-                targetY = 0f
-            }
+            // Boost the lerp rate based on returnSpeed for faster but still smooth return
+            // returnSpeed=0.15 (default): boost=1.5x → ~1.5s to center
+            // returnSpeed=0.50: boost=4x → ~0.4s to center
+            // returnSpeed=1.00: boost=8x → ~0.2s to center (still smooth)
+            returnLerpBoost = 1f + returnSpeed * 7f
         } else if (tiltMagnitude < RETURN_TILT_THRESHOLD && returnSpeed <= 0.001f) {
             // returnSpeed = 0: Hold current position (no return to center)
             targetX = positionX
@@ -218,7 +201,9 @@ class ParallaxCalculator {
         
         // Calculate effective lerp rate based on smoothing setting
         // Higher smoothing = slower response (smaller lerp rate)
-        val effectiveLerpRate = (POSITION_LERP_RATE * (1f - smoothing * 0.6f) * deltaScale).coerceAtMost(1f)
+        // Apply returnLerpBoost when returning to center
+        val baseLerpRate = POSITION_LERP_RATE * (1f - smoothing * 0.6f) * deltaScale
+        val effectiveLerpRate = (baseLerpRate * returnLerpBoost).coerceAtMost(0.9f)  // Cap at 0.9 for smooth animation
         
         // Smoothly interpolate position toward target
         positionX += (targetX - positionX) * effectiveLerpRate
