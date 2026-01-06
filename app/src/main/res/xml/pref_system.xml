@@ -163,6 +163,18 @@
             android:summary="Enable tracing (copies log when disabled)"
             android:defaultValue="false" />
 
+        <SwitchPreferenceCompat
+            android:key="pref_debug_frame_timing"
+            android:title="Frame Timing"
+            android:summary="Log slow frames (&gt;16ms) for performance analysis"
+            android:defaultValue="false" />
+
+        <info.olli.weatherlwp.settings.DebugOverlayPreference
+            android:key="pref_debug_overlay_enabled"
+            android:title="🐞 Debug Overlay"
+            android:summary="Show FPS, frame time, and debug info on screen"
+            android:defaultValue="false" />
+
         <Preference
             android:key="pref_preview"
             android:title="Preview Wallpaper"

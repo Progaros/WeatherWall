@@ -101,35 +101,63 @@ object RenderConstants {
     const val PARALLAX_HILLS_MIN = 0.50f
     const val PARALLAX_HILLS_MAX = 0.80f
     
+    /**
+     * Calculate parallax depth factor for ground events based on normalized depth (0-1).
+     * Maps normalized depth to the hills parallax range.
+     * 
+     * @param normalizedDepth 0.0 = closest to viewer, 1.0 = furthest
+     * @return Parallax depth factor in PARALLAX_HILLS range
+     */
+    fun getHillParallaxDepth(normalizedDepth: Float): Float {
+        return PARALLAX_HILLS_MIN + normalizedDepth * (PARALLAX_HILLS_MAX - PARALLAX_HILLS_MIN)
+    }
+    
+    /**
+     * Calculate event duration safely from distance and speed.
+     * Ensures no division by zero and clamps result to reasonable range.
+     * 
+     * @param distance Total distance to travel (normalized screen units)
+     * @param speed Movement speed per millisecond
+     * @param minMs Minimum duration in milliseconds (default 1000ms = 1 second)
+     * @param maxMs Maximum duration in milliseconds (default 180000ms = 3 minutes)
+     * @return Safe duration in milliseconds
+     */
+    fun calculateEventDuration(distance: Float, speed: Float, minMs: Long = 1000L, maxMs: Long = 180000L): Long {
+        val safeSpeed = speed.coerceAtLeast(0.00001f)
+        val rawDuration = (distance / safeSpeed).toLong()
+        return rawDuration.coerceIn(minMs, maxMs)
+    }
+    
     // ============== Sky Colors (3-stop gradients: Top, Middle, Horizon) ==============
     // Always use a 3-stop LinearGradient for the sky.
     // Horizon should be significantly lighter than top (atmosphere thickness)
+    // NOTE: Lazy initialization prevents unit test failures when only math functions are used
     
     // Night: Deep space -> Dark blue -> Slightly lighter horizon
-    val SKY_NIGHT_TOP: Int = Color.parseColor("#0B0B1A")      // Deep space
-    val SKY_NIGHT_MID: Int = Color.parseColor("#141428")      // Dark blue
-    val SKY_NIGHT_BOTTOM: Int = Color.parseColor("#252540")   // Lighter horizon
+    val SKY_NIGHT_TOP: Int by lazy { Color.parseColor("#0B0B1A") }      // Deep space
+    val SKY_NIGHT_MID: Int by lazy { Color.parseColor("#141428") }      // Dark blue
+    val SKY_NIGHT_BOTTOM: Int by lazy { Color.parseColor("#252540") }   // Lighter horizon
     
     // Dawn: Orange-purple transition with bright horizon
-    val SKY_DAWN_TOP: Int = Color.parseColor("#4A3060")       // Purple-ish
-    val SKY_DAWN_MID: Int = Color.parseColor("#FF8855")       // Orange
-    val SKY_DAWN_BOTTOM: Int = Color.parseColor("#FFCC88")    // Bright horizon
+    val SKY_DAWN_TOP: Int by lazy { Color.parseColor("#4A3060") }       // Purple-ish
+    val SKY_DAWN_MID: Int by lazy { Color.parseColor("#FF8855") }       // Orange
+    val SKY_DAWN_BOTTOM: Int by lazy { Color.parseColor("#FFCC88") }    // Bright horizon
     
     // Day: Deep blue -> Blue -> Light horizon haze
-    val SKY_DAY_TOP: Int = Color.parseColor("#1565C0")        // Deep blue
-    val SKY_DAY_MID: Int = Color.parseColor("#42A5F5")        // Bright blue
-    val SKY_DAY_BOTTOM: Int = Color.parseColor("#B3E5FC")     // Light horizon
+    val SKY_DAY_TOP: Int by lazy { Color.parseColor("#1565C0") }        // Deep blue
+    val SKY_DAY_MID: Int by lazy { Color.parseColor("#42A5F5") }        // Bright blue
+    val SKY_DAY_BOTTOM: Int by lazy { Color.parseColor("#B3E5FC") }     // Light horizon
     
     // Dusk: Purple -> Orange -> Bright glow at horizon
-    val SKY_DUSK_TOP: Int = Color.parseColor("#4A2060")       // Deep purple
-    val SKY_DUSK_MID: Int = Color.parseColor("#FF6B35")       // Orange
-    val SKY_DUSK_BOTTOM: Int = Color.parseColor("#FFAB76")    // Bright horizon glow
+    val SKY_DUSK_TOP: Int by lazy { Color.parseColor("#4A2060") }       // Deep purple
+    val SKY_DUSK_MID: Int by lazy { Color.parseColor("#FF6B35") }       // Orange
+    val SKY_DUSK_BOTTOM: Int by lazy { Color.parseColor("#FFAB76") }    // Bright horizon glow
     
     // Ambient tint colors for global tinting
-    val AMBIENT_NIGHT: Int = Color.parseColor("#2A2040")      // Purple-blue night tint
-    val AMBIENT_DAWN: Int = Color.parseColor("#FF9966")       // Warm orange dawn tint
-    val AMBIENT_DAY: Int = Color.parseColor("#E8F0F8")        // Very light neutral (nearly white with hint of sky)
-    val AMBIENT_DUSK: Int = Color.parseColor("#FF7744")       // Orange-red dusk tint
+    val AMBIENT_NIGHT: Int by lazy { Color.parseColor("#2A2040") }      // Purple-blue night tint
+    val AMBIENT_DAWN: Int by lazy { Color.parseColor("#FF9966") }       // Warm orange dawn tint
+    val AMBIENT_DAY: Int by lazy { Color.parseColor("#E8F0F8") }        // Very light neutral (nearly white with hint of sky)
+    val AMBIENT_DUSK: Int by lazy { Color.parseColor("#FF7744") }       // Orange-red dusk tint
     
     // ============== Time Thresholds (hours) ==============
     
@@ -146,9 +174,10 @@ object RenderConstants {
     const val MOUNTAIN_GRAY_MAX = 100
     
     // ============== Terrain Colors ==============
+    // NOTE: Lazy initialization prevents unit test failures when only math functions are used
     
-    val HILL_BASE_COLOR: Int = Color.rgb(30, 80, 40)
-    val TREE_BASE_COLOR: Int = Color.rgb(20, 60, 30)
+    val HILL_BASE_COLOR: Int by lazy { Color.rgb(30, 80, 40) }
+    val TREE_BASE_COLOR: Int by lazy { Color.rgb(20, 60, 30) }
     
     // ============== Weather Effect Constants ==============
     
@@ -157,10 +186,10 @@ object RenderConstants {
     const val STORM_CLOUD_Y2 = 0.05f   // Middle layer
     const val STORM_CLOUD_Y3 = 0.15f   // Front layer
     
-    /** Storm cloud colors (ARGB) */
-    val STORM_CLOUD_COLOR_BACK: Int = Color.argb(180, 30, 35, 45)
-    val STORM_CLOUD_COLOR_MID: Int = Color.argb(160, 40, 45, 55)
-    val STORM_CLOUD_COLOR_FRONT: Int = Color.argb(140, 50, 55, 65)
+    /** Storm cloud colors (ARGB) - lazy to avoid Android dependency in tests */
+    val STORM_CLOUD_COLOR_BACK: Int by lazy { Color.argb(180, 30, 35, 45) }
+    val STORM_CLOUD_COLOR_MID: Int by lazy { Color.argb(160, 40, 45, 55) }
+    val STORM_CLOUD_COLOR_FRONT: Int by lazy { Color.argb(140, 50, 55, 65) }
     
     /** Cloud size multipliers */
     const val STORM_CLOUD_SIZE_BACK = 0.6f
@@ -282,6 +311,11 @@ object RenderConstants {
     const val EVENT_DURATION_FIREFLY = 10000L
     const val EVENT_DURATION_OWL = 15000L
     const val EVENT_DURATION_ALIEN = 20000L
+    const val EVENT_DURATION_SQUIRREL = 10000L
+    const val EVENT_DURATION_DRAGONFLY = 10000L
+    const val EVENT_DURATION_SNOWFLAKE = 20000L
+    const val EVENT_DURATION_BAT = 13000L
+    const val EVENT_DURATION_DEER = 15000L
     
     // ============== Utility Functions ==============
     
@@ -363,6 +397,22 @@ object RenderConstants {
         val g = (Color.green(baseColor) * (1 - amount) + Color.green(ambientColor) * amount).toInt()
         val b = (Color.blue(baseColor) * (1 - amount) + Color.blue(ambientColor) * amount).toInt()
         return Color.rgb(r.coerceIn(0, 255), g.coerceIn(0, 255), b.coerceIn(0, 255))
+    }
+    
+    /**
+     * Apply atmospheric perspective to a color based on depth/distance.
+     * Combines distance-based tint calculation with ambient blending.
+     * 
+     * Use this for objects at varying depths where atmospheric perspective matters.
+     * 
+     * @param baseColor The object's base color
+     * @param ambientColor The current ambient light color
+     * @param distance 0.0 = foreground (less tint), 1.0 = background (more tint)
+     * @return The tinted color with atmospheric perspective applied
+     */
+    fun applyAtmosphericPerspective(baseColor: Int, ambientColor: Int, distance: Float): Int {
+        val tintAmount = applyAmbientTint(baseColor, ambientColor, distance)
+        return blendWithAmbient(baseColor, ambientColor, tintAmount)
     }
     
     /**

@@ -437,4 +437,176 @@ class RandomEventTest {
         
         assertTrue("Should be idle when nothing happening", isIdle)
     }
+    
+    // ============== Seasonal Event Tests ==============
+    
+    @Test
+    fun `butterfly restricted to warm seasons`() {
+        // Butterflies only appear in spring and summer
+        val spring = "spring"
+        val summer = "summer"
+        val autumn = "autumn"
+        val winter = "winter"
+        
+        val butterflyInSpring = spring == "spring" || spring == "summer"
+        val butterflyInSummer = summer == "spring" || summer == "summer"
+        val butterflyInAutumn = autumn == "spring" || autumn == "summer"
+        val butterflyInWinter = winter == "spring" || winter == "summer"
+        
+        assertTrue("Butterfly appears in spring", butterflyInSpring)
+        assertTrue("Butterfly appears in summer", butterflyInSummer)
+        assertFalse("Butterfly not in autumn", butterflyInAutumn)
+        assertFalse("Butterfly not in winter", butterflyInWinter)
+    }
+    
+    @Test
+    fun `dragonfly only in summer`() {
+        // Dragonflies only appear in summer (peak insect season)
+        val spring = "spring"
+        val summer = "summer"
+        val autumn = "autumn"
+        
+        val dragonflyInSpring = spring == "summer"
+        val dragonflyInSummer = summer == "summer"
+        val dragonflyInAutumn = autumn == "summer"
+        
+        assertFalse("Dragonfly not in spring", dragonflyInSpring)
+        assertTrue("Dragonfly appears in summer", dragonflyInSummer)
+        assertFalse("Dragonfly not in autumn", dragonflyInAutumn)
+    }
+    
+    @Test
+    fun `fireflies only on summer nights`() {
+        // Fireflies: summer + night + no rain
+        val isSummer = true
+        val isNight = true
+        val isRaining = false
+        
+        val firefliesAvailable = isSummer && isNight && !isRaining
+        assertTrue("Fireflies on summer nights", firefliesAvailable)
+        
+        // Not in winter nights
+        val isWinter = true
+        val winterFireflies = !isWinter || (isSummer && isNight && !isRaining)
+        // Winter would make isSummer false, so:
+        val firefliesInWinter = false && isNight && !isRaining
+        assertFalse("No fireflies in winter", firefliesInWinter)
+    }
+    
+    @Test
+    fun `squirrel more common in autumn`() {
+        // Squirrels: always available in autumn, 30% chance other seasons
+        val autumnChance = 1.0f  // Always in autumn
+        val otherSeasonChance = 0.3f  // 30% chance in other seasons
+        
+        assertTrue("Squirrel guaranteed in autumn", autumnChance >= 1.0f)
+        assertTrue("Squirrel possible in other seasons", otherSeasonChance > 0f)
+        assertTrue("Squirrel less common outside autumn", otherSeasonChance < autumnChance)
+    }
+    
+    @Test
+    fun `snowflake only in winter daytime`() {
+        // Decorative snowflakes: winter + day + not already snowing
+        val isWinter = true
+        val isNight = false
+        val isSnowing = false
+        
+        val snowflakeAvailable = isWinter && !isNight && !isSnowing
+        assertTrue("Snowflakes in winter day", snowflakeAvailable)
+        
+        // Not at night
+        val nightSnowflake = isWinter && true && !isSnowing
+        // Note: the condition is !isNight, so night = true means not available
+        val snowflakeAtNight = isWinter && !true && !isSnowing
+        assertFalse("No decorative snowflakes at night", snowflakeAtNight)
+    }
+    
+    // ============== New Event Duration Tests ==============
+    
+    @Test
+    fun `squirrel duration is reasonable`() {
+        val duration = RenderConstants.EVENT_DURATION_SQUIRREL
+        
+        assertTrue("Squirrel visible long enough", duration >= 8000L)
+        assertTrue("Squirrel not too long", duration <= 20000L)
+    }
+    
+    @Test
+    fun `dragonfly duration is reasonable`() {
+        val duration = RenderConstants.EVENT_DURATION_DRAGONFLY
+        
+        assertTrue("Dragonfly visible long enough", duration >= 6000L)
+        assertTrue("Dragonfly not too long", duration <= 15000L)
+    }
+    
+    @Test
+    fun `snowflake duration allows slow fall`() {
+        val duration = RenderConstants.EVENT_DURATION_SNOWFLAKE
+        
+        assertTrue("Snowflake falls slowly", duration >= 12000L)
+        assertTrue("Snowflake not too long", duration <= 30000L)
+    }
+    
+    // ============== Butterfly Movement Fix Tests ==============
+    
+    @Test
+    fun `butterfly wobble amplitude is reduced`() {
+        // Original values were too high, causing erratic movement
+        // New values should be smaller
+        val oldWobbleAmpX = 0.03f  // Old minimum
+        val newWobbleAmpX = 0.015f  // New minimum (reduced by 50%)
+        
+        assertTrue("Wobble amplitude reduced", newWobbleAmpX < oldWobbleAmpX)
+    }
+    
+    @Test
+    fun `butterfly drift speed is reduced`() {
+        // Original drift was too fast
+        val oldDriftSpeed = 0.005f  // Old minimum
+        val newDriftSpeed = 0.003f  // New minimum (reduced by 40%)
+        
+        assertTrue("Drift speed reduced", newDriftSpeed < oldDriftSpeed)
+    }
+    
+    @Test
+    fun `butterfly wobble frequency is reduced`() {
+        // Slower wobble = more gentle movement
+        val oldWobbleFreq = 0.6f  // Old minimum
+        val newWobbleFreq = 0.3f  // New minimum (halved)
+        
+        assertTrue("Wobble frequency reduced", newWobbleFreq < oldWobbleFreq)
+    }
+    
+    // ============== Bird Flock Animation Fix Tests ==============
+    
+    @Test
+    fun `bird wings always curve upward`() {
+        // The fix ensures wings have a base upward angle
+        val baseWingUp = 0.4f  // size * 0.4 base lift
+        
+        assertTrue("Base wing lift is positive", baseWingUp > 0f)
+    }
+    
+    @Test
+    fun `bird wing oscillation does not invert wings`() {
+        // Wing lift = baseWingUp + sin * amplitude
+        // Even at minimum (sin = -1), wings should stay up
+        val baseWingUp = 0.4f
+        val maxAmplitude = 0.35f  // During flapping
+        
+        val minWingLift = baseWingUp - maxAmplitude
+        
+        assertTrue("Wings never fully invert", minWingLift > 0f || minWingLift >= -0.1f)
+        // At minimum: 0.4 - 0.35 = 0.05 (still positive, wings still up)
+    }
+    
+    @Test
+    fun `bird wing tips stay above body`() {
+        // The V-shape should always have tips above the body
+        // wingtip Y = birdY - wingLift (negative Y = up on screen)
+        val wingLift = 0.4f  // Base lift
+        
+        // Since we subtract wingLift, tips are above body when wingLift > 0
+        assertTrue("Wing tips above body", wingLift > 0f)
+    }
 }

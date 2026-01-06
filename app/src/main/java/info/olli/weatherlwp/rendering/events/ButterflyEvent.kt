@@ -34,12 +34,13 @@ class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
         2 -> Color.rgb(255, 240, 80)   // Yellow
         else -> Color.rgb(255, 180, 200) // Pink
     }
-    private val driftSpeedX = 0.005f + random.nextFloat() * 0.008f
-    private val driftSpeedY = 0.003f + random.nextFloat() * 0.005f
-    private val wobbleFreqX = 0.6f + random.nextFloat() * 0.4f
-    private val wobbleFreqY = 0.4f + random.nextFloat() * 0.3f
-    private val wobbleAmpX = 0.03f + random.nextFloat() * 0.04f
-    private val wobbleAmpY = 0.02f + random.nextFloat() * 0.03f
+    // Reduced movement values for more natural, gentle flight
+    private val driftSpeedX = 0.003f + random.nextFloat() * 0.004f  // Slower horizontal drift
+    private val driftSpeedY = 0.002f + random.nextFloat() * 0.003f  // Slower vertical drift
+    private val wobbleFreqX = 0.3f + random.nextFloat() * 0.2f     // Slower wobble frequency
+    private val wobbleFreqY = 0.2f + random.nextFloat() * 0.15f    // Slower vertical wobble
+    private val wobbleAmpX = 0.015f + random.nextFloat() * 0.02f   // Reduced horizontal amplitude
+    private val wobbleAmpY = 0.01f + random.nextFloat() * 0.015f   // Reduced vertical amplitude
     private val direction = if (random.nextBoolean()) 1f else -1f
     
     // Parallax based on distance
@@ -56,14 +57,12 @@ class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val t = elapsedMs / 1000f
         
-        // Calculate position from elapsed time
-        val x = startX + direction * t * driftSpeedX * 0.1f + 
-            sin(t * wobbleFreqX + flutterPhase) * wobbleAmpX +
-            sin(t * wobbleFreqX * 2.3f) * wobbleAmpX * 0.4f
+        // Calculate position from elapsed time - gentler, more natural movement
+        val x = startX + direction * t * driftSpeedX * 0.15f + 
+            sin(t * wobbleFreqX + flutterPhase) * wobbleAmpX
         
         val y = startY + 
             sin(t * wobbleFreqY + flutterPhase * 0.7f) * wobbleAmpY +
-            sin(t * wobbleFreqY * 1.7f) * wobbleAmpY * 0.5f +
             cos(t * wobbleFreqY * 0.5f) * wobbleAmpY * 0.3f
         
         val px = parallaxCalculator.getOffsetXForDepth(parallaxDepth)

@@ -1,0 +1,173 @@
+package info.olli.weatherlwp.rendering.events
+
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Path
+import info.olli.weatherlwp.parallax.ParallaxCalculator
+import info.olli.weatherlwp.rendering.RenderConstants
+import info.olli.weatherlwp.simulation.SimulationState
+import kotlin.math.abs
+import kotlin.math.sin
+import kotlin.random.Random
+
+/**
+ * Squirrel scurrying across the ground, stops occasionally to look around.
+ * Seasonal: Autumn (gathering nuts for winter)
+ */
+class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
+    override val layer = EventLayer.GROUND
+    
+    // Depth determines size and parallax (0.4-0.8 - squirrels stay in mid-foreground)
+    private val depthValue = 0.4f + random.nextFloat() * 0.4f
+    override val depthFactor = depthValue
+    
+    private val sizeScale = 1.0f - depthValue * 0.3f
+    
+    // Direction: left or right
+    private val direction = if (random.nextBoolean()) 1f else -1f
+    private val startX = if (direction > 0) -0.05f else 1.05f
+    
+    // Baseline Y - will be adjusted by hill height
+    private val baseY = 0.78f + random.nextFloat() * 0.08f
+    
+    // Movement speed (squirrels are quick!)
+    private val speed = 0.00008f + random.nextFloat() * 0.00004f
+    override val durationMs: Long = (1.2f / speed).toLong()
+    
+    // Animation phases
+    private val animPhase = random.nextFloat() * 6.28f
+    
+    // Colors - lazy to avoid Android dependency in tests
+    private val bodyColor by lazy { Color.rgb(139, 90, 43) }  // Brown
+    private val bellyColor by lazy { Color.rgb(222, 184, 135) }  // Tan
+    
+    private val path = Path()
+    
+    // Parallax depth - use centralized helper
+    private val parallaxDepth = RenderConstants.getHillParallaxDepth(depthValue)
+    
+    // Stop and look behavior - squirrels pause periodically
+    private val stopIntervalMs = 2000L + random.nextLong(1500)
+    private val stopDurationMs = 400L + random.nextLong(300)
+    
+    override fun getCurrentYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
+        val x = startX + direction * speed * elapsedMs
+        return hillHeightProvider?.invoke(x, depthValue) ?: baseY
+    }
+    
+    override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
+                      parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
+                      timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
+                      hillHeightProvider: HillHeightProvider?) {
+        val unit = height * 0.006f * sizeScale
+        
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
+        
+        // Check if squirrel is stopped to look around
+        val cyclePos = elapsedMs % (stopIntervalMs + stopDurationMs)
+        val isStopped = cyclePos > stopIntervalMs
+        
+        // Calculate position
+        val effectiveElapsed = if (isStopped) {
+            // During stop, freeze position at the moment it stopped
+            (elapsedMs / (stopIntervalMs + stopDurationMs)) * stopIntervalMs + stopIntervalMs
+        } else {
+            elapsedMs - (elapsedMs / (stopIntervalMs + stopDurationMs)) * stopDurationMs
+        }
+        
+        val x = startX + direction * speed * effectiveElapsed
+        val y = hillHeightProvider?.invoke(x, depthValue) ?: baseY
+        
+        val px = parallaxCalculator.getOffsetXForDepth(parallaxDepth)
+        val py = parallaxCalculator.getOffsetYForDepth(parallaxDepth)
+        canvas.save()
+        canvas.translate(px, py)
+        
+        val screenX = x * width - extendedOffset
+        val screenY = y * height - unit * 3f  // Offset above ground
+        
+        // Running animation - legs move when not stopped
+        val runPhase = if (isStopped) 0f else sin(timeSeconds * 20f + animPhase)
+        
+        // Tail bob
+        val tailBob = sin(timeSeconds * 3f + animPhase) * unit * 0.3f
+        
+        // Body color with ambient
+        paint.color = RenderConstants.blendWithAmbient(bodyColor, ambientColor, 0.3f)
+        
+        canvas.save()
+        // Flip based on direction
+        if (direction < 0) {
+            canvas.scale(-1f, 1f, screenX, screenY)
+        }
+        
+        // Draw tail (large, fluffy, curved upward)
+        path.reset()
+        path.moveTo(screenX - unit * 1.5f, screenY)
+        path.quadTo(
+            screenX - unit * 2.5f, screenY - unit * 2f + tailBob,
+            screenX - unit * 1.8f, screenY - unit * 3f + tailBob
+        )
+        path.quadTo(
+            screenX - unit * 1.2f, screenY - unit * 2.5f + tailBob,
+            screenX - unit * 1.2f, screenY - unit * 0.5f
+        )
+        path.close()
+        canvas.drawPath(path, paint)
+        
+        // Draw body (oval)
+        canvas.drawOval(
+            screenX - unit * 1.5f, screenY - unit * 0.8f,
+            screenX + unit * 0.8f, screenY + unit * 0.8f,
+            paint
+        )
+        
+        // Draw head
+        canvas.drawCircle(screenX + unit * 1.2f, screenY - unit * 0.2f, unit * 0.7f, paint)
+        
+        // Ear
+        path.reset()
+        path.moveTo(screenX + unit * 1.0f, screenY - unit * 0.7f)
+        path.lineTo(screenX + unit * 1.3f, screenY - unit * 1.4f)
+        path.lineTo(screenX + unit * 1.5f, screenY - unit * 0.6f)
+        path.close()
+        canvas.drawPath(path, paint)
+        
+        // Eye
+        paint.color = Color.BLACK
+        canvas.drawCircle(screenX + unit * 1.5f, screenY - unit * 0.3f, unit * 0.12f, paint)
+        
+        // Legs (animated when running)
+        paint.color = RenderConstants.blendWithAmbient(bodyColor, ambientColor, 0.3f)
+        val legOffset = runPhase * unit * 0.4f
+        
+        // Front legs
+        canvas.drawRoundRect(
+            screenX + unit * 0.3f + legOffset, screenY + unit * 0.3f,
+            screenX + unit * 0.6f + legOffset, screenY + unit * 1.2f,
+            unit * 0.15f, unit * 0.15f, paint
+        )
+        canvas.drawRoundRect(
+            screenX + unit * 0.0f - legOffset, screenY + unit * 0.3f,
+            screenX + unit * 0.3f - legOffset, screenY + unit * 1.2f,
+            unit * 0.15f, unit * 0.15f, paint
+        )
+        
+        // Back legs
+        canvas.drawRoundRect(
+            screenX - unit * 1.0f - legOffset, screenY + unit * 0.3f,
+            screenX - unit * 0.7f - legOffset, screenY + unit * 1.2f,
+            unit * 0.15f, unit * 0.15f, paint
+        )
+        canvas.drawRoundRect(
+            screenX - unit * 1.3f + legOffset, screenY + unit * 0.3f,
+            screenX - unit * 1.0f + legOffset, screenY + unit * 1.2f,
+            unit * 0.15f, unit * 0.15f, paint
+        )
+        
+        canvas.restore()
+        canvas.restore()
+    }
+}

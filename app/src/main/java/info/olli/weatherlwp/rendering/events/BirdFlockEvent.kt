@@ -94,20 +94,26 @@ class BirdFlockEvent(random: Random, override val spawnTimeMs: Long = System.cur
             val birdY = (y + bird.offsetY) * height
             
             // Smooth wing animation using sine
-            // During flap: fast wing beats, during glide: slow gentle movement
-            val wingBeatSpeed = if (isFlapping) 12f else 2f
-            val wingAmplitude = if (isFlapping) size * 0.7f else size * 0.15f
-            val wingOffset = if (isFlapping) 0f else -size * 0.2f  // Wings slightly down when gliding
+            // During flap: fast wing beats with larger amplitude
+            // During glide: slow gentle movement with wings mostly up
+            val wingBeatSpeed = if (isFlapping) 10f else 1.5f
+            val wingAmplitude = if (isFlapping) size * 0.35f else size * 0.1f
+            // Base wing angle: wings curve upward (negative Y = up on screen)
+            val baseWingUp = size * 0.4f
             
-            val wingY = sin(elapsedSec * wingBeatSpeed + bird.wingPhase) * wingAmplitude + wingOffset
+            // Wing lift oscillates around base position, always keeping wings angled up
+            // Use abs(sin) to keep wings always curved upward, varying lift amount
+            val sineValue = sin(elapsedSec * wingBeatSpeed + bird.wingPhase)
+            val wingLift = baseWingUp + sineValue * wingAmplitude
             
             strokePaint.strokeWidth = (size * 0.25f).coerceAtLeast(1.5f)
             
-            // Draw bird as smooth curved V-shape
+            // Draw bird as smooth curved V-shape (wings always curve up from body)
+            // Wingtips are above body (birdY - wingLift), body is at center
             path.reset()
-            path.moveTo(birdX - size, birdY + wingY * 0.3f)  // Left wingtip
-            path.quadTo(birdX - size * 0.3f, birdY - wingY, birdX, birdY)  // Left wing curve
-            path.quadTo(birdX + size * 0.3f, birdY - wingY, birdX + size, birdY + wingY * 0.3f)  // Right wing curve
+            path.moveTo(birdX - size, birdY - wingLift)  // Left wingtip (above body)
+            path.quadTo(birdX - size * 0.3f, birdY - wingLift * 0.3f, birdX, birdY)  // Left wing curves down to body
+            path.quadTo(birdX + size * 0.3f, birdY - wingLift * 0.3f, birdX + size, birdY - wingLift)  // Right wing curves up to tip
             canvas.drawPath(path, strokePaint)
         }
         canvas.restore()

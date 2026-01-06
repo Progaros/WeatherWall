@@ -24,9 +24,14 @@ class EventsSettingsFragment : PreferenceFragmentCompat() {
         setupSpawnButton("pref_event_shootingstar", "shootingstar", "Shooting Star")
         setupSpawnButton("pref_event_alien", "alien", "UFO")
         setupSpawnButton("pref_event_butterfly", "butterfly", "Butterfly")
+        setupSpawnButton("pref_event_dragonfly", "dragonfly", "Dragonfly")
         setupSpawnButton("pref_event_rabbit", "rabbit", "Rabbit")
         setupSpawnButton("pref_event_fox", "fox", "Fox")
+        setupSpawnButton("pref_event_squirrel", "squirrel", "Squirrel")
         setupSpawnButton("pref_event_fireflies", "fireflies", "Fireflies")
+        setupSpawnButton("pref_event_snowflake", "snowflake", "Snowflake")
+        setupSpawnButton("pref_event_bat", "bat", "Bat Colony")
+        setupSpawnButton("pref_event_deer", "deer", "Deer")
         
         // Random spawn button
         findPreference<Preference>("pref_spawn_event")?.setOnPreferenceClickListener {

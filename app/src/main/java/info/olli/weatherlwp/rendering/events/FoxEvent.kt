@@ -34,8 +34,7 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
     // This ensures the fox walks on visible foreground hills, not hidden in the background
     // The exact depthFactor will be matched to the closest hill by hillHeightProvider
     private val normalizedDepth = 0.4f + random.nextFloat() * 0.6f  // 0.4 to 1.0
-    override val depthFactor: Float = RenderConstants.PARALLAX_HILLS_MIN + 
-        normalizedDepth * (RenderConstants.PARALLAX_HILLS_MAX - RenderConstants.PARALLAX_HILLS_MIN)
+    override val depthFactor: Float = RenderConstants.getHillParallaxDepth(normalizedDepth)
     
     // Fallback ground Y based on depth (used when no hill data available)
     private val fallbackGroundY = 0.78f + normalizedDepth * 0.10f  // 0.78 to 0.88

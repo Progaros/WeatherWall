@@ -52,6 +52,7 @@ class ParallaxScene(
     private val terrainLayer = TerrainLayer(context)
     private val randomEventLayer = RandomEventLayer(context)
     private val vignetteLayer = VignetteLayer(context)
+    private val debugOverlayLayer = DebugOverlayLayer(context)
     
     // Overlays
     private val weatherLayer = WeatherLayer()
@@ -162,7 +163,15 @@ class ParallaxScene(
         }
     }
 
+    // Frame timing for performance monitoring (based on ai.md guidance)
+    private var frameTimeLoggingEnabled = false
+    private var slowFrameCount = 0
+    private var totalFrameCount = 0
+    private val SLOW_FRAME_THRESHOLD_MS = 16L  // 60 FPS target
+    private val FRAME_LOG_INTERVAL = 300  // Log stats every 300 frames (~5 seconds at 60fps)
+
     fun render(canvas: Canvas, deltaTimeMs: Long = 16L) {
+        val frameStartTime = if (frameTimeLoggingEnabled) System.nanoTime() else 0L
         DebugTracer.traceStart("render")
         try {
             val w = canvas.width.toFloat()
@@ -302,7 +311,38 @@ class ParallaxScene(
                 Log.e(TAG, "Error drawing vignette", e)
             }
             
+            // Draw Debug Overlay (on top of vignette for visibility)
+            try {
+                // Update debug overlay with current state info
+                debugOverlayLayer.activeEventCount = randomEventLayer.getActiveEventCount()
+                debugOverlayLayer.isIdleMode = false  // This will be set by wallpaper engine
+                val (px, py) = parallaxCalculator.getOffset()
+                debugOverlayLayer.parallaxOffsetX = px
+                debugOverlayLayer.parallaxOffsetY = py
+                debugOverlayLayer.update(state, 0L)  // Update for FPS calculation
+                debugOverlayLayer.draw(canvas, state, parallaxCalculator)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error drawing debug overlay", e)
+            }
+            
             DebugTracer.traceEnd("render")
+            
+            // Frame time monitoring for performance analysis
+            if (frameTimeLoggingEnabled) {
+                val frameTimeMs = (System.nanoTime() - frameStartTime) / 1_000_000
+                totalFrameCount++
+                if (frameTimeMs > SLOW_FRAME_THRESHOLD_MS) {
+                    slowFrameCount++
+                }
+                // Log statistics periodically
+                if (totalFrameCount % FRAME_LOG_INTERVAL == 0) {
+                    val slowPercentage = (slowFrameCount * 100f / totalFrameCount)
+                    Log.d(TAG, "Frame stats: $totalFrameCount frames, ${String.format("%.1f", slowPercentage)}% slow (>16ms)")
+                    if (slowPercentage > 10f) {
+                        Log.w(TAG, "High slow frame rate detected - consider reducing event count or visual complexity")
+                    }
+                }
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error rendering scene", e)
         }
@@ -314,6 +354,7 @@ class ParallaxScene(
         }
         weatherLayer.resize(w, h)
         vignetteLayer.resize(w, h)
+        debugOverlayLayer.resize(w, h)
     }
 
     fun loadPrefs() {
@@ -419,11 +460,21 @@ class ParallaxScene(
             weatherLayer.reloadSettings()
             seasonalEvents.loadSettings()
             vignetteLayer.reloadSettings()
+            debugOverlayLayer.reloadSettings()
             
             // Configure shake detection based on settings
             val shakeEnabled = prefs.getBoolean("pref_shake_fireworks_enabled", true)
             val shakeSensitivity = prefs.getInt("pref_shake_sensitivity", 50) / 100f
             sensor.setShakeSettings(shakeEnabled, shakeSensitivity)
+            
+            // Frame time logging (debug feature for performance analysis)
+            frameTimeLoggingEnabled = prefs.getBoolean("pref_debug_frame_timing", false)
+            if (frameTimeLoggingEnabled) {
+                // Reset counters when enabled
+                slowFrameCount = 0
+                totalFrameCount = 0
+                Log.d(TAG, "Frame timing logging enabled")
+            }
             
         } catch (e: Exception) {
             Log.e(TAG, "Error loading prefs", e)
@@ -436,6 +487,7 @@ class ParallaxScene(
         }
         weatherLayer.destroy()
         vignetteLayer.destroy()
+        debugOverlayLayer.destroy()
     }
     
     /**

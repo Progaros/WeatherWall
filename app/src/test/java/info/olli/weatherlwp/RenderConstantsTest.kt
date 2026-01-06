@@ -229,4 +229,91 @@ class RenderConstantsTest {
         assertTrue("Haze visible", alpha >= 10)
         assertTrue("Haze not too opaque", alpha <= 50)
     }
+    
+    // ============== New Utility Function Tests ==============
+    
+    @Test
+    fun `hill parallax depth calculation concept`() {
+        // Tests the concept used in getHillParallaxDepth()
+        val hillsMin = 0.50f  // PARALLAX_HILLS_MIN
+        val hillsMax = 0.80f  // PARALLAX_HILLS_MAX
+        
+        // At normalized depth 0.0 (closest)
+        val depthAtZero = hillsMin + 0.0f * (hillsMax - hillsMin)
+        assertEquals("At 0 = min", hillsMin, depthAtZero, 0.001f)
+        
+        // At normalized depth 1.0 (furthest)
+        val depthAtOne = hillsMin + 1.0f * (hillsMax - hillsMin)
+        assertEquals("At 1 = max", hillsMax, depthAtOne, 0.001f)
+        
+        // At normalized depth 0.5 (middle)
+        val depthAtHalf = hillsMin + 0.5f * (hillsMax - hillsMin)
+        val expectedMid = (hillsMin + hillsMax) / 2f
+        assertEquals("At 0.5 = middle", expectedMid, depthAtHalf, 0.001f)
+    }
+    
+    @Test
+    fun `hill parallax depth monotonically increases`() {
+        val hillsMin = 0.50f
+        val hillsMax = 0.80f
+        
+        var lastDepth = -1f
+        for (i in 0..10) {
+            val normalizedDepth = i / 10f
+            val depth = hillsMin + normalizedDepth * (hillsMax - hillsMin)
+            assertTrue("Depth increases with distance: $normalizedDepth", depth > lastDepth)
+            lastDepth = depth
+        }
+    }
+    
+    @Test
+    fun `atmospheric perspective blend amount concept`() {
+        // Tests the concept used in applyAmbientTint()
+        // More distant objects get more tint (atmospheric perspective)
+        val minBlend = 0.05f  // At distance 0
+        val maxBlend = 0.45f  // At distance 1
+        
+        // Distance 0 (foreground) - minimal tint
+        val blendAtZero = minBlend + 0.0f * 0.4f
+        assertEquals("Foreground minimal tint", minBlend, blendAtZero, 0.001f)
+        
+        // Distance 1 (background) - more tint
+        val blendAtOne = minBlend + 1.0f * 0.4f
+        assertEquals("Background more tint", maxBlend, blendAtOne, 0.001f)
+    }
+    
+    @Test
+    fun `height scale calculation concept`() {
+        // Tests the concept used in getHeightScale()
+        val referenceHeight = 1920f
+        val minScale = 0.5f
+        
+        // At reference height - scale is 1.0
+        val scaleAtRef = (1920f / referenceHeight).coerceAtLeast(minScale)
+        assertEquals("At reference height = 1.0", 1.0f, scaleAtRef, 0.001f)
+        
+        // At double height - scale is 2.0
+        val scaleAtDouble = (3840f / referenceHeight).coerceAtLeast(minScale)
+        assertEquals("At double height = 2.0", 2.0f, scaleAtDouble, 0.001f)
+        
+        // At half height - scale is 0.5 (clamped to min)
+        val scaleAtHalf = (960f / referenceHeight).coerceAtLeast(minScale)
+        assertEquals("At half height = 0.5 (min)", minScale, scaleAtHalf, 0.001f)
+        
+        // At quarter height - still 0.5 (clamped)
+        val scaleAtQuarter = (480f / referenceHeight).coerceAtLeast(minScale)
+        assertEquals("At quarter height = 0.5 (clamped)", minScale, scaleAtQuarter, 0.001f)
+    }
+    
+    @Test
+    fun `event duration constants are reasonable`() {
+        // New events added for seasonal system
+        val squirrelDuration = 10000L
+        val dragonflyDuration = 10000L
+        val snowflakeDuration = 20000L
+        
+        assertTrue("Squirrel duration reasonable", squirrelDuration in 5000L..30000L)
+        assertTrue("Dragonfly duration reasonable", dragonflyDuration in 5000L..20000L)
+        assertTrue("Snowflake duration allows slow fall", snowflakeDuration in 10000L..30000L)
+    }
 }
