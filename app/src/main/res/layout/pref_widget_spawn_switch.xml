@@ -5,6 +5,13 @@
     android:orientation="horizontal"
     android:gravity="center_vertical">
 
+    <!-- Animated Event Preview -->
+    <info.olli.weatherlwp.settings.EventPreviewView
+        android:id="@+id/event_preview"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginEnd="8dp" />
+
     <!-- Spawn Button (Inline) -->
     <ImageButton
         android:id="@+id/spawn_button"

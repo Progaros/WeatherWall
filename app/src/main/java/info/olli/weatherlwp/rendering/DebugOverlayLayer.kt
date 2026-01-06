@@ -167,7 +167,13 @@ class DebugOverlayLayer(private val context: Context) : SceneLayer {
                     Triple("Wind", windStr, warn)
                 }
                 DebugItem.CLOUDS -> {
-                    Triple("Clouds", state.cloudDensity.name, false)
+                    val cloudCount = state.getCloudCount()
+                    val modeStr = if (state.cloudDensity.name == "AUTO") {
+                        "${cloudCount} (${(state.cloudCover * 100).toInt()}%)"
+                    } else {
+                        "${cloudCount} (${state.cloudDensity.name})"
+                    }
+                    Triple("Clouds", modeStr, false)
                 }
                 DebugItem.EVENTS -> {
                     Triple("Events", activeEventCount.toString(), false)
