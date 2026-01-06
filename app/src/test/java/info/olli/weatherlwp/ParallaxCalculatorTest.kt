@@ -362,4 +362,80 @@ class ParallaxCalculatorTest {
         assertEquals("Half tilt should produce half offset",
             fullTiltOffset / 2f, halfTiltOffset, 3f)
     }
+    
+    // ============== Circular Clamping Tests ==============
+    
+    @Test
+    fun testCircularClampingPrinciple() {
+        // Test the circular clamping formula
+        val maxOffsetPercent = 15f
+        
+        // If tilt is at corner (1, 1), both X and Y are at max
+        val targetX = 1.0f  // Normalized to maxOffset
+        val targetY = 1.0f
+        
+        // Calculate magnitude
+        val magnitude = kotlin.math.sqrt(targetX * targetX + targetY * targetY)
+        
+        // Magnitude should be sqrt(2) ≈ 1.414
+        assertTrue("Corner magnitude exceeds 1", magnitude > 1f)
+        assertEquals("Corner magnitude is sqrt(2)", kotlin.math.sqrt(2f), magnitude, 0.01f)
+        
+        // After circular clamping, magnitude should be 1
+        val scale = 1f / magnitude
+        val clampedX = targetX * scale
+        val clampedY = targetY * scale
+        
+        val clampedMagnitude = kotlin.math.sqrt(clampedX * clampedX + clampedY * clampedY)
+        assertEquals("Clamped magnitude should be 1", 1f, clampedMagnitude, 0.01f)
+    }
+    
+    @Test
+    fun testCircularClampingPreservesDirection() {
+        // Direction should be preserved after clamping
+        val targetX = 0.8f
+        val targetY = 0.6f
+        
+        val magnitude = kotlin.math.sqrt(targetX * targetX + targetY * targetY)
+        // magnitude = 1.0, so no clamping needed
+        assertEquals("This vector is already on unit circle", 1f, magnitude, 0.01f)
+        
+        // No scaling needed when already at unit magnitude
+        val angle = kotlin.math.atan2(targetY, targetX)
+        val expectedAngle = kotlin.math.atan2(0.6f, 0.8f)
+        assertEquals("Direction preserved", expectedAngle, angle, 0.01f)
+    }
+    
+    @Test
+    fun testCircularClampingVsSquare() {
+        // Square clamping: max = 1.0 in each axis independently
+        // Circular clamping: max = 1.0 in combined magnitude
+        
+        // At corner (1, 1):
+        // Square: stays at (1, 1) - magnitude = sqrt(2) ≈ 1.414
+        // Circular: becomes (0.707, 0.707) - magnitude = 1.0
+        
+        val cornerX = 1f
+        val cornerY = 1f
+        
+        // Square clamping result
+        val squareMagnitude = kotlin.math.sqrt(cornerX * cornerX + cornerY * cornerY)
+        
+        // Circular clamping result
+        val circularX = cornerX / squareMagnitude
+        val circularY = cornerY / squareMagnitude
+        val circularMagnitude = kotlin.math.sqrt(circularX * circularX + circularY * circularY)
+        
+        assertTrue("Square clamping allows corner overflow", squareMagnitude > 1f)
+        assertEquals("Circular clamping constrains to unit circle", 1f, circularMagnitude, 0.01f)
+    }
+    
+    @Test
+    fun testMaxOffsetPercentIs15() {
+        // Verify the default max offset is 15%
+        val newCalculator = ParallaxCalculator()
+        
+        // Default should be 15%
+        assertEquals("Default maxOffsetPercent should be 15", 15f, newCalculator.maxOffsetPercent, 0.01f)
+    }
 }

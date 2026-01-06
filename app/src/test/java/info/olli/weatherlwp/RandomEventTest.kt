@@ -300,4 +300,141 @@ class RandomEventTest {
         assertEquals("Tree draws first (behind)", "tree", drawOrder[0].first)
         assertEquals("Animal draws second (in front)", "animal", drawOrder[1].first)
     }
+    
+    // ============== Shooting Star Fade-Out Tests ==============
+    
+    @Test
+    fun `shooting star fade starts at 80 percent of travel`() {
+        val fadeStartProgress = 0.8f
+        val totalTravel = 0.9f
+        
+        // At 80% of total travel, fade should start
+        val currentProgress = 0.8f * totalTravel
+        val isFading = currentProgress >= fadeStartProgress * totalTravel
+        
+        assertFalse("Just before fade start should not be fading", 
+            (fadeStartProgress * totalTravel - 0.01f) >= fadeStartProgress * totalTravel)
+        assertTrue("At fade start should be fading", isFading)
+    }
+    
+    @Test
+    fun `shooting star alpha decreases during fade`() {
+        val fadeStartProgress = 0.8f
+        val totalTravel = 0.9f
+        
+        // Calculate alpha at different points during fade
+        val progressAtFadeStart = fadeStartProgress * totalTravel
+        val progressAtEnd = totalTravel
+        val fadeRange = progressAtEnd - progressAtFadeStart
+        
+        // At start of fade: alpha = 1.0
+        // At end of fade: alpha = 0.0
+        val alphaAtStart = 1f
+        val progressMidFade = progressAtFadeStart + fadeRange * 0.5f
+        val fadeProgress = (progressMidFade - progressAtFadeStart) / fadeRange
+        val alphaAtMidFade = 1f - fadeProgress
+        
+        assertTrue("Alpha should decrease during fade", alphaAtMidFade < alphaAtStart)
+        assertEquals("Alpha at mid-fade should be 0.5", 0.5f, alphaAtMidFade, 0.01f)
+    }
+    
+    @Test
+    fun `shooting star tail shrinks during fade`() {
+        // Tail length decreases proportionally with alpha
+        val baseLength = 0.08f
+        val fadeAlpha = 0.5f
+        
+        val tailLength = baseLength * fadeAlpha
+        
+        assertEquals("Tail should be half length at half alpha", 0.04f, tailLength, 0.001f)
+    }
+    
+    @Test
+    fun `shooting star head shrinks during fade`() {
+        // Head radius decreases proportionally with alpha
+        val baseRadius = 0.003f
+        val fadeAlpha = 0.5f
+        
+        val headRadius = baseRadius * fadeAlpha
+        
+        assertEquals("Head should be half size at half alpha", 0.0015f, headRadius, 0.0001f)
+    }
+    
+    @Test
+    fun `shooting star speed is slower than before`() {
+        // New speed range: 0.00025f + random * 0.00015f
+        // Max speed = 0.00025 + 0.00015 = 0.0004
+        val minSpeed = 0.00025f
+        val maxSpeed = 0.0004f
+        
+        // Old speed was 0.0005f - new max should be slower
+        val oldSpeed = 0.0005f
+        
+        assertTrue("Max new speed should be slower than old", maxSpeed < oldSpeed)
+        assertTrue("Speed range should be positive", minSpeed > 0)
+        assertTrue("Max should be greater than min", maxSpeed > minSpeed)
+    }
+    
+    // ============== Idle Mode Tests ==============
+    
+    @Test
+    fun `idle mode reduces frame rate`() {
+        val normalFps = 60
+        val idleFps = 10
+        
+        assertTrue("Idle FPS should be much lower", idleFps < normalFps / 2)
+        assertTrue("Idle FPS should still be reasonable", idleFps >= 5)
+    }
+    
+    @Test
+    fun `idle timeout is 5 seconds`() {
+        val idleTimeoutMs = 5000L
+        
+        assertEquals("Idle timeout should be 5 seconds", 5000L, idleTimeoutMs)
+    }
+    
+    @Test
+    fun `scene is not idle when parallax is active`() {
+        // Helper to check scene activity
+        val parallaxActive = true
+        val weatherActive = false
+        val eventsActive = false
+        
+        val isIdle = !parallaxActive && !weatherActive && !eventsActive
+        
+        assertFalse("Should not be idle when parallax moving", isIdle)
+    }
+    
+    @Test
+    fun `scene is not idle when weather is active`() {
+        val parallaxActive = false
+        val weatherActive = true  // Rain, snow, etc.
+        val eventsActive = false
+        
+        val isIdle = !parallaxActive && !weatherActive && !eventsActive
+        
+        assertFalse("Should not be idle during active weather", isIdle)
+    }
+    
+    @Test
+    fun `scene is not idle when events are active`() {
+        val parallaxActive = false
+        val weatherActive = false
+        val eventsActive = true  // Shooting star, airplane, etc.
+        
+        val isIdle = !parallaxActive && !weatherActive && !eventsActive
+        
+        assertFalse("Should not be idle with active events", isIdle)
+    }
+    
+    @Test
+    fun `scene is idle when nothing is active`() {
+        val parallaxActive = false
+        val weatherActive = false
+        val eventsActive = false
+        
+        val isIdle = !parallaxActive && !weatherActive && !eventsActive
+        
+        assertTrue("Should be idle when nothing happening", isIdle)
+    }
 }

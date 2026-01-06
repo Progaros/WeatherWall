@@ -16,6 +16,23 @@ object RenderConstants {
     
     // ============== Screen & Coordinate System ==============
     
+    /** Reference screen height for scaling calculations (1080p portrait) */
+    const val REFERENCE_HEIGHT = 1920f
+    
+    /** Minimum height scale to prevent elements becoming too small */
+    const val MIN_HEIGHT_SCALE = 0.5f
+    
+    /**
+     * Calculate height scale for the current screen.
+     * Elements sized relative to reference height should be multiplied by this.
+     * 
+     * @param screenHeight The actual screen height
+     * @return Scale factor (1.0 at 1920px, 0.5 at 960px, clamped to MIN_HEIGHT_SCALE)
+     */
+    fun getHeightScale(screenHeight: Float): Float {
+        return (screenHeight / REFERENCE_HEIGHT).coerceAtLeast(MIN_HEIGHT_SCALE)
+    }
+    
     /** Reference aspect ratio for world-space calculations (9:16 portrait) */
     const val REFERENCE_ASPECT_RATIO = 0.5625f
     
@@ -166,8 +183,8 @@ object RenderConstants {
     // ============== Animation Speeds ==============
     
     /** Wind effect on cloud speed multiplier */
-    const val WIND_CLOUD_SPEED_MIN = 0.3f
-    const val WIND_CLOUD_SPEED_MAX = 12.0f  // Increased for dramatic high wind
+    const val WIND_CLOUD_SPEED_MIN = 0.3f   // Light breeze cloud drift
+    const val WIND_CLOUD_SPEED_MAX = 12.0f  // Dramatic storm cloud speed
     
     /** Tree sway animation parameters */
     const val TREE_SWAY_FREQUENCY = 0.6f   // Base frequency (slower, more natural)

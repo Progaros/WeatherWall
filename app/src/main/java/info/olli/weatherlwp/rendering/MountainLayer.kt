@@ -10,6 +10,7 @@ import android.graphics.Shader
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationState
+import info.olli.weatherlwp.util.SeasonHelper
 import kotlin.random.Random
 
 /**
@@ -93,17 +94,13 @@ class MountainLayer(private val context: Context) : SceneLayer {
     
     /**
      * Determines current terrain season based on date or override setting.
+     * Delegates to centralized SeasonHelper for consistency with TerrainLayer.
      */
     private fun getCurrentTerrainSeason(): String {
-        if (terrainSeasonOverride != "auto") {
-            return terrainSeasonOverride
-        }
-        val cal = java.util.Calendar.getInstance()
-        return when (cal.get(java.util.Calendar.MONTH)) {
-            2, 3, 4 -> "spring"
-            5, 6, 7 -> "summer"
-            8, 9, 10 -> "autumn"
-            else -> "winter"
+        return if (terrainSeasonOverride != "auto") {
+            terrainSeasonOverride
+        } else {
+            SeasonHelper.getCurrentCalendarSeasonKey()
         }
     }
     
@@ -530,7 +527,13 @@ class MountainLayer(private val context: Context) : SceneLayer {
         mountainBottomOffset = bottomOffsetVal / 100f
         
         // Seasonal settings (same preferences as TerrainLayer for consistency)
-        terrainSeasonOverride = prefs.getString("pref_terrain_season", "auto") ?: "auto"
+        // Only use terrain season override when debug/simulation mode is enabled
+        val debugEnabled = prefs.getBoolean("pref_debug_enabled", false)
+        terrainSeasonOverride = if (debugEnabled) {
+            prefs.getString("pref_terrain_season", "auto") ?: "auto"
+        } else {
+            "auto"  // Always use real season when not in debug mode
+        }
         winterSnowEnabled = prefs.getBoolean("pref_winter_snow_hills", true)
         winterSnowCoverage = prefs.getInt("pref_winter_snow_coverage", 50)
         

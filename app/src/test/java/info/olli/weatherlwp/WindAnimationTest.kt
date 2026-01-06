@@ -127,9 +127,9 @@ class WindAnimationTest {
         
         assertTrue("Min speed positive", minSpeed > 0f)
         assertTrue("Max speed > min", maxSpeed > minSpeed)
-        assertTrue("Max speed not too fast", maxSpeed <= 15f)
+        assertTrue("Max speed not too fast", maxSpeed <= 15f)  // Allow up to 15 for storms
         
-        // Ratio should be significant
+        // Ratio should be significant for dramatic effect
         val ratio = maxSpeed / minSpeed
         assertTrue("Speed range is significant", ratio >= 10f)
     }

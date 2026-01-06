@@ -213,4 +213,62 @@ class WeatherRepositoryTest {
         
         assertEquals("Normalized moon phase should be 0.5", 0.5f, normalized, 0.01f)
     }
+    
+    // ============== Wind Speed Conversion Tests ==============
+    
+    @Test
+    fun `wind speed from kmh to ms conversion`() {
+        // Breezy Weather sends km/h, we convert to m/s by dividing by 3.6
+        val windSpeedKmh = 36f  // 36 km/h
+        val windSpeedMs = windSpeedKmh / 3.6f
+        
+        assertEquals("36 km/h should be 10 m/s", 10f, windSpeedMs, 0.01f)
+    }
+    
+    @Test
+    fun `light wind 5kmh converts correctly`() {
+        // Common light breeze scenario: 5 km/h
+        val windSpeedKmh = 5f
+        val windSpeedMs = windSpeedKmh / 3.6f
+        
+        // 5 km/h = 1.39 m/s
+        assertEquals("5 km/h should be ~1.39 m/s", 1.39f, windSpeedMs, 0.02f)
+    }
+    
+    @Test
+    fun `strong wind 72kmh converts correctly`() {
+        // Strong wind: 72 km/h = 20 m/s (our max normalization point)
+        val windSpeedKmh = 72f
+        val windSpeedMs = windSpeedKmh / 3.6f
+        
+        assertEquals("72 km/h should be 20 m/s", 20f, windSpeedMs, 0.01f)
+    }
+    
+    @Test
+    fun `normalized wind strength for light wind`() {
+        // 5 km/h = 1.39 m/s -> normalized = 1.39/20 = 0.07
+        val windSpeedMs = 5f / 3.6f  // Convert km/h to m/s
+        val normalized = (windSpeedMs / 20f).coerceIn(0f, 1f)
+        
+        assertTrue("Light wind should be well under 0.1", normalized < 0.1f)
+        assertEquals("Normalized light wind", 0.07f, normalized, 0.01f)
+    }
+    
+    @Test
+    fun `normalized wind strength for max wind`() {
+        // 20 m/s = 72 km/h -> normalized = 1.0
+        val windSpeedMs = 20f
+        val normalized = (windSpeedMs / 20f).coerceIn(0f, 1f)
+        
+        assertEquals("Max wind should normalize to 1.0", 1f, normalized, 0.01f)
+    }
+    
+    @Test
+    fun `normalized wind strength clamps above 20ms`() {
+        // Hurricane wind: 50 m/s -> normalized = 1.0 (clamped)
+        val windSpeedMs = 50f
+        val normalized = (windSpeedMs / 20f).coerceIn(0f, 1f)
+        
+        assertEquals("Extreme wind should clamp to 1.0", 1f, normalized, 0.01f)
+    }
 }

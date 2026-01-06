@@ -21,8 +21,8 @@ class WeatherLayerTest {
     private val LIGHTNING_INTERVAL_RANGE_MS = 2500L
     private val LIGHTNING_FLASH_DURATION_MS = 70L
     private val CLOUD_MOVEMENT_SCALE = 0.06f
-    private val WIND_CLOUD_SPEED_MAX = 12.0f
-    private val WIND_CLOUD_SPEED_MIN = 0.3f
+    private val WIND_CLOUD_SPEED_MAX = 12.0f  // Dramatic storm cloud speed
+    private val WIND_CLOUD_SPEED_MIN = 0.3f   // Light breeze cloud drift
     private val RAIN_PARTICLE_POOL_SIZE = 300
     private val SNOW_PARTICLE_POOL_SIZE = 200
     private val STORM_CLOUD_Y1 = -0.05f
@@ -91,7 +91,7 @@ class WeatherLayerTest {
         val scale = CLOUD_MOVEMENT_SCALE
         val maxSpeedMultiplier = WIND_CLOUD_SPEED_MAX
         
-        // At max wind, clouds should cross screen in 2-15 seconds (faster now)
+        // At max wind (12.0), clouds should cross screen in 2-15 seconds
         // movement per second = scale * effectiveSpeed * groupSpeed
         // For full screen (1.0): time = 1.0 / (scale * maxSpeed * avgGroupSpeed)
         val avgGroupSpeed = 0.5f  // Typical group speed
@@ -111,7 +111,7 @@ class WeatherLayerTest {
         val movementPerSecond = scale * minSpeedMultiplier * avgGroupSpeed
         val screenCrossTime = 1.0f / movementPerSecond
         
-        assertTrue("Screen cross time > 30s at min wind", screenCrossTime >= 30f)
+        assertTrue("Screen cross time > 60s at min wind", screenCrossTime >= 60f)
         assertTrue("Screen cross time < 3min at min wind", screenCrossTime <= 180f)
     }
     

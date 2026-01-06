@@ -211,8 +211,8 @@ class CloudLayerTest {
     @Test
     fun `cloud speed should scale with wind strength`() {
         // Wind speed calculation: WIND_CLOUD_SPEED_MIN + windStrength * (MAX - MIN)
-        val windSpeedMin = 0.2f  // RenderConstants.WIND_CLOUD_SPEED_MIN
-        val windSpeedMax = 8.0f  // RenderConstants.WIND_CLOUD_SPEED_MAX
+        val windSpeedMin = 0.3f  // RenderConstants.WIND_CLOUD_SPEED_MIN
+        val windSpeedMax = 12.0f  // RenderConstants.WIND_CLOUD_SPEED_MAX
         
         val calmWind = 0f
         val strongWind = 1f
@@ -222,9 +222,9 @@ class CloudLayerTest {
         val strongSpeed = windSpeedMin + strongWind * (windSpeedMax - windSpeedMin)
         val moderateSpeed = windSpeedMin + moderateWind * (windSpeedMax - windSpeedMin)
         
-        assertEquals("Calm wind speed", 0.2f, calmSpeed, 0.01f)
-        assertEquals("Strong wind speed", 8.0f, strongSpeed, 0.01f)
-        assertEquals("Moderate wind speed", 4.1f, moderateSpeed, 0.01f)
+        assertEquals("Calm wind speed", 0.3f, calmSpeed, 0.01f)
+        assertEquals("Strong wind speed", 12.0f, strongSpeed, 0.01f)
+        assertEquals("Moderate wind speed", 6.15f, moderateSpeed, 0.01f)
         
         assertTrue("Strong wind moves clouds faster", strongSpeed > calmSpeed)
         assertTrue("Moderate wind between calm and strong", 

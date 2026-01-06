@@ -409,7 +409,7 @@ class WeatherLayer : SceneLayer {
         // Base speed scaled by layer
         p.speed = (1.5f + Random.nextFloat() * 2f) * layerScale
         // Size relative to screen height, also scaled by layer
-        val heightScale = screenHeight / 1920f
+        val heightScale = RenderConstants.getHeightScale(screenHeight.toFloat())
         p.size = (3f + Random.nextFloat() * 5f) * heightScale * layerScale
         // Alpha reduced for back layers
         p.alpha = ((180 + Random.nextInt(75)) * layerScale).toInt().coerceIn(60, 255)

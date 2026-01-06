@@ -10,6 +10,7 @@ import android.graphics.Shader
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationState
+import info.olli.weatherlwp.util.SeasonHelper
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -154,20 +155,14 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     /**
      * Determines current terrain season based on date or override setting.
      * Returns: "spring" (Mar-May), "summer" (Jun-Aug), "autumn" (Sep-Nov), "winter" (Dec-Feb)
+     * 
+     * Delegates to centralized SeasonHelper for consistency with MountainLayer.
      */
     private fun getCurrentTerrainSeason(): String {
-        // Check for manual override first
-        if (terrainSeasonOverride != "auto") {
-            return terrainSeasonOverride
-        }
-        
-        // Fall back to calendar-based season
-        val cal = java.util.Calendar.getInstance()
-        return when (cal.get(java.util.Calendar.MONTH)) {
-            2, 3, 4 -> "spring"    // Mar, Apr, May
-            5, 6, 7 -> "summer"    // Jun, Jul, Aug
-            8, 9, 10 -> "autumn"   // Sep, Oct, Nov
-            else -> "winter"       // Dec, Jan, Feb
+        return if (terrainSeasonOverride != "auto") {
+            terrainSeasonOverride
+        } else {
+            SeasonHelper.getCurrentCalendarSeasonKey()
         }
     }
 
@@ -1022,7 +1017,13 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         treeSegments = prefs.getInt("pref_tree_segments", 1).coerceIn(1, 5)
         
         // Seasonal terrain settings
-        terrainSeasonOverride = prefs.getString("pref_terrain_season", "auto") ?: "auto"
+        // Only use terrain season override when debug/simulation mode is enabled
+        val debugEnabled = prefs.getBoolean("pref_debug_enabled", false)
+        terrainSeasonOverride = if (debugEnabled) {
+            prefs.getString("pref_terrain_season", "auto") ?: "auto"
+        } else {
+            "auto"  // Always use real season when not in debug mode
+        }
         springFlowersEnabled = prefs.getBoolean("pref_spring_flowers", true)
         springFlowerDensity = prefs.getInt("pref_spring_flower_density", 500)
         springFlowerSpread = prefs.getInt("pref_spring_flower_spread", 50) / 100f

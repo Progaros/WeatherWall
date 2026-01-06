@@ -119,10 +119,9 @@ class SeasonalEvents(private val context: Context? = null) {
     private var screenWidth = 0
     private var screenHeight = 0
     
-    // Scale factor for height-relative sizing (reference height: 1920px)
+    // Scale factor for height-relative sizing (uses RenderConstants.REFERENCE_HEIGHT)
     // All pixel values are designed for 1920px height and scaled proportionally
     private var heightScale = 1f
-    private val REFERENCE_HEIGHT = 1920f
 
     private var fireworkTimer = 0
     private val fireworkColors = intArrayOf(
@@ -206,7 +205,7 @@ class SeasonalEvents(private val context: Context? = null) {
         if (!initialized || screenWidth != width || screenHeight != height) {
             screenWidth = width
             screenHeight = height
-            heightScale = screenHeight / REFERENCE_HEIGHT
+            heightScale = RenderConstants.getHeightScale(screenHeight.toFloat())
             initParticles()
             initialized = true
         }
@@ -311,7 +310,7 @@ class SeasonalEvents(private val context: Context? = null) {
             if (!initialized || screenWidth != canvas.width || screenHeight != canvas.height) {
                 screenWidth = canvas.width
                 screenHeight = canvas.height
-                heightScale = screenHeight / REFERENCE_HEIGHT
+                heightScale = RenderConstants.getHeightScale(screenHeight.toFloat())
                 initParticles()
                 initialized = true
             }
@@ -352,7 +351,7 @@ class SeasonalEvents(private val context: Context? = null) {
             if (!initialized || screenWidth != canvas.width || screenHeight != canvas.height) {
                 screenWidth = canvas.width
                 screenHeight = canvas.height
-                heightScale = screenHeight / REFERENCE_HEIGHT
+                heightScale = RenderConstants.getHeightScale(screenHeight.toFloat())
                 initParticles()
                 initialized = true
             }
@@ -383,7 +382,7 @@ class SeasonalEvents(private val context: Context? = null) {
             if (!initialized || screenWidth != canvas.width || screenHeight != canvas.height) {
                 screenWidth = canvas.width
                 screenHeight = canvas.height
-                heightScale = screenHeight / REFERENCE_HEIGHT
+                heightScale = RenderConstants.getHeightScale(screenHeight.toFloat())
                 initParticles()
                 initialized = true
             }

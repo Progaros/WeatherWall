@@ -73,9 +73,11 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
             val sunrise = data.optLong("sunRise", data.optLong("todaySunrise", -1))
             val sunset = data.optLong("sunSet", data.optLong("todaySunset", -1))
             
-            // Wind speed in m/s (Breezy sends currentWindSpeed or windSpeed)
-            val windSpeed = data.optDouble("currentWindSpeed", 
+            // Wind speed - Breezy Weather sends in km/h, we need m/s
+            // Convert km/h to m/s by dividing by 3.6
+            val windSpeedKmh = data.optDouble("currentWindSpeed", 
                 data.optDouble("windSpeed", 0.0)).toFloat()
+            val windSpeed = windSpeedKmh / 3.6f
             
             // Extended weather data
             val extendedData = WeatherRepository.ExtendedWeatherData(
@@ -93,7 +95,7 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
             // Store in repository (including raw JSON for debugging)
             WeatherRepository.updateWeather(context, weatherType, sunrise, sunset, windSpeed, json, extendedData)
             
-            Log.i(TAG, "Weather updated: $weatherType (code=$conditionCode), wind=$windSpeed m/s, " +
+            Log.i(TAG, "Weather updated: $weatherType (code=$conditionCode), wind=${windSpeedKmh}km/h (${windSpeed}m/s), " +
                 "precip=${extendedData.precipProbability}%, clouds=${extendedData.cloudCover}%")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse weather JSON", e)

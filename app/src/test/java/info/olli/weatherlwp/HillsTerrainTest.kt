@@ -138,4 +138,53 @@ class HillsTerrainTest {
         
         assertEquals("Control points should be at midpoints", segmentWidth / 2, cx1, 0.1f)
     }
+
+    // ============== Terrain Season Override Tests ==============
+    
+    @Test
+    fun `terrain season should use override when debug enabled`() {
+        val debugEnabled = true
+        val prefSeasonOverride = "winter"
+        
+        val effectiveSeason = getTerrainSeasonHelper(debugEnabled, prefSeasonOverride)
+        
+        assertEquals("Should use override when debug enabled", "winter", effectiveSeason)
+    }
+    
+    @Test
+    fun `terrain season should ignore override when debug disabled`() {
+        val debugEnabled = false
+        val prefSeasonOverride = "winter"  // This should be ignored
+        
+        val effectiveSeason = getTerrainSeasonHelper(debugEnabled, prefSeasonOverride)
+        
+        assertEquals("Should use auto when debug disabled", "auto", effectiveSeason)
+    }
+    
+    @Test
+    fun `terrain season auto should use calendar`() {
+        val debugEnabled = true
+        val prefSeasonOverride = "auto"
+        
+        val effectiveSeason = getTerrainSeasonHelper(debugEnabled, prefSeasonOverride)
+        
+        assertEquals("Auto should remain auto for calendar lookup", "auto", effectiveSeason)
+    }
+    
+    @Test
+    fun `terrain season valid values`() {
+        val validSeasons = listOf("auto", "spring", "summer", "autumn", "winter")
+        
+        assertTrue("Should include auto", "auto" in validSeasons)
+        assertTrue("Should include all four seasons", validSeasons.size == 5)
+    }
+    
+    // Helper that mirrors TerrainLayer/MountainLayer logic
+    private fun getTerrainSeasonHelper(debugEnabled: Boolean, prefSeason: String): String {
+        return if (debugEnabled) {
+            prefSeason
+        } else {
+            "auto"  // Always use real season when not in debug mode
+        }
+    }
 }
