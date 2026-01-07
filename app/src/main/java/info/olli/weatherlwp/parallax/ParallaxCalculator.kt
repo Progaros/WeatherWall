@@ -85,11 +85,11 @@ class ParallaxCalculator {
     }
     
     /**
-     * Return speed: continuous pull toward center that dampens tilt effect.
-     * 0.0 = no return (position fully follows tilt)
-     * 0.5 = moderate dampening (scene drifts toward center)
-     * 1.0 = strong dampening (scene resists tilt, quickly returns to center)
-     * Works continuously at all tilt angles, not just when phone is flat.
+     * Return speed: controls how fast the scene re-centers when the device is flat.
+     * 0.0 = no return (holds position when tilt is released)
+     * 0.5 = normal return speed
+     * 1.0 = instant return
+     * Only applies when tilt magnitude is low (near zero).
      */
     var returnSpeed = 0.15f             // Default: moderate pull (pref_parallax_return_speed=15)
     
@@ -178,32 +178,31 @@ class ParallaxCalculator {
             targetY = tiltTargetY
         }
         
-        // Apply continuous return-to-center force that competes with tilt
-        // Higher returnSpeed means stronger constant pull toward center
-        // Special case: when returnSpeed=0 AND tilt is near zero, hold current position
-        if (returnSpeed <= 0.001f && tiltMagnitude < 0.05f) {
-            // returnSpeed=0 with no tilt: hold current position (don't move to center)
-            targetX = positionX
-            targetY = positionY
-        } else if (returnSpeed > 0.001f) {
-            // Apply return force proportional to returnSpeed
-            // returnSpeed=0.5: moderate bias toward center
-            // returnSpeed=1.0: strong pull toward center (tilt effect is dampened)
-            val returnForce = returnSpeed * 0.2f * deltaScale  // Max 20% pull per 16ms at returnSpeed=1
-            
-            // Blend target toward center based on return force
-            targetX = targetX * (1f - returnForce)
-            targetY = targetY * (1f - returnForce)
+        // Determine interpolation speed based on state
+        // If tilt is low (device flat), we use "Return Speed" to control recentering
+        val isReturning = tiltMagnitude < 0.1f
+        
+        val effectiveLerpRate = if (isReturning) {
+            if (returnSpeed <= 0.001f) {
+                // returnSpeed=0: Hold position (freeze) when flat
+                0f
+            } else {
+                // Use returnSpeed for lerp rate (0.001 to 0.5)
+                // returnSpeed=1.0 -> 0.5 (Very fast)
+                // returnSpeed=0.1 -> 0.05 (Slow)
+                (returnSpeed * 0.5f * deltaScale).coerceAtMost(0.9f)
+            }
+        } else {
+            // Standard smoothing when active (tilting)
+            val baseLerpRate = POSITION_LERP_RATE * (1f - smoothing * 0.6f) * deltaScale
+            baseLerpRate.coerceAtMost(0.9f)
         }
         
-        // Calculate effective lerp rate based on smoothing setting
-        // Higher smoothing = slower response (smaller lerp rate)
-        val baseLerpRate = POSITION_LERP_RATE * (1f - smoothing * 0.6f) * deltaScale
-        val effectiveLerpRate = baseLerpRate.coerceAtMost(0.9f)  // Cap at 0.9 for smooth animation
-        
-        // Smoothly interpolate position toward target
-        positionX += (targetX - positionX) * effectiveLerpRate
-        positionY += (targetY - positionY) * effectiveLerpRate
+        // Apply interpolation only if rate > 0
+        if (effectiveLerpRate > 0f) {
+            positionX += (targetX - positionX) * effectiveLerpRate
+            positionY += (targetY - positionY) * effectiveLerpRate
+        }
         
         // Snap to target when very close (prevents tiny oscillations)
         if (kotlin.math.abs(targetX - positionX) < 0.1f) positionX = targetX
