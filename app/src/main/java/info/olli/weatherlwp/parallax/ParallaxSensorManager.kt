@@ -117,7 +117,10 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     private var accumulatedX = 0f
     private var accumulatedY = 0f
     
-    private val DECAY_RATE = 0.995f  // Slowly decay back to center
+    // Decay rate controls how fast the scene returns to center after movement stops
+    // Default 0.995f gives a slow, natural return
+    // Modified by setReturnSpeed() - range 0.9f (fast) to 1.0f (no return)
+    private var decayRate = 0.995f
     
     // Pose gain: reduces sensitivity when near vertical (gimbal-lock region)
     // 1.0 = flat (stable), 0.0 = vertical (unstable)
@@ -350,6 +353,23 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         Log.d(TAG, "Recalibration triggered (delta reset)")
     }
     
+    /**
+     * Update return speed based on user preference.
+     * @param speed 0.0 to 1.0 (0=no return, 1=fast return)
+     */
+    fun setReturnSpeed(speed: Float) {
+        // Map 0..1 to decay rate 1.0..0.9
+        // speed=0 -> rate=1.0 (no decay, holds position)
+        // speed=0.5 -> rate=0.995 (default slow decay)
+        // speed=1.0 -> rate=0.9 (fast decay)
+        
+        // Use exponential curve for better feel?
+        // Let's stick to mapped linear for predictability
+        // 0.0 -> 1.0
+        // 1.0 -> 0.9
+        decayRate = (1.0f - (speed * 0.1f)).coerceIn(0.9f, 1.0f)
+    }
+
     fun isRunning(): Boolean = isStarted
     
     @Suppress("DEPRECATION")
@@ -797,8 +817,8 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         accumulatedY = accumulatedY.coerceIn(-1f, 1f)
         
         // Slow decay back to center when not moving (feels natural)
-        accumulatedX *= DECAY_RATE
-        accumulatedY *= DECAY_RATE
+        accumulatedX *= decayRate
+        accumulatedY *= decayRate
         
         processTiltValues(accumulatedX, accumulatedY)
     }

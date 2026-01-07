@@ -453,6 +453,9 @@ class ParallaxScene(
             parallaxCalculator.invertY = invertY
             parallaxCalculator.aspectRatioCompensation = aspectRatioCompensation
             
+            // Also update sensor decay (affects how fast the raw tilt returns to center)
+            sensor.setReturnSpeed(returnSpeed)
+            
             // Weather and seasonal toggles
             weatherEnabled = prefs.getBoolean("pref_weather_enabled", true)
             seasonalEnabled = prefs.getBoolean("pref_seasonal_enabled", true)
