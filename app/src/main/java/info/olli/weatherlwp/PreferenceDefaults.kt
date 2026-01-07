@@ -83,4 +83,5 @@ object PreferenceDefaults {
     const val IDLE_ENABLED = true
     const val IDLE_TIMEOUT = "5"  // seconds (as String for ListPreference)
     const val IDLE_FPS = 10  // 5-20
+    const val MAX_FPS = "30" // 30, 60, 90, 120 (as String for ListPreference)
 }

@@ -113,14 +113,14 @@ class WeatherWallpaper : WallpaperService() {
         private fun loadPrefs() {
             try {
                 val prefs = PreferenceManager.getDefaultSharedPreferences(this@WeatherWallpaper)
-                targetFps = prefs.getString("pref_max_fps", "30")?.toIntOrNull() ?: 30
+                targetFps = prefs.getString("pref_max_fps", PreferenceDefaults.MAX_FPS)?.toIntOrNull() ?: 30
                 targetFps = targetFps.coerceIn(10, 60)
                 
                 // Idle mode for battery optimization
-                idleModeEnabled = prefs.getBoolean("pref_idle_mode_enabled", true)
-                idleFps = prefs.getInt("pref_idle_fps", 10).coerceIn(5, 20)
+                idleModeEnabled = prefs.getBoolean("pref_idle_mode_enabled", PreferenceDefaults.IDLE_ENABLED)
+                idleFps = prefs.getInt("pref_idle_fps", PreferenceDefaults.IDLE_FPS).coerceIn(5, 20)
                 // Idle timeout is now a ListPreference (String) with values in seconds
-                idleTimeoutMs = (prefs.getString("pref_idle_timeout", "5")?.toLongOrNull() ?: 5L) * 1000L
+                idleTimeoutMs = (prefs.getString("pref_idle_timeout", PreferenceDefaults.IDLE_TIMEOUT)?.toLongOrNull() ?: 5L) * 1000L
                 
                 // Reload scene settings (handles parallax, clouds, day/night, terrain, weather, seasonal)
                 // ParallaxScene internally manages WeatherLayer and SeasonalEvents
