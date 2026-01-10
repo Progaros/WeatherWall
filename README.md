@@ -19,7 +19,7 @@
 - **Weather effects**: Rain, Snow, Lightning with particle systems
 - **Fog overlay** for atmospheric depth
 - **Cloud layers** with wind-driven movement and soft blur
-- **Seasonal events**: Christmas stars (Dec 15-26), New Year fireworks (Dec 27 - Jan 7)
+- **Seasonal events**: Christmas stars (Dec 15-26), New Year fireworks (Dec 27 - Jan 7). Shake to launch fireworks anytime!
 
 ### 🦅 Random Events
 Animated wildlife and sky events appear randomly throughout the day:
