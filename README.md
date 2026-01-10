@@ -96,17 +96,17 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 For faster repeated builds, use the pre-cached Docker image:
 
 ```bash
-# Build the cached builder image (one-time, ~5 min)
+# Build the cached builder image 
 docker build -t weatherwall-builder -f Dockerfile.build .
 
-# Run tests (~30 sec with cached image)
-docker run --rm -v "$PWD":/workspace -w /workspace weatherwall-builder "./gradlew test --no-daemon"
+# Run tests 
+docker run --rm weatherwall-builder ./gradlew test
 
-# Build debug APK (~20 sec with cached image)
-docker run --rm -v "$PWD":/workspace -w /workspace weatherwall-builder "./gradlew assembleDebug --no-daemon"
+# Run lint checks
+docker run --rm weatherwall-builder ./gradlew lintDebug
 
-# Run tests and build together
-docker run --rm -v "$PWD":/workspace -w /workspace weatherwall-builder "./gradlew test assembleDebug --no-daemon"
+# Build debug APK 
+docker run --rm weatherwall-builder ./gradlew assembleDebug
 ```
 
 **Without cached image** (slower, downloads Gradle each time):
@@ -126,9 +126,6 @@ The project includes 528+ unit tests covering all major features:
 ```bash
 # Run all tests locally
 ./gradlew test
-
-# Run tests in Docker
-docker run --rm -v "$PWD":/workspace -w /workspace weatherwall-builder "./gradlew test --no-daemon"
 
 # Run lint checks
 ./gradlew lintDebug

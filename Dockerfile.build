@@ -1,48 +1,37 @@
-# WeatherWall Build Environment
-# Pre-caches Gradle and Android SDK dependencies for faster CI builds
-#
-# Build: docker build -t weatherwall-builder -f Dockerfile.build .
-# Use:   docker run --rm -v "$PWD":/workspace weatherwall-builder ./gradlew test assembleDebug
-
 FROM ghcr.io/cirruslabs/android-sdk:35
 
 LABEL maintainer="WeatherWall Project"
 LABEL description="Cached build environment for WeatherWall Android app"
 
-# Create non-root user matching typical host user (UID/GID 1000)
-RUN groupadd -g 1000 builder 2>/dev/null || true && \
-    useradd -m -u 1000 -g 1000 -s /bin/bash builder 2>/dev/null || true && \
-    mkdir -p /home/builder && \
-    chown -R 1000:1000 /home/builder
+# 1. Setup environment for numeric user 1000
+#    We set HOME explicitly because USER 1000 might not have an /etc/passwd entry
+ENV HOME=/home/builder
+ENV GRADLE_USER_HOME=$HOME/.gradle
 
-# Set working directory for prebuild
-WORKDIR /prebuild
+# 2. Create home directory and workspace with correct permissions
+#    Using numeric ID 1000:1000 bypasses name conflict issues
+RUN mkdir -p $GRADLE_USER_HOME && \
+    chown -R 1000:1000 /home/builder && \
+    mkdir -p /workspace && \
+    chown 1000:1000 /workspace
 
-# Copy only the files needed to download dependencies
-COPY build.gradle.kts settings.gradle.kts gradle.properties ./
-COPY gradle/ gradle/
-COPY gradlew ./
-COPY app/build.gradle.kts app/
-
-# Make gradlew executable and set ownership
-RUN chmod +x gradlew && chown -R 1000:1000 /prebuild
-
-# Pre-download Gradle distribution and all dependencies as root (for caching)
-RUN ./gradlew dependencies --no-daemon || true
-RUN ./gradlew :app:dependencies --no-daemon || true
-RUN ./gradlew tasks --no-daemon || true
-
-# Set up workspace directory
-WORKDIR /workspace
-RUN rm -rf /prebuild
-
-# Copy cached gradle to builder home for non-root access
-RUN cp -r /root/.gradle /home/builder/.gradle 2>/dev/null || true && \
-    chown -R 1000:1000 /home/builder/.gradle 2>/dev/null || true
-
-# Switch to non-root user for actual builds
+# 3. Switch to numeric user immediately
 USER 1000:1000
+WORKDIR /workspace
 
-# Set entrypoint for flexibility
-ENTRYPOINT ["/bin/bash", "-c"]
-CMD ["./gradlew test assembleDebug --no-daemon"]
+# 4. Copy build definitions with correct ownership
+#    We use --chown=1000:1000 so the files are owned by our user
+COPY --chown=1000:1000 gradle gradle
+COPY --chown=1000:1000 gradlew gradle.properties settings.gradle.kts build.gradle.kts ./
+COPY --chown=1000:1000 app/build.gradle.kts app/
+
+# 5. Make executable
+RUN chmod +x gradlew
+
+# 6. Download and cache dependencies
+#    This runs as user 1000, storing files in /home/builder/.gradle
+RUN ./gradlew dependencies --no-daemon && \
+    ./gradlew :app:dependencies --no-daemon
+
+# 7. Entrypoint
+CMD ["./gradlew", "test", "assembleDebug", "--no-daemon"]

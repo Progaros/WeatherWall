@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.util.Log
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.DebugTracer
+import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.parallax.ParallaxSensorManager
 import info.olli.weatherlwp.simulation.SimulationController

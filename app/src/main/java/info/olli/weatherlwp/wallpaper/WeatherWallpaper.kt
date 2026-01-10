@@ -8,6 +8,7 @@ import android.service.wallpaper.WallpaperService
 import android.util.Log
 import android.view.SurfaceHolder
 import androidx.preference.PreferenceManager
+import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.rendering.ParallaxScene
 import info.olli.weatherlwp.weather.WeatherRepository
 import info.olli.weatherlwp.parallax.ParallaxSensorManager
