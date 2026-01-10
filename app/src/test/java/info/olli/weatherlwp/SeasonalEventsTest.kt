@@ -15,10 +15,10 @@ class SeasonalEventsTest {
     // ============== Issue #9: Seasonal Event Detection Tests ==============
     
     @Test
-    fun `christmas season should be Dec 20-26`() {
-        // Christmas effects should show from Dec 20 to Dec 26
-        val christmasDays = listOf(20, 21, 22, 23, 24, 25, 26)
-        val nonChristmasDays = listOf(1, 15, 19, 27, 28, 31)
+    fun `christmas season should be Dec 15-26`() {
+        // Christmas effects should show from Dec 15 to Dec 26
+        val christmasDays = listOf(15, 20, 21, 22, 23, 24, 25, 26)
+        val nonChristmasDays = listOf(1, 14, 27, 28, 31)
         
         for (day in christmasDays) {
             val isChristmas = isChristmasHelper(12, day)
@@ -32,16 +32,17 @@ class SeasonalEventsTest {
     }
     
     @Test
-    fun `new year season should be Dec 31 - Jan 2`() {
-        // New Year effects should show Dec 31 to Jan 2
+    fun `new year season should be Dec 27 - Jan 7`() {
+        // New Year effects should show Dec 27 to Jan 7
         val newYearDates = listOf(
+            Pair(12, 27),  // Dec 27
             Pair(12, 31),  // Dec 31
             Pair(1, 1),    // Jan 1
-            Pair(1, 2)     // Jan 2
+            Pair(1, 7)     // Jan 7
         )
         val nonNewYearDates = listOf(
-            Pair(12, 30),  // Dec 30
-            Pair(1, 3),    // Jan 3
+            Pair(12, 26),  // Dec 26
+            Pair(1, 8),    // Jan 8
             Pair(1, 15)    // Jan 15
         )
         
@@ -171,11 +172,15 @@ class SeasonalEventsTest {
 
     // Helper functions matching SeasonalEvents logic
     private fun isChristmasHelper(month: Int, day: Int): Boolean {
-        return month == 12 && day in 20..26
+        // Matches SeasonalEvents.kt: month == 11 && day in 15..26 (0-indexed month)
+        // Helper input is 1-indexed month (12 = Dec)
+        return month == 12 && day in 15..26
     }
     
     private fun isNewYearHelper(month: Int, day: Int): Boolean {
-        return (month == 12 && day == 31) || (month == 1 && day in 1..2)
+        // Matches SeasonalEvents.kt: (month == 11 && day >= 27) || (month == 0 && day <= 7)
+        // Helper input is 1-indexed month
+        return (month == 12 && day >= 27) || (month == 1 && day <= 7)
     }
     
     private fun getSeasonHelper(debugEnabled: Boolean, debugSeason: String, month: Int, day: Int): String {

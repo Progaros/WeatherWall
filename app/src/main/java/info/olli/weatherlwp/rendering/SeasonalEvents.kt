@@ -371,14 +371,21 @@ class SeasonalEvents(private val context: Context? = null) {
      * Called from scene renderer after mountains but before terrain layer.
      */
     fun renderBehindTerrain(canvas: Canvas, enabled: Boolean) {
-        if (!enabled) return
+        // Check for active fireworks first - shake fireworks should work independent of season/master switch
+        // if user has enabled the specific shake setting
+        val hasActiveFireworks = rockets.any { it.active } || fireworks.any { it.life > 0 }
+
+        if (!enabled && !hasActiveFireworks) return
         try {
             val now = System.currentTimeMillis()
             if (now - lastSettingsLoad > SETTINGS_RELOAD_INTERVAL_MS) {
                 loadSettings()
             }
             val season = getCurrentSeason()
-            if (season == Season.NONE) return
+            
+            // Allow rendering if we have active fireworks (from shake) even if season is NONE
+            if (season == Season.NONE && !hasActiveFireworks) return
+            
             if (!initialized || screenWidth != canvas.width || screenHeight != canvas.height) {
                 screenWidth = canvas.width
                 screenHeight = canvas.height
@@ -387,10 +394,11 @@ class SeasonalEvents(private val context: Context? = null) {
                 initialized = true
             }
             // Fireworks should appear behind hills but in front of mountains
-            when (season) {
-                Season.NEW_YEAR -> renderNewYearFireworks(canvas)
-                Season.CN_NEW_YEAR -> renderChineseNewYear(canvas)
-                else -> {}
+            when {
+                season == Season.NEW_YEAR -> renderNewYearFireworks(canvas, autoLaunch = true)
+                season == Season.CN_NEW_YEAR -> renderChineseNewYear(canvas)
+                // If not in season but we have active fireworks (e.g. from shake), render them without auto-launch
+                hasActiveFireworks -> renderNewYearFireworks(canvas, autoLaunch = false)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error rendering behind-terrain seasonal events", e)
@@ -604,27 +612,29 @@ class SeasonalEvents(private val context: Context? = null) {
         christmasStarPaint.shader = null
     }
 
-    private fun renderNewYearFireworks(canvas: Canvas) {
-        fireworkTimer++
+    private fun renderNewYearFireworks(canvas: Canvas, autoLaunch: Boolean = true) {
+        if (autoLaunch) {
+            fireworkTimer++
 
-        // Launch new rocket based on frequency setting
-        // At 0: every 200+ frames (rare), at 50: every 40-90 frames, at 100: every 10-30 frames
-        val minInterval = when {
-            fireworkFrequency >= 80 -> 10
-            fireworkFrequency >= 50 -> 30
-            fireworkFrequency >= 20 -> 60
-            else -> 150
-        }
-        val intervalRange = when {
-            fireworkFrequency >= 80 -> 20
-            fireworkFrequency >= 50 -> 50
-            fireworkFrequency >= 20 -> 80
-            else -> 100
-        }
-        
-        if (fireworkFrequency > 0 && fireworkTimer > minInterval + Random.nextInt(intervalRange)) {
-            fireworkTimer = 0
-            launchRocket()
+            // Launch new rocket based on frequency setting
+            // At 0: every 200+ frames (rare), at 50: every 40-90 frames, at 100: every 10-30 frames
+            val minInterval = when {
+                fireworkFrequency >= 80 -> 10
+                fireworkFrequency >= 50 -> 30
+                fireworkFrequency >= 20 -> 60
+                else -> 150
+            }
+            val intervalRange = when {
+                fireworkFrequency >= 80 -> 20
+                fireworkFrequency >= 50 -> 50
+                fireworkFrequency >= 20 -> 80
+                else -> 100
+            }
+            
+            if (fireworkFrequency > 0 && fireworkTimer > minInterval + Random.nextInt(intervalRange)) {
+                fireworkTimer = 0
+                launchRocket()
+            }
         }
 
         // Update and render rockets
@@ -757,7 +767,10 @@ class SeasonalEvents(private val context: Context? = null) {
         for (f in fireworks) {
             if (f.life <= 0 && particleCount < targetParticles) {
                 val angle = Random.nextFloat() * 360f
-                val speed = 4f + Random.nextFloat() * 6f
+                // Starburst effect: clearer shell by reducing speed variance
+                // Was: 4f + Random.nextFloat() * 6f (4-10 range, very messy)
+                // New: 6f + Random.nextFloat() * 2f (6-8 range, clearer ring/star)
+                val speed = 6f + Random.nextFloat() * 2f
 
                 f.x = cx
                 f.y = cy

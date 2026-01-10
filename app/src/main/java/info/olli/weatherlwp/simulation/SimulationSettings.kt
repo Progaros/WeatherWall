@@ -98,7 +98,7 @@ class SimulationSettings(context: Context) {
             useWeatherWind = false  // Simulation mode uses manual wind
         } else {
             // Use real weather wind data when available
-            windStrength = 0.5f  // Default fallback if no weather data
+            windStrength = 0.05f  // Default fallback if no weather data (5% reduces illusion of 50% speed)
             useWeatherWind = true  // Enable weather-based wind
         }
         
