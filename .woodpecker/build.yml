@@ -1,32 +1,25 @@
 when:
   event: [push, pull_request, tag]
 
-# Use standard YAML anchors for reuse
-_settings:
-  image: &img ghcr.io/cirruslabs/android-sdk:35
-  cache_path: &cache_path .gradle
-
 steps:
   # 1. Prepare & Download Dependencies
-  #    This step acts as a "cache warmer". Dependencies are downloaded once
-  #    and stored in the '.gradle' folder, which Woodpecker shares across all steps.
   - name: prepare
-    image: *img
+    # DEFINE ANCHOR HERE: &img
+    image: &img ghcr.io/cirruslabs/android-sdk:35
     environment:
-      GRADLE_USER_HOME: *cache_path
+      # DEFINE ANCHOR HERE: &cache_path
+      GRADLE_USER_HOME: &cache_path .gradle
     commands:
       - chmod +x gradlew
-      # Download dependencies only (cached for next steps)
       - ./gradlew dependencies --no-daemon
       - ./gradlew :app:dependencies --no-daemon
-      # Accept licenses silently to prevent build failures
       - yes | sdkmanager --licenses || true
 
   # 2. Lint Analysis
   - name: lint
-    image: *img
+    image: *img  # Reuse anchor
     environment:
-      GRADLE_USER_HOME: *cache_path
+      GRADLE_USER_HOME: *cache_path  # Reuse anchor
     commands:
       - ./gradlew lintDebug --no-daemon
       - echo "Lint report available at app/build/reports/lint-results-debug.html"
@@ -48,15 +41,14 @@ steps:
       GRADLE_USER_HOME: *cache_path
     commands:
       - ./gradlew assembleDebug --no-daemon
-      # Extract version name for release step
       - grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/' > .version
       - VERSION=$(cat .version)
       - echo "Built version $VERSION"
       - cp app/build/outputs/apk/debug/app-debug.apk "WeatherWall-v$VERSION.apk"
 
-  # 5. Publish Release (Only on push to main/develop)
+  # 5. Publish Release
   - name: release
-    image: curlimages/curl:8.6.0  # Lighter image, safer for secrets
+    image: curlimages/curl:8.6.0
     environment:
       FORGEJO_TOKEN:
         from_secret: forgejo_token
@@ -65,7 +57,6 @@ steps:
       - APK_FILE="WeatherWall-v$VERSION.apk"
       - |
         echo "Checking release v$VERSION..."
-        # Check if release exists
         HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token $FORGEJO_TOKEN" "https://git.olli.info/api/v1/repos/Oliver/WeatherWall/releases/tags/v$VERSION")
         
         if [ "$HTTP_CODE" = "200" ]; then 
@@ -74,7 +65,6 @@ steps:
         fi
 
         echo "Creating release v$VERSION..."
-        # Create Release
         RESP=$(curl -s -X POST -H "Authorization: token $FORGEJO_TOKEN" -H "Content-Type: application/json" \
           -d "{\"tag_name\": \"v$VERSION\", \"name\": \"v$VERSION\", \"body\": \"Automated release v$VERSION\"}" \
           "https://git.olli.info/api/v1/repos/Oliver/WeatherWall/releases")
@@ -86,7 +76,6 @@ steps:
           exit 1
         fi
 
-        # Upload APK
         echo "Uploading $APK_FILE..."
         curl -s -X POST -H "Authorization: token $FORGEJO_TOKEN" -H "Content-Type: application/octet-stream" \
           --data-binary "@$APK_FILE" \
