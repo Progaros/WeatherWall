@@ -648,9 +648,11 @@ class SeasonalEvents(private val context: Context? = null) {
                 r.trailX1 = r.x
                 r.trailY1 = r.y
                 
-                // Move rocket upward (scale velocity and deceleration by height)
+                // Move rocket upward (scale velocity AND deceleration by height for consistent physics)
+                // Bug fix: Previously deceleration wasn't scaled, causing rockets on smaller screens
+                // to decelerate too quickly and disappear at 80-90% height without exploding
                 r.y += r.vy * heightScale
-                r.vy += 0.05f  // Slight deceleration (in reference pixels)
+                r.vy += 0.05f * heightScale  // Deceleration scaled by height for consistent behavior
                 
                 // Draw rocket trail (fading dots behind, scaled by height)
                 val trailScale = heightScale.coerceAtLeast(0.5f)  // Don't go below 50% size
