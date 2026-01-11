@@ -23,9 +23,8 @@ import java.util.concurrent.atomic.AtomicReference
 class ParallaxCalculator {
     companion object {
         /** How fast position approaches target (per frame, 0-1)
-         * Higher = faster response, lower latency
-         * Reference app uses direct values (effectively 1.0)
-         * 0.9 gives near-instant response with minimal smoothing
+         * Reference app uses direct values (no lerping) with tan() transformation
+         * For compatibility with smoothing slider, we lerp but support instant mode
          */
         private const val POSITION_LERP_RATE = 0.9f
     }
@@ -47,7 +46,7 @@ class ParallaxCalculator {
     var strength = 0.075f               // Default: 25% on log scale → ~0.075
     var maxOffsetPx = 130f              // Legacy: used when maxOffsetPercent is 0
     var maxOffsetPercent = 15f          // Default: 15% of screen height (increased for more movement)
-    var smoothing = 0.134f              // Default: 0.02 + (30/100)*0.38 (pref_parallax_smoothing=30)
+    var smoothing = 0f                  // Default: 0 = direct/instant (reference app behavior)
     var depthSeparation = 1.32f         // Default: (33/100)*4.0 = 1.32 (pref_parallax_depth=33)
     
     // Axis inversion settings - for correcting inverted parallax directions
@@ -197,13 +196,24 @@ class ParallaxCalculator {
                 (returnSpeed * 0.5f * deltaScale).coerceAtMost(0.9f)
             }
         } else {
-            // Standard smoothing when active (tilting)
-            val baseLerpRate = POSITION_LERP_RATE * (1f - smoothing * 0.6f) * deltaScale
-            baseLerpRate.coerceAtMost(0.9f)
+            // Smoothing=0 means instant/direct response (matches reference app)
+            // Smoothing>0 adds progressive lerp-based smoothing
+            if (smoothing <= 0.01f) {
+                // Direct mode: instant response, no lerping (reference app behavior)
+                1.0f
+            } else {
+                // Standard smoothing when active (tilting)
+                val baseLerpRate = POSITION_LERP_RATE * (1f - smoothing * 0.6f) * deltaScale
+                baseLerpRate.coerceAtMost(0.95f)
+            }
         }
         
-        // Apply interpolation only if rate > 0
-        if (effectiveLerpRate > 0f) {
+        // Apply interpolation
+        if (effectiveLerpRate >= 1.0f) {
+            // Direct/instant mode - no lerping
+            positionX = targetX
+            positionY = targetY
+        } else if (effectiveLerpRate > 0f) {
             positionX += (targetX - positionX) * effectiveLerpRate
             positionY += (targetY - positionY) * effectiveLerpRate
         }

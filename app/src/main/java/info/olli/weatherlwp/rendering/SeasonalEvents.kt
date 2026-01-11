@@ -90,7 +90,7 @@ class SeasonalEvents(private val context: Context? = null) {
 
     // Pre-allocated pools
     private val stars = Array(30) { Star() }
-    private val fireworks = Array(250) { Firework() }  // Larger pool for multiple simultaneous explosions
+    private val fireworks = Array(800) { Firework() }  // Large pool for shake fireworks (50 rockets × ~15 particles each)
     private val rockets = Array(50) { Rocket() }  // Up to 50 rockets in flight for shake fireworks
     private val trailParticles = Array(20) { TrailParticle() }
     private var christmasStar: ChristmasStar? = null
@@ -760,10 +760,11 @@ class SeasonalEvents(private val context: Context? = null) {
         val colors = rocket.colors
         
         // Spawn explosion particles based on fireworkAmount setting
-        // At 10: 10-15 particles, at 100: 55-85 particles, at 200: 105-165 particles
+        // Reduced particle count for shake to ensure pool isn't exhausted
+        // At 10: 8-12 particles, at 100: 25-35 particles, at 200: 45-55 particles
         var particleCount = 0
-        val baseParticles = (fireworkAmount * 0.5f + 5).toInt()  // 10→10, 100→55, 200→105
-        val varianceParticles = (fireworkAmount * 0.3f).toInt()   // 10→3, 100→30, 200→60
+        val baseParticles = (fireworkAmount * 0.2f + 5).toInt()   // 10→7, 100→25, 200→45
+        val varianceParticles = (fireworkAmount * 0.1f + 3).toInt()  // 10→4, 100→13, 200→23
         val targetParticles = baseParticles + Random.nextInt(varianceParticles.coerceAtLeast(1))
         
         for (f in fireworks) {

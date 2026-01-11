@@ -16,8 +16,8 @@ This document provides a summary of the project's source code to assist with mai
 - **SimulationSettings.kt**: Helper for loading general simulation preferences.
 
 ## Parallax System
-- **ParallaxCalculator.kt**: Core logic for calculating 3D perspective shifts from tilt. Uses high lerp rate (0.9) for near-instant response (~20ms latency), matching reference app behavior. Handles return-to-center when device is leveled.
-- **ParallaxSensorManager.kt**: Handles accelerometer/gyroscope/rotation vector sensors. Gyroscope mode uses direct output (no filter) with 3-sample averaging for minimal latency. Rotation vector mode uses high filter alpha (0.85) for fast response.
+- **ParallaxCalculator.kt**: Core logic for calculating 3D perspective shifts from tilt. When smoothing=0, uses direct mode for instant response (matching reference app). Supports lerp-based smoothing when slider is increased. Handles return-to-center when device is leveled.
+- **ParallaxSensorManager.kt**: Handles accelerometer/gyroscope/rotation vector sensors. Gyroscope mode exactly matches reference app (RotationManager.java): raw values to 3-sample averagers, no deadzone/decay, display rotation applied after accumulation. Formula: `angle += avgRate * deltaTimeNanos * 1e-8 * 6 * DEG_TO_RAD`, clamped to ±18°.
 - **ParallaxScene.kt**: Composition root for the visual scene. Manages all layers and passes render calls.
 
 ## Rendering System (Canvas)

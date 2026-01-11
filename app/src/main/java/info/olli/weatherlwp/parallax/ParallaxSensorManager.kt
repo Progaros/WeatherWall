@@ -448,78 +448,75 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
      * - ROTATION_90: tiltX = -lastYaw, tiltY = -lastPitch
      * - ROTATION_270: tiltX = lastYaw, tiltY = lastPitch
      * 
-     * Uses 3-sample averaging, formula: angle += avgRate * deltaTimeNanos * 1e-8 * 6 * DEG_TO_RAD
-     * Clamps to ±18° (0.31415927 rad)
+     * EXACT MATCH to reference app RotationManager.java:
+     * 1. Add raw gyro values to 3-sample averagers (no deadzone before averaging)
+     * 2. Formula: angle += avgRate * deltaTimeNanos * 1e-8 * 6 * DEG_TO_RAD
+     * 3. Clamp each angle to ±18° (0.31415927 rad)
+     * 4. No decay - angles hold their values until moved
+     * 5. Display rotation applied AFTER accumulation when converting to tiltX/tiltY
      */
     private fun handleGyroscope(values: FloatArray, displayRotation: Int) {
-        // Gyroscope reports angular velocity in rad/s around device axes
-        // values[0] = rotation rate around X axis (pitch rate)
-        // values[1] = rotation rate around Y axis (roll rate)
-        // values[2] = rotation rate around Z axis (yaw rate)
+        // Reference app RotationManager.java (lines 63-66):
+        // averagers[0].add(values[0]) → lastYaw (Z-axis / twist)
+        // averagers[1].add(values[1]) → lastPitch (X-axis / forward-back)
+        // averagers[2].add(values[2]) → lastRoll (Y-axis / left-right)
+        // 
+        // Android gyroscope axis definition:
+        // values[0] = rotation rate around X axis (pitch rate - tilting device forward/back)
+        // values[1] = rotation rate around Y axis (roll rate - tilting device left/right)
+        // values[2] = rotation rate around Z axis (yaw rate - twisting/rotating device)
+        //
+        // Reference app mapping (confusingly named):
+        // values[0] → "yaw" averager → lastYaw
+        // values[1] → "pitch" averager → lastPitch  
+        // values[2] → "roll" averager → lastRoll
         
-        // Remap based on display rotation (same approach as v1.4.6 that worked)
-        val (rateX, rateY, rateZ) = when (displayRotation) {
-            Surface.ROTATION_90 -> Triple(values[1], -values[0], values[2])
-            Surface.ROTATION_180 -> Triple(-values[0], -values[1], values[2])
-            Surface.ROTATION_270 -> Triple(-values[1], values[0], values[2])
-            else -> Triple(values[0], values[1], values[2])
-        }
+        // Step 1: Add raw values to averagers (NO deadzone, NO display rotation adjustment)
+        // This matches reference exactly - accumulate raw sensor values
+        avgYaw.add(values[0])    // X-axis rate → "yaw" (reference naming)
+        avgPitch.add(values[1])  // Y-axis rate → "pitch" (reference naming)
+        avgRoll.add(values[2])   // Z-axis rate → "roll" (reference naming)
         
-        // Apply dead zone to filter sensor noise (prevents jitter buildup on flat surfaces)
-        val filteredRateX = if (abs(rateX) < GYRO_DEADZONE_RADS) 0f else rateX
-        val filteredRateY = if (abs(rateY) < GYRO_DEADZONE_RADS) 0f else rateY
-        val filteredRateZ = if (abs(rateZ) < GYRO_DEADZONE_RADS) 0f else rateZ
-        
-        // Add filtered values to averagers for smoothing
-        avgPitch.add(filteredRateX)
-        avgRoll.add(filteredRateY)
-        avgYaw.add(filteredRateZ)
-        
-        // Calculate time delta
+        // Step 2: Calculate time delta
         val currentTime = System.nanoTime()
         val deltaTimeNanos = currentTime - lastGyroTime
         
-        // Skip first sample or stale data
-        if (deltaTimeNanos <= 0 || deltaTimeNanos > 100_000_000L) {
+        // Skip first sample or stale data (>100ms gap)
+        if (lastGyroTime == 0L || deltaTimeNanos <= 0 || deltaTimeNanos > 100_000_000L) {
             lastGyroTime = currentTime
             return
         }
         
-        // Reference formula: f = deltaTimeNanos * 1e-8 * 6.0 * DEG_TO_RAD
+        // Step 3: Reference formula exactly: f = deltaTimeNanos * 1e-8 * 6.0 * DEG_TO_RAD
+        // DEG_TO_RAD = 0.017453292 = π/180
         val f = deltaTimeNanos * 1e-8f * 6.0f * 0.017453292f
         
-        // Get averaged rates
-        val avgPitchRate = avgPitch.calc()
-        val avgRollRate = avgRoll.calc()
-        
-        // Accumulate averaged angular velocity into angle (only if above noise floor)
-        if (abs(avgPitchRate) >= GYRO_DEADZONE_RADS) {
-            gyroPitch = (gyroPitch + avgPitchRate * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
-        } else {
-            // Decay toward zero when no significant motion (prevents drift buildup)
-            gyroPitch *= GYRO_DECAY_RATE
-        }
-        
-        if (abs(avgRollRate) >= GYRO_DEADZONE_RADS) {
-            gyroRoll = (gyroRoll + avgRollRate * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
-        } else {
-            gyroRoll *= GYRO_DECAY_RATE
-        }
-        
+        // Step 4: Accumulate averaged angular velocity into angles
+        // NO deadzone check, NO decay - matches reference exactly
         gyroYaw = (gyroYaw + avgYaw.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
+        gyroPitch = (gyroPitch + avgPitch.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
+        gyroRoll = (gyroRoll + avgRoll.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
         
         // Update time AFTER accumulation
         lastGyroTime = currentTime
         
-        // Convert gyro angles to tilt output (-1 to 1 range)
-        // Roll = left/right tilt → tiltX, Pitch = forward/back tilt → tiltY
-        // Note: gyroRoll is negated to match rotation vector behavior (invert horizontal for gyro)
-        val tiltX = (-gyroRoll / MAX_TILT_RAD).coerceIn(-1f, 1f)
-        val tiltY = (-gyroPitch / MAX_TILT_RAD).coerceIn(-1f, 1f)
+        // Step 5: Apply display rotation to get tiltX/tiltY (matches ForestRenderer.java lines 580-593)
+        // Reference ForestRenderer.java:
+        // ROTATION_0:   tiltX = -lastPitch, tiltY = lastYaw
+        // ROTATION_90:  tiltX = -lastYaw,   tiltY = -lastPitch  
+        // ROTATION_270: tiltX = lastYaw,    tiltY = lastPitch
+        val (rawTiltX, rawTiltY) = when (displayRotation) {
+            Surface.ROTATION_90 -> Pair(-gyroYaw, -gyroPitch)
+            Surface.ROTATION_180 -> Pair(gyroPitch, -gyroYaw)  // Interpolated from pattern
+            Surface.ROTATION_270 -> Pair(gyroYaw, gyroPitch)
+            else -> Pair(-gyroPitch, gyroYaw)  // ROTATION_0
+        }
         
-        // Gyroscope mode: Output directly without additional filtering
-        // The 3-sample averaging already provides sufficient smoothing
-        // Reference app (RotationManager.java) uses this exact approach for ~20ms latency
+        // Convert angles from radians to normalized -1..1 range
+        val tiltX = (rawTiltX / MAX_TILT_RAD).coerceIn(-1f, 1f)
+        val tiltY = (rawTiltY / MAX_TILT_RAD).coerceIn(-1f, 1f)
+        
+        // Output directly - no additional filtering (reference app has no extra smoothing)
         filteredX = tiltX
         filteredY = tiltY
         

@@ -438,4 +438,52 @@ class ParallaxCalculatorTest {
         // Default should be 15%
         assertEquals("Default maxOffsetPercent should be 15", 15f, newCalculator.maxOffsetPercent, 0.01f)
     }
+    
+    // ============== Direct Mode (smoothing=0) Tests ==============
+    
+    @Test
+    fun testDirectModeInstantResponse() {
+        // When smoothing=0, position should instantly match target (no lerping)
+        // This matches reference app behavior
+        calculator.smoothing = 0f
+        calculator.strength = 1.0f
+        calculator.maxOffsetPx = 40f
+        
+        // Set tilt and update ONCE
+        calculator.updateFromSensor(1.0f, 0f)
+        calculator.update(16)  // Single frame
+        
+        // Position should be exactly at target (40 * 1.0 * 1.0 = 40)
+        val offset = calculator.getOffsetX()
+        assertEquals("Direct mode should reach target in one frame", 40f, offset, 0.5f)
+    }
+    
+    @Test
+    fun testDefaultSmoothingIsZero() {
+        // Verify the new default is 0 (direct/instant mode like reference app)
+        val newCalculator = ParallaxCalculator()
+        
+        assertEquals("Default smoothing should be 0 (direct mode)", 0f, newCalculator.smoothing, 0.001f)
+    }
+    
+    @Test
+    fun testSmoothingAboveZeroAddsLerp() {
+        // When smoothing > 0, there should be gradual interpolation
+        calculator.smoothing = 0.5f
+        calculator.strength = 1.0f
+        calculator.maxOffsetPx = 40f
+        
+        // Set tilt and update once
+        calculator.updateFromSensor(1.0f, 0f)
+        calculator.update(16)
+        
+        // With smoothing, position should NOT be at target yet
+        val offset = calculator.getOffsetX()
+        assertTrue("With smoothing, first frame should not reach full target", offset < 35f)
+        
+        // After many frames, should converge
+        repeat(100) { calculator.update(16) }
+        val convergedOffset = calculator.getOffsetX()
+        assertTrue("After many frames should be near target", convergedOffset >= 35f)
+    }
 }
