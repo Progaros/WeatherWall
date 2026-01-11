@@ -28,7 +28,9 @@ import kotlin.math.sqrt
 class ParallaxSensorManager(context: Context) : SensorEventListener {
     companion object {
         private const val TAG = "ParallaxSensorManager"
-        private const val FILTER_ALPHA = 0.4f
+        // Near-direct pass-through for minimal latency (reference app uses no filter)
+        // Higher = faster response (1.0 = instant, 0.4 = old sluggish value)
+        private const val FILTER_ALPHA = 0.85f
         private const val FULL_TILT_RADIANS = (45f * PI / 180f).toFloat()
         private const val DEADZONE = 0.03f
         
@@ -515,9 +517,11 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         val tiltX = (-gyroRoll / MAX_TILT_RAD).coerceIn(-1f, 1f)
         val tiltY = (-gyroPitch / MAX_TILT_RAD).coerceIn(-1f, 1f)
         
-        // Apply low-pass filter for extra smoothness
-        filteredX += FILTER_ALPHA * (tiltX - filteredX)
-        filteredY += FILTER_ALPHA * (tiltY - filteredY)
+        // Gyroscope mode: Output directly without additional filtering
+        // The 3-sample averaging already provides sufficient smoothing
+        // Reference app (RotationManager.java) uses this exact approach for ~20ms latency
+        filteredX = tiltX
+        filteredY = tiltY
         
         listener?.onTiltChanged(filteredX, filteredY)
     }

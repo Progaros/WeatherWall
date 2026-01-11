@@ -11,8 +11,8 @@ android {
         applicationId = "info.olli.weatherlwp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 134
-        versionName = "1.8.4"
+        versionCode = 135
+        versionName = "1.8.5"
     }
 
     buildFeatures {

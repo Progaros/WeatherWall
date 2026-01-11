@@ -19,7 +19,7 @@
 - **Weather effects**: Rain, Snow, Lightning with particle systems
 - **Fog overlay** for atmospheric depth
 - **Cloud layers** with wind-driven movement and soft blur
-- **Seasonal events**: Christmas stars (Dec 15-26), New Year fireworks (Dec 27 - Jan 7). Shake to launch fireworks anytime!
+- **Seasonal events**: Christmas stars (Dec 15-26), New Year fireworks (Dec 27 - Jan 7)
 
 ### 🦅 Random Events
 Animated wildlife and sky events appear randomly throughout the day:
@@ -93,35 +93,27 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 ### Build with Docker (Recommended for CI)
 
-For faster repeated builds, use the pre-cached Docker image:
+For faster repeated builds, use the pre-cached Docker image.
+**Note:** You must mount your current directory to `/workspace` so the builder can access your source code.
 
 ```bash
-# Build the cached builder image 
+# 1. Build the cached builder image (run once or when dependencies change)
 docker build -t weatherwall-builder -f Dockerfile.build .
 
-# Run tests 
-docker run --rm weatherwall-builder ./gradlew test
+# 2. Run commands (mounts current directory to /workspace)
+# Run Unit Tests
+docker run --rm -v "$PWD":/workspace -w /workspace weatherwall-builder ./gradlew test --no-daemon
 
-# Run lint checks
-docker run --rm weatherwall-builder ./gradlew lintDebug
+# Run Lint Checks
+docker run --rm -v "$PWD":/workspace -w /workspace weatherwall-builder ./gradlew lintDebug --no-daemon
 
-# Build debug APK 
-docker run --rm weatherwall-builder ./gradlew assembleDebug
-```
-
-**Without cached image** (slower, downloads Gradle each time):
-```bash
-docker run --rm -v "$PWD":/workspace -w /workspace ghcr.io/cirruslabs/android-sdk:35 ./gradlew test assembleDebug --no-daemon
-```
-
-### Build Release
-```bash
-./gradlew assembleRelease
+# Build Debug APK
+docker run --rm -v "$PWD":/workspace -w /workspace weatherwall-builder ./gradlew assembleDebug --no-daemon
 ```
 
 ## 🧪 Testing
 
-The project includes 528+ unit tests covering all major features:
+The project includes 535+ unit tests covering all major features:
 
 ```bash
 # Run all tests locally
@@ -136,14 +128,14 @@ open app/build/reports/tests/testDebugUnitTest/index.html
 
 **CI Pipeline:**
 - Lint checks (Android Lint)
-- Unit tests (528+ tests)
+- Unit tests (535+ tests)
 - Debug APK build
 - Release publishing (on version bump)
 
 **Test Coverage:**
 - `ParallaxSceneTest` - Terrain baseline, parallax factors, color transitions
-- `ParallaxSensorManagerTest` - Rotation matrix, orientation extraction
-- `ParallaxCalculatorTest` - Return speed, tilt thresholds
+- `ParallaxSensorManagerTest` - Rotation matrix, orientation extraction, latency optimization
+- `ParallaxCalculatorTest` - Return speed, tilt thresholds, latency optimization
 - `DayNightCycleTest` - Time periods, sunset colors, manual time override
 - `WeatherRepositoryTest` - Data freshness, staleness detection
 - `SeasonalEventsTest` - Christmas/New Year detection, debug overrides

@@ -1,60 +1,62 @@
 when:
   event: [push, pull_request, tag]
 
-variables:
-  - &image 'ghcr.io/cirruslabs/android-sdk:35'
-  - &gradle_home '/woodpecker/src/.gradle' # Store cache in the workspace volume
+# Use standard YAML anchors for reuse
+_settings:
+  image: &img ghcr.io/cirruslabs/android-sdk:35
+  cache_path: &cache_path .gradle
 
 steps:
-  # 1. Restore cache (Optional but recommended if you have a cache plugin)
-  # If not, the first step below will act as the "warmer" for subsequent steps
-
-  # 2. Setup & Download Dependencies (Once)
+  # 1. Prepare & Download Dependencies
+  #    This step acts as a "cache warmer". Dependencies are downloaded once
+  #    and stored in the '.gradle' folder, which Woodpecker shares across all steps.
   - name: prepare
-    image: *image
+    image: *img
     environment:
-      GRADLE_USER_HOME: *gradle_home
+      GRADLE_USER_HOME: *cache_path
     commands:
-      # Fix permissions if needed, ensure gradlew is executable
       - chmod +x gradlew
-      # Download dependencies once so other steps are fast
+      # Download dependencies only (cached for next steps)
       - ./gradlew dependencies --no-daemon
-      # Copy specific Android licenses if missing (common CI issue)
+      - ./gradlew :app:dependencies --no-daemon
+      # Accept licenses silently to prevent build failures
       - yes | sdkmanager --licenses || true
 
-  # 3. Lint
+  # 2. Lint Analysis
   - name: lint
-    image: *image
+    image: *img
     environment:
-      GRADLE_USER_HOME: *gradle_home
+      GRADLE_USER_HOME: *cache_path
     commands:
       - ./gradlew lintDebug --no-daemon
+      - echo "Lint report available at app/build/reports/lint-results-debug.html"
     when:
       event: [pull_request, push]
 
-  # 4. Test
+  # 3. Unit Tests
   - name: test
-    image: *image
+    image: *img
     environment:
-      GRADLE_USER_HOME: *gradle_home
+      GRADLE_USER_HOME: *cache_path
     commands:
       - ./gradlew testDebugUnitTest --no-daemon
 
-  # 5. Build APK
+  # 4. Build APK
   - name: build
-    image: *image
+    image: *img
     environment:
-      GRADLE_USER_HOME: *gradle_home
+      GRADLE_USER_HOME: *cache_path
     commands:
       - ./gradlew assembleDebug --no-daemon
-      # Extract version and rename APK for release
-      - VERSION=$(grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
-      - echo "$VERSION" > .version
+      # Extract version name for release step
+      - grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/' > .version
+      - VERSION=$(cat .version)
+      - echo "Built version $VERSION"
       - cp app/build/outputs/apk/debug/app-debug.apk "WeatherWall-v$VERSION.apk"
 
-  # 6. Publish (Only on push to main/develop)
+  # 5. Publish Release (Only on push to main/develop)
   - name: release
-    image: curlimages/curl:8.6.0 # Lighter image for just curl
+    image: curlimages/curl:8.6.0  # Lighter image, safer for secrets
     environment:
       FORGEJO_TOKEN:
         from_secret: forgejo_token
@@ -62,20 +64,35 @@ steps:
       - VERSION=$(cat .version)
       - APK_FILE="WeatherWall-v$VERSION.apk"
       - |
+        echo "Checking release v$VERSION..."
         # Check if release exists
         HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token $FORGEJO_TOKEN" "https://git.olli.info/api/v1/repos/Oliver/WeatherWall/releases/tags/v$VERSION")
-        if [ "$HTTP_CODE" = "200" ]; then echo "Release v$VERSION exists."; exit 0; fi
+        
+        if [ "$HTTP_CODE" = "200" ]; then 
+          echo "Release v$VERSION already exists. Skipping."
+          exit 0
+        fi
 
-        # Create Release
         echo "Creating release v$VERSION..."
-        RESP=$(curl -s -X POST -H "Authorization: token $FORGEJO_TOKEN" -H "Content-Type: application/json" -d "{\"tag_name\": \"v$VERSION\", \"name\": \"v$VERSION\", \"body\": \"Automated release v$VERSION\"}" "https://git.olli.info/api/v1/repos/Oliver/WeatherWall/releases")
+        # Create Release
+        RESP=$(curl -s -X POST -H "Authorization: token $FORGEJO_TOKEN" -H "Content-Type: application/json" \
+          -d "{\"tag_name\": \"v$VERSION\", \"name\": \"v$VERSION\", \"body\": \"Automated release v$VERSION\"}" \
+          "https://git.olli.info/api/v1/repos/Oliver/WeatherWall/releases")
+        
         REL_ID=$(echo "$RESP" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
 
-        # Upload Asset
-        if [ ! -z "$REL_ID" ]; then
-          curl -s -X POST -H "Authorization: token $FORGEJO_TOKEN" -H "Content-Type: application/octet-stream" --data-binary "@$APK_FILE" "https://git.olli.info/api/v1/repos/Oliver/WeatherWall/releases/$REL_ID/assets?name=$APK_FILE"
-          echo "Published successfully."
+        if [ -z "$REL_ID" ]; then
+          echo "Error creating release. Response: $RESP"
+          exit 1
         fi
+
+        # Upload APK
+        echo "Uploading $APK_FILE..."
+        curl -s -X POST -H "Authorization: token $FORGEJO_TOKEN" -H "Content-Type: application/octet-stream" \
+          --data-binary "@$APK_FILE" \
+          "https://git.olli.info/api/v1/repos/Oliver/WeatherWall/releases/$REL_ID/assets?name=$APK_FILE"
+        
+        echo "Done!"
     when:
       branch: [main, develop]
       event: push

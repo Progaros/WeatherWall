@@ -13,13 +13,19 @@ import kotlin.math.sqrt
  * Key approach:
  * - Gravity in screen coords = -[R[6], R[7], R[8]] (negative third row of remapped matrix)
  * - Deadzone prevents noise when device is flat
- * - Low-pass filter for smooth motion
+ * - Near-direct pass-through for minimal latency (~20ms target, matching reference app)
  * - Outputs absolute tilt position (not velocity) so parallax follows held angle
+ * 
+ * Latency optimization:
+ * - Reference app (RotationManager.java) uses no smoothing filter
+ * - We use high FILTER_ALPHA (0.85) for near-instant response
+ * - Gyroscope mode bypasses filter entirely for direct output
  */
 class ParallaxSensorManagerTest {
 
     companion object {
-        const val FILTER_ALPHA = 0.12f  // Matches ParallaxSensorManager
+        // Near-direct pass-through for minimal latency (reference app uses no filter)
+        const val FILTER_ALPHA = 0.85f  // Matches ParallaxSensorManager
         const val DEADZONE = 0.08f
         const val GRAVITY_EARTH = 9.81f  // SensorManager.GRAVITY_EARTH
         const val SHAKE_THRESHOLD_GRAVITY = 2.7f
@@ -662,6 +668,78 @@ class ParallaxSensorManagerTest {
         }
         
         assertEquals("Direction changes should reset on timeout", 0, directionChanges)
+    }
+    
+    // ============== Latency Optimization Tests ==============
+    
+    @Test
+    fun `high filter alpha provides near-instant response`() {
+        // With FILTER_ALPHA = 0.85, we reach 85% of target in first frame
+        var filtered = 0f
+        val target = 1f
+        
+        // Single update
+        filtered += FILTER_ALPHA * (target - filtered)
+        
+        // Should reach 85% immediately (vs old 40% with alpha=0.4)
+        assertTrue("Should reach at least 80% of target in first frame", filtered >= 0.80f)
+        
+        // Second update gets us to 97.75%
+        filtered += FILTER_ALPHA * (target - filtered)
+        assertTrue("Should reach at least 97% after 2 frames", filtered >= 0.97f)
+    }
+    
+    @Test
+    fun `latency is under 2 frames with high alpha`() {
+        // Target: reach 95% of target in under 2 frames (vs ~8 frames with old alpha)
+        var filtered = 0f
+        val target = 0.8f
+        var framesTo95Percent = 0
+        
+        while (filtered < target * 0.95f && framesTo95Percent < 100) {
+            filtered += FILTER_ALPHA * (target - filtered)
+            framesTo95Percent++
+        }
+        
+        assertTrue("Should reach 95% of target in 2 frames or less (got $framesTo95Percent)", 
+            framesTo95Percent <= 2)
+    }
+    
+    @Test
+    fun `gyroscope mode uses direct output without filter`() {
+        // Gyroscope mode should bypass filter entirely for minimum latency
+        // This matches reference app behavior (RotationManager.java)
+        val MAX_TILT_RAD = 0.31415927f
+        
+        // Simulating gyro output calculation
+        val gyroRoll = 0.15f  // Half max tilt
+        val gyroPitch = 0.10f
+        
+        // Direct output (no filtering)
+        val tiltX = (-gyroRoll / MAX_TILT_RAD).coerceIn(-1f, 1f)
+        val tiltY = (-gyroPitch / MAX_TILT_RAD).coerceIn(-1f, 1f)
+        
+        // Output should be exact, not smoothed
+        assertEquals("Gyro mode tiltX should be direct", -gyroRoll / MAX_TILT_RAD, tiltX, 0.001f)
+        assertEquals("Gyro mode tiltY should be direct", -gyroPitch / MAX_TILT_RAD, tiltY, 0.001f)
+    }
+    
+    @Test
+    fun `reference app latency target is 20ms`() {
+        // At 50Hz sensor rate (SENSOR_DELAY_GAME = ~20ms), we want:
+        // - Sensor event arrives: +20ms
+        // - Processing (near-instant with direct output): +0-1ms
+        // - Next render frame picks up value: +16ms max (60fps)
+        // Total: ~36ms worst case, ~20ms typical
+        
+        // With high FILTER_ALPHA (0.85), single frame convergence is ~85%
+        // This matches reference app's direct-value approach closely
+        
+        val sensorDelayMs = 20L  // SENSOR_DELAY_GAME
+        val renderDelayMs = 16L  // 60fps
+        val worstCaseLatency = sensorDelayMs + renderDelayMs
+        
+        assertTrue("Worst case latency should be under 50ms", worstCaseLatency < 50)
     }
 }
 

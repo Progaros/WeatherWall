@@ -22,8 +22,12 @@ import java.util.concurrent.atomic.AtomicReference
  */
 class ParallaxCalculator {
     companion object {
-        /** How fast position approaches target (per frame, 0-1) - increased for faster response */
-        private const val POSITION_LERP_RATE = 0.5f
+        /** How fast position approaches target (per frame, 0-1)
+         * Higher = faster response, lower latency
+         * Reference app uses direct values (effectively 1.0)
+         * 0.9 gives near-instant response with minimal smoothing
+         */
+        private const val POSITION_LERP_RATE = 0.9f
     }
     
     // Tilt holder for atomic operations (lock-free)

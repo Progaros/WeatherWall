@@ -335,4 +335,90 @@ class ParallaxCalculatorTest {
         val logScaleAt100 = kotlin.math.ln(1f + 1f) / kotlin.math.ln(2f)
         assertEquals("Log scale at 100% should be 1.0", 1.0f, logScaleAt100, 0.01f)
     }
+    
+    // ============== Latency Optimization Tests ==============
+    
+    @Test
+    fun testHighLerpRateForLowLatency() {
+        // With POSITION_LERP_RATE = 0.9, position should reach target very quickly
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 0f
+        calculator.maxOffsetPx = 100f
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.smoothing = 0f  // No smoothing for this test
+        
+        // Apply tilt
+        calculator.updateFromSensor(1.0f, 0f)
+        
+        // After just 2-3 frames, should be near target (vs 20+ frames with old lerp rate)
+        calculator.update(16)
+        val xAfter1Frame = calculator.getOffsetX()
+        
+        calculator.update(16)
+        val xAfter2Frames = calculator.getOffsetX()
+        
+        // With lerp rate 0.9: first frame reaches 90%, second frame reaches 99%
+        assertTrue("After 1 frame, should reach at least 80% of target", 
+            kotlin.math.abs(xAfter1Frame) > 70f)
+        assertTrue("After 2 frames, should reach at least 95% of target", 
+            kotlin.math.abs(xAfter2Frames) > 90f)
+    }
+    
+    @Test
+    fun testLatencyUnder3Frames() {
+        // Target: reach 99% of final position in under 3 frames for ~50ms total latency
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 0f
+        calculator.maxOffsetPx = 100f
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.smoothing = 0f
+        
+        calculator.updateFromSensor(1.0f, 0f)
+        
+        // Let it converge for reference
+        repeat(100) { calculator.update(16) }
+        val targetX = calculator.getOffsetX()
+        
+        // Reset and test convergence speed
+        calculator.reset()
+        calculator.updateFromSensor(1.0f, 0f)
+        
+        var frames = 0
+        var currentX = 0f
+        while (kotlin.math.abs(currentX) < kotlin.math.abs(targetX) * 0.99f && frames < 10) {
+            calculator.update(16)
+            currentX = calculator.getOffsetX()
+            frames++
+        }
+        
+        assertTrue("Should reach 99% of target in 3 frames or less (got $frames)", frames <= 3)
+    }
+    
+    @Test
+    fun testDirectResponseMatchesReferenceApp() {
+        // Reference app (ForestRenderer.java) reads rotation values directly each frame
+        // Our implementation should match this with near-instant lerp
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 10f  // 10% of screen height
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.smoothing = 0f
+        
+        // Simulate tilt input changing rapidly (like real device motion)
+        calculator.updateFromSensor(0.5f, 0f)
+        calculator.update(16)
+        val x1 = calculator.getOffsetX()
+        
+        // Immediately change direction
+        calculator.updateFromSensor(-0.5f, 0f)
+        calculator.update(16)
+        val x2 = calculator.getOffsetX()
+        
+        // With high lerp rate, should have already moved significantly toward new target
+        // (negative direction)
+        assertTrue("Should respond immediately to direction change (x2 < x1 * 0.5)", 
+            x2 < x1 * 0.5f)
+    }
 }
