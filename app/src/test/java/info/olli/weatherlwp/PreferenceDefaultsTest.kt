@@ -63,6 +63,8 @@ class PreferenceDefaultsTest {
             "pref_parallax_invert_x" to PreferenceDefaults.PARALLAX_INVERT_X,
             "pref_parallax_invert_y" to PreferenceDefaults.PARALLAX_INVERT_Y,
             "pref_parallax_sensor_mode" to PreferenceDefaults.PARALLAX_SENSOR_MODE,
+            "pref_parallax_edge_easing" to PreferenceDefaults.PARALLAX_EDGE_EASING,
+            "pref_parallax_return_unlocked" to PreferenceDefaults.PARALLAX_RETURN_UNLOCKED,
             
             // Cloud settings
             "pref_clouds_enabled" to PreferenceDefaults.CLOUDS_ENABLED,
@@ -93,6 +95,7 @@ class PreferenceDefaultsTest {
             "pref_seasonal_enabled" to PreferenceDefaults.SEASONAL_ENABLED,
             "pref_shake_fireworks_enabled" to PreferenceDefaults.SHAKE_FIREWORKS_ENABLED,
             "pref_shake_sensitivity" to PreferenceDefaults.SHAKE_SENSITIVITY,
+            "pref_shake_delay" to PreferenceDefaults.SHAKE_DELAY_MS,
             
             // Visual settings
             "pref_night_shade_strength" to PreferenceDefaults.NIGHT_SHADE_STRENGTH,

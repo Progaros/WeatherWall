@@ -404,9 +404,9 @@ class ParallaxScene(
             val rawStrength = minStrength * logBase.toDouble().pow(exponent.toDouble()).toFloat()
             parallaxStrength = if (parallaxEnabled) rawStrength else 0f
             
-            // Max offset as percentage of screen height: 2..20% (default 10%)
+            // Max offset as percentage of screen height: 2..40% (default 20%)
             // This ensures movement scales proportionally with screen size
-            val maxOffsetPercentVal = prefs.getInt("pref_parallax_max_offset", 10).coerceIn(2, 20)
+            val maxOffsetPercentVal = prefs.getInt("pref_parallax_max_offset", 20).coerceIn(2, 40)
             val maxOffsetPercent = maxOffsetPercentVal.toFloat()
             
             // Legacy pixel offset (not used when percentage is set, but kept for compatibility)
@@ -416,6 +416,14 @@ class ParallaxScene(
             // 1 = nearly instant, 50 = moderate smoothing, 100 = floaty
             val smoothingVal = prefs.getInt("pref_parallax_smoothing", 30).coerceIn(1, 100)
             val smoothingFactor = 0.02f + (smoothingVal / 100f) * 0.38f
+            
+            // Edge easing slider: map 0..100 -> 0f..1f
+            // 0 = linear (no easing), 50 = moderate easing, 100 = extreme (center-only movement)
+            val edgeEasingVal = prefs.getInt("pref_parallax_edge_easing", 0).coerceIn(0, 100)
+            val edgeEasing = edgeEasingVal / 100f
+            
+            // Return speed unlocked: when true, return to center is always fast
+            val returnSpeedUnlocked = prefs.getBoolean("pref_parallax_return_unlocked", true)
             
             // Depth separation slider: map 0..100 -> 0f..4.0f (default 33 = ~1.3x effect)
             val depthVal = prefs.getInt("pref_parallax_depth", 33).coerceIn(0, 100)
@@ -453,6 +461,8 @@ class ParallaxScene(
             parallaxCalculator.invertX = invertX
             parallaxCalculator.invertY = invertY
             parallaxCalculator.aspectRatioCompensation = aspectRatioCompensation
+            parallaxCalculator.edgeEasing = edgeEasing
+            parallaxCalculator.returnSpeedUnlocked = returnSpeedUnlocked
             
             // Also update sensor decay (affects how fast the raw tilt returns to center)
             sensor.setReturnSpeed(returnSpeed)
@@ -482,7 +492,8 @@ class ParallaxScene(
             // Configure shake detection based on settings
             val shakeEnabled = prefs.getBoolean("pref_shake_fireworks_enabled", true)
             val shakeSensitivity = prefs.getInt("pref_shake_sensitivity", 50) / 100f
-            sensor.setShakeSettings(shakeEnabled, shakeSensitivity)
+            val shakeDelayMs = prefs.getInt("pref_shake_delay", 500).coerceIn(0, 2000)
+            sensor.setShakeSettings(shakeEnabled, shakeSensitivity, shakeDelayMs)
             
             // Frame time logging (debug feature for performance analysis)
             frameTimeLoggingEnabled = prefs.getBoolean("pref_debug_frame_timing", false)

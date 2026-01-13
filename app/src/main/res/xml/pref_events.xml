@@ -262,6 +262,17 @@
             app:showSeekBarValue="true"
             app:updatesContinuously="true"
             android:dependency="pref_shake_fireworks_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_shake_delay"
+            android:title="Unlock Delay"
+            android:summary="Ignore shakes after screen on (0-2000ms, prevents accidental triggers)"
+            android:defaultValue="500"
+            android:max="2000"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_shake_fireworks_enabled" />
     </PreferenceCategory>
 
 </PreferenceScreen>

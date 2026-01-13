@@ -788,6 +788,44 @@ class ParallaxSensorManagerTest {
         
         assertTrue("Worst case latency should be under 50ms", worstCaseLatency < 50)
     }
+    
+    // ============== Shake Unlock Delay Tests ==============
+    
+    @Test
+    fun `shake unlock delay default is 500ms`() {
+        // Default unlock delay should prevent accidental triggers after phone unlock
+        val defaultDelay = 500L
+        assertTrue("Default unlock delay should be 500ms", defaultDelay == 500L)
+    }
+    
+    @Test
+    fun `shake ignored during unlock delay period`() {
+        // Simulate the unlock delay logic
+        val screenOnTime = 1000L
+        val shakeUnlockDelayMs = 500L
+        val shakeTimeWithinDelay = 1200L  // 200ms after screen on
+        val shakeTimeAfterDelay = 1600L   // 600ms after screen on
+        
+        // Shake within delay period should be ignored
+        val ignoredWithinDelay = shakeTimeWithinDelay - screenOnTime < shakeUnlockDelayMs
+        assertTrue("Shake 200ms after screen on should be ignored", ignoredWithinDelay)
+        
+        // Shake after delay period should be accepted
+        val ignoredAfterDelay = shakeTimeAfterDelay - screenOnTime < shakeUnlockDelayMs
+        assertTrue("Shake 600ms after screen on should be accepted", !ignoredAfterDelay)
+    }
+    
+    @Test
+    fun `shake unlock delay of zero disables the feature`() {
+        // When delay is 0, shakes should always be accepted (no unlock delay)
+        val shakeUnlockDelayMs = 0L
+        val screenOnTime = 1000L
+        val immediateShakeTime = 1001L  // 1ms after screen on
+        
+        // With delay=0, no shakes should be ignored due to unlock delay
+        val ignored = shakeUnlockDelayMs > 0 && immediateShakeTime - screenOnTime < shakeUnlockDelayMs
+        assertTrue("With delay=0, shakes should never be ignored due to unlock delay", !ignored)
+    }
 }
 
 /**

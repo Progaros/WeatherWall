@@ -177,6 +177,10 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     private var gyroAxisThreshold = DEFAULT_GYRO_AXIS_THRESHOLD
     private var gyroWindowMs = DEFAULT_GYRO_WINDOW_MS
     private var gyroTriggerChanges = DEFAULT_GYRO_TRIGGER_CHANGES
+    
+    // Shake unlock delay: prevents accidental shake triggers after screen on (phone unlock motion)
+    private var shakeUnlockDelayMs = 500L
+    private var screenOnTime = 0L  // Timestamp when start() was called (screen became visible)
 
     fun setListener(l: Listener) { listener = l }
     
@@ -201,9 +205,11 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
      * Configure shake detection.
      * @param enabled Whether shake detection is enabled
      * @param sensitivity 0.0 = hard shake only, 1.0 = sensitive wiggle detection
+     * @param unlockDelayMs Delay in ms after screen on before shake triggers are accepted
      */
-    fun setShakeSettings(enabled: Boolean, sensitivity: Float = 0.5f) {
+    fun setShakeSettings(enabled: Boolean, sensitivity: Float = 0.5f, unlockDelayMs: Int = 500) {
         shakeEnabled = enabled
+        shakeUnlockDelayMs = unlockDelayMs.toLong()
         
         // Map sensitivity to thresholds: higher sensitivity = lower thresholds, fewer required changes
         val s = sensitivity.coerceIn(0f, 1f)
@@ -316,6 +322,10 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             lastShakeTime = 0L
             shakeTimestamp = 0L
             
+            // Record screen on time for shake unlock delay
+            // Prevents accidental shake triggers from phone unlock gesture
+            screenOnTime = System.currentTimeMillis()
+            
             // Use SENSOR_DELAY_GAME (~20ms, 50Hz) for responsive parallax
             // Battery savings come from unregistering when not visible (done in stop())
             val sensorRate = SensorManager.SENSOR_DELAY_GAME
@@ -326,7 +336,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             registerShakeSensors()
             
             isStarted = true
-            Log.d(TAG, "Sensor started with mode: $parallaxMode, shakeEnabled=$shakeEnabled")
+            Log.d(TAG, "Sensor started with mode: $parallaxMode, shakeEnabled=$shakeEnabled, unlockDelay=${shakeUnlockDelayMs}ms")
         }
     }
 
@@ -543,6 +553,13 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         
         val now = System.currentTimeMillis()
         
+        // Check unlock delay: ignore shakes immediately after screen on
+        // This prevents accidental triggers from phone unlock gesture
+        if (shakeUnlockDelayMs > 0 && now - screenOnTime < shakeUnlockDelayMs) {
+            Log.d(TAG, "Shake ignored: within unlock delay (${now - screenOnTime}ms < ${shakeUnlockDelayMs}ms)")
+            return
+        }
+        
         // Check cooldown after a successful shake trigger
         if (now - lastShakeTime < SHAKE_COOLDOWN_MS) return
         
@@ -578,6 +595,10 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
      */
     private fun detectGyroWiggle(values: FloatArray) {
         val now = System.currentTimeMillis()
+        
+        // Check unlock delay: ignore wiggles immediately after screen on
+        // This prevents accidental triggers from phone unlock gesture
+        if (shakeUnlockDelayMs > 0 && now - screenOnTime < shakeUnlockDelayMs) return
         
         // Check cooldown after a successful shake trigger (shared with other detectors)
         if (now - lastShakeTime < SHAKE_COOLDOWN_MS) return

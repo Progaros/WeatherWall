@@ -83,6 +83,7 @@ class SeasonalEvents(private val context: Context? = null) {
         var targetY: Float = 0f,
         var colors: IntArray = intArrayOf(),  // 1-3 colors for this rocket's explosion
         var active: Boolean = false,
+        var explodeAfterFrame: Int = 0,  // Frame number when rocket should explode
         var trailX1: Float = 0f, var trailY1: Float = 0f,
         var trailX2: Float = 0f, var trailY2: Float = 0f,
         var trailX3: Float = 0f, var trailY3: Float = 0f
@@ -122,6 +123,9 @@ class SeasonalEvents(private val context: Context? = null) {
     // Scale factor for height-relative sizing (uses RenderConstants.REFERENCE_HEIGHT)
     // All pixel values are designed for 1920px height and scaled proportionally
     private var heightScale = 1f
+    
+    // Global frame counter for time-based rocket explosions
+    private var frameCounter = 0
 
     private var fireworkTimer = 0
     private val fireworkColors = intArrayOf(
@@ -637,6 +641,9 @@ class SeasonalEvents(private val context: Context? = null) {
             }
         }
 
+        // Increment frame counter for time-based rocket explosions
+        frameCounter++
+
         // Update and render rockets
         for (r in rockets) {
             if (r.active) {
@@ -648,11 +655,9 @@ class SeasonalEvents(private val context: Context? = null) {
                 r.trailX1 = r.x
                 r.trailY1 = r.y
                 
-                // Move rocket upward (scale velocity AND deceleration by height for consistent physics)
-                // Bug fix: Previously deceleration wasn't scaled, causing rockets on smaller screens
-                // to decelerate too quickly and disappear at 80-90% height without exploding
+                // Move rocket upward (scale velocity by height for consistent physics)
                 r.y += r.vy * heightScale
-                r.vy += 0.05f * heightScale  // Deceleration scaled by height for consistent behavior
+                r.vy += 0.06f * heightScale  // Gentle deceleration
                 
                 // Draw rocket trail (fading dots behind, scaled by height)
                 val trailScale = heightScale.coerceAtLeast(0.5f)  // Don't go below 50% size
@@ -667,9 +672,9 @@ class SeasonalEvents(private val context: Context? = null) {
                 rocketPaint.color = Color.WHITE
                 canvas.drawCircle(r.x, r.y, 3f * trailScale, rocketPaint)
                 
-                // Explode when reaching target or when rocket starts falling (vy > 0)
-                // This ensures rockets always explode even if they don't quite reach target
-                if (r.y <= r.targetY || r.vy > 0) {
+                // Simple time-based explosion: explode when scheduled frame is reached
+                // This prevents slow-motion lingering at apex
+                if (frameCounter >= r.explodeAfterFrame) {
                     explodeRocket(r)
                     r.active = false
                 }
@@ -735,8 +740,13 @@ class SeasonalEvents(private val context: Context? = null) {
             if (!r.active) {
                 r.x = screenWidth * 0.15f + Random.nextFloat() * screenWidth * 0.7f
                 r.y = screenHeight.toFloat()
-                r.vy = -12f - Random.nextFloat() * 6f  // Upward velocity
+                // Upward velocity: -12 to -18 (negative = up)
+                r.vy = -12f - Random.nextFloat() * 6f
                 r.targetY = screenHeight * 0.15f + Random.nextFloat() * screenHeight * 0.25f
+                
+                // Explode after 45-75 frames (~0.75-1.25 seconds at 60fps)
+                // This gives a nice arc without lingering
+                r.explodeAfterFrame = frameCounter + 45 + Random.nextInt(30)
                 
                 // Choose 1-3 colors for this rocket's explosion
                 val numColors = 1 + Random.nextInt(3)  // 1, 2, or 3 colors

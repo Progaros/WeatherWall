@@ -16,8 +16,11 @@ This document provides a summary of the project's source code to assist with mai
 - **SimulationSettings.kt**: Helper for loading general simulation preferences.
 
 ## Parallax System
-- **ParallaxCalculator.kt**: Core logic for calculating 3D perspective shifts from tilt. When smoothing=0, uses direct mode for instant response (matching reference app). Supports lerp-based smoothing when slider is increased. Handles return-to-center when device is leveled.
-- **ParallaxSensorManager.kt**: Handles accelerometer/gyroscope/rotation vector sensors. Gyroscope mode exactly matches reference app (RotationManager.java): raw values to 3-sample averagers, no deadzone/decay, display rotation applied after accumulation. Formula: `angle += avgRate * deltaTimeNanos * 1e-8 * 6 * DEG_TO_RAD`, clamped to ±18°.
+- **ParallaxCalculator.kt**: Core logic for calculating 3D perspective shifts from tilt. When smoothing=0, uses direct mode for instant response (matching reference app). Supports lerp-based smoothing when slider is increased. Handles return-to-center when device is leveled. Features:
+  - **Edge Easing** (0-100): Power curve that slows movement near screen edges. At 0=linear, higher values make center more responsive while edges barely move. Uses `(1 - normalizedDistance)^(1 + edgeEasing*3)`.
+  - **Return Unlocked**: When enabled, return-to-center is not slowed by edge easing (only outward movement is affected).
+  - **Max Offset**: Configurable 0-40% of screen height (default 20%).
+- **ParallaxSensorManager.kt**: Handles accelerometer/gyroscope/rotation vector sensors. Gyroscope mode exactly matches reference app (RotationManager.java): raw values to 3-sample averagers, no deadzone/decay, display rotation applied after accumulation. Formula: `angle += avgRate * deltaTimeNanos * 1e-8 * 6 * DEG_TO_RAD`, clamped to ±18°. Also handles shake detection with configurable unlock delay (0-2000ms) to prevent accidental triggers after phone unlock.
 - **ParallaxScene.kt**: Composition root for the visual scene. Manages all layers and passes render calls.
 
 ## Rendering System (Canvas)
@@ -34,7 +37,7 @@ This document provides a summary of the project's source code to assist with mai
 ## Event System (Animated Elements)
 - **RandomEventLayer.kt**: Manager for spawning and updating random events.
 - **RandomEvent.kt**: Base class for all events.
-- **SeasonalEvents.kt**: Helper to determine which events can spawn in current season/weather.
+- **SeasonalEvents.kt**: Helper to determine which events can spawn in current season/weather. Also handles fireworks (shake-triggered and seasonal). Rockets use time-based explosion (45-75 frames after launch, ~0.75-1.25s) to ensure mid-flight explosions rather than lingering at apex.
 - **Events**: `AirplaneEvent`, `AlienEvent`, `BatEvent`, `BirdFlockEvent`, `ButterflyEvent`, `DeerEvent`, `DragonflyEvent`, `EagleEvent`, `FireflyEvent`, `FoxEvent`, `HotAirBalloonEvent`, `OwlEvent`, `RabbitEvent`, `ShootingStarEvent`, `SnowflakeEvent`, `SquirrelEvent`.
 
 ## Weather Data

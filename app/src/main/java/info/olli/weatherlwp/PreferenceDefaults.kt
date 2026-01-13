@@ -29,7 +29,7 @@ object PreferenceDefaults {
     // === Parallax Settings ===
     const val PARALLAX_ENABLED = true
     const val PARALLAX_STRENGTH = 25  // 1-100%, log scale
-    const val PARALLAX_MAX_OFFSET = 15  // % of screen height
+    const val PARALLAX_MAX_OFFSET = 20  // % of screen height (increased from 15)
     const val PARALLAX_RETURN_SPEED = 15  // 0-100
     const val PARALLAX_SMOOTHING = 30  // 1-100
     const val PARALLAX_DEPTH = 33  // 0-100
@@ -38,6 +38,8 @@ object PreferenceDefaults {
     const val PARALLAX_INVERT_X = false
     const val PARALLAX_INVERT_Y = false
     const val PARALLAX_SENSOR_MODE = "rotation_vector"
+    const val PARALLAX_EDGE_EASING = 0  // 0-100, 0=linear, 100=extreme quadratic
+    const val PARALLAX_RETURN_UNLOCKED = true  // true=fast return regardless of position
     
     // === Cloud Settings ===
     const val CLOUDS_ENABLED = true
@@ -68,6 +70,7 @@ object PreferenceDefaults {
     const val SEASONAL_ENABLED = true
     const val SHAKE_FIREWORKS_ENABLED = true
     const val SHAKE_SENSITIVITY = 50  // 0-100
+    const val SHAKE_DELAY_MS = 500  // 0-2000ms, delay after screen on before shake triggers
     
     // === Visual Settings ===
     const val NIGHT_SHADE_STRENGTH = 35  // 0-100

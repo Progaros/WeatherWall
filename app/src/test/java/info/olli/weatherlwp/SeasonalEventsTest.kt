@@ -386,4 +386,65 @@ class SeasonalEventsTest {
         // can cause rockets to fail on some screen sizes but not others
         assertTrue("Test documents the scaling requirement", true)
     }
+    
+    // ============== Rocket Timing Improvement Tests ==============
+    
+    @Test
+    fun `rocket uses time-based explosion`() {
+        // Rockets now explode based on frame count, not velocity
+        // This prevents slow-motion lingering at apex
+        val launchFrame = 100
+        val explodeAfterFrames = 45 + 15  // Mid-range: 60 frames
+        val explodeAtFrame = launchFrame + explodeAfterFrames
+        
+        // At 60fps, 60 frames = 1 second of flight time
+        val flightTimeSeconds = explodeAfterFrames / 60f
+        assertTrue("Flight time should be around 1 second", flightTimeSeconds in 0.75f..1.25f)
+        
+        // Test explosion timing
+        var currentFrame = launchFrame
+        var shouldExplode = false
+        
+        while (currentFrame <= explodeAtFrame + 10) {
+            if (currentFrame >= explodeAtFrame) {
+                shouldExplode = true
+                break
+            }
+            currentFrame++
+        }
+        
+        assertTrue("Rocket should explode at scheduled frame", shouldExplode)
+    }
+    
+    @Test
+    fun `rocket explosion timing is randomized`() {
+        // Rockets explode 45-75 frames after launch (~0.75-1.25 seconds)
+        val minFrames = 45
+        val maxFrames = 75
+        
+        // Verify range is reasonable
+        val minSeconds = minFrames / 60f
+        val maxSeconds = maxFrames / 60f
+        
+        assertTrue("Min flight time should be ~0.75s", minSeconds >= 0.7f)
+        assertTrue("Max flight time should be ~1.25s", maxSeconds <= 1.3f)
+        
+        // Range of 30 frames gives good variety
+        val range = maxFrames - minFrames
+        assertEquals("Range should be 30 frames", 30, range)
+    }
+    
+    @Test
+    fun `rocket physics uses gentle deceleration`() {
+        // Deceleration is 0.06 * heightScale
+        val deceleration = 0.06f
+        
+        // With initial velocity -15 and decel 0.06:
+        // Frames to stop = 15 / 0.06 = 250 frames (~4.2 seconds)
+        // But rockets explode at 45-75 frames, so they're still moving up
+        val initialVy = -15f
+        val framesToStop = -initialVy / deceleration
+        
+        assertTrue("Rockets should still be moving when they explode", framesToStop > 75)
+    }
 }

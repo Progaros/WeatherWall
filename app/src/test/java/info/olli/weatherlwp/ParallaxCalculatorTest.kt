@@ -431,12 +431,12 @@ class ParallaxCalculatorTest {
     }
     
     @Test
-    fun testMaxOffsetPercentIs15() {
-        // Verify the default max offset is 15%
+    fun testMaxOffsetPercentIs20() {
+        // Verify the default max offset is 20%
         val newCalculator = ParallaxCalculator()
         
-        // Default should be 15%
-        assertEquals("Default maxOffsetPercent should be 15", 15f, newCalculator.maxOffsetPercent, 0.01f)
+        // Default should be 20%
+        assertEquals("Default maxOffsetPercent should be 20", 20f, newCalculator.maxOffsetPercent, 0.01f)
     }
     
     // ============== Direct Mode (smoothing=0) Tests ==============

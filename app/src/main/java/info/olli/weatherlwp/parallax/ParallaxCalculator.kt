@@ -45,7 +45,7 @@ class ParallaxCalculator {
     // These are overwritten by loadPrefs() but provide sane defaults before settings load
     var strength = 0.075f               // Default: 25% on log scale → ~0.075
     var maxOffsetPx = 130f              // Legacy: used when maxOffsetPercent is 0
-    var maxOffsetPercent = 15f          // Default: 15% of screen height (increased for more movement)
+    var maxOffsetPercent = 20f          // Default: 20% of screen height (increased for more movement)
     var smoothing = 0f                  // Default: 0 = direct/instant (reference app behavior)
     var depthSeparation = 1.32f         // Default: (33/100)*4.0 = 1.32 (pref_parallax_depth=33)
     
@@ -57,6 +57,22 @@ class ParallaxCalculator {
     // 1.0 = same movement for both axes (default with height-based percentage)
     // >1.0 = more horizontal movement, <1.0 = less horizontal movement
     var aspectRatioCompensation = 1.0f  // Default: pref_parallax_aspect_ratio=100 (100/100=1.0)
+    
+    /**
+     * Edge easing curve: controls how movement slows near edges.
+     * 0.0 = linear (no easing, hard edges)
+     * 0.5 = moderate easing (smooth deceleration near edges)
+     * 1.0 = extreme easing (only moves freely in center, steep slowdown near edges)
+     * Uses quadratic falloff: movement multiplier = 1 - (distance^(1+edgeEasing*3))
+     */
+    var edgeEasing = 0.0f               // Default: 0 = linear (no easing)
+    
+    /**
+     * Return speed unlocked: when true, return to center uses full speed regardless of position.
+     * When false, return speed is also affected by edge easing (slower near edges).
+     * Default true = return to center is always responsive.
+     */
+    var returnSpeedUnlocked = true      // Default: true = fast return to center
     
     /**
      * Reference height for scaling parallax offset.
@@ -139,6 +155,12 @@ class ParallaxCalculator {
      * - At 0: position fully follows tilt (no return)
      * - At 1: strong dampening, scene resists tilt and drifts toward center
      * - Works at all tilt angles, not just when phone is flat
+     * 
+     * Edge easing behavior:
+     * - Movement slows down when approaching edges (away from center)
+     * - Moving toward center is always at normal speed
+     * - edgeEasing=0: linear movement (no slowdown)
+     * - edgeEasing=1: extreme slowdown near edges, only center moves freely
      */
     fun update(deltaTimeMs: Long = 16L) {
         val deltaScale = deltaTimeMs / 16f  // Normalize to ~60fps
@@ -185,6 +207,14 @@ class ParallaxCalculator {
         // If tilt is low (device flat), we use "Return Speed" to control recentering
         val isReturning = tiltMagnitude < 0.1f
         
+        // Calculate edge easing multiplier based on current position
+        // Only applies when moving AWAY from center (not when returning)
+        val edgeEasingMultiplier = if (edgeEasing > 0.01f && !isReturning) {
+            calculateEdgeEasingMultiplier(xLimit, yLimit)
+        } else {
+            1f
+        }
+        
         val effectiveLerpRate = if (isReturning) {
             if (returnSpeed <= 0.001f) {
                 // returnSpeed=0: Hold position (freeze) when flat
@@ -193,12 +223,14 @@ class ParallaxCalculator {
                 // Use returnSpeed for lerp rate (0.001 to 0.5)
                 // returnSpeed=1.0 -> 0.5 (Very fast)
                 // returnSpeed=0.1 -> 0.05 (Slow)
-                (returnSpeed * 0.5f * deltaScale).coerceAtMost(0.9f)
+                val baseLerp = (returnSpeed * 0.5f * deltaScale).coerceAtMost(0.9f)
+                // Apply edge easing to return speed only if not unlocked
+                if (returnSpeedUnlocked) baseLerp else baseLerp * edgeEasingMultiplier
             }
         } else {
             // Smoothing=0 means instant/direct response (matches reference app)
             // Smoothing>0 adds progressive lerp-based smoothing
-            if (smoothing <= 0.01f) {
+            val baseLerp = if (smoothing <= 0.01f) {
                 // Direct mode: instant response, no lerping (reference app behavior)
                 1.0f
             } else {
@@ -206,6 +238,9 @@ class ParallaxCalculator {
                 val baseLerpRate = POSITION_LERP_RATE * (1f - smoothing * 0.6f) * deltaScale
                 baseLerpRate.coerceAtMost(0.95f)
             }
+            // Apply edge easing - only slow down when moving away from center
+            val movingAwayFromCenter = isMovingAwayFromCenter(targetX, targetY)
+            if (movingAwayFromCenter) baseLerp * edgeEasingMultiplier else baseLerp
         }
         
         // Apply interpolation
@@ -275,5 +310,45 @@ class ParallaxCalculator {
         targetX = 0f
         targetY = 0f
         pendingTilt.set(TiltPair(0f, 0f))
+    }
+    
+    /**
+     * Calculate edge easing multiplier based on current position.
+     * Returns a value between 0 and 1 that slows movement near edges.
+     * 
+     * Uses power curve: multiplier = (1 - normalizedDistance)^exponent
+     * where exponent = 1 + edgeEasing * 3 (range 1-4)
+     * 
+     * At edgeEasing=0: exponent=1, linear (no easing)
+     * At edgeEasing=0.5: exponent=2.5, moderate easing
+     * At edgeEasing=1: exponent=4, extreme easing (steep slowdown near edges)
+     */
+    private fun calculateEdgeEasingMultiplier(xLimit: Float, yLimit: Float): Float {
+        if (edgeEasing <= 0.01f) return 1f
+        
+        // Calculate normalized distance from center (0=center, 1=edge)
+        val normalizedX = if (xLimit > 0) kotlin.math.abs(positionX) / xLimit else 0f
+        val normalizedY = if (yLimit > 0) kotlin.math.abs(positionY) / yLimit else 0f
+        val normalizedDistance = kotlin.math.sqrt(normalizedX * normalizedX + normalizedY * normalizedY)
+            .coerceIn(0f, 1f)
+        
+        // Apply power curve: near center (0) = full speed, near edge (1) = slow
+        // exponent ranges from 1 (linear) to 4 (very steep at edges)
+        val exponent = 1f + edgeEasing * 3f
+        val base = (1f - normalizedDistance).toDouble()
+        val multiplier = Math.pow(base, exponent.toDouble()).toFloat()
+        
+        // Clamp to reasonable minimum to prevent complete freeze
+        return multiplier.coerceIn(0.05f, 1f)
+    }
+    
+    /**
+     * Check if the parallax is moving away from center (position magnitude increasing).
+     * Movement toward center should not be slowed by edge easing.
+     */
+    private fun isMovingAwayFromCenter(newTargetX: Float, newTargetY: Float): Boolean {
+        val currentMagnitude = kotlin.math.sqrt(positionX * positionX + positionY * positionY)
+        val targetMagnitude = kotlin.math.sqrt(newTargetX * newTargetX + newTargetY * newTargetY)
+        return targetMagnitude > currentMagnitude
     }
 }

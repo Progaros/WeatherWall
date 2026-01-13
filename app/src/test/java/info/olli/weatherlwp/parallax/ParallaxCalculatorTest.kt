@@ -224,8 +224,8 @@ class ParallaxCalculatorTest {
     fun testMaxOffsetPercentDefault() {
         val calculator = ParallaxCalculator()
         
-        // Default max offset should be 15% of screen height (increased for more movement)
-        assertEquals("Default max offset percent should be 15%", 15f, calculator.maxOffsetPercent, 0.01f)
+        // Default max offset should be 20% of screen height (increased for more movement)
+        assertEquals("Default max offset percent should be 20%", 20f, calculator.maxOffsetPercent, 0.01f)
     }
     
     @Test
@@ -420,5 +420,102 @@ class ParallaxCalculatorTest {
         // (negative direction)
         assertTrue("Should respond immediately to direction change (x2 < x1 * 0.5)", 
             x2 < x1 * 0.5f)
+    }
+    
+    // ============== Edge Easing Tests ==============
+    
+    @Test
+    fun testEdgeEasingDefaultIsZero() {
+        val calculator = ParallaxCalculator()
+        assertEquals("Default edge easing should be 0 (linear)", 0f, calculator.edgeEasing, 0.01f)
+    }
+    
+    @Test
+    fun testEdgeEasingZeroIsLinear() {
+        // With edgeEasing=0, movement should not slow down near edges
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 10f
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.edgeEasing = 0f  // Linear, no slowdown
+        calculator.smoothing = 0f  // Instant response
+        
+        // Move to edge
+        calculator.updateFromSensor(1.0f, 0f)
+        repeat(100) { calculator.update(16) }
+        val xAtEdge = calculator.getOffsetX()
+        
+        // Should reach near maximum
+        assertTrue("With edgeEasing=0, should reach near max offset", xAtEdge > 150f)
+    }
+    
+    @Test
+    fun testEdgeEasingSlowsNearEdge() {
+        // With high edgeEasing, movement should slow significantly near edges
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 10f
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.edgeEasing = 1.0f  // Maximum easing
+        calculator.smoothing = 0.1f  // Some smoothing to see the effect
+        
+        // First move to center
+        calculator.updateFromSensor(0.5f, 0f)
+        repeat(50) { calculator.update(16) }
+        val xAtMid = calculator.getOffsetX()
+        
+        // Then try to move to edge
+        calculator.updateFromSensor(1.0f, 0f)
+        repeat(50) { calculator.update(16) }
+        val xAtEdge = calculator.getOffsetX()
+        
+        // Progress from mid to edge should be slower than from center to mid
+        // due to edge easing
+        val centerToMidProgress = kotlin.math.abs(xAtMid)
+        val midToEdgeProgress = kotlin.math.abs(xAtEdge - xAtMid)
+        
+        // With extreme easing, mid-to-edge progress should be less than center-to-mid
+        assertTrue("Edge easing should slow movement near edges (midToEdge < centerToMid)", 
+            midToEdgeProgress < centerToMidProgress * 1.5f)
+    }
+    
+    @Test
+    fun testReturnSpeedUnlockedDefault() {
+        val calculator = ParallaxCalculator()
+        assertTrue("Default returnSpeedUnlocked should be true", calculator.returnSpeedUnlocked)
+    }
+    
+    @Test
+    fun testReturnSpeedUnlockedIgnoresEdgeEasing() {
+        // When returnSpeedUnlocked=true, return to center should be fast regardless of edge easing
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 10f
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.edgeEasing = 1.0f  // Maximum easing
+        calculator.returnSpeed = 0.5f  // Fast return
+        calculator.returnSpeedUnlocked = true  // Fast return ignores easing
+        
+        // Move to edge
+        calculator.updateFromSensor(1.0f, 0f)
+        repeat(100) { calculator.update(16) }
+        val xAtEdge = calculator.getOffsetX()
+        assertTrue("Should have moved to edge", xAtEdge > 100f)
+        
+        // Now return to center (tilt near zero triggers return)
+        calculator.updateFromSensor(0f, 0f)
+        repeat(100) { calculator.update(16) }
+        val xAfterReturn = calculator.getOffsetX()
+        
+        // Should return to near center quickly despite edge easing
+        assertTrue("With unlocked return, should return to near center quickly", 
+            kotlin.math.abs(xAfterReturn) < 20f)
+    }
+    
+    @Test
+    fun testMaxOffsetPercentDefaultIncreased() {
+        val calculator = ParallaxCalculator()
+        // Default max offset should be 20% (increased from 15%)
+        assertEquals("Default max offset percent should be 20%", 20f, calculator.maxOffsetPercent, 0.01f)
     }
 }

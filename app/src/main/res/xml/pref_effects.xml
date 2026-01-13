@@ -101,9 +101,9 @@
         <SeekBarPreference
             android:key="pref_parallax_max_offset"
             android:title="Max Movement"
-            android:summary="Scene shift as % of screen height (2-30%)"
-            android:defaultValue="15"
-            android:max="30"
+            android:summary="Scene shift as % of screen height (2-40%)"
+            android:defaultValue="20"
+            android:max="40"
             app:min="2"
             app:showSeekBarValue="true"
             app:updatesContinuously="true"
@@ -129,6 +129,24 @@
             app:min="1"
             app:showSeekBarValue="true"
             app:updatesContinuously="true"
+            android:dependency="pref_parallax_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_parallax_edge_easing"
+            android:title="Edge Easing"
+            android:summary="Slowdown near edges (0=linear, 50=soft, 100=center-only)"
+            android:defaultValue="0"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_parallax_enabled" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_parallax_return_unlocked"
+            android:title="Fast Return"
+            android:summary="Return to center ignores edge easing (always fast)"
+            android:defaultValue="true"
             android:dependency="pref_parallax_enabled" />
 
         <SeekBarPreference
