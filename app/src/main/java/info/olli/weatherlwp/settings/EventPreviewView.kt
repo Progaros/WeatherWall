@@ -42,6 +42,17 @@ class EventPreviewView @JvmOverloads constructor(
             postDelayed(this, frameDelay)
         }
     }
+    
+    // Background color cycles every 4 seconds between sky blue and dark
+    private val backgroundColor: Int
+        get() {
+            val cyclePhase = (animationTime * 0.25f).toInt() % 2
+            return if (cyclePhase == 0) {
+                Color.argb(40, 135, 206, 235)  // Sky blue tint
+            } else {
+                Color.argb(40, 20, 20, 30)      // Dark/night tint
+            }
+        }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
@@ -63,8 +74,8 @@ class EventPreviewView @JvmOverloads constructor(
         val size = minOf(w, h)
         val unit = size * 0.15f  // Larger unit for bigger previews
 
-        // Draw background circle using nearly full height
-        paint.color = Color.argb(40, 128, 128, 128)
+        // Draw background circle using nearly full height (cycles between sky blue and dark)
+        paint.color = backgroundColor
         paint.style = Paint.Style.FILL
         canvas.drawCircle(centerX, centerY, size * 0.48f, paint)
 
@@ -142,13 +153,13 @@ class EventPreviewView @JvmOverloads constructor(
         paint.strokeWidth = unit * 0.15f
         paint.strokeCap = Paint.Cap.ROUND
         
-        // Draw 5 birds in V-formation
+        // Draw 5 birds in V-formation, centered on the preview
         val birds = arrayOf(
-            Pair(0f, 0f),
-            Pair(-unit * 1.5f, -unit),
-            Pair(-unit * 3f, -unit * 2f),
-            Pair(-unit * 1.5f, unit),
-            Pair(-unit * 3f, unit * 2f)
+            Pair(0f, 0f),           // Leader at center
+            Pair(-unit * 0.8f, -unit * 0.6f),   // Upper left
+            Pair(-unit * 1.6f, -unit * 1.2f),   // Far upper left
+            Pair(-unit * 0.8f, unit * 0.6f),    // Lower left
+            Pair(-unit * 1.6f, unit * 1.2f)     // Far lower left
         )
         
         for ((dx, dy) in birds) {
@@ -157,8 +168,8 @@ class EventPreviewView @JvmOverloads constructor(
             
             // Simple bird shape - two lines forming V wings
             val wingUp = wingBeat * unit
-            canvas.drawLine(-unit * 0.6f, wingUp, 0f, 0f, paint)
-            canvas.drawLine(0f, 0f, unit * 0.6f, wingUp, paint)
+            canvas.drawLine(-unit * 0.5f, wingUp, 0f, 0f, paint)
+            canvas.drawLine(0f, 0f, unit * 0.5f, wingUp, paint)
             
             canvas.restore()
         }
@@ -489,45 +500,59 @@ class EventPreviewView @JvmOverloads constructor(
         paint.style = Paint.Style.FILL
 
         canvas.save()
-        canvas.translate(cx + bodyWobble, cy)
+        canvas.translate(cx, cy + bodyWobble)
 
-        // Body (long and thin)
-        paint.color = Color.argb(230, 50, 150, 200)
-        canvas.drawOval(-unit * 0.2f, -unit * 2f, unit * 0.2f, unit * 2f, paint)
+        // Body colors - iridescent blue/green like actual event
+        val bodyColor = Color.argb(230, 30, 144, 255)  // Dodger blue
+        val wingColor = Color.argb(100, 200, 220, 255)
 
-        // Head
-        canvas.drawCircle(0f, -unit * 2.3f, unit * 0.4f, paint)
+        // Draw horizontally (matching actual DragonflyEvent)
+        // Thorax (main body)
+        paint.color = bodyColor
+        canvas.drawCircle(0f, 0f, unit * 0.8f, paint)
 
-        // Wings (4 wings)
-        paint.color = Color.argb(100, 200, 220, 255)
-        val wingLength = unit * 2.5f
-        val wingWidth = unit * 0.8f
-        val wingOffset = wingBeat * 15f
+        // Abdomen (long thin tail to the left)
+        path.reset()
+        path.moveTo(-unit * 0.5f, 0f)
+        path.lineTo(-unit * 3.5f, unit * 0.15f)
+        path.lineTo(-unit * 3.5f, -unit * 0.15f)
+        path.close()
+        canvas.drawPath(path, paint)
 
-        // Upper left
+        // Head (to the right)
+        canvas.drawCircle(unit * 1.0f, 0f, unit * 0.5f, paint)
+
+        // Compound eyes
+        paint.color = Color.rgb(60, 60, 60)
+        canvas.drawCircle(unit * 1.2f, -unit * 0.2f, unit * 0.25f, paint)
+        canvas.drawCircle(unit * 1.2f, unit * 0.2f, unit * 0.25f, paint)
+
+        // Wings (4 wings, translucent, oriented for horizontal body)
+        paint.color = wingColor
+        val wingAngle = wingBeat * 15f
+
+        // Top front wing
         canvas.save()
-        canvas.rotate(-30f + wingOffset)
-        canvas.drawOval(-wingLength, -wingWidth * 0.3f, 0f, wingWidth * 0.3f, paint)
+        canvas.rotate(wingAngle, 0f, 0f)
+        canvas.drawOval(-unit * 0.5f, -unit * 2.5f, unit * 1.5f, -unit * 0.3f, paint)
         canvas.restore()
 
-        // Upper right
+        // Bottom front wing
         canvas.save()
-        canvas.rotate(30f - wingOffset)
-        canvas.drawOval(0f, -wingWidth * 0.3f, wingLength, wingWidth * 0.3f, paint)
+        canvas.rotate(-wingAngle, 0f, 0f)
+        canvas.drawOval(-unit * 0.5f, unit * 0.3f, unit * 1.5f, unit * 2.5f, paint)
         canvas.restore()
 
-        // Lower left
+        // Top rear wing (slightly smaller)
         canvas.save()
-        canvas.translate(0f, unit * 0.5f)
-        canvas.rotate(-35f - wingOffset)
-        canvas.drawOval(-wingLength * 0.9f, -wingWidth * 0.25f, 0f, wingWidth * 0.25f, paint)
+        canvas.rotate(-wingAngle * 0.8f, -unit * 0.8f, 0f)
+        canvas.drawOval(-unit * 1.5f, -unit * 2f, unit * 0.3f, -unit * 0.2f, paint)
         canvas.restore()
 
-        // Lower right
+        // Bottom rear wing
         canvas.save()
-        canvas.translate(0f, unit * 0.5f)
-        canvas.rotate(35f + wingOffset)
-        canvas.drawOval(0f, -wingWidth * 0.25f, wingLength * 0.9f, wingWidth * 0.25f, paint)
+        canvas.rotate(wingAngle * 0.8f, -unit * 0.8f, 0f)
+        canvas.drawOval(-unit * 1.5f, unit * 0.2f, unit * 0.3f, unit * 2f, paint)
         canvas.restore()
 
         canvas.restore()

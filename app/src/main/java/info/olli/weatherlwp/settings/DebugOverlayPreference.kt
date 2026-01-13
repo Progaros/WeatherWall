@@ -51,31 +51,38 @@ class DebugOverlayPreference @JvmOverloads constructor(
         val divider = holder.findViewById(R.id.debug_overlay_divider) as? View
         switch?.isChecked = prefs.getBoolean(key, false)
         
-        // Remove default listeners - we'll handle everything via touch
+        // Remove default listener on switch - we handle via click
         switch?.setOnCheckedChangeListener(null)
         
-        // Use touch listener to determine which zone was tapped
+        // Switch direct click toggles the setting
+        switch?.setOnClickListener {
+            val newState = switch.isChecked
+            prefs.edit().putBoolean(key, newState).apply()
+            mainHandler.post { 
+                updateSummaryText()
+                notifyChanged()
+            }
+            callChangeListener(newState)
+        }
+        
+        // Use touch listener on item view to determine which zone was tapped
         holder.itemView.setOnTouchListener { view, event ->
             if (event.action == MotionEvent.ACTION_UP) {
                 val dividerLeft = divider?.let { getDividerLeftPosition(holder.itemView, it) } 
                     ?: (view.width - 100)  // Fallback: rightmost 100px is switch zone
                 
                 if (event.x >= dividerLeft) {
-                    // Tapped on switch area (right of divider) - toggle the switch
-                    toggleSwitch(switch)
+                    // Tapped on switch area (right of divider) - let the switch handle it
+                    // Return false so the event propagates to the switch
+                    false
                 } else {
                     // Tapped on main area (left of divider) - open configure dialog
                     showItemSelectionDialog()
+                    true
                 }
-                true
             } else {
                 false
             }
-        }
-        
-        // Switch direct click also toggles
-        switch?.setOnClickListener {
-            toggleSwitch(switch)
         }
     }
     
