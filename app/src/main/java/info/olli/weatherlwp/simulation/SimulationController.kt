@@ -58,6 +58,8 @@ class SimulationController(private val context: Context) {
      */
     fun resetTiming() {
         lastUpdateMs = 0L
+        // Reset time smoothing so sun/moon position initializes immediately without jumping
+        timeInitialized = false
     }
     
     /**
@@ -249,16 +251,24 @@ class SimulationController(private val context: Context) {
         }
         
         val timeDelta = kotlin.math.abs(rawTime - lastSmoothedTime)
-        return if (timeDelta > 0.5f) {
-            // Large change: lerp gradually
-            val lerpFactor = 0.05f
-            lastSmoothedTime = lastSmoothedTime + (rawTime - lastSmoothedTime) * lerpFactor
-            lastSmoothedTime
-        } else {
-            // Small change: use raw time
+        
+        // Very small delta: just use raw time to avoid floating point drift
+        if (timeDelta < 0.001f) {
             lastSmoothedTime = rawTime
-            rawTime
+            return rawTime
         }
+        
+        // Use lerp that smoothly approaches target without sudden jump
+        // Factor increases as we get closer to prevent slow crawl at the end
+        val lerpFactor = when {
+            timeDelta > 2f -> 0.03f      // Large jump (e.g. time slider): slow start
+            timeDelta > 0.5f -> 0.08f    // Medium jump: moderate speed
+            timeDelta > 0.1f -> 0.15f    // Small gap: faster to catch up
+            else -> 0.3f                  // Tiny gap: quick finish
+        }
+        
+        lastSmoothedTime = lastSmoothedTime + (rawTime - lastSmoothedTime) * lerpFactor
+        return lastSmoothedTime
     }
     
     /**
