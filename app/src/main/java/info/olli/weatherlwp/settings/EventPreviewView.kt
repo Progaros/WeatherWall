@@ -43,15 +43,21 @@ class EventPreviewView @JvmOverloads constructor(
         }
     }
     
-    // Background color cycles every 4 seconds between sky blue and dark
+    // Background color smoothly cycles between sky blue and dark (8 second full cycle)
     private val backgroundColor: Int
         get() {
-            val cyclePhase = (animationTime * 0.25f).toInt() % 2
-            return if (cyclePhase == 0) {
-                Color.argb(40, 135, 206, 235)  // Sky blue tint
-            } else {
-                Color.argb(40, 20, 20, 30)      // Dark/night tint
-            }
+            // Use sin wave for smooth transition (0 to 1 to 0)
+            // Period: 8 seconds (0.125 * 2π = full cycle)
+            val phase = sin(animationTime * 0.785f).toFloat()  // 0.785 ≈ π/4, gives ~8s cycle
+            val t = (phase + 1f) / 2f  // Normalize from -1..1 to 0..1
+            
+            // Interpolate between bright sky blue and dark night
+            // Sky blue: (100, 180, 235), Dark: (15, 15, 35)
+            val r = (15 + (100 - 15) * t).toInt()
+            val g = (15 + (180 - 15) * t).toInt()
+            val b = (35 + (235 - 35) * t).toInt()
+            
+            return Color.argb(50, r, g, b)
         }
 
     override fun onAttachedToWindow() {

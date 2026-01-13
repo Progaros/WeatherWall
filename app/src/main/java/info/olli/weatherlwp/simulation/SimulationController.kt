@@ -21,6 +21,7 @@ class SimulationController(private val context: Context) {
     
     // For smooth time transitions
     private var lastSmoothedTime = 0f
+    private var timeInitialized = false  // Skip smoothing on first frame
     
     // Wind gust simulation
     private var gustPhase = 0f
@@ -237,8 +238,16 @@ class SimulationController(private val context: Context) {
     
     /**
      * Smooth time transitions to prevent color jumps when using time slider.
+     * On first call (wallpaper load), skip smoothing to avoid sun/moon jumping.
      */
     private fun smoothTimeTransitions(rawTime: Float): Float {
+        // On first call, initialize immediately to avoid jump from 0 to current time
+        if (!timeInitialized) {
+            timeInitialized = true
+            lastSmoothedTime = rawTime
+            return rawTime
+        }
+        
         val timeDelta = kotlin.math.abs(rawTime - lastSmoothedTime)
         return if (timeDelta > 0.5f) {
             // Large change: lerp gradually
