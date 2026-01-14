@@ -17,6 +17,26 @@ import kotlin.random.Random
 // Java Random is used for nextGaussian() (normal distribution)
 private val gaussianRandom = java.util.Random()
 
+// Pre-calculated trigonometry for 8-point star (avoids Math.toRadians in render loop)
+// Angles: 0°, 45°, 90°, 135°, 180°, 225°, 270°, 315°
+private val STAR_RAY_ANGLES_RAD = doubleArrayOf(
+    0.0, Math.PI / 4, Math.PI / 2, 3 * Math.PI / 4,
+    Math.PI, 5 * Math.PI / 4, 3 * Math.PI / 2, 7 * Math.PI / 4
+)
+private val STAR_RAY_COS = STAR_RAY_ANGLES_RAD.map { kotlin.math.cos(it).toFloat() }.toFloatArray()
+private val STAR_RAY_SIN = STAR_RAY_ANGLES_RAD.map { kotlin.math.sin(it).toFloat() }.toFloatArray()
+
+// Pre-calculated trail angle (225° = down-left from star)
+private const val TRAIL_ANGLE_RAD = 225.0 * Math.PI / 180.0
+private val TRAIL_COS = kotlin.math.cos(TRAIL_ANGLE_RAD).toFloat()
+private val TRAIL_SIN = kotlin.math.sin(TRAIL_ANGLE_RAD).toFloat()
+private const val TRAIL_PERP_RAD = TRAIL_ANGLE_RAD + Math.PI / 2
+private val TRAIL_PERP_COS = kotlin.math.cos(TRAIL_PERP_RAD).toFloat()
+private val TRAIL_PERP_SIN = kotlin.math.sin(TRAIL_PERP_RAD).toFloat()
+
+// Conversion constant
+private const val DEG_TO_RAD = Math.PI / 180.0
+
 /**
  * Seasonal event effects: Christmas star with trail and New Year fireworks.
  * Active during December 15 - January 7, or when debug override is set.
@@ -95,6 +115,11 @@ class SeasonalEvents(private val context: Context? = null) {
     private val rockets = Array(50) { Rocket() }  // Up to 50 rockets in flight for shake fireworks
     private val trailParticles = Array(20) { TrailParticle() }
     private var christmasStar: ChristmasStar? = null
+    
+    // Pre-allocated paths (avoid allocations in render loop)
+    private val christmasTrailPath = Path()
+    private val christmasRayPath = Path()
+    private val dragonHornPath = Path()
 
     // Pre-allocated paints
     private val starPaint = Paint().apply {
@@ -489,44 +514,43 @@ class SeasonalEvents(private val context: Context? = null) {
         // Apply size multiplier
         val effectiveSize = star.size * starSizeMultiplier
         
-        // Twinkle factor for the whole star
-        val twinkleFactor = 0.85f + 0.15f * kotlin.math.sin(Math.toRadians(star.twinkle.toDouble())).toFloat()
+        // Twinkle factor for the whole star (use precalculated DEG_TO_RAD)
+        val twinkleFactor = 0.85f + 0.15f * kotlin.math.sin(star.twinkle * DEG_TO_RAD).toFloat()
         
-        // Trail/Schweif - gradient path going down-left from the star
-        val trailAngle = Math.toRadians(225.0)
+        // Trail/Schweif - gradient path going down-left from the star (use precalculated angles)
         val trailLength = effectiveSize * 7f * trailLengthMultiplier
         
         // Only render trail if length > 0
         if (trailLengthMultiplier > 0.01f) {
             // Smooth gradient trail using LinearGradient instead of discrete circles
-            val trailEndX = starX + (trailLength * kotlin.math.cos(trailAngle)).toFloat()
-            val trailEndY = starY + (trailLength * kotlin.math.sin(trailAngle)).toFloat()
+            val trailEndX = starX + trailLength * TRAIL_COS
+            val trailEndY = starY + trailLength * TRAIL_SIN
             
             // Create a tapered trail path (wider near star, narrower at end)
-            val perpAngle = trailAngle + Math.PI / 2
             val startWidth = effectiveSize * 0.35f
             val endWidth = effectiveSize * 0.05f
             
-            val path = Path()
+            // Use pre-allocated path (avoid allocation in render loop)
+            christmasTrailPath.reset()
             // Starting edge (near star) - wider
-            path.moveTo(
-                starX + (startWidth * kotlin.math.cos(perpAngle)).toFloat(),
-                starY + (startWidth * kotlin.math.sin(perpAngle)).toFloat()
+            christmasTrailPath.moveTo(
+                starX + startWidth * TRAIL_PERP_COS,
+                starY + startWidth * TRAIL_PERP_SIN
             )
-            path.lineTo(
-                starX - (startWidth * kotlin.math.cos(perpAngle)).toFloat(),
-                starY - (startWidth * kotlin.math.sin(perpAngle)).toFloat()
+            christmasTrailPath.lineTo(
+                starX - startWidth * TRAIL_PERP_COS,
+                starY - startWidth * TRAIL_PERP_SIN
             )
             // End edge (far from star) - narrower
-            path.lineTo(
-                trailEndX - (endWidth * kotlin.math.cos(perpAngle)).toFloat(),
-                trailEndY - (endWidth * kotlin.math.sin(perpAngle)).toFloat()
+            christmasTrailPath.lineTo(
+                trailEndX - endWidth * TRAIL_PERP_COS,
+                trailEndY - endWidth * TRAIL_PERP_SIN
             )
-            path.lineTo(
-                trailEndX + (endWidth * kotlin.math.cos(perpAngle)).toFloat(),
-                trailEndY + (endWidth * kotlin.math.sin(perpAngle)).toFloat()
+            christmasTrailPath.lineTo(
+                trailEndX + endWidth * TRAIL_PERP_COS,
+                trailEndY + endWidth * TRAIL_PERP_SIN
             )
-            path.close()
+            christmasTrailPath.close()
             
             // Linear gradient from star (bright gold) to end (transparent)
             trailPaint.shader = LinearGradient(
@@ -540,7 +564,7 @@ class SeasonalEvents(private val context: Context? = null) {
                 Shader.TileMode.CLAMP
             )
             trailPaint.alpha = 255
-            canvas.drawPath(path, trailPaint)
+            canvas.drawPath(christmasTrailPath, trailPaint)
             trailPaint.shader = null
         }
         
@@ -559,31 +583,37 @@ class SeasonalEvents(private val context: Context? = null) {
         canvas.drawCircle(starX, starY, glowRadius, christmasStarPaint)
         christmasStarPaint.shader = null
         
-        // 8-point star rays as filled triangles with alpha falloff
+        // 8-point star rays as filled triangles with alpha falloff (use precalculated sin/cos)
         val primaryRayLength = effectiveSize * 1.6f * twinkleFactor
         val secondaryRayLength = effectiveSize * 0.9f * twinkleFactor
         val rayBaseWidth = effectiveSize * 0.12f
         
-        val rayPath = Path()
-        for ((index, angle) in listOf(0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0).withIndex()) {
+        // Use pre-allocated path (avoid allocation in render loop)
+        christmasRayPath.reset()
+        for (index in 0 until 8) {
             val isPrimary = index % 2 == 0  // 0, 90, 180, 270 are primary
             val rayLen = if (isPrimary) primaryRayLength else secondaryRayLength
-            val rad = Math.toRadians(angle)
-            val perpRad = rad + Math.PI / 2
+            // Use precalculated cos/sin arrays
+            val cosVal = STAR_RAY_COS[index]
+            val sinVal = STAR_RAY_SIN[index]
+            // Perpendicular is 90° ahead in the array (with wrap)
+            val perpIndex = (index + 2) % 8
+            val perpCos = STAR_RAY_COS[perpIndex]
+            val perpSin = STAR_RAY_SIN[perpIndex]
             
-            val tipX = starX + (rayLen * kotlin.math.cos(rad)).toFloat()
-            val tipY = starY + (rayLen * kotlin.math.sin(rad)).toFloat()
+            val tipX = starX + rayLen * cosVal
+            val tipY = starY + rayLen * sinVal
             
             val baseOffset = rayBaseWidth * (if (isPrimary) 1f else 0.7f)
-            val baseX1 = starX + (baseOffset * kotlin.math.cos(perpRad)).toFloat()
-            val baseY1 = starY + (baseOffset * kotlin.math.sin(perpRad)).toFloat()
-            val baseX2 = starX - (baseOffset * kotlin.math.cos(perpRad)).toFloat()
-            val baseY2 = starY - (baseOffset * kotlin.math.sin(perpRad)).toFloat()
+            val baseX1 = starX + baseOffset * perpCos
+            val baseY1 = starY + baseOffset * perpSin
+            val baseX2 = starX - baseOffset * perpCos
+            val baseY2 = starY - baseOffset * perpSin
             
-            rayPath.moveTo(baseX1, baseY1)
-            rayPath.lineTo(tipX, tipY)
-            rayPath.lineTo(baseX2, baseY2)
-            rayPath.close()
+            christmasRayPath.moveTo(baseX1, baseY1)
+            christmasRayPath.lineTo(tipX, tipY)
+            christmasRayPath.lineTo(baseX2, baseY2)
+            christmasRayPath.close()
         }
         
         // Fill rays with gradient from center
@@ -597,7 +627,7 @@ class SeasonalEvents(private val context: Context? = null) {
             floatArrayOf(0f, 0.3f, 1f),
             Shader.TileMode.CLAMP
         )
-        canvas.drawPath(rayPath, christmasStarPaint)
+        canvas.drawPath(christmasRayPath, christmasStarPaint)
         christmasStarPaint.shader = null
         
         // Bright central core with radial gradient
@@ -740,13 +770,13 @@ class SeasonalEvents(private val context: Context? = null) {
             if (!r.active) {
                 r.x = screenWidth * 0.15f + Random.nextFloat() * screenWidth * 0.7f
                 r.y = screenHeight.toFloat()
-                // Upward velocity: -12 to -18 (negative = up)
-                r.vy = -12f - Random.nextFloat() * 6f
-                r.targetY = screenHeight * 0.15f + Random.nextFloat() * screenHeight * 0.25f
+                // Upward velocity: -14 to -20 (negative = up, faster to reach height)
+                r.vy = -14f - Random.nextFloat() * 6f
+                r.targetY = screenHeight * 0.08f + Random.nextFloat() * screenHeight * 0.22f
                 
-                // Explode after 45-75 frames (~0.75-1.25 seconds at 60fps)
-                // This gives a nice arc without lingering
-                r.explodeAfterFrame = frameCounter + 45 + Random.nextInt(30)
+                // Explode after 75-120 frames (~1.25-2.0 seconds at 60fps)
+                // Longer flight time ensures rockets clear mountains (which are at 30-60% from bottom)
+                r.explodeAfterFrame = frameCounter + 75 + Random.nextInt(45)
                 
                 // Choose 1-3 colors for this rocket's explosion
                 val numColors = 1 + Random.nextInt(3)  // 1, 2, or 3 colors
@@ -787,8 +817,10 @@ class SeasonalEvents(private val context: Context? = null) {
 
                 f.x = cx
                 f.y = cy
-                f.vx = (speed * kotlin.math.cos(Math.toRadians(angle.toDouble()))).toFloat()
-                f.vy = (speed * kotlin.math.sin(Math.toRadians(angle.toDouble()))).toFloat()
+                // Use precalculated DEG_TO_RAD constant
+                val angleRad = angle * DEG_TO_RAD
+                f.vx = (speed * kotlin.math.cos(angleRad)).toFloat()
+                f.vy = (speed * kotlin.math.sin(angleRad)).toFloat()
                 
                 // Randomly pick one of the rocket's colors
                 f.color = colors[Random.nextInt(colors.size)]
@@ -1004,14 +1036,15 @@ class SeasonalEvents(private val context: Context? = null) {
         canvas.drawCircle(headX - headRadius * 0.3f - snoutLength * 0.7f, headY + headRadius * 0.15f, nostrilRadius, dragonPaint)
         
         // Gold whiskers/mane (flowing back from face, toward the RIGHT/behind)
+        // Pre-calculated sin values for whisker angles: -60°, -30°, 30°, 60°
         dragonPaint.color = dragonColors[1]
         val whiskerLength = headRadius * 0.8f
-        for (angle in listOf(-30f, -60f, 30f, 60f)) {
-            val rad = Math.toRadians(angle.toDouble())
+        val whiskerSinValues = floatArrayOf(-0.866f, -0.5f, 0.5f, 0.866f)  // sin(-60°), sin(-30°), sin(30°), sin(60°)
+        for (sinVal in whiskerSinValues) {
             val wx = headX + headRadius * 0.3f  // Start from back of head
-            val wy = headY + kotlin.math.sin(rad).toFloat() * headRadius * 0.5f
+            val wy = headY + sinVal * headRadius * 0.5f
             val wxEnd = wx + whiskerLength  // Flow to the right (behind dragon)
-            val wyEnd = wy + kotlin.math.sin(rad).toFloat() * whiskerLength * 0.5f
+            val wyEnd = wy + sinVal * whiskerLength * 0.5f
             dragonOutlinePaint.color = dragonColors[1]
             dragonOutlinePaint.strokeWidth = 3f * scale
             canvas.drawLine(wx, wy, wxEnd, wyEnd, dragonOutlinePaint)
@@ -1043,22 +1076,23 @@ class SeasonalEvents(private val context: Context? = null) {
         )
         
         // Horns/antlers (gold) - pointing up and back
+        // Use pre-allocated path (avoid allocation in render loop)
         dragonPaint.color = dragonColors[1]
-        val hornPath = Path()
+        dragonHornPath.reset()
         // Main horn
-        hornPath.moveTo(headX, headY - headRadius * 0.8f)
-        hornPath.lineTo(headX + headRadius * 0.3f, headY - headRadius * 1.6f)
-        hornPath.lineTo(headX + headRadius * 0.5f, headY - headRadius * 0.9f)
-        hornPath.close()
-        canvas.drawPath(hornPath, dragonPaint)
+        dragonHornPath.moveTo(headX, headY - headRadius * 0.8f)
+        dragonHornPath.lineTo(headX + headRadius * 0.3f, headY - headRadius * 1.6f)
+        dragonHornPath.lineTo(headX + headRadius * 0.5f, headY - headRadius * 0.9f)
+        dragonHornPath.close()
+        canvas.drawPath(dragonHornPath, dragonPaint)
         
         // Secondary horn (smaller, behind)
-        hornPath.reset()
-        hornPath.moveTo(headX + headRadius * 0.4f, headY - headRadius * 0.6f)
-        hornPath.lineTo(headX + headRadius * 0.7f, headY - headRadius * 1.2f)
-        hornPath.lineTo(headX + headRadius * 0.8f, headY - headRadius * 0.7f)
-        hornPath.close()
-        canvas.drawPath(hornPath, dragonPaint)
+        dragonHornPath.reset()
+        dragonHornPath.moveTo(headX + headRadius * 0.4f, headY - headRadius * 0.6f)
+        dragonHornPath.lineTo(headX + headRadius * 0.7f, headY - headRadius * 1.2f)
+        dragonHornPath.lineTo(headX + headRadius * 0.8f, headY - headRadius * 0.7f)
+        dragonHornPath.close()
+        canvas.drawPath(dragonHornPath, dragonPaint)
         
         // Head outline
         dragonOutlinePaint.color = dragonColors[3]

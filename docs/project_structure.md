@@ -37,7 +37,7 @@ This document provides a summary of the project's source code to assist with mai
 ## Event System (Animated Elements)
 - **RandomEventLayer.kt**: Manager for spawning and updating random events.
 - **RandomEvent.kt**: Base class for all events.
-- **SeasonalEvents.kt**: Helper to determine which events can spawn in current season/weather. Also handles fireworks (shake-triggered and seasonal). Rockets use time-based explosion (45-75 frames after launch, ~0.75-1.25s) to ensure mid-flight explosions rather than lingering at apex.
+- **SeasonalEvents.kt**: Helper to determine which events can spawn in current season/weather. Also handles fireworks (shake-triggered and seasonal). Rockets use time-based explosion (75-120 frames after launch, ~1.25-2.0s) to ensure explosions occur above mountain level.
 - **Events**: `AirplaneEvent`, `AlienEvent`, `BatEvent`, `BirdFlockEvent`, `ButterflyEvent`, `DeerEvent`, `DragonflyEvent`, `EagleEvent`, `FireflyEvent`, `FoxEvent`, `HotAirBalloonEvent`, `OwlEvent`, `RabbitEvent`, `ShootingStarEvent`, `SnowflakeEvent`, `SquirrelEvent`.
 
 ## Weather Data

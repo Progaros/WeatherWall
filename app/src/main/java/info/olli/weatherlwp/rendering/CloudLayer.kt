@@ -387,8 +387,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val effectiveSpeed = windSpeed * cloudSpeedMultiplier * stormBoost
         
         // Get wind direction for X component (-1 to 1, positive = rightward)
-        val windDirX = kotlin.math.cos(Math.toRadians(state.windDirection.toDouble())).toFloat()
-        val dirX = windDirX.coerceIn(-1f, 1f)
+        // Use precalculated value from SimulationState for efficiency
+        val dirX = state.getWindDirX()
         
         // Convert delta time to seconds, cap to prevent jumps
         val deltaSec = (deltaTimeMs / 1000f).coerceAtMost(0.1f)

@@ -65,15 +65,34 @@ data class SimulationState(
     // Debug/Override flags
     val isDebugMode: Boolean
 ) {
+    // Pre-calculated wind direction trig values (computed once per state creation)
+    private val windDirRad: Double = Math.toRadians(windDirection.toDouble())
+    private val windCosVal: Float = kotlin.math.cos(windDirRad).toFloat()
+    private val windSinVal: Float = kotlin.math.sin(windDirRad).toFloat()
+    
+    /**
+     * Get wind direction X component (cos of wind angle, -1 to 1).
+     * Uses precalculated value for efficiency. For use without strength multiplier.
+     */
+    fun getWindDirX(): Float = windCosVal
+    
+    /**
+     * Get wind direction Y component (sin of wind angle, -1 to 1).
+     * Uses precalculated value for efficiency. For use without strength multiplier.
+     */
+    fun getWindDirY(): Float = windSinVal
+    
     /**
      * Get wind X component (-1 to 1).
+     * Uses precalculated cos value for efficiency.
      */
-    fun getWindX(): Float = windStrength * kotlin.math.cos(Math.toRadians(windDirection.toDouble())).toFloat()
+    fun getWindX(): Float = windStrength * windCosVal
     
     /**
      * Get wind Y component (-1 to 1).
+     * Uses precalculated sin value for efficiency.
      */
-    fun getWindY(): Float = windStrength * kotlin.math.sin(Math.toRadians(windDirection.toDouble())).toFloat()
+    fun getWindY(): Float = windStrength * windSinVal
     
     /**
      * Get ambient light level (0.0 = deep night, 1.0 = bright day).
@@ -187,9 +206,12 @@ data class SimulationState(
      *   - PI/2 = light from above
      *   - PI = light from left
      */
-    fun getLightSourceAngle(): Float {
+    fun getLightSourceAngle(): Float = lightSourceAngle
+    
+    // Pre-calculated light source angle and shadow trig values (computed once per state)
+    private val lightSourceAngle: Float = run {
         val hour = timeOfDayHours
-        return when {
+        when {
             // Day: 6am-6pm, sun arc from left to right
             hour in 6f..18f -> {
                 val dayProgress = (hour - 6f) / 12f  // 0 to 1
@@ -208,9 +230,14 @@ data class SimulationState(
         }
     }
     
+    // Pre-calculated shadow direction values (avoids per-tree sin/cos)
+    private val shadowCos: Float = kotlin.math.cos(lightSourceAngle)
+    private val shadowSin: Float = kotlin.math.sin(lightSourceAngle)
+    
     /**
      * Get shadow offset for an entity based on light source position.
      * Returns (dx, dy) offset to apply to shadow relative to object.
+     * Uses precalculated sin/cos values for efficiency (called per-tree).
      * 
      * @param objectHeight Relative height of the object (affects shadow length)
      * @return Pair of (shadowOffsetX, shadowOffsetY) normalized -1 to 1
@@ -218,16 +245,15 @@ data class SimulationState(
     fun getShadowOffset(objectHeight: Float = 1f): Pair<Float, Float> {
         if (!shadowsEnabled) return Pair(0f, 0f)
         
-        val angle = getLightSourceAngle()
         val strength = getEffectiveShadowStrength()
         
         // Shadow length based on light angle (longer shadows at sunrise/sunset)
-        val lightHeight = kotlin.math.sin(angle).coerceIn(0.1f, 1f)
+        val lightHeight = shadowSin.coerceIn(0.1f, 1f)
         // Dramatically longer shadows at low sun angles for visibility
         val shadowLength = (1.5f / lightHeight).coerceIn(0.5f, 4f) * objectHeight * strength
         
         // Shadow direction is opposite to light source (dx determines left/right)
-        val dx = -kotlin.math.cos(angle) * shadowLength
+        val dx = -shadowCos * shadowLength
         // Shadow extends along ground (positive dy = downward on screen = extending along ground plane)
         val dy = shadowLength * 0.4f  // Shadow projects forward onto ground
         

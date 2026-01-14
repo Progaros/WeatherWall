@@ -832,8 +832,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val localGust = gustIntensity * combinedWave
         
         // Wind direction for gust lean (-1 to 1, positive = rightward)
-        val windDirX = kotlin.math.cos(Math.toRadians(state.windDirection.toDouble())).toFloat()
-        val windX = windDirX.coerceIn(-1f, 1f)
+        // Use precalculated value from SimulationState for efficiency
+        val windX = state.getWindDirX()
         
         // Gust impact: when gustIntensity is high, trees lean strongly then recover
         // Use a stronger one-sided push during gusts - trees bend in wind direction
