@@ -95,9 +95,9 @@ class RandomEventTest {
     fun `shooting star duration is short`() {
         val duration = RenderConstants.EVENT_DURATION_SHOOTING_STAR
         
-        // Shooting stars now have fade-out effect, making them slightly longer
-        assertTrue("Shooting star is brief", duration <= 6000L)
-        assertTrue("Shooting star visible", duration >= 2000L)
+        // Shooting stars now have longer graceful arc with fade-out effect
+        assertTrue("Shooting star is brief", duration <= 12000L)
+        assertTrue("Shooting star visible", duration >= 5000L)
     }
     
     @Test

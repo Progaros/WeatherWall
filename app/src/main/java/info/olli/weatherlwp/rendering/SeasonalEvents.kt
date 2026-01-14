@@ -978,13 +978,14 @@ class SeasonalEvents(private val context: Context? = null) {
         val segmentSpacing = segmentRadius * 1.6f
         
         // Pre-calculate segment positions for smooth body curve
+        // Dragon moves LEFT, so tail segments trail to the RIGHT (higher X)
         val segmentPositions = Array(segmentCount) { i ->
             val t = i.toFloat()
             // Primary undulation wave
             val wave1 = kotlin.math.sin((dragonPhase * 3f - t * 0.5f).toDouble()).toFloat() * 25f * scale
             // Secondary faster ripple
             val wave2 = kotlin.math.sin((dragonPhase * 5f - t * 0.8f).toDouble()).toFloat() * 8f * scale
-            val x = baseX - t * segmentSpacing
+            val x = baseX + t * segmentSpacing  // Tail trails BEHIND (to the right)
             val y = baseY + wave1 + wave2
             Pair(x, y)
         }
@@ -1024,29 +1025,29 @@ class SeasonalEvents(private val context: Context? = null) {
         val snoutLength = headRadius * 1.2f
         dragonPaint.color = dragonColors[0]
         canvas.drawOval(
-            headX - headRadius * 0.3f - snoutLength, headY - headRadius * 0.4f,
-            headX - headRadius * 0.3f, headY + headRadius * 0.4f,
+            headX - snoutLength - headRadius * 0.3f, headY - headRadius * 0.4f,
+            headX + headRadius * 0.3f, headY + headRadius * 0.4f,
             dragonPaint
         )
         
-        // Nostrils on snout
+        // Nostrils on snout (at the front/left of the snout)
         dragonPaint.color = dragonColors[3]
         val nostrilRadius = headRadius * 0.1f
-        canvas.drawCircle(headX - headRadius * 0.3f - snoutLength * 0.7f, headY - headRadius * 0.15f, nostrilRadius, dragonPaint)
-        canvas.drawCircle(headX - headRadius * 0.3f - snoutLength * 0.7f, headY + headRadius * 0.15f, nostrilRadius, dragonPaint)
+        canvas.drawCircle(headX - snoutLength * 0.8f, headY - headRadius * 0.15f, nostrilRadius, dragonPaint)
+        canvas.drawCircle(headX - snoutLength * 0.8f, headY + headRadius * 0.15f, nostrilRadius, dragonPaint)
         
         // Gold whiskers/mane (flowing back from face, toward the RIGHT/behind)
         // Pre-calculated sin values for whisker angles: -60°, -30°, 30°, 60°
         dragonPaint.color = dragonColors[1]
-        val whiskerLength = headRadius * 0.8f
+        val whiskerLength = headRadius * 1.0f
         val whiskerSinValues = floatArrayOf(-0.866f, -0.5f, 0.5f, 0.866f)  // sin(-60°), sin(-30°), sin(30°), sin(60°)
+        dragonOutlinePaint.color = dragonColors[1]
+        dragonOutlinePaint.strokeWidth = 3f * scale
         for (sinVal in whiskerSinValues) {
-            val wx = headX + headRadius * 0.3f  // Start from back of head
-            val wy = headY + sinVal * headRadius * 0.5f
-            val wxEnd = wx + whiskerLength  // Flow to the right (behind dragon)
-            val wyEnd = wy + sinVal * whiskerLength * 0.5f
-            dragonOutlinePaint.color = dragonColors[1]
-            dragonOutlinePaint.strokeWidth = 3f * scale
+            val wx = headX + headRadius * 0.6f  // Start from back of head (right side)
+            val wy = headY + sinVal * headRadius * 0.4f
+            val wxEnd = wx + whiskerLength  // Flow to the right (trailing behind dragon)
+            val wyEnd = wy + sinVal * whiskerLength * 0.3f
             canvas.drawLine(wx, wy, wxEnd, wyEnd, dragonOutlinePaint)
         }
         dragonOutlinePaint.color = dragonColors[3]

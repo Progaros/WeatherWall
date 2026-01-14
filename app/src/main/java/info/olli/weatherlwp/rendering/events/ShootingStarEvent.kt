@@ -21,14 +21,14 @@ class ShootingStarEvent(random: Random, override val spawnTimeMs: Long = System.
     private val startX = -0.15f + random.nextFloat() * 0.3f  // -0.15 to 0.15 (mostly off-screen left)
     private val startY = -0.1f + random.nextFloat() * 0.1f   // -0.1 to 0.0 (off-screen top)
     private val angle = 0.4f + random.nextFloat() * 0.3f     // ~23-40 degrees down-right
-    private val speed = 0.00025f + random.nextFloat() * 0.00015f  // Slowed further - more graceful
-    private val length = 0.08f + random.nextFloat() * 0.06f
+    private val speed = 0.00015f + random.nextFloat() * 0.0001f  // Slower - graceful arc across sky
+    private val length = 0.10f + random.nextFloat() * 0.08f   // Slightly longer tail
     
     // Delay before the shooting star becomes visible (~1 second)
     private val spawnDelayMs = 800L + (random.nextFloat() * 400).toLong()  // 0.8-1.2 sec
     
-    // Total travel distance before fade-out completes (travel across 80-100% of screen width)
-    private val totalTravel = 0.8f + random.nextFloat() * 0.2f
+    // Total travel distance before fade-out completes (travel across 100-130% of screen width)
+    private val totalTravel = 1.0f + random.nextFloat() * 0.3f
     
     // Fade out during last 20% of journey
     private val fadeStartProgress = totalTravel * 0.8f
