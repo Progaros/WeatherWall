@@ -119,7 +119,6 @@ class SeasonalEvents(private val context: Context? = null) {
     // Pre-allocated paths (avoid allocations in render loop)
     private val christmasTrailPath = Path()
     private val christmasRayPath = Path()
-    private val dragonHornPath = Path()
 
     // Pre-allocated paints
     private val starPaint = Paint().apply {
@@ -966,189 +965,167 @@ class SeasonalEvents(private val context: Context? = null) {
         // Render New Year fireworks as base
         renderNewYearFireworks(canvas)
         
-        // Draw a traditional Chinese paper dragon flying across the sky
-        // Dragon moves right-to-left, undulating up and down
+        // --- 1. CALCULATE POSITIONS ---
+        // Dragon moves right-to-left
         val baseX = screenWidth + 150f * heightScale - (dragonPhase * 40f * heightScale) % (screenWidth + 400f * heightScale)
         val baseY = screenHeight * 0.18f
         
-        // Scale based on screen height for consistent look
         val scale = heightScale.coerceIn(0.5f, 1.5f)
         val segmentRadius = 18f * scale
         val segmentCount = 12
         val segmentSpacing = segmentRadius * 1.6f
         
-        // Pre-calculate segment positions for smooth body curve
-        // Dragon moves LEFT, so tail segments trail to the RIGHT (higher X)
         val segmentPositions = Array(segmentCount) { i ->
             val t = i.toFloat()
-            // Primary undulation wave
+            // Wave motion
             val wave1 = kotlin.math.sin((dragonPhase * 3f - t * 0.5f).toDouble()).toFloat() * 25f * scale
-            // Secondary faster ripple
             val wave2 = kotlin.math.sin((dragonPhase * 5f - t * 0.8f).toDouble()).toFloat() * 8f * scale
-            val x = baseX + t * segmentSpacing  // Tail trails BEHIND (to the right)
+            val x = baseX + t * segmentSpacing
             val y = baseY + wave1 + wave2
             Pair(x, y)
         }
-        
-        // Draw body segments from tail to head (so head overlaps body)
+
+        // --- 2. DRAW BODY (Tail to Neck) ---
+        // Stop at i=1 so head (i=0) is drawn last on top
         for (i in (segmentCount - 1) downTo 1) {
             val (x, y) = segmentPositions[i]
-            // Segment size tapers toward tail
+            // Taper tail
             val sizeFactor = 1f - (i.toFloat() / segmentCount) * 0.4f
             val radius = segmentRadius * sizeFactor
             
-            // Body: alternating red/orange-red with gold trim
+            // Body Segment
             dragonPaint.color = if (i % 2 == 0) dragonColors[0] else dragonColors[2]
             canvas.drawCircle(x, y, radius, dragonPaint)
             
-            // Gold scale accent on every other segment
-            if (i % 2 == 1) {
+            // Gold Scales (SKIP for segments close to head to reduce clutter)
+            if (i % 2 == 1 && i > 2) { 
                 dragonPaint.color = dragonColors[1]
-                val scaleSize = radius * 0.5f
-                canvas.drawCircle(x, y - radius * 0.3f, scaleSize, dragonPaint)
+                canvas.drawCircle(x, y - radius * 0.3f, radius * 0.5f, dragonPaint)
             }
             
             // Outline
             canvas.drawCircle(x, y, radius, dragonOutlinePaint)
         }
         
-        // Draw dragon head (first segment, larger and more detailed)
-        // Dragon is moving LEFT, so face points LEFT (negative X direction)
-        // ================= DRAGON HEAD (High Detail) =================
-        // We render layers: Back Horns/Mane -> Head Base -> Face Details -> Front Whiskers
-        
+        // --- 3. DRAW HEAD (Complex Path) ---
         val (headX, headY) = segmentPositions[0]
-        val headSize = segmentRadius * 2.2f // Slightly larger for detail
-        val snoutLen = headSize * 1.3f
+        val headSize = segmentRadius * 2.4f 
+
+        // A. Rear Antlers (Solid Fill, not just lines)
+        // Draw these BEFORE the head so they look like they grow out of the skull
+        dragonPaint.color = dragonColors[1] // Gold
+        val antlerPath = Path()
+        // Main beam (polygon shape for solidity)
+        antlerPath.moveTo(headX + headSize * 0.1f, headY - headSize * 0.6f) // Base
+        antlerPath.lineTo(headX + headSize * 0.4f, headY - headSize * 1.5f) // Tip
+        antlerPath.lineTo(headX + headSize * 0.25f, headY - headSize * 1.5f) // Thickness at tip
+        antlerPath.lineTo(headX - headSize * 0.05f, headY - headSize * 0.6f) // Base width
+        antlerPath.close()
+        // Small branch
+        antlerPath.moveTo(headX + headSize * 0.2f, headY - headSize * 1.0f)
+        antlerPath.lineTo(headX + headSize * 0.0f, headY - headSize * 1.3f)
+        antlerPath.lineTo(headX - headSize * 0.1f, headY - headSize * 1.2f)
+        antlerPath.close()
         
-        // 1. REAR ANTLERS & MANE (Background Layer)
-        val rearPath = Path()
-        // Rear Antler (Branching Stag Horn)
-        rearPath.moveTo(headX + headSize * 0.2f, headY - headSize * 0.5f)
-        rearPath.lineTo(headX + headSize * 0.6f, headY - headSize * 1.4f) // Main shaft
-        rearPath.lineTo(headX + headSize * 0.8f, headY - headSize * 1.8f) // Tip
-        // Branch
-        rearPath.moveTo(headX + headSize * 0.6f, headY - headSize * 1.4f)
-        rearPath.lineTo(headX + headSize * 0.5f, headY - headSize * 1.8f)
-        // Mane (Flowing hair behind head)
-        rearPath.moveTo(headX + headSize * 0.4f, headY)
-        rearPath.cubicTo(
-            headX + headSize * 0.8f, headY - headSize * 0.2f,
-            headX + headSize * 1.2f, headY + headSize * 0.5f,
-            headX + headSize * 1.5f, headY + headSize * 0.2f
-        )
-        // Stroke style for antlers/mane
-        dragonOutlinePaint.color = dragonColors[1] // Gold
-        dragonOutlinePaint.strokeWidth = 4f * scale
-        dragonOutlinePaint.style = Paint.Style.STROKE
-        canvas.drawPath(rearPath, dragonOutlinePaint)
-        
-        // 2. HEAD SILHOUETTE (Camel/Horse Shape using Bézier curves)
+        // Draw filled antler + outline
+        canvas.drawPath(antlerPath, dragonPaint) // Fill Gold
+        dragonOutlinePaint.color = dragonColors[3]
+        canvas.drawPath(antlerPath, dragonOutlinePaint) // Outline Dark Red
+
+        // B. Head Shape (Snout & Jaw with distinct overbite)
         val headPath = Path()
+        val snoutLen = headSize * 1.4f
         
-        // Start at top of head/brow
-        headPath.moveTo(headX, headY - headSize * 0.5f)
-        // Forehead slope to snout bridge
+        // Forehead
+        headPath.moveTo(headX + headSize * 0.2f, headY - headSize * 0.5f)
         headPath.cubicTo(
-            headX - headSize * 0.3f, headY - headSize * 0.6f,  // Ctrl 1
-            headX - snoutLen * 0.5f, headY - headSize * 0.4f,  // Ctrl 2
-            headX - snoutLen, headY - headSize * 0.2f          // Nose Tip (Top)
-        )
-        // Snout/Nose front face (slightly vertical)
-        headPath.lineTo(headX - snoutLen - headSize * 0.1f, headY + headSize * 0.1f)
-        // Upper Jaw line running back
-        headPath.cubicTo(
-            headX - snoutLen, headY + headSize * 0.2f,
-            headX - headSize * 0.5f, headY + headSize * 0.2f,
-            headX - headSize * 0.2f, headY + headSize * 0.3f  // Jaw hinge area
-        )
-        // Lower Jaw / Chin (Receded slightly)
-        headPath.cubicTo(
-            headX - headSize * 0.4f, headY + headSize * 0.6f,
-            headX - headSize * 0.2f, headY + headSize * 0.8f,
-            headX + headSize * 0.2f, headY + headSize * 0.5f  // Back of jaw
-        )
-        // Close loop at back of head
-        headPath.cubicTo(
-            headX + headSize * 0.5f, headY + headSize * 0.2f,
-            headX + headSize * 0.4f, headY - headSize * 0.4f,
-            headX, headY - headSize * 0.5f
+            headX - headSize * 0.2f, headY - headSize * 0.6f,
+            headX - snoutLen * 0.4f, headY - headSize * 0.5f,
+            headX - snoutLen, headY - headSize * 0.2f // Snout Tip
         )
         
-        // Fill Head
-        dragonPaint.color = dragonColors[0] // Red
+        // Upper Lip / Snout (Overhanging - creates overbite)
+        headPath.cubicTo(
+            headX - snoutLen - headSize * 0.2f, headY + headSize * 0.1f, // Curve down/out
+            headX - snoutLen * 0.8f, headY + headSize * 0.2f,            // Curve back in
+            headX - headSize * 0.5f, headY + headSize * 0.1f             // Corner of mouth
+        )
+        
+        // Lower Jaw (Distinct from upper - step down)
+        headPath.lineTo(headX - headSize * 0.6f, headY + headSize * 0.2f) // Step down slightly
+        headPath.cubicTo(
+            headX - headSize * 0.6f, headY + headSize * 0.5f, // Jaw chin curve
+            headX - headSize * 0.2f, headY + headSize * 0.7f, // Jaw bottom
+            headX + headSize * 0.3f, headY + headSize * 0.4f  // Jaw hinge/neck
+        )
+        
+        // Close at back of head
+        headPath.quadTo(
+            headX + headSize * 0.5f, headY - headSize * 0.2f,
+            headX + headSize * 0.2f, headY - headSize * 0.5f
+        )
+
+        // Fill Head (Red)
+        dragonPaint.color = dragonColors[0]
         canvas.drawPath(headPath, dragonPaint)
+        
         // Outline Head
-        dragonOutlinePaint.color = dragonColors[3] // Dark Red
-        dragonOutlinePaint.strokeWidth = 2.5f * scale
+        dragonOutlinePaint.color = dragonColors[3]
         canvas.drawPath(headPath, dragonOutlinePaint)
-        
-        // 3. FACIAL DETAILS
-        
-        // Eye (Demon/Eagle style - Angled and fierce)
-        val eyeX = headX - headSize * 0.3f
+
+        // C. Face Details
+        // Eye (Almond shaped - demon/eagle style)
+        val eyeX = headX - headSize * 0.25f
         val eyeY = headY - headSize * 0.25f
-        val eyeSize = headSize * 0.25f
+        val eyeRad = headSize * 0.22f
         
-        // White of eye (Almond shape)
         dragonPaint.color = Color.WHITE
         val eyePath = Path()
-        eyePath.moveTo(eyeX - eyeSize, eyeY) // Front corner
-        eyePath.quadTo(eyeX, eyeY - eyeSize * 0.6f, eyeX + eyeSize * 0.6f, eyeY - eyeSize * 0.2f) // Top lid
-        eyePath.quadTo(eyeX, eyeY + eyeSize * 0.6f, eyeX - eyeSize, eyeY) // Bottom lid
+        eyePath.moveTo(eyeX - eyeRad, eyeY)
+        eyePath.quadTo(eyeX, eyeY - eyeRad * 0.7f, eyeX + eyeRad, eyeY - eyeRad * 0.2f)
+        eyePath.quadTo(eyeX, eyeY + eyeRad * 0.7f, eyeX - eyeRad, eyeY)
         canvas.drawPath(eyePath, dragonPaint)
         
-        // Pupil (Intense dot looking forward)
+        // Pupil
         dragonPaint.color = Color.BLACK
-        canvas.drawCircle(eyeX - eyeSize * 0.2f, eyeY, eyeSize * 0.25f, dragonPaint)
-        
-        // Heavy Brow Ridge (Gold) 
+        canvas.drawCircle(eyeX - eyeRad * 0.1f, eyeY, eyeRad * 0.3f, dragonPaint)
+
+        // Brow Ridge (Gold)
         dragonOutlinePaint.color = dragonColors[1] // Gold
         dragonOutlinePaint.strokeWidth = 3f * scale
+        dragonOutlinePaint.style = Paint.Style.STROKE
         val browPath = Path()
-        browPath.moveTo(eyeX - eyeSize * 1.2f, eyeY - eyeSize * 0.5f)
-        browPath.cubicTo(
-            eyeX - eyeSize * 0.5f, eyeY - eyeSize * 1.2f,
-            eyeX + eyeSize * 0.5f, eyeY - eyeSize * 1.2f,
-            eyeX + eyeSize * 1.5f, eyeY + eyeSize * 0.2f
-        )
+        browPath.moveTo(eyeX - eyeRad * 1.2f, eyeY - eyeRad * 0.6f)
+        browPath.quadTo(eyeX, eyeY - eyeRad * 1.3f, eyeX + eyeRad * 1.2f, eyeY - eyeRad * 0.5f)
         canvas.drawPath(browPath, dragonOutlinePaint)
         
         // Nostril (Flared)
-        dragonPaint.color = dragonColors[3] // Dark for depth
+        dragonPaint.color = dragonColors[3]
         canvas.drawOval(
-            headX - snoutLen * 0.9f, headY - headSize * 0.1f,
-            headX - snoutLen * 0.7f, headY + headSize * 0.1f,
+            headX - snoutLen * 0.85f, headY - headSize * 0.1f,
+            headX - snoutLen * 0.7f, headY + headSize * 0.05f,
             dragonPaint
         )
+
+        // D. Whiskers (Flowing from Snout)
+        val whiskerStartX = headX - snoutLen * 0.7f
+        val whiskerStartY = headY - headSize * 0.1f
         
-        // 4. FOREGROUND WHISKERS & BEARD
-        // Main Whiskers (Long, catfish-style barbels)
         val whiskerPath = Path()
-        whiskerPath.moveTo(headX - snoutLen * 0.8f, headY + headSize * 0.1f) // From nose
-        // S-Curve flowing back
+        whiskerPath.moveTo(whiskerStartX, whiskerStartY)
         whiskerPath.cubicTo(
-            headX - snoutLen * 1.2f, headY + headSize * 0.8f,   // Dip down forward
-            headX - headSize * 0.5f, headY + headSize * 1.5f,   // Loop back
-            headX + headSize * 2.0f, headY + headSize * 0.5f    // Trail behind
+            whiskerStartX - headSize * 0.5f, whiskerStartY + headSize * 0.8f, // Loop forward/down
+            headX - headSize * 0.2f, headY + headSize * 1.2f,                 // Loop under jaw
+            headX + headSize * 1.5f, headY + headSize * 0.5f                  // Trail back
         )
+        
         dragonOutlinePaint.color = dragonColors[1] // Gold
         dragonOutlinePaint.strokeWidth = 2.5f * scale
         canvas.drawPath(whiskerPath, dragonOutlinePaint)
         
-        // Beard (Goatee under chin)
-        val beardPath = Path()
-        beardPath.moveTo(headX - headSize * 0.1f, headY + headSize * 0.7f) // Chin
-        beardPath.quadTo(
-            headX + headSize * 0.2f, headY + headSize * 1.2f,
-            headX + headSize * 0.6f, headY + headSize * 0.9f
-        )
-        dragonOutlinePaint.strokeWidth = 2f * scale
-        canvas.drawPath(beardPath, dragonOutlinePaint)
-        
-        // Reset outline paint style for future use
-        dragonOutlinePaint.style = Paint.Style.STROKE
+        // Reset paint for next frame
         dragonOutlinePaint.color = dragonColors[3]
         dragonOutlinePaint.strokeWidth = 2f * scale
+        dragonOutlinePaint.style = Paint.Style.STROKE
     }
 }
