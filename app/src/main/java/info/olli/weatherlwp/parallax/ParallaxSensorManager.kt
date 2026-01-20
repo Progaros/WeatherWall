@@ -61,9 +61,16 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         private const val WIGGLE_TRIGGER_COUNT = 4         // Direction changes to trigger (4 = 2 back-and-forth)
         
         // Default gyro wiggle thresholds (tuned via sensitivity)
-        private const val DEFAULT_GYRO_AXIS_THRESHOLD = 1.3f  // rad/s angular velocity threshold
-        private const val DEFAULT_GYRO_WINDOW_MS = 900L       // Time window for wiggle detection
-        private const val DEFAULT_GYRO_TRIGGER_CHANGES = 4    // Direction changes to trigger
+        // Require 3 full back-and-forth wiggles = 6 direction changes
+        private const val DEFAULT_GYRO_AXIS_THRESHOLD = 1.2f  // rad/s angular velocity threshold
+        private const val DEFAULT_GYRO_WINDOW_MS = 1600L      // Time window for wiggle detection
+        private const val DEFAULT_GYRO_TRIGGER_CHANGES = 6    // Direction changes to trigger
+        
+        // Stable sign detection: require N consecutive samples of new sign before counting
+        private const val GYRO_SIGN_STABLE_SAMPLES = 2
+        
+        // Minimum time between accepted direction changes (filters high-frequency jitter/tremor)
+        private const val GYRO_MIN_DIR_CHANGE_TIME_MS = 90L
     }
     
     interface Listener {
@@ -165,8 +172,11 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     private var lastRollDirection = 0  // -1=left, 0=none, 1=right
     private var rollWiggleStartTime = 0L
     
-    // Gyroscope wiggle detection state - detects wrist wiggle via angular velocity
-    private var gyroLastSign = 0
+    // Gyroscope wiggle detection state - improved (stable sign + debounce)
+    private var gyroConfirmedSign = 0          // last confirmed direction
+    private var gyroCandidateSign = 0          // current candidate direction
+    private var gyroCandidateCount = 0         // how many consecutive samples confirmed candidate
+    private var lastGyroChangeTime = 0L        // last accepted direction-change timestamp
     private var gyroSignChanges = 0
     private var gyroWiggleStart = 0L
     
@@ -257,8 +267,11 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         shakeTimestamp = 0L
         shakeCount = 0
         
-        // Reset gyro wiggle state
-        gyroLastSign = 0
+        // Reset gyro wiggle state (stable sign detection)
+        gyroConfirmedSign = 0
+        gyroCandidateSign = 0
+        gyroCandidateCount = 0
+        lastGyroChangeTime = 0L
         gyroSignChanges = 0
         gyroWiggleStart = 0L
         
@@ -591,57 +604,86 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
      * Uses yaw (Z-axis) angular velocity sign changes to detect quick wrist turns.
      * Works better than accelerometer gForce for subtle hand movements.
      * 
+     * Improved algorithm with stable sign detection + debouncing:
+     * - Requires GYRO_SIGN_STABLE_SAMPLES consecutive samples of new sign before counting
+     * - Minimum time between accepted changes filters high-frequency jitter/tremor
+     * - Default requires 3 full back-and-forth wiggles (6 direction changes)
+     * 
      * @param values Gyroscope sensor values [x=pitch rate, y=roll rate, z=yaw rate] in rad/s
      */
     private fun detectGyroWiggle(values: FloatArray) {
         val now = System.currentTimeMillis()
-        
-        // Check unlock delay: ignore wiggles immediately after screen on
-        // This prevents accidental triggers from phone unlock gesture
+
+        // Unlock delay + cooldown
         if (shakeUnlockDelayMs > 0 && now - screenOnTime < shakeUnlockDelayMs) return
-        
-        // Check cooldown after a successful shake trigger (shared with other detectors)
         if (now - lastShakeTime < SHAKE_COOLDOWN_MS) return
-        
-        // Use yaw (Z-axis) for wrist wiggle detection - rotates when you twist your wrist
+
         val yawRate = values[2]
-        
-        // Ignore small movements below threshold
-        if (abs(yawRate) < gyroAxisThreshold) return
-        
-        // Determine direction: positive = right, negative = left
-        val sign = if (yawRate > 0) 1 else -1
-        
-        // Check if direction changed from last movement
-        if (gyroLastSign != 0 && sign != gyroLastSign) {
-            // Direction changed! This is a wiggle
-            if (gyroSignChanges == 0) {
-                gyroWiggleStart = now
-            }
-            gyroSignChanges++
-            
-            Log.d(TAG, "Gyro wiggle change=$gyroSignChanges yawRate=${"%.2f".format(yawRate)}")
-            
-            // Check if enough changes within time window
-            if (now - gyroWiggleStart <= gyroWindowMs && gyroSignChanges >= gyroTriggerChanges) {
-                gyroSignChanges = 0
-                gyroWiggleStart = 0L
-                gyroLastSign = 0
-                lastShakeTime = now
-                Log.d(TAG, "Gyro wiggle gesture detected! Triggering listener")
-                shakeListener?.onShake()
-                return
-            }
+        if (abs(yawRate) < gyroAxisThreshold) {
+            // Below threshold -> reset candidate stability, but keep confirmed sign
+            gyroCandidateSign = 0
+            gyroCandidateCount = 0
+            return
         }
-        
-        // Reset if too much time passed since first wiggle
+
+        val sign = if (yawRate > 0) 1 else -1
+
+        // First ever sign
+        if (gyroConfirmedSign == 0) {
+            gyroConfirmedSign = sign
+            gyroCandidateSign = 0
+            gyroCandidateCount = 0
+            return
+        }
+
+        // If same as confirmed, clear candidate
+        if (sign == gyroConfirmedSign) {
+            gyroCandidateSign = 0
+            gyroCandidateCount = 0
+            return
+        }
+
+        // Candidate differs from confirmed -> require stability (N consecutive samples)
+        if (gyroCandidateSign != sign) {
+            gyroCandidateSign = sign
+            gyroCandidateCount = 1
+            return
+        } else {
+            gyroCandidateCount++
+        }
+
+        if (gyroCandidateCount < GYRO_SIGN_STABLE_SAMPLES) return
+
+        // Debounce: ignore changes that happen too fast
+        if (now - lastGyroChangeTime < GYRO_MIN_DIR_CHANGE_TIME_MS) return
+
+        // Accept the sign change
+        lastGyroChangeTime = now
+        gyroConfirmedSign = sign
+        gyroCandidateSign = 0
+        gyroCandidateCount = 0
+
+        if (gyroSignChanges == 0) gyroWiggleStart = now
+        gyroSignChanges++
+
+        Log.d(TAG, "Gyro wiggle change=$gyroSignChanges yawRate=${"%.2f".format(yawRate)}")
+
+        if (now - gyroWiggleStart <= gyroWindowMs && gyroSignChanges >= gyroTriggerChanges) {
+            gyroSignChanges = 0
+            gyroWiggleStart = 0L
+            gyroConfirmedSign = 0
+            lastShakeTime = now
+            Log.d(TAG, "Gyro wiggle gesture detected! Triggering listener")
+            shakeListener?.onShake()
+            return
+        }
+
+        // Timeout reset
         if (gyroSignChanges > 0 && now - gyroWiggleStart > gyroWindowMs) {
             gyroSignChanges = 0
             gyroWiggleStart = 0L
-            gyroLastSign = 0
+            gyroConfirmedSign = 0
             Log.d(TAG, "Gyro wiggle reset - timeout")
-        } else {
-            gyroLastSign = sign
         }
     }
     

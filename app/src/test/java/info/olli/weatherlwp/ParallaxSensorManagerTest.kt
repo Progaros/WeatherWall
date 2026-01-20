@@ -32,6 +32,13 @@ class ParallaxSensorManagerTest {
         const val SHAKE_SLOP_TIME_MS = 500L
         const val SHAKE_COUNT_RESET_TIME_MS = 3000L
         const val SHAKE_TRIGGER_COUNT = 3
+        
+        // Gyro wiggle constants (improved stable sign + debounce detection)
+        const val GYRO_SIGN_STABLE_SAMPLES = 2
+        const val GYRO_MIN_DIR_CHANGE_TIME_MS = 90L
+        const val DEFAULT_GYRO_TRIGGER_CHANGES = 6  // Requires 3 full back-and-forth wiggles
+        const val DEFAULT_GYRO_WINDOW_MS = 1600L
+        const val DEFAULT_GYRO_AXIS_THRESHOLD = 1.2f
     }
 
     // ============== Gravity Extraction Tests ==============
@@ -825,6 +832,216 @@ class ParallaxSensorManagerTest {
         // With delay=0, no shakes should be ignored due to unlock delay
         val ignored = shakeUnlockDelayMs > 0 && immediateShakeTime - screenOnTime < shakeUnlockDelayMs
         assertTrue("With delay=0, shakes should never be ignored due to unlock delay", !ignored)
+    }
+    
+    // ============== Gyro Wiggle Stable Sign Detection Tests ==============
+    // Tests for the improved gyro wiggle detection with stable sign + debounce
+    
+    @Test
+    fun `gyro wiggle requires stable sign before counting direction change`() {
+        // Single sample of new sign should not count as direction change
+        // Need GYRO_SIGN_STABLE_SAMPLES (2) consecutive samples
+        var gyroCandidateCount = 0
+        
+        // First sample of new sign
+        gyroCandidateCount = 1
+        val shouldCount = gyroCandidateCount >= GYRO_SIGN_STABLE_SAMPLES
+        
+        assertFalse("Single sample should not count as direction change", shouldCount)
+        
+        // Second consecutive sample
+        gyroCandidateCount++
+        val shouldCountNow = gyroCandidateCount >= GYRO_SIGN_STABLE_SAMPLES
+        
+        assertTrue("Two consecutive samples should count as direction change", shouldCountNow)
+    }
+    
+    @Test
+    fun `gyro wiggle debounces rapid direction changes`() {
+        // Direction changes happening faster than GYRO_MIN_DIR_CHANGE_TIME_MS should be ignored
+        val lastChangeTime = 100L
+        val now = 150L  // Only 50ms later (< 90ms min)
+        
+        val shouldIgnore = now - lastChangeTime < GYRO_MIN_DIR_CHANGE_TIME_MS
+        
+        assertTrue("Direction change within 90ms should be ignored", shouldIgnore)
+    }
+    
+    @Test
+    fun `gyro wiggle accepts direction change after debounce time`() {
+        val lastChangeTime = 100L
+        val now = 200L  // 100ms later (> 90ms min)
+        
+        val shouldIgnore = now - lastChangeTime < GYRO_MIN_DIR_CHANGE_TIME_MS
+        
+        assertFalse("Direction change after 90ms should be accepted", shouldIgnore)
+    }
+    
+    @Test
+    fun `gyro wiggle requires 6 direction changes by default`() {
+        // 6 direction changes = 3 full back-and-forth wiggles
+        // This is stricter than the old 4-change requirement
+        assertEquals("Default trigger count should be 6", 6, DEFAULT_GYRO_TRIGGER_CHANGES)
+        
+        // Simulate: 5 changes should not trigger, 6 should
+        var changes = 5
+        assertFalse("5 changes should not trigger", changes >= DEFAULT_GYRO_TRIGGER_CHANGES)
+        
+        changes = 6
+        assertTrue("6 changes should trigger", changes >= DEFAULT_GYRO_TRIGGER_CHANGES)
+    }
+    
+    @Test
+    fun `gyro wiggle window is 1600ms for deliberate gesture`() {
+        // Extended window allows slower, more deliberate gesture
+        assertEquals("Window should be 1600ms", 1600L, DEFAULT_GYRO_WINDOW_MS)
+    }
+    
+    @Test
+    fun `gyro wiggle threshold filters low angular velocity`() {
+        // Threshold of 1.2 rad/s filters out slow movements
+        val lowVelocity = 1.0f  // Below threshold
+        val highVelocity = 1.5f // Above threshold
+        
+        val lowIgnored = kotlin.math.abs(lowVelocity) < DEFAULT_GYRO_AXIS_THRESHOLD
+        val highIgnored = kotlin.math.abs(highVelocity) < DEFAULT_GYRO_AXIS_THRESHOLD
+        
+        assertTrue("Low velocity (1.0 rad/s) should be ignored", lowIgnored)
+        assertFalse("High velocity (1.5 rad/s) should be processed", highIgnored)
+    }
+    
+    @Test
+    fun `stable sign rejects jitter from single wrist turn`() {
+        // Simulating sensor jitter: rapid sign flips that shouldn't count
+        // A single wrist turn might cause yaw to flip signs multiple times due to noise
+        
+        // Scenario: sign = +1, then quickly -1, then +1 all within one sample window
+        // Without stable sign detection, this could count as 2+ direction changes
+        // With stable sign detection, need 2 consecutive samples to confirm
+        
+        var confirmedSign = 1
+        var candidateSign = 0
+        var candidateCount = 0
+        
+        // Simulated sensor readings (jitter pattern)
+        val jitterSigns = listOf(-1, 1, -1)  // Rapid flips
+        var acceptedChanges = 0
+        
+        for (sign in jitterSigns) {
+            if (sign == confirmedSign) {
+                candidateSign = 0
+                candidateCount = 0
+            } else if (candidateSign != sign) {
+                candidateSign = sign
+                candidateCount = 1
+            } else {
+                candidateCount++
+            }
+            
+            if (candidateCount >= GYRO_SIGN_STABLE_SAMPLES) {
+                acceptedChanges++
+                confirmedSign = sign
+                candidateSign = 0
+                candidateCount = 0
+            }
+        }
+        
+        // Rapid jitter should result in 0 accepted changes (not stable enough)
+        assertEquals("Rapid jitter should not count as direction changes", 0, acceptedChanges)
+    }
+    
+    @Test
+    fun `stable sign accepts deliberate direction change`() {
+        // Simulating deliberate wiggle: sustained sign for multiple samples
+        var confirmedSign = 1
+        var candidateSign = 0
+        var candidateCount = 0
+        
+        // Deliberate change: 3 consecutive samples of opposite sign
+        val deliberateSigns = listOf(-1, -1, -1)
+        var acceptedChanges = 0
+        
+        for (sign in deliberateSigns) {
+            if (sign == confirmedSign) {
+                candidateSign = 0
+                candidateCount = 0
+            } else if (candidateSign != sign) {
+                candidateSign = sign
+                candidateCount = 1
+            } else {
+                candidateCount++
+            }
+            
+            if (candidateCount >= GYRO_SIGN_STABLE_SAMPLES) {
+                acceptedChanges++
+                confirmedSign = sign
+                candidateSign = 0
+                candidateCount = 0
+            }
+        }
+        
+        // Deliberate sustained sign should count as 1 direction change
+        assertEquals("Deliberate sustained sign should count as 1 change", 1, acceptedChanges)
+    }
+    
+    @Test
+    fun `full wiggle sequence triggers after 6 stable direction changes`() {
+        // Simulate a complete 3-wiggle gesture with stable sign detection
+        // Pattern: +++ --- +++ --- +++ --- (6 direction changes)
+        
+        var confirmedSign = 0
+        var candidateSign = 0
+        var candidateCount = 0
+        var directionChanges = 0
+        var lastChangeTime = 0L
+        var currentTime = 0L
+        
+        // Each wiggle: 3 samples of each sign, 100ms apart
+        val sampleInterval = 100L  // > GYRO_MIN_DIR_CHANGE_TIME_MS
+        
+        // Full wiggle pattern: 3 reps of (3 positive, 3 negative)
+        val wigglePattern = listOf(
+            1, 1, 1,  // First positive
+            -1, -1, -1,  // First negative (change 1)
+            1, 1, 1,  // Second positive (change 2)
+            -1, -1, -1,  // Second negative (change 3)
+            1, 1, 1,  // Third positive (change 4)
+            -1, -1, -1,  // Third negative (change 5)
+            1, 1, 1   // Fourth positive (change 6)
+        )
+        
+        for (sign in wigglePattern) {
+            currentTime += sampleInterval
+            
+            if (confirmedSign == 0) {
+                confirmedSign = sign
+                continue
+            }
+            
+            if (sign == confirmedSign) {
+                candidateSign = 0
+                candidateCount = 0
+            } else if (candidateSign != sign) {
+                candidateSign = sign
+                candidateCount = 1
+            } else {
+                candidateCount++
+            }
+            
+            if (candidateCount >= GYRO_SIGN_STABLE_SAMPLES) {
+                // Check debounce
+                if (currentTime - lastChangeTime >= GYRO_MIN_DIR_CHANGE_TIME_MS) {
+                    directionChanges++
+                    lastChangeTime = currentTime
+                    confirmedSign = sign
+                    candidateSign = 0
+                    candidateCount = 0
+                }
+            }
+        }
+        
+        assertTrue("Full wiggle sequence should reach trigger count", 
+            directionChanges >= DEFAULT_GYRO_TRIGGER_CHANGES)
     }
 }
 
