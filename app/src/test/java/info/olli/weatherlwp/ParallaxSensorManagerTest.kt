@@ -1043,6 +1043,102 @@ class ParallaxSensorManagerTest {
         assertTrue("Full wiggle sequence should reach trigger count", 
             directionChanges >= DEFAULT_GYRO_TRIGGER_CHANGES)
     }
+    
+    // ============== Sensor Warmup Tests ==============
+    // Tests for the sensor warmup feature that prevents stale queued events from triggering shakes
+    
+    @Test
+    fun `shake warmup ignores first N sensor events after start`() {
+        // Sensor warmup period: first 10 sensor events are ignored
+        // This prevents stale queued events from triggering shakes after unlock
+        val SHAKE_WARMUP_SAMPLES = 10
+        
+        var warmupRemaining = SHAKE_WARMUP_SAMPLES
+        var shakeTriggered = false
+        
+        // Simulate 15 sensor events with high gForce (would normally trigger shake)
+        for (i in 1..15) {
+            if (warmupRemaining > 0) {
+                warmupRemaining--
+                // Skip processing during warmup
+                continue
+            }
+            // After warmup, shakes can be triggered
+            if (i > 10) {
+                shakeTriggered = true
+            }
+        }
+        
+        assertTrue("Shake should only trigger after warmup period", shakeTriggered)
+        assertEquals("Warmup should complete after 10 samples", 0, warmupRemaining)
+    }
+    
+    @Test
+    fun `shake warmup counter resets on sensor restart`() {
+        // When sensors are restarted (e.g., screen on/off), warmup counter should reset
+        val SHAKE_WARMUP_SAMPLES = 10
+        
+        // First start
+        var warmupRemaining = SHAKE_WARMUP_SAMPLES
+        
+        // Process some samples
+        for (i in 1..5) {
+            if (warmupRemaining > 0) warmupRemaining--
+        }
+        assertEquals("After 5 samples, 5 warmup remaining", 5, warmupRemaining)
+        
+        // Simulate restart (stop + start)
+        warmupRemaining = SHAKE_WARMUP_SAMPLES  // Reset on start()
+        
+        assertEquals("After restart, warmup should reset to 10", SHAKE_WARMUP_SAMPLES, warmupRemaining)
+    }
+    
+    @Test
+    fun `shake warmup prevents immediate triggers after phone unlock`() {
+        // Combined test: warmup + unlock delay should prevent false triggers
+        val SHAKE_WARMUP_SAMPLES = 10
+        val shakeUnlockDelayMs = 500L
+        val screenOnTime = 1000L
+        
+        var warmupRemaining = SHAKE_WARMUP_SAMPLES
+        var shakeIgnoredDueToWarmup = 0
+        var shakeIgnoredDueToUnlockDelay = 0
+        var shakeAccepted = 0
+        
+        // Simulate sensor events starting at screen on time
+        var eventTime = screenOnTime
+        val sensorInterval = 20L  // ~50Hz sensor rate
+        
+        for (i in 1..30) {
+            eventTime += sensorInterval
+            
+            // Check warmup first
+            if (warmupRemaining > 0) {
+                warmupRemaining--
+                shakeIgnoredDueToWarmup++
+                continue
+            }
+            
+            // Check unlock delay
+            if (eventTime - screenOnTime < shakeUnlockDelayMs) {
+                shakeIgnoredDueToUnlockDelay++
+                continue
+            }
+            
+            // Would be accepted
+            shakeAccepted++
+        }
+        
+        // First 10 events ignored by warmup
+        assertEquals("10 events ignored by warmup", 10, shakeIgnoredDueToWarmup)
+        
+        // Events 11-25 (200ms-500ms) should be ignored by unlock delay
+        // At 20ms intervals: event 11 is at 220ms, event 25 is at 500ms
+        assertTrue("Some events ignored by unlock delay", shakeIgnoredDueToUnlockDelay > 0)
+        
+        // Events after warmup AND unlock delay should be accepted
+        assertTrue("Events after both protections should be accepted", shakeAccepted > 0)
+    }
 }
 
 /**

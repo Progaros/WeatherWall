@@ -71,6 +71,10 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         
         // Minimum time between accepted direction changes (filters high-frequency jitter/tremor)
         private const val GYRO_MIN_DIR_CHANGE_TIME_MS = 90L
+        
+        // Sensor warmup: ignore first N sensor events after start() to prevent stale queued events
+        // from triggering shakes immediately after unlock (in addition to time-based delay)
+        private const val SHAKE_WARMUP_SAMPLES = 10
     }
     
     interface Listener {
@@ -191,6 +195,10 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     // Shake unlock delay: prevents accidental shake triggers after screen on (phone unlock motion)
     private var shakeUnlockDelayMs = 500L
     private var screenOnTime = 0L  // Timestamp when start() was called (screen became visible)
+    
+    // Sensor warmup: counts down sensor samples to ignore after start()
+    // Prevents stale queued sensor events from triggering shakes immediately after unlock
+    private var shakeWarmupSamplesRemaining = 0
 
     fun setListener(l: Listener) { listener = l }
     
@@ -338,6 +346,10 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             // Record screen on time for shake unlock delay
             // Prevents accidental shake triggers from phone unlock gesture
             screenOnTime = System.currentTimeMillis()
+            
+            // Initialize sensor warmup counter to ignore first N sensor events
+            // This prevents stale queued events from triggering shakes immediately after unlock
+            shakeWarmupSamplesRemaining = SHAKE_WARMUP_SAMPLES
             
             // Use SENSOR_DELAY_GAME (~20ms, 50Hz) for responsive parallax
             // Battery savings come from unregistering when not visible (done in stop())
@@ -566,6 +578,13 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         
         val now = System.currentTimeMillis()
         
+        // Sensor warmup: skip first N samples after start to ignore stale queued events
+        if (shakeWarmupSamplesRemaining > 0) {
+            shakeWarmupSamplesRemaining--
+            Log.d(TAG, "Shake ignored: sensor warmup ($shakeWarmupSamplesRemaining samples remaining)")
+            return
+        }
+        
         // Check unlock delay: ignore shakes immediately after screen on
         // This prevents accidental triggers from phone unlock gesture
         if (shakeUnlockDelayMs > 0 && now - screenOnTime < shakeUnlockDelayMs) {
@@ -614,6 +633,10 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     private fun detectGyroWiggle(values: FloatArray) {
         val now = System.currentTimeMillis()
 
+        // Sensor warmup: skip first N samples after start to ignore stale queued events
+        // Note: warmup counter is decremented in detectShakeFromAccelerometer, which runs first
+        if (shakeWarmupSamplesRemaining > 0) return
+        
         // Unlock delay + cooldown
         if (shakeUnlockDelayMs > 0 && now - screenOnTime < shakeUnlockDelayMs) return
         if (now - lastShakeTime < SHAKE_COOLDOWN_MS) return

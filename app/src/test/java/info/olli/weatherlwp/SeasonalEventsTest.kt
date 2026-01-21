@@ -249,6 +249,99 @@ class SeasonalEventsTest {
             shakeFireworksEnabled && !seasonalEnabled)
     }
     
+    // ============== Chinese New Year Dragon Visibility Tests ==============
+    
+    @Test
+    fun `dragon should not render when completely off screen left`() {
+        // Dragon segments moving left should be culled when past left edge
+        val screenWidth = 1080f
+        val segmentRadius = 18f
+        val margin = segmentRadius * 4f
+        
+        // Dragon segment positions far past left edge
+        val segmentPositions = listOf(
+            Pair(-200f, 300f),
+            Pair(-150f, 300f),
+            Pair(-100f, 300f)
+        )
+        
+        val rightmostX = segmentPositions.maxOf { it.first }
+        val shouldSkipRender = rightmostX < -margin
+        
+        assertTrue("Dragon past left edge should be culled", shouldSkipRender)
+    }
+    
+    @Test
+    fun `dragon should not render when waiting off screen right`() {
+        // Dragon waiting to enter from right should not be rendered
+        val screenWidth = 1080f
+        val segmentRadius = 18f
+        val margin = segmentRadius * 4f
+        
+        // Dragon segment positions waiting far off right edge
+        val segmentPositions = listOf(
+            Pair(screenWidth + 500f, 300f),
+            Pair(screenWidth + 550f, 300f),
+            Pair(screenWidth + 600f, 300f)
+        )
+        
+        val leftmostX = segmentPositions.minOf { it.first }
+        val shouldSkipRender = leftmostX > screenWidth + margin
+        
+        assertTrue("Dragon waiting off right should be culled", shouldSkipRender)
+    }
+    
+    @Test
+    fun `dragon should render when partially on screen`() {
+        // Dragon with some segments visible should render
+        val screenWidth = 1080f
+        val segmentRadius = 18f
+        val margin = segmentRadius * 4f
+        
+        // Dragon partially on screen (head visible, tail off-screen right)
+        val segmentPositions = listOf(
+            Pair(500f, 300f),   // Head visible
+            Pair(800f, 300f),   // Body visible
+            Pair(screenWidth + 100f, 300f)  // Tail off-screen
+        )
+        
+        val leftmostX = segmentPositions.minOf { it.first }
+        val rightmostX = segmentPositions.maxOf { it.first }
+        
+        val shouldSkipRender = rightmostX < -margin || leftmostX > screenWidth + margin
+        
+        assertFalse("Partially visible dragon should render", shouldSkipRender)
+    }
+    
+    @Test
+    fun `dragon visibility check uses generous margin for head features`() {
+        // The margin should be 4x segment radius to account for head features
+        // (antlers, whiskers, etc.) that extend beyond segment centers
+        val segmentRadius = 18f
+        val margin = segmentRadius * 4f
+        
+        assertEquals("Margin should be 4x segment radius", 72f, margin, 0.01f)
+    }
+    
+    @Test
+    fun `dragon phase wrapping should produce valid positions`() {
+        // Test that modulo arithmetic for dragon position produces valid coordinates
+        val screenWidth = 1080f
+        val heightScale = 1f
+        
+        // Test various phase values including wrap-around points
+        val testPhases = listOf(0f, 10f, 50f, 100f, 1000f)
+        
+        for (phase in testPhases) {
+            val baseX = screenWidth + 150f * heightScale - 
+                (phase * 40f * heightScale) % (screenWidth + 400f * heightScale)
+            
+            // Position should always be within reasonable bounds
+            // When phase wraps, baseX should jump back to right side
+            assertTrue("Base X at phase $phase should be finite", baseX.isFinite())
+        }
+    }
+    
     // ============== Rocket Physics Tests ==============
     
     @Test

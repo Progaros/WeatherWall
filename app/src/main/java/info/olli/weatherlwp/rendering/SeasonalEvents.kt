@@ -984,6 +984,18 @@ class SeasonalEvents(private val context: Context? = null) {
             val y = baseY + wave1 + wave2
             Pair(x, y)
         }
+        
+        // --- VISIBILITY CHECK ---
+        // Skip rendering if dragon is completely off-screen
+        // Use generous margin to include head features that extend beyond segment positions
+        val margin = segmentRadius * 4f
+        val leftmostX = segmentPositions.minOf { it.first }
+        val rightmostX = segmentPositions.maxOf { it.first }
+        
+        // Dragon moves right-to-left, so skip if entirely past left edge or waiting to enter from right
+        if (rightmostX < -margin || leftmostX > screenWidth + margin) {
+            return  // Dragon completely off-screen, skip rendering
+        }
 
         // --- 2. DRAW BODY (Tail to Neck) ---
         // Stop at i=1 so head (i=0) is drawn last on top
