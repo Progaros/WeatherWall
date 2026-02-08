@@ -28,6 +28,10 @@ class SimulationClock {
     // Base time for animation consistency (doesn't change on reload)
     private val startTimeMs = System.currentTimeMillis()
     
+    // Cached Calendar instances (avoid per-frame allocations)
+    private val cachedCal = Calendar.getInstance(TimeZone.getDefault())
+    private val cachedConvertCal = Calendar.getInstance(TimeZone.getDefault())
+    
     /**
      * Update sunrise/sunset times from weather data (Unix timestamps in seconds).
      * Pass -1 for unknown values to use defaults.
@@ -45,9 +49,8 @@ class SimulationClock {
      * Convert Unix timestamp (seconds) to local hour of day (0-24).
      */
     private fun unixToLocalHour(unixSeconds: Long): Float {
-        val cal = Calendar.getInstance(TimeZone.getDefault())
-        cal.timeInMillis = unixSeconds * 1000
-        return cal.get(Calendar.HOUR_OF_DAY) + cal.get(Calendar.MINUTE) / 60f
+        cachedConvertCal.timeInMillis = unixSeconds * 1000
+        return cachedConvertCal.get(Calendar.HOUR_OF_DAY) + cachedConvertCal.get(Calendar.MINUTE) / 60f
     }
     
     /**
@@ -56,9 +59,9 @@ class SimulationClock {
      */
     fun getTimeOfDayHours(): Float {
         return if (useRealTime) {
-            val now = java.util.Calendar.getInstance()
-            val hours = now.get(java.util.Calendar.HOUR_OF_DAY)
-            val minutes = now.get(java.util.Calendar.MINUTE)
+            cachedCal.timeInMillis = System.currentTimeMillis()
+            val hours = cachedCal.get(Calendar.HOUR_OF_DAY)
+            val minutes = cachedCal.get(Calendar.MINUTE)
             hours + minutes / 60f
         } else {
             manualTimeMinutes / 60f
@@ -70,8 +73,8 @@ class SimulationClock {
      */
     fun getTimeOfDayMinutes(): Int {
         return if (useRealTime) {
-            val now = java.util.Calendar.getInstance()
-            now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE)
+            cachedCal.timeInMillis = System.currentTimeMillis()
+            cachedCal.get(Calendar.HOUR_OF_DAY) * 60 + cachedCal.get(Calendar.MINUTE)
         } else {
             manualTimeMinutes
         }

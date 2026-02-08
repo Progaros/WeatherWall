@@ -68,9 +68,19 @@ object PreferenceDefaults {
     
     // === Seasonal Settings ===
     const val SEASONAL_ENABLED = true
+    const val CHRISTMAS_ENABLED = true
+    const val CHRISTMAS_INTERVAL = 5  // ±days around Dec 25
+    const val NEWYEAR_ENABLED = true
+    const val NEWYEAR_INTERVAL = 7  // ±days around Jan 1
+    const val CN_NEWYEAR_ENABLED = true
+    const val CN_NEWYEAR_INTERVAL = 14  // ±days around Feb 1
+    const val ST_PATRICKS_ENABLED = true
+    const val ST_PATRICKS_INTERVAL = 2  // ±days around Mar 17
+    const val FIREWORK_FREQUENCY = 50  // 0-100
+    const val FIREWORK_AMOUNT = 100  // 10-200, particles per explosion
     const val SHAKE_FIREWORKS_ENABLED = true
     const val SHAKE_SENSITIVITY = 50  // 0-100
-    const val SHAKE_DELAY_MS = 500  // 0-2000ms, delay after screen on before shake triggers
+    const val SHAKE_DELAY_MS = 2500  // 0-5000ms, delay after screen on before shake triggers
     
     // === Visual Settings ===
     const val NIGHT_SHADE_STRENGTH = 35  // 0-100

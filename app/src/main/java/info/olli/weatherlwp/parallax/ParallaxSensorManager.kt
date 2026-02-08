@@ -19,26 +19,17 @@ import kotlin.math.sqrt
  * Uses TYPE_ROTATION_VECTOR (preferred) or TYPE_GAME_ROTATION_VECTOR for orientation.
  * Falls back to TYPE_GRAVITY if rotation vectors unavailable.
  * 
- * KEY IMPLEMENTATION:
- * 1. Delta-based motion detection: responds to movement, not absolute position
- * 2. Works at ANY orientation (flat, tilted, vertical, upside-down)
- * 3. Accumulates motion with slow decay back to center
- * 4. Auto-resets when display rotation changes
+ * KEY IMPLEMENTATION (aligned with kaka.wallpaper.forest reference):
+ * 1. Direct pass-through: no exponential smoothing, no deadzone on sensor side
+ * 2. Gyroscope mode: 3-sample moving average, direct integration, ±18° clamp
+ * 3. Rotation vector mode: delta-based accumulation, no decay
+ * 4. All smoothing/return-to-center handled by ParallaxCalculator
+ * 5. Auto-resets when display rotation changes
  */
 class ParallaxSensorManager(context: Context) : SensorEventListener {
     companion object {
         private const val TAG = "ParallaxSensorManager"
-        // Near-direct pass-through for minimal latency (reference app uses no filter)
-        // Higher = faster response (1.0 = instant, 0.4 = old sluggish value)
-        private const val FILTER_ALPHA = 0.85f
         private const val FULL_TILT_RADIANS = (45f * PI / 180f).toFloat()
-        private const val DEADZONE = 0.03f
-        
-        // Gyroscope drift prevention: ignore very small angular velocities
-        // Typical gyro noise is ~0.01 rad/s, so 0.03 rad/s (~1.7°/s) filters noise
-        private const val GYRO_DEADZONE_RADS = 0.03f
-        // Gyro accumulated angle decay (prevents drift buildup)
-        private const val GYRO_DECAY_RATE = 0.998f  // Slowly decay to center
         
         // Hysteresis thresholds for isScreenDown to prevent flip-flopping at vertical
         // When |z| is small (near vertical), we freeze the current state
@@ -74,7 +65,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         
         // Sensor warmup: ignore first N sensor events after start() to prevent stale queued events
         // from triggering shakes immediately after unlock (in addition to time-based delay)
-        private const val SHAKE_WARMUP_SAMPLES = 10
+        private const val SHAKE_WARMUP_SAMPLES = 30
     }
     
     interface Listener {
@@ -130,14 +121,15 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     private var accumulatedX = 0f
     private var accumulatedY = 0f
     
-    // Decay rate controls how fast the scene returns to center after movement stops
-    // Default 0.995f gives a slow, natural return
-    // Modified by setReturnSpeed() - range 0.9f (fast) to 1.0f (no return)
-    private var decayRate = 0.995f
-    
     // Pose gain: reduces sensitivity when near vertical (gimbal-lock region)
     // 1.0 = flat (stable), 0.0 = vertical (unstable)
     private var poseGain = 1f
+
+    // Auto-return rate: controls gentle return-to-center when device is held still.
+    // 1.0 = no decay (holds forever, reference app behavior)
+    // <1.0 = gentle decay per sensor sample (only when device is not moving)
+    // Set via setAutoReturnRate(). NOT applied during active tilting.
+    private var autoReturnRate = 1f
 
     // Track whether the screen is facing down (used to conditionally flip Y)
     private var isScreenDown = false
@@ -193,7 +185,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     private var gyroTriggerChanges = DEFAULT_GYRO_TRIGGER_CHANGES
     
     // Shake unlock delay: prevents accidental shake triggers after screen on (phone unlock motion)
-    private var shakeUnlockDelayMs = 500L
+    private var shakeUnlockDelayMs = 2500L
     private var screenOnTime = 0L  // Timestamp when start() was called (screen became visible)
     
     // Sensor warmup: counts down sensor samples to ignore after start()
@@ -391,20 +383,17 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     }
     
     /**
-     * Update return speed based on user preference.
-     * @param speed 0.0 to 1.0 (0=no return, 1=fast return)
+     * Set auto-return rate for rotation-vector / gravity modes.
+     * Only applies when the device is held still (no active tilting).
+     * @param speed 0.0 to 1.0 (0 = no return/holds forever, 1 = fast return)
      */
-    fun setReturnSpeed(speed: Float) {
-        // Map 0..1 to decay rate 1.0..0.9
-        // speed=0 -> rate=1.0 (no decay, holds position)
-        // speed=0.5 -> rate=0.995 (default slow decay)
-        // speed=1.0 -> rate=0.9 (fast decay)
-        
-        // Use exponential curve for better feel?
-        // Let's stick to mapped linear for predictability
-        // 0.0 -> 1.0
-        // 1.0 -> 0.9
-        decayRate = (1.0f - (speed * 0.1f)).coerceIn(0.9f, 1.0f)
+    fun setAutoReturnRate(speed: Float) {
+        // Map user's return-speed 0..1 to per-sample rate:
+        //   speed=0   → rate=1.0     (no decay, like reference app)
+        //   speed=0.15→ rate≈0.99994 (≈0.3%/sec at 50 Hz, very gentle)
+        //   speed=1.0 → rate=0.9995  (≈2.5%/sec at 50 Hz, noticeable)
+        autoReturnRate = if (speed <= 0.001f) 1f
+            else (1f - speed * 0.0005f).coerceIn(0.999f, 1f)
     }
 
     fun isRunning(): Boolean = isStarted
@@ -903,21 +892,26 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         accumulatedX = accumulatedX.coerceIn(-1f, 1f)
         accumulatedY = accumulatedY.coerceIn(-1f, 1f)
         
-        // Slow decay back to center when not moving (feels natural)
-        accumulatedX *= decayRate
-        accumulatedY *= decayRate
+        // Auto-return: gentle decay ONLY when device is not actively moving.
+        // During active tilting the accumulated values pass through unchanged
+        // (zero-latency, matching the kaka.wallpaper.forest reference app).
+        if (autoReturnRate < 1f) {
+            val motionMag = sqrt(deltaPitch * deltaPitch + deltaRoll * deltaRoll)
+            if (motionMag < 0.002f) {
+                accumulatedX *= autoReturnRate
+                accumulatedY *= autoReturnRate
+            }
+        }
         
         processTiltValues(accumulatedX, accumulatedY)
     }
     
     private fun processTiltValues(targetX: Float, targetY: Float) {
-        // Per-axis deadzone instead of magnitude-based
-        // This prevents killing single-axis motion when combined magnitude is small
-        val scaledX = if (abs(targetX) > DEADZONE) targetX else 0f
-        val scaledY = if (abs(targetY) > DEADZONE) targetY else 0f
-        
-        filteredX += FILTER_ALPHA * (scaledX - filteredX)
-        filteredY += FILTER_ALPHA * (scaledY - filteredY)
+        // Direct pass-through: no deadzone, no exponential filter.
+        // Reference app (kaka.wallpaper.forest) uses zero sensor-side smoothing;
+        // all smoothing/return-to-center is handled by ParallaxCalculator.
+        filteredX = targetX
+        filteredY = targetY
 
         // Conditionally flip vertical axis depending on whether the screen is down.
         // For screen-up we invert Y for consumers; when screen-down the pitch sign

@@ -11,6 +11,7 @@ import android.graphics.RadialGradient
 import android.graphics.Shader
 import android.util.Log
 import androidx.preference.PreferenceManager
+import info.olli.weatherlwp.PreferenceDefaults
 import java.util.Calendar
 import kotlin.random.Random
 
@@ -42,10 +43,6 @@ private const val DEG_TO_RAD = Math.PI / 180.0
  * Active during December 15 - January 7, or when debug override is set.
  */
 class SeasonalEvents(private val context: Context? = null) {
-    companion object {
-        private const val TAG = "SeasonalEvents"
-    }
-
     enum class Season {
         NONE,
         CHRISTMAS,      // Dec 15-26
@@ -120,6 +117,13 @@ class SeasonalEvents(private val context: Context? = null) {
     private val christmasTrailPath = Path()
     private val christmasRayPath = Path()
 
+    // Pre-allocated paths for Chinese New Year dragon (avoid per-frame allocations)
+    private val dragonAntlerPath = Path()
+    private val dragonHeadPath = Path()
+    private val dragonEyePath = Path()
+    private val dragonBrowPath = Path()
+    private val dragonWhiskerPath = Path()
+
     // Pre-allocated paints
     private val starPaint = Paint().apply {
         color = Color.WHITE
@@ -184,6 +188,18 @@ class SeasonalEvents(private val context: Context? = null) {
     private var rainbowPositionY = 50    // 0-100, vertical position (0 = top, 100 = bottom)
     private var rainbowSize = 100        // 0-200, size percentage
     
+    // Per-event toggles (each seasonal event can be individually enabled/disabled)
+    private var christmasEnabled = true
+    private var newyearEnabled = true
+    private var cnNewyearEnabled = true
+    private var stPatricksEnabled = true
+    
+    // Per-event intervals (±days around the center holiday date)
+    private var christmasInterval = 5   // ±days around Dec 25
+    private var newyearInterval = 7     // ±days around Jan 1
+    private var cnNewyearInterval = 14  // ±days around Feb 1
+    private var stPatricksInterval = 2  // ±days around Mar 17
+    
     // Shake-to-fireworks settings
     private var shakeFireworksEnabled = true
     private var shakeFireworksCount = 12  // Number of fireworks to launch on shake (10-15)
@@ -206,15 +222,27 @@ class SeasonalEvents(private val context: Context? = null) {
             starSizeMultiplier = (it.getInt("pref_christmas_star_size", 100) / 100f).coerceIn(0.5f, 2.0f)
             trailLengthMultiplier = (it.getInt("pref_christmas_star_trail", 100) / 100f).coerceIn(0f, 2.0f)
             fireworkFrequency = it.getInt("pref_firework_frequency", 50).coerceIn(0, 100)
-            fireworkAmount = it.getInt("pref_firework_amount", 100).coerceIn(10, 200)
+            fireworkAmount = it.getInt("pref_firework_amount", PreferenceDefaults.FIREWORK_AMOUNT).coerceIn(10, 200)
             
             // Rainbow settings
             rainbowPositionX = it.getInt("pref_rainbow_position_x", 50).coerceIn(0, 100)
             rainbowPositionY = it.getInt("pref_rainbow_position_y", 40).coerceIn(0, 100)
             rainbowSize = it.getInt("pref_rainbow_size", 100).coerceIn(20, 200)
             
+            // Per-event toggles
+            christmasEnabled = it.getBoolean("pref_christmas_enabled", PreferenceDefaults.CHRISTMAS_ENABLED)
+            newyearEnabled = it.getBoolean("pref_newyear_enabled", PreferenceDefaults.NEWYEAR_ENABLED)
+            cnNewyearEnabled = it.getBoolean("pref_cn_newyear_enabled", PreferenceDefaults.CN_NEWYEAR_ENABLED)
+            stPatricksEnabled = it.getBoolean("pref_st_patricks_enabled", PreferenceDefaults.ST_PATRICKS_ENABLED)
+            
+            // Per-event intervals (±days)
+            christmasInterval = it.getInt("pref_christmas_interval", PreferenceDefaults.CHRISTMAS_INTERVAL).coerceIn(0, 30)
+            newyearInterval = it.getInt("pref_newyear_interval", PreferenceDefaults.NEWYEAR_INTERVAL).coerceIn(0, 30)
+            cnNewyearInterval = it.getInt("pref_cn_newyear_interval", PreferenceDefaults.CN_NEWYEAR_INTERVAL).coerceIn(0, 30)
+            stPatricksInterval = it.getInt("pref_st_patricks_interval", PreferenceDefaults.ST_PATRICKS_INTERVAL).coerceIn(0, 30)
+            
             // Shake-to-fireworks settings
-            shakeFireworksEnabled = it.getBoolean("pref_shake_fireworks_enabled", true)
+            shakeFireworksEnabled = it.getBoolean("pref_shake_fireworks_enabled", PreferenceDefaults.SHAKE_FIREWORKS_ENABLED)
             shakeFireworksCount = it.getInt("pref_shake_fireworks_count", 15).coerceIn(5, 50)
         }
         lastSettingsLoad = System.currentTimeMillis()
@@ -304,21 +332,58 @@ class SeasonalEvents(private val context: Context? = null) {
             Log.e(TAG, "Error reading debug prefs", e)
         }
 
-        val cal = Calendar.getInstance()
-        val month = cal.get(Calendar.MONTH) // 0-indexed (0=Jan, 11=Dec)
-        val day = cal.get(Calendar.DAY_OF_MONTH)
+        return getSeasonByDate()
+    }
 
-        return when {
-            // Christmas: Dec 15-26
-            month == 11 && day in 15..26 -> Season.CHRISTMAS
-            // New Year: Dec 27 - Jan 7
-            month == 11 && day >= 27 -> Season.NEW_YEAR
-            month == 0 && day <= 7 -> Season.NEW_YEAR
-            // Chinese New Year: Late Jan - Mid Feb (simplified: Jan 20 - Feb 15)
-            (month == 0 && day >= 20) || (month == 1 && day <= 15) -> Season.CN_NEW_YEAR
-            // St. Patrick's Day: Mar 14-18
-            month == 2 && day in 14..18 -> Season.ST_PATRICKS
-            else -> Season.NONE
+    /**
+     * Determine season from current date using circular day distance.
+     * Each event has a center date and ±interval days.
+     * Priority order: Christmas → New Year → CN New Year → St. Patrick's.
+     */
+    internal fun getSeasonByDate(
+        cal: Calendar = Calendar.getInstance()
+    ): Season {
+        val currentDoy = cal.get(Calendar.DAY_OF_YEAR)
+        val daysInYear = cal.getActualMaximum(Calendar.DAY_OF_YEAR)
+
+        // Check in priority order (first match wins on overlap days)
+        if (christmasEnabled && circularDayDistance(currentDoy, dayOfYear(Calendar.DECEMBER, 25, cal), daysInYear) <= christmasInterval) {
+            return Season.CHRISTMAS
+        }
+        if (newyearEnabled && circularDayDistance(currentDoy, dayOfYear(Calendar.JANUARY, 1, cal), daysInYear) <= newyearInterval) {
+            return Season.NEW_YEAR
+        }
+        if (cnNewyearEnabled && circularDayDistance(currentDoy, dayOfYear(Calendar.FEBRUARY, 1, cal), daysInYear) <= cnNewyearInterval) {
+            return Season.CN_NEW_YEAR
+        }
+        if (stPatricksEnabled && circularDayDistance(currentDoy, dayOfYear(Calendar.MARCH, 17, cal), daysInYear) <= stPatricksInterval) {
+            return Season.ST_PATRICKS
+        }
+
+        return Season.NONE
+    }
+
+    companion object {
+        private const val TAG = "SeasonalEvents"
+
+        /**
+         * Circular distance between two day-of-year values,
+         * correctly wrapping around year-end (e.g. Dec 31→Jan 1 = 1 day).
+         */
+        internal fun circularDayDistance(day1: Int, day2: Int, daysInYear: Int = 365): Int {
+            val diff = kotlin.math.abs(day1 - day2)
+            return minOf(diff, daysInYear - diff)
+        }
+
+        /**
+         * Get the day-of-year for a given month and day.
+         * @param month 0-indexed Calendar month (Calendar.JANUARY=0, Calendar.DECEMBER=11)
+         */
+        internal fun dayOfYear(month: Int, day: Int, referenceCal: Calendar = Calendar.getInstance()): Int {
+            val c = referenceCal.clone() as Calendar
+            c.set(Calendar.MONTH, month)
+            c.set(Calendar.DAY_OF_MONTH, day)
+            return c.get(Calendar.DAY_OF_YEAR)
         }
     }
 
@@ -966,14 +1031,19 @@ class SeasonalEvents(private val context: Context? = null) {
         renderNewYearFireworks(canvas)
         
         // --- 1. CALCULATE POSITIONS ---
-        // Dragon moves right-to-left
-        val baseX = screenWidth + 150f * heightScale - (dragonPhase * 40f * heightScale) % (screenWidth + 400f * heightScale)
-        val baseY = screenHeight * 0.18f
-        
         val scale = heightScale.coerceIn(0.5f, 1.5f)
         val segmentRadius = 18f * scale
         val segmentCount = 12
         val segmentSpacing = segmentRadius * 1.6f
+        val totalBodyLength = segmentCount * segmentSpacing
+        val margin = segmentRadius * 4f
+        
+        // Dragon moves right-to-left
+        // Wrap distance accounts for full body length + margins so dragon fully
+        // exits left edge before re-entering from the right (fixes despawn-on-screen bug)
+        val wrapDistance = screenWidth + totalBodyLength + margin * 2f + 200f * heightScale
+        val baseX = screenWidth + (margin + 100f) * heightScale - (dragonPhase * 40f * heightScale) % wrapDistance
+        val baseY = screenHeight * 0.18f
         
         val segmentPositions = Array(segmentCount) { i ->
             val t = i.toFloat()
@@ -988,7 +1058,6 @@ class SeasonalEvents(private val context: Context? = null) {
         // --- VISIBILITY CHECK ---
         // Skip rendering if dragon is completely off-screen
         // Use generous margin to include head features that extend beyond segment positions
-        val margin = segmentRadius * 4f
         val leftmostX = segmentPositions.minOf { it.first }
         val rightmostX = segmentPositions.maxOf { it.first }
         
@@ -1026,64 +1095,64 @@ class SeasonalEvents(private val context: Context? = null) {
         // A. Rear Antlers (Solid Fill, not just lines)
         // Draw these BEFORE the head so they look like they grow out of the skull
         dragonPaint.color = dragonColors[1] // Gold
-        val antlerPath = Path()
+        dragonAntlerPath.reset()
         // Main beam (polygon shape for solidity)
-        antlerPath.moveTo(headX + headSize * 0.1f, headY - headSize * 0.6f) // Base
-        antlerPath.lineTo(headX + headSize * 0.4f, headY - headSize * 1.5f) // Tip
-        antlerPath.lineTo(headX + headSize * 0.25f, headY - headSize * 1.5f) // Thickness at tip
-        antlerPath.lineTo(headX - headSize * 0.05f, headY - headSize * 0.6f) // Base width
-        antlerPath.close()
+        dragonAntlerPath.moveTo(headX + headSize * 0.1f, headY - headSize * 0.6f) // Base
+        dragonAntlerPath.lineTo(headX + headSize * 0.4f, headY - headSize * 1.5f) // Tip
+        dragonAntlerPath.lineTo(headX + headSize * 0.25f, headY - headSize * 1.5f) // Thickness at tip
+        dragonAntlerPath.lineTo(headX - headSize * 0.05f, headY - headSize * 0.6f) // Base width
+        dragonAntlerPath.close()
         // Small branch
-        antlerPath.moveTo(headX + headSize * 0.2f, headY - headSize * 1.0f)
-        antlerPath.lineTo(headX + headSize * 0.0f, headY - headSize * 1.3f)
-        antlerPath.lineTo(headX - headSize * 0.1f, headY - headSize * 1.2f)
-        antlerPath.close()
+        dragonAntlerPath.moveTo(headX + headSize * 0.2f, headY - headSize * 1.0f)
+        dragonAntlerPath.lineTo(headX + headSize * 0.0f, headY - headSize * 1.3f)
+        dragonAntlerPath.lineTo(headX - headSize * 0.1f, headY - headSize * 1.2f)
+        dragonAntlerPath.close()
         
         // Draw filled antler + outline
-        canvas.drawPath(antlerPath, dragonPaint) // Fill Gold
+        canvas.drawPath(dragonAntlerPath, dragonPaint) // Fill Gold
         dragonOutlinePaint.color = dragonColors[3]
-        canvas.drawPath(antlerPath, dragonOutlinePaint) // Outline Dark Red
+        canvas.drawPath(dragonAntlerPath, dragonOutlinePaint) // Outline Dark Red
 
         // B. Head Shape (Snout & Jaw with distinct overbite)
-        val headPath = Path()
+        dragonHeadPath.reset()
         val snoutLen = headSize * 1.4f
         
         // Forehead
-        headPath.moveTo(headX + headSize * 0.2f, headY - headSize * 0.5f)
-        headPath.cubicTo(
+        dragonHeadPath.moveTo(headX + headSize * 0.2f, headY - headSize * 0.5f)
+        dragonHeadPath.cubicTo(
             headX - headSize * 0.2f, headY - headSize * 0.6f,
             headX - snoutLen * 0.4f, headY - headSize * 0.5f,
             headX - snoutLen, headY - headSize * 0.2f // Snout Tip
         )
         
         // Upper Lip / Snout (Overhanging - creates overbite)
-        headPath.cubicTo(
+        dragonHeadPath.cubicTo(
             headX - snoutLen - headSize * 0.2f, headY + headSize * 0.1f, // Curve down/out
             headX - snoutLen * 0.8f, headY + headSize * 0.2f,            // Curve back in
             headX - headSize * 0.5f, headY + headSize * 0.1f             // Corner of mouth
         )
         
         // Lower Jaw (Distinct from upper - step down)
-        headPath.lineTo(headX - headSize * 0.6f, headY + headSize * 0.2f) // Step down slightly
-        headPath.cubicTo(
+        dragonHeadPath.lineTo(headX - headSize * 0.6f, headY + headSize * 0.2f) // Step down slightly
+        dragonHeadPath.cubicTo(
             headX - headSize * 0.6f, headY + headSize * 0.5f, // Jaw chin curve
             headX - headSize * 0.2f, headY + headSize * 0.7f, // Jaw bottom
             headX + headSize * 0.3f, headY + headSize * 0.4f  // Jaw hinge/neck
         )
         
         // Close at back of head
-        headPath.quadTo(
+        dragonHeadPath.quadTo(
             headX + headSize * 0.5f, headY - headSize * 0.2f,
             headX + headSize * 0.2f, headY - headSize * 0.5f
         )
 
         // Fill Head (Red)
         dragonPaint.color = dragonColors[0]
-        canvas.drawPath(headPath, dragonPaint)
+        canvas.drawPath(dragonHeadPath, dragonPaint)
         
         // Outline Head
         dragonOutlinePaint.color = dragonColors[3]
-        canvas.drawPath(headPath, dragonOutlinePaint)
+        canvas.drawPath(dragonHeadPath, dragonOutlinePaint)
 
         // C. Face Details
         // Eye (Almond shaped - demon/eagle style)
@@ -1092,11 +1161,11 @@ class SeasonalEvents(private val context: Context? = null) {
         val eyeRad = headSize * 0.22f
         
         dragonPaint.color = Color.WHITE
-        val eyePath = Path()
-        eyePath.moveTo(eyeX - eyeRad, eyeY)
-        eyePath.quadTo(eyeX, eyeY - eyeRad * 0.7f, eyeX + eyeRad, eyeY - eyeRad * 0.2f)
-        eyePath.quadTo(eyeX, eyeY + eyeRad * 0.7f, eyeX - eyeRad, eyeY)
-        canvas.drawPath(eyePath, dragonPaint)
+        dragonEyePath.reset()
+        dragonEyePath.moveTo(eyeX - eyeRad, eyeY)
+        dragonEyePath.quadTo(eyeX, eyeY - eyeRad * 0.7f, eyeX + eyeRad, eyeY - eyeRad * 0.2f)
+        dragonEyePath.quadTo(eyeX, eyeY + eyeRad * 0.7f, eyeX - eyeRad, eyeY)
+        canvas.drawPath(dragonEyePath, dragonPaint)
         
         // Pupil
         dragonPaint.color = Color.BLACK
@@ -1106,10 +1175,10 @@ class SeasonalEvents(private val context: Context? = null) {
         dragonOutlinePaint.color = dragonColors[1] // Gold
         dragonOutlinePaint.strokeWidth = 3f * scale
         dragonOutlinePaint.style = Paint.Style.STROKE
-        val browPath = Path()
-        browPath.moveTo(eyeX - eyeRad * 1.2f, eyeY - eyeRad * 0.6f)
-        browPath.quadTo(eyeX, eyeY - eyeRad * 1.3f, eyeX + eyeRad * 1.2f, eyeY - eyeRad * 0.5f)
-        canvas.drawPath(browPath, dragonOutlinePaint)
+        dragonBrowPath.reset()
+        dragonBrowPath.moveTo(eyeX - eyeRad * 1.2f, eyeY - eyeRad * 0.6f)
+        dragonBrowPath.quadTo(eyeX, eyeY - eyeRad * 1.3f, eyeX + eyeRad * 1.2f, eyeY - eyeRad * 0.5f)
+        canvas.drawPath(dragonBrowPath, dragonOutlinePaint)
         
         // Nostril (Flared)
         dragonPaint.color = dragonColors[3]
@@ -1123,9 +1192,9 @@ class SeasonalEvents(private val context: Context? = null) {
         val whiskerStartX = headX - snoutLen * 0.7f
         val whiskerStartY = headY - headSize * 0.1f
         
-        val whiskerPath = Path()
-        whiskerPath.moveTo(whiskerStartX, whiskerStartY)
-        whiskerPath.cubicTo(
+        dragonWhiskerPath.reset()
+        dragonWhiskerPath.moveTo(whiskerStartX, whiskerStartY)
+        dragonWhiskerPath.cubicTo(
             whiskerStartX - headSize * 0.5f, whiskerStartY + headSize * 0.8f, // Loop forward/down
             headX - headSize * 0.2f, headY + headSize * 1.2f,                 // Loop under jaw
             headX + headSize * 1.5f, headY + headSize * 0.5f                  // Trail back
@@ -1133,7 +1202,7 @@ class SeasonalEvents(private val context: Context? = null) {
         
         dragonOutlinePaint.color = dragonColors[1] // Gold
         dragonOutlinePaint.strokeWidth = 2.5f * scale
-        canvas.drawPath(whiskerPath, dragonOutlinePaint)
+        canvas.drawPath(dragonWhiskerPath, dragonOutlinePaint)
         
         // Reset paint for next frame
         dragonOutlinePaint.color = dragonColors[3]

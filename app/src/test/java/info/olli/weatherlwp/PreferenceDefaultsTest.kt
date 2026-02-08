@@ -93,6 +93,14 @@ class PreferenceDefaultsTest {
             
             // Seasonal settings
             "pref_seasonal_enabled" to PreferenceDefaults.SEASONAL_ENABLED,
+            "pref_christmas_enabled" to PreferenceDefaults.CHRISTMAS_ENABLED,
+            "pref_christmas_interval" to PreferenceDefaults.CHRISTMAS_INTERVAL,
+            "pref_newyear_enabled" to PreferenceDefaults.NEWYEAR_ENABLED,
+            "pref_newyear_interval" to PreferenceDefaults.NEWYEAR_INTERVAL,
+            "pref_cn_newyear_enabled" to PreferenceDefaults.CN_NEWYEAR_ENABLED,
+            "pref_cn_newyear_interval" to PreferenceDefaults.CN_NEWYEAR_INTERVAL,
+            "pref_st_patricks_enabled" to PreferenceDefaults.ST_PATRICKS_ENABLED,
+            "pref_st_patricks_interval" to PreferenceDefaults.ST_PATRICKS_INTERVAL,
             "pref_shake_fireworks_enabled" to PreferenceDefaults.SHAKE_FIREWORKS_ENABLED,
             "pref_shake_sensitivity" to PreferenceDefaults.SHAKE_SENSITIVITY,
             "pref_shake_delay" to PreferenceDefaults.SHAKE_DELAY_MS,

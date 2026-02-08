@@ -464,8 +464,8 @@ class ParallaxScene(
             parallaxCalculator.edgeEasing = edgeEasing
             parallaxCalculator.returnSpeedUnlocked = returnSpeedUnlocked
             
-            // Also update sensor decay (affects how fast the raw tilt returns to center)
-            sensor.setReturnSpeed(returnSpeed)
+            // Sensor auto-return: gentle return-to-center only when device is still
+            sensor.setAutoReturnRate(returnSpeed)
             
             // Weather and seasonal toggles
             weatherEnabled = prefs.getBoolean("pref_weather_enabled", true)
@@ -492,7 +492,7 @@ class ParallaxScene(
             // Configure shake detection based on settings
             val shakeEnabled = prefs.getBoolean("pref_shake_fireworks_enabled", true)
             val shakeSensitivity = prefs.getInt("pref_shake_sensitivity", 50) / 100f
-            val shakeDelayMs = prefs.getInt("pref_shake_delay", 500).coerceIn(0, 2000)
+            val shakeDelayMs = prefs.getInt("pref_shake_delay", PreferenceDefaults.SHAKE_DELAY_MS).coerceIn(0, 5000)
             sensor.setShakeSettings(shakeEnabled, shakeSensitivity, shakeDelayMs)
             
             // Frame time logging (debug feature for performance analysis)

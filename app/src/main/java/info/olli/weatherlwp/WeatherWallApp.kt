@@ -12,6 +12,7 @@ class WeatherWallApp : Application() {
     
     companion object {
         private const val TAG = "WeatherWallApp"
+        @Volatile
         private var instance: WeatherWallApp? = null
         
         @Volatile

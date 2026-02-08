@@ -1,67 +1,172 @@
 package info.olli.weatherlwp
 
+import info.olli.weatherlwp.rendering.SeasonalEvents
 import org.junit.Assert.*
 import org.junit.Test
 import java.util.Calendar
 
 /**
- * Unit tests for SeasonalEvents - Tests for Issue #9
+ * Unit tests for SeasonalEvents - Tests for Issue #9 + interval/toggle features
  * 
  * Issue #9: Seasonal Events No Debug Switch
  * Need ability to test Christmas/New Year effects without waiting for actual date
+ * 
+ * New: Tests for circular day distance, per-event toggles, and configurable intervals.
  */
 class SeasonalEventsTest {
 
-    // ============== Issue #9: Seasonal Event Detection Tests ==============
-    
+    // ============== Circular Day Distance Tests ==============
+
     @Test
-    fun `christmas season should be Dec 15-26`() {
-        // Christmas effects should show from Dec 15 to Dec 26
-        val christmasDays = listOf(15, 20, 21, 22, 23, 24, 25, 26)
-        val nonChristmasDays = listOf(1, 14, 27, 28, 31)
-        
-        for (day in christmasDays) {
-            val isChristmas = isChristmasHelper(12, day)
-            assertTrue("Dec $day should be Christmas", isChristmas)
-        }
-        
-        for (day in nonChristmasDays) {
-            val isChristmas = isChristmasHelper(12, day)
-            assertFalse("Dec $day should NOT be Christmas", isChristmas)
-        }
+    fun `circularDayDistance - same day returns 0`() {
+        assertEquals(0, SeasonalEvents.circularDayDistance(100, 100, 365))
     }
-    
+
     @Test
-    fun `new year season should be Dec 27 - Jan 7`() {
-        // New Year effects should show Dec 27 to Jan 7
-        val newYearDates = listOf(
-            Pair(12, 27),  // Dec 27
-            Pair(12, 31),  // Dec 31
-            Pair(1, 1),    // Jan 1
-            Pair(1, 7)     // Jan 7
-        )
-        val nonNewYearDates = listOf(
-            Pair(12, 26),  // Dec 26
-            Pair(1, 8),    // Jan 8
-            Pair(1, 15)    // Jan 15
-        )
-        
-        for ((month, day) in newYearDates) {
-            val isNewYear = isNewYearHelper(month, day)
-            assertTrue("$month/$day should be New Year", isNewYear)
-        }
-        
-        for ((month, day) in nonNewYearDates) {
-            val isNewYear = isNewYearHelper(month, day)
-            assertFalse("$month/$day should NOT be New Year", isNewYear)
-        }
+    fun `circularDayDistance - adjacent days returns 1`() {
+        assertEquals(1, SeasonalEvents.circularDayDistance(100, 101, 365))
+        assertEquals(1, SeasonalEvents.circularDayDistance(101, 100, 365))
     }
-    
+
+    @Test
+    fun `circularDayDistance - wraps around year boundary`() {
+        // Dec 31 (DOY 365) to Jan 1 (DOY 1) = 1 day
+        assertEquals(1, SeasonalEvents.circularDayDistance(365, 1, 365))
+        assertEquals(1, SeasonalEvents.circularDayDistance(1, 365, 365))
+    }
+
+    @Test
+    fun `circularDayDistance - Dec 25 to Jan 1 is 7 days`() {
+        // Dec 25 ≈ DOY 359, Jan 1 = DOY 1 → distance = min(358, 365-358) = 7
+        val dec25 = SeasonalEvents.dayOfYear(Calendar.DECEMBER, 25)
+        val jan1 = SeasonalEvents.dayOfYear(Calendar.JANUARY, 1)
+        val dist = SeasonalEvents.circularDayDistance(dec25, jan1)
+        assertEquals("Dec 25 to Jan 1 should be 7 days", 7, dist)
+    }
+
+    @Test
+    fun `circularDayDistance - half year is max distance`() {
+        assertEquals(182, SeasonalEvents.circularDayDistance(1, 183, 365))
+        // Going the other direction: min(183, 365-183) = min(183, 182) = 182
+        assertEquals(182, SeasonalEvents.circularDayDistance(1, 184, 365))
+    }
+
+    @Test
+    fun `circularDayDistance - leap year wraps correctly`() {
+        assertEquals(1, SeasonalEvents.circularDayDistance(366, 1, 366))
+    }
+
+    // ============== dayOfYear Tests ==============
+
+    @Test
+    fun `dayOfYear - Jan 1 is day 1`() {
+        assertEquals(1, SeasonalEvents.dayOfYear(Calendar.JANUARY, 1))
+    }
+
+    @Test
+    fun `dayOfYear - Dec 31 is 365 or 366`() {
+        val doy = SeasonalEvents.dayOfYear(Calendar.DECEMBER, 31)
+        assertTrue("Dec 31 should be 365 or 366", doy == 365 || doy == 366)
+    }
+
+    @Test
+    fun `dayOfYear - Mar 17 is around day 76`() {
+        val doy = SeasonalEvents.dayOfYear(Calendar.MARCH, 17)
+        assertTrue("Mar 17 should be around day 76", doy in 75..77)
+    }
+
+    // ============== getSeasonByDate with Default Intervals ==============
+    // Uses test helper that replicates the interval logic without Android context
+
+    @Test
+    fun `christmas season - Dec 25 with default interval`() {
+        assertEquals("CHRISTMAS", getSeasonByDateHelper(Calendar.DECEMBER, 25))
+    }
+
+    @Test
+    fun `christmas season - Dec 20 within default ±5 interval`() {
+        assertEquals("CHRISTMAS", getSeasonByDateHelper(Calendar.DECEMBER, 20))
+    }
+
+    @Test
+    fun `christmas season - Dec 30 within default ±5 interval`() {
+        assertEquals("CHRISTMAS", getSeasonByDateHelper(Calendar.DECEMBER, 30))
+    }
+
+    @Test
+    fun `christmas season - Dec 19 outside default ±5 interval`() {
+        // Dec 19 is 6 days before Dec 25, outside ±5
+        assertNotEquals("CHRISTMAS", getSeasonByDateHelper(Calendar.DECEMBER, 19))
+    }
+
+    @Test
+    fun `new year season - Jan 1 with default interval`() {
+        // Jan 1 is 7 days from Dec 25 (outside ±5 Christmas), so New Year wins
+        assertEquals("NEW_YEAR", getSeasonByDateHelper(Calendar.JANUARY, 1))
+    }
+
+    @Test
+    fun `new year season - Jan 8 within default ±7 interval`() {
+        assertEquals("NEW_YEAR", getSeasonByDateHelper(Calendar.JANUARY, 8))
+    }
+
+    @Test
+    fun `new year season - Jan 9 outside default ±7 interval`() {
+        assertNotEquals("NEW_YEAR", getSeasonByDateHelper(Calendar.JANUARY, 9))
+    }
+
+    @Test
+    fun `cn new year season - Feb 1 with default interval`() {
+        assertEquals("CN_NEW_YEAR", getSeasonByDateHelper(Calendar.FEBRUARY, 1))
+    }
+
+    @Test
+    fun `cn new year season - Jan 18 within default ±14 interval`() {
+        assertEquals("CN_NEW_YEAR", getSeasonByDateHelper(Calendar.JANUARY, 18))
+    }
+
+    @Test
+    fun `st patricks season - Mar 17 with default interval`() {
+        assertEquals("ST_PATRICKS", getSeasonByDateHelper(Calendar.MARCH, 17))
+    }
+
+    @Test
+    fun `st patricks season - Mar 15 within default ±2 interval`() {
+        assertEquals("ST_PATRICKS", getSeasonByDateHelper(Calendar.MARCH, 15))
+    }
+
+    @Test
+    fun `st patricks season - Mar 14 outside default ±2 interval`() {
+        assertNotEquals("ST_PATRICKS", getSeasonByDateHelper(Calendar.MARCH, 14))
+    }
+
+    @Test
+    fun `no season in summer`() {
+        assertEquals("NONE", getSeasonByDateHelper(Calendar.JULY, 15))
+    }
+
+    // ============== Priority Tests ==============
+
+    @Test
+    fun `christmas takes priority over new year on overlap dates`() {
+        // Dec 25 is within both Christmas (±5: Dec 20-30) and New Year (±7: Dec 25-Jan 8)
+        // Christmas should win due to priority order
+        assertEquals("CHRISTMAS", getSeasonByDateHelper(Calendar.DECEMBER, 25))
+    }
+
+    @Test
+    fun `new year wins on Dec 31 when outside christmas interval`() {
+        // Dec 31 is 6 days from Dec 25 (outside ±5) but only 1 day from Jan 1 (inside ±7)
+        assertEquals("NEW_YEAR", getSeasonByDateHelper(Calendar.DECEMBER, 31))
+    }
+
+    // ============== Issue #9: Debug Override Tests ==============
+
     @Test
     fun `debug override should force christmas mode`() {
         val debugEnabled = true
         val debugSeason = "christmas"
-        val currentMonth = 6  // June (definitely not Christmas)
+        val currentMonth = 6  // June
         val currentDay = 15
         
         val season = getSeasonHelper(debugEnabled, debugSeason, currentMonth, currentDay)
@@ -82,7 +187,7 @@ class SeasonalEventsTest {
     @Test
     fun `debug disabled should use real date`() {
         val debugEnabled = false
-        val debugSeason = "christmas"  // Debug setting ignored
+        val debugSeason = "christmas"
         val currentMonth = 6  // June
         val currentDay = 15
         
@@ -105,18 +210,12 @@ class SeasonalEventsTest {
     
     @Test
     fun `christmas should have snowflake effects`() {
-        val season = "christmas"
-        val hasSnowflakes = season == "christmas"
-        
-        assertTrue("Christmas should have snowflakes", hasSnowflakes)
+        assertTrue("Christmas should have snowflakes", "christmas" == "christmas")
     }
     
     @Test
     fun `newyear should have firework effects`() {
-        val season = "newyear"
-        val hasFireworks = season == "newyear"
-        
-        assertTrue("New Year should have fireworks", hasFireworks)
+        assertTrue("New Year should have fireworks", "newyear" == "newyear")
     }
     
     // ============== Height Scaling Tests ==============
@@ -126,7 +225,6 @@ class SeasonalEventsTest {
         val referenceHeight = 1920f
         val screenHeight = 1920f
         val scale = screenHeight / referenceHeight
-        
         assertEquals("Scale at reference height should be 1.0", 1.0f, scale, 0.001f)
     }
     
@@ -135,28 +233,20 @@ class SeasonalEventsTest {
         val referenceHeight = 1920f
         val screenHeight = 960f
         val scale = screenHeight / referenceHeight
-        
         assertEquals("Scale at 960px should be 0.5", 0.5f, scale, 0.001f)
     }
     
     @Test
     fun `height scale minimum should clamp at 0_5`() {
         val referenceHeight = 1920f
-        val screenHeight = 480f  // Very small screen
+        val screenHeight = 480f
         val rawScale = screenHeight / referenceHeight
         val clampedScale = rawScale.coerceAtLeast(0.5f)
-        
         assertEquals("Scale should clamp to 0.5 minimum", 0.5f, clampedScale, 0.001f)
     }
     
     @Test
     fun `fireworks should render behind terrain in front of mountains`() {
-        // Verify render order for fireworks: mountains < fireworks < terrain
-        // In ParallaxScene, render order is:
-        // 1. Sky, 2. Clouds, 3. Far sky events, 4. Rainbow (St Patricks)
-        // 5. Mountains, 6. Mid sky events, 7. Fireworks (renderBehindTerrain)
-        // 8. Terrain (hills + trees)
-        
         val renderOrder = listOf(
             "sky", "clouds", "farSkyEvents", "rainbow",
             "mountains", "midSkyEvents", "fireworks", "terrain"
@@ -170,17 +260,133 @@ class SeasonalEventsTest {
         assertTrue("Fireworks should be before terrain", fireworksIndex < terrainIndex)
     }
 
-    // Helper functions matching SeasonalEvents logic
+    // ============== Dragon Wrap Distance Tests ==============
+
+    @Test
+    fun `dragon wrap distance includes full body length`() {
+        // The wrap distance must be large enough that the dragon's tail exits
+        // the left edge before it re-enters from the right
+        val screenWidth = 1080f
+        val heightScale = 1.0f
+        val scale = heightScale.coerceIn(0.5f, 1.5f)
+        val segmentRadius = 18f * scale
+        val segmentCount = 12
+        val segmentSpacing = segmentRadius * 1.6f
+        val totalBodyLength = segmentCount * segmentSpacing
+        val margin = segmentRadius * 4f
+        
+        val wrapDistance = screenWidth + totalBodyLength + margin * 2f + 200f * heightScale
+        
+        // At minimum, wrap distance must be larger than screenWidth + body length + margins
+        val minRequired = screenWidth + totalBodyLength + margin * 2f
+        assertTrue("Wrap distance ($wrapDistance) must exceed minimum ($minRequired)",
+            wrapDistance > minRequired)
+    }
+
+    @Test
+    fun `dragon tail fully exits before wrap on various screen sizes`() {
+        val screenWidths = listOf(720f, 1080f, 1440f, 2160f)
+        val heightScales = listOf(0.5f, 0.75f, 1.0f, 1.5f)
+        
+        for (sw in screenWidths) {
+            for (hs in heightScales) {
+                val scale = hs.coerceIn(0.5f, 1.5f)
+                val segmentRadius = 18f * scale
+                val segmentCount = 12
+                val segmentSpacing = segmentRadius * 1.6f
+                val totalBodyLength = segmentCount * segmentSpacing
+                val margin = segmentRadius * 4f
+                
+                val wrapDistance = sw + totalBodyLength + margin * 2f + 200f * hs
+                
+                // When dragon wraps: baseX = startX - wrapDistance
+                // The rightmost part (tail) = baseX + totalBodyLength
+                // It should be past -margin at that point
+                val startX = sw + (margin + 100f) * hs
+                val baseXAtWrap = startX - wrapDistance
+                val tailAtWrap = baseXAtWrap + totalBodyLength
+                
+                assertTrue("Tail ($tailAtWrap) should be past -margin (${ -margin}) " +
+                    "at wrap on ${sw}x$hs",
+                    tailAtWrap < -margin)
+            }
+        }
+    }
+
+    @Test
+    fun `old wrap distance was too short causing despawn bug`() {
+        // Demonstrate the old bug: wrapDistance = screenWidth + 400 * heightScale
+        val screenWidth = 1080f
+        val heightScale = 1.0f
+        val scale = heightScale.coerceIn(0.5f, 1.5f)
+        val segmentRadius = 18f * scale
+        val segmentCount = 12
+        val segmentSpacing = segmentRadius * 1.6f
+        val totalBodyLength = segmentCount * segmentSpacing
+        val margin = segmentRadius * 4f
+        
+        val oldWrapDistance = screenWidth + 400f * heightScale  // OLD (buggy)
+        val oldStartX = screenWidth + 150f * heightScale
+        val oldBaseXAtWrap = oldStartX - oldWrapDistance
+        val oldTailAtWrap = oldBaseXAtWrap + totalBodyLength
+        
+        // Old tail position at wrap was VISIBLE (> -margin), proving the bug
+        assertTrue("Old: tail at wrap ($oldTailAtWrap) was visible (> ${-margin})",
+            oldTailAtWrap > -margin)
+    }
+
+    // Helper functions - replicate getSeasonByDate() logic using companion methods
+    // to avoid instantiating SeasonalEvents (requires Android context)
+
+    /**
+     * Replicate getSeasonByDate() logic using default intervals/toggles.
+     * Uses SeasonalEvents.circularDayDistance() and SeasonalEvents.dayOfYear() directly.
+     */
+    private fun getSeasonByDateHelper(
+        month: Int,
+        day: Int,
+        christmasEnabled: Boolean = true,
+        newyearEnabled: Boolean = true,
+        cnNewyearEnabled: Boolean = true,
+        stPatricksEnabled: Boolean = true,
+        christmasInterval: Int = PreferenceDefaults.CHRISTMAS_INTERVAL,
+        newyearInterval: Int = PreferenceDefaults.NEWYEAR_INTERVAL,
+        cnNewyearInterval: Int = PreferenceDefaults.CN_NEWYEAR_INTERVAL,
+        stPatricksInterval: Int = PreferenceDefaults.ST_PATRICKS_INTERVAL
+    ): String {
+        val cal = calFor(month, day)
+        val currentDoy = cal.get(Calendar.DAY_OF_YEAR)
+        val daysInYear = cal.getActualMaximum(Calendar.DAY_OF_YEAR)
+
+        if (christmasEnabled && SeasonalEvents.circularDayDistance(
+                currentDoy, SeasonalEvents.dayOfYear(Calendar.DECEMBER, 25, cal), daysInYear
+            ) <= christmasInterval
+        ) return "CHRISTMAS"
+
+        if (newyearEnabled && SeasonalEvents.circularDayDistance(
+                currentDoy, SeasonalEvents.dayOfYear(Calendar.JANUARY, 1, cal), daysInYear
+            ) <= newyearInterval
+        ) return "NEW_YEAR"
+
+        if (cnNewyearEnabled && SeasonalEvents.circularDayDistance(
+                currentDoy, SeasonalEvents.dayOfYear(Calendar.FEBRUARY, 1, cal), daysInYear
+            ) <= cnNewyearInterval
+        ) return "CN_NEW_YEAR"
+
+        if (stPatricksEnabled && SeasonalEvents.circularDayDistance(
+                currentDoy, SeasonalEvents.dayOfYear(Calendar.MARCH, 17, cal), daysInYear
+            ) <= stPatricksInterval
+        ) return "ST_PATRICKS"
+
+        return "NONE"
+    }
+    
     private fun isChristmasHelper(month: Int, day: Int): Boolean {
-        // Matches SeasonalEvents.kt: month == 11 && day in 15..26 (0-indexed month)
-        // Helper input is 1-indexed month (12 = Dec)
-        return month == 12 && day in 15..26
+        return getSeasonByDateHelper(month - 1, day) == "CHRISTMAS"
     }
     
     private fun isNewYearHelper(month: Int, day: Int): Boolean {
-        // Matches SeasonalEvents.kt: (month == 11 && day >= 27) || (month == 0 && day <= 7)
-        // Helper input is 1-indexed month
-        return (month == 12 && day >= 27) || (month == 1 && day <= 7)
+        return getSeasonByDateHelper(month - 1, day) == "NEW_YEAR"
     }
     
     private fun getSeasonHelper(debugEnabled: Boolean, debugSeason: String, month: Int, day: Int): String {
@@ -188,10 +394,19 @@ class SeasonalEventsTest {
             return debugSeason
         }
         
-        return when {
-            isChristmasHelper(month, day) -> "christmas"
-            isNewYearHelper(month, day) -> "newyear"
+        return when (getSeasonByDateHelper(month - 1, day)) {
+            "CHRISTMAS" -> "christmas"
+            "NEW_YEAR" -> "newyear"
+            "CN_NEW_YEAR" -> "cn_newyear"
+            "ST_PATRICKS" -> "st_patricks"
             else -> "none"
+        }
+    }
+
+    private fun calFor(month: Int, day: Int): Calendar {
+        return Calendar.getInstance().apply {
+            set(Calendar.MONTH, month)
+            set(Calendar.DAY_OF_MONTH, day)
         }
     }
     
@@ -207,7 +422,6 @@ class SeasonalEventsTest {
         assertTrue("Max count should be 50", maxCount == 50)
         assertTrue("Default should be 15", defaultCount == 15)
         
-        // Verify coercion works
         val tooLow = 1.coerceIn(minCount, maxCount)
         val tooHigh = 100.coerceIn(minCount, maxCount)
         val valid = 30.coerceIn(minCount, maxCount)
@@ -219,10 +433,9 @@ class SeasonalEventsTest {
     
     @Test
     fun `normal distribution should cluster around mean`() {
-        // Test that normal distribution produces values clustered around mean
-        val random = java.util.Random(42)  // Fixed seed for reproducibility
+        val random = java.util.Random(42)
         val mean = 15
-        val stdDev = mean * 0.15  // 15% of mean = 2.25
+        val stdDev = mean * 0.15
         
         val samples = (1..1000).map {
             (random.nextGaussian() * stdDev + mean).toInt().coerceIn(3, 50)
@@ -231,20 +444,15 @@ class SeasonalEventsTest {
         val avg = samples.average()
         assertTrue("Average should be near mean (15)", avg in 13.0..17.0)
         
-        // Most values should be within 2 stdDev of mean (roughly 95%)
         val withinTwoStdDev = samples.count { it in 10..20 }
-        assertTrue("Most values should be near mean", withinTwoStdDev > 800)  // >80%
+        assertTrue("Most values should be near mean", withinTwoStdDev > 800)
     }
     
     @Test
     fun `shake fireworks should work regardless of seasonal settings`() {
-        // Shake fireworks feature should not depend on seasonal events being enabled
-        // The ensureShakeReady() method allows initialization without seasonal rendering
-        
         val seasonalEnabled = false
         val shakeFireworksEnabled = true
         
-        // When seasonal is disabled but shake is enabled, shake should still work
         assertTrue("Shake should work when seasonal disabled", 
             shakeFireworksEnabled && !seasonalEnabled)
     }
@@ -253,12 +461,9 @@ class SeasonalEventsTest {
     
     @Test
     fun `dragon should not render when completely off screen left`() {
-        // Dragon segments moving left should be culled when past left edge
-        val screenWidth = 1080f
         val segmentRadius = 18f
         val margin = segmentRadius * 4f
         
-        // Dragon segment positions far past left edge
         val segmentPositions = listOf(
             Pair(-200f, 300f),
             Pair(-150f, 300f),
@@ -273,12 +478,10 @@ class SeasonalEventsTest {
     
     @Test
     fun `dragon should not render when waiting off screen right`() {
-        // Dragon waiting to enter from right should not be rendered
         val screenWidth = 1080f
         val segmentRadius = 18f
         val margin = segmentRadius * 4f
         
-        // Dragon segment positions waiting far off right edge
         val segmentPositions = listOf(
             Pair(screenWidth + 500f, 300f),
             Pair(screenWidth + 550f, 300f),
@@ -293,7 +496,6 @@ class SeasonalEventsTest {
     
     @Test
     fun `dragon should render when partially on screen`() {
-        // Dragon with some segments visible should render
         val screenWidth = 1080f
         val segmentRadius = 18f
         val margin = segmentRadius * 4f
@@ -328,13 +530,20 @@ class SeasonalEventsTest {
         // Test that modulo arithmetic for dragon position produces valid coordinates
         val screenWidth = 1080f
         val heightScale = 1f
+        val scale = heightScale.coerceIn(0.5f, 1.5f)
+        val segmentRadius = 18f * scale
+        val segmentCount = 12
+        val segmentSpacing = segmentRadius * 1.6f
+        val totalBodyLength = segmentCount * segmentSpacing
+        val margin = segmentRadius * 4f
         
         // Test various phase values including wrap-around points
         val testPhases = listOf(0f, 10f, 50f, 100f, 1000f)
+        val wrapDistance = screenWidth + totalBodyLength + margin * 2f + 200f * heightScale
         
         for (phase in testPhases) {
-            val baseX = screenWidth + 150f * heightScale - 
-                (phase * 40f * heightScale) % (screenWidth + 400f * heightScale)
+            val baseX = screenWidth + (margin + 100f) * heightScale -
+                (phase * 40f * heightScale) % wrapDistance
             
             // Position should always be within reasonable bounds
             // When phase wraps, baseX should jump back to right side

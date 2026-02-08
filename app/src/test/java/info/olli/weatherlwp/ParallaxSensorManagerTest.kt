@@ -5,28 +5,22 @@ import org.junit.Test
 import kotlin.math.sqrt
 
 /**
- * Unit tests for ParallaxSensorManager - Gravity projection approach
+ * Unit tests for ParallaxSensorManager
  * 
- * The implementation extracts gravity directly from the rotation matrix
- * instead of using Euler angles (which suffer from gimbal lock).
+ * Key approach (aligned with kaka.wallpaper.forest reference):
+ * - Direct pass-through: no exponential smoothing, no deadzone on sensor side
+ * - Gyroscope mode: 3-sample moving average, direct integration, ±18° clamp
+ * - Rotation vector mode: delta-based accumulation, no decay during motion
+ * - All smoothing/return-to-center handled by ParallaxCalculator
  * 
- * Key approach:
- * - Gravity in screen coords = -[R[6], R[7], R[8]] (negative third row of remapped matrix)
- * - Deadzone prevents noise when device is flat
- * - Near-direct pass-through for minimal latency (~20ms target, matching reference app)
- * - Outputs absolute tilt position (not velocity) so parallax follows held angle
- * 
- * Latency optimization:
- * - Reference app (RotationManager.java) uses no smoothing filter
- * - We use high FILTER_ALPHA (0.85) for near-instant response
- * - Gyroscope mode bypasses filter entirely for direct output
+ * Latency:
+ * - Reference app uses no smoothing filter at all
+ * - Both sensor modes output directly (zero sensor-side latency)
+ * - Optional auto-return only when device is held still
  */
 class ParallaxSensorManagerTest {
 
     companion object {
-        // Near-direct pass-through for minimal latency (reference app uses no filter)
-        const val FILTER_ALPHA = 0.85f  // Matches ParallaxSensorManager
-        const val DEADZONE = 0.08f
         const val GRAVITY_EARTH = 9.81f  // SensorManager.GRAVITY_EARTH
         const val SHAKE_THRESHOLD_GRAVITY = 2.7f
         const val SHAKE_SLOP_TIME_MS = 500L
@@ -63,40 +57,44 @@ class ParallaxSensorManagerTest {
         assertEquals("Gravity Z should be negative of R[8]", -0.95f, gz, 0.001f)
     }
     
-    // ============== Deadzone / Confidence Tests ==============
+    // ============== Direct Pass-Through Tests ==============
+    // Sensor output is passed directly to listener without deadzone or smoothing
     
     @Test
-    fun `confidence is zero when device is flat`() {
-        // Device flat: gravity is purely in Z, horizontal magnitude is 0
-        val gx = 0f
-        val gy = 0f
-        val horizMag = sqrt(gx * gx + gy * gy)
+    fun `direct pass-through outputs value unchanged`() {
+        // processTiltValues now sets filteredX/Y directly (no deadzone, no filter)
+        val targetX = 0.5f
+        val targetY = -0.3f
         
-        val confidence = ((horizMag - DEADZONE) / (1f - DEADZONE)).coerceIn(0f, 1f)
+        // Direct assignment
+        val filteredX = targetX
+        val filteredY = targetY
         
-        assertEquals("Flat device should have zero confidence", 0f, confidence, 0.001f)
+        assertEquals("X should pass through unchanged", targetX, filteredX, 0.001f)
+        assertEquals("Y should pass through unchanged", targetY, filteredY, 0.001f)
     }
     
     @Test
-    fun `confidence is full when device is tilted significantly`() {
-        // Device tilted 45°: horizontal magnitude is ~0.7
-        val gx = 0.5f
-        val gy = 0.5f
-        val horizMag = sqrt(gx * gx + gy * gy)  // ~0.707
+    fun `small values pass through without deadzone`() {
+        // Previously small values were killed by DEADZONE=0.03
+        // Now all values pass through directly (reference app behavior)
+        val tinyX = 0.005f
+        val tinyY = 0.002f
         
-        val confidence = ((horizMag - DEADZONE) / (1f - DEADZONE)).coerceIn(0f, 1f)
+        val filteredX = tinyX
+        val filteredY = tinyY
         
-        assertTrue("Tilted device should have high confidence", confidence > 0.6f)
+        assertTrue("Even tiny X should pass through", filteredX > 0f)
+        assertTrue("Even tiny Y should pass through", filteredY > 0f)
     }
     
     @Test
-    fun `confidence scales smoothly near deadzone`() {
-        // Just above deadzone
-        val horizMag = DEADZONE + 0.1f
-        val confidence = ((horizMag - DEADZONE) / (1f - DEADZONE)).coerceIn(0f, 1f)
+    fun `zero value outputs zero`() {
+        val filteredX = 0f
+        val filteredY = 0f
         
-        assertTrue("Just above deadzone should have small but positive confidence", 
-            confidence > 0f && confidence < 0.2f)
+        assertEquals("Zero input should output zero", 0f, filteredX, 0.001f)
+        assertEquals("Zero input should output zero", 0f, filteredY, 0.001f)
     }
     
     // ============== Tilt Direction Tests ==============
@@ -123,89 +121,112 @@ class ParallaxSensorManagerTest {
         assertTrue("Tilting right should give positive targetX", targetX > 0)
     }
     
-    // ============== Low-Pass Filter Tests ==============
+    // ============== Auto-Return Tests ==============
+    // Auto-return decays accumulated values only when device is held still
     
     @Test
-    fun `low-pass filter should smooth sudden changes`() {
-        var filtered = 0f
-        val target = 1f
+    fun `auto-return does not apply during active motion`() {
+        val autoReturnRate = 0.9995f  // Some decay enabled
+        var accumulatedX = 0.5f
         
-        // Single update
-        filtered += FILTER_ALPHA * (target - filtered)
+        // Simulate motion (delta above threshold)
+        val deltaPitch = 0.01f
+        val deltaRoll = 0.005f
+        val motionMag = sqrt(deltaPitch * deltaPitch + deltaRoll * deltaRoll)
         
-        assertEquals("First filtered value should be alpha * target", 
-            FILTER_ALPHA, filtered, 0.001f)
-        assertTrue("Filtered should be less than target", filtered < target)
+        // motionMag > 0.002f → no decay applied
+        if (motionMag < 0.002f) {
+            accumulatedX *= autoReturnRate
+        }
+        
+        assertEquals("Accumulated value should NOT decay during motion", 0.5f, accumulatedX, 0.0001f)
     }
     
     @Test
-    fun `low-pass filter converges to target`() {
-        var filtered = 0f
-        val target = 0.8f
+    fun `auto-return applies when device is still`() {
+        val autoReturnRate = 0.999f
+        var accumulatedX = 0.5f
         
-        // Many updates
-        for (i in 0 until 100) {
-            filtered += FILTER_ALPHA * (target - filtered)
+        // Simulate no motion (deltas near zero)
+        val deltaPitch = 0.0001f
+        val deltaRoll = 0.0001f
+        val motionMag = sqrt(deltaPitch * deltaPitch + deltaRoll * deltaRoll)
+        
+        // motionMag < 0.002f → decay applied
+        if (motionMag < 0.002f) {
+            accumulatedX *= autoReturnRate
         }
         
-        assertTrue("After many updates, should be close to target",
-            kotlin.math.abs(filtered - target) < 0.01f)
+        assertTrue("Accumulated value should decay when still", accumulatedX < 0.5f)
+        assertEquals("Decay should be gentle", 0.5f * 0.999f, accumulatedX, 0.0001f)
+    }
+    
+    @Test
+    fun `auto-return rate 1 means no decay`() {
+        val autoReturnRate = 1f
+        var accumulatedX = 0.5f
+        
+        // Even when still, rate=1 should not decay
+        for (i in 0 until 1000) {
+            if (autoReturnRate < 1f) {
+                accumulatedX *= autoReturnRate
+            }
+        }
+        
+        assertEquals("Rate 1.0 should never decay", 0.5f, accumulatedX, 0.0001f)
+    }
+    
+    @Test
+    fun `setAutoReturnRate maps speed correctly`() {
+        // speed=0 → rate=1.0 (no decay)
+        // speed=1 → rate=0.9995 (gentle decay)
+        val speed0Rate = 1f  // speed=0 → 1.0
+        val speed1Rate = (1f - 1f * 0.0005f).coerceIn(0.999f, 1f) // speed=1 → 0.9995
+        
+        assertEquals("Speed 0 should give rate 1.0", 1f, speed0Rate, 0.0001f)
+        assertEquals("Speed 1 should give rate 0.9995", 0.9995f, speed1Rate, 0.0001f)
     }
     
     // ============== Tilt Position Output Tests ==============
     
     @Test
-    fun `filtered tilt position is output directly`() {
-        // The new system outputs filtered tilt position, not velocity
-        var filtered = 0f
+    fun `tilt position passes through instantly`() {
+        // Direct pass-through: output equals input immediately (no filter convergence needed)
         val target = 0.6f
+        val filtered = target  // Direct assignment
         
-        // Simulate several filter updates
-        for (i in 0 until 50) {
-            filtered += FILTER_ALPHA * (target - filtered)
-        }
-        
-        // The filtered value IS the output (no velocity calculation)
-        assertTrue("Filtered value should be close to target after convergence",
-            kotlin.math.abs(filtered - target) < 0.05f)
+        assertEquals("Output should equal input instantly",
+            target, filtered, 0.001f)
     }
     
     @Test
     fun `tilt position is stable when device held at angle`() {
-        // Simulate holding device at constant tilt
-        var filtered = 0f
+        // Accumulated delta approach: same input → same accumulated value → stable output
         val constantTarget = 0.5f
         
-        // Initial convergence
-        for (i in 0 until 100) {
-            filtered += FILTER_ALPHA * (constantTarget - filtered)
-        }
-        val initialPosition = filtered
+        // With direct pass-through, output is always exactly the input
+        val initialPosition = constantTarget
+        val laterPosition = constantTarget
         
-        // Continue with same target (device held steady)
-        for (i in 0 until 50) {
-            filtered += FILTER_ALPHA * (constantTarget - filtered)
-        }
-        val laterPosition = filtered
-        
-        // Position should be stable
         assertEquals("Position should remain stable when tilt is constant",
             initialPosition, laterPosition, 0.001f)
     }
     
     @Test
     fun `tilt position returns to zero when device leveled`() {
-        var filtered = 0.5f  // Start at some offset
-        val levelTarget = 0f  // Device is now level
+        // When accumulated deltas cancel out (user returns to original position),
+        // output naturally returns to zero
+        var accumulated = 0.5f
         
-        // Simulate returning to level
-        for (i in 0 until 100) {
-            filtered += FILTER_ALPHA * (levelTarget - filtered)
+        // Simulate returning: deltas that cancel the accumulated offset
+        val returnDelta = -0.01f
+        for (i in 0 until 50) {
+            accumulated += returnDelta
         }
+        accumulated = accumulated.coerceIn(-1f, 1f)
         
-        // Should return to near zero
-        assertTrue("Position should return to near zero when leveled",
-            kotlin.math.abs(filtered) < 0.01f)
+        assertEquals("Accumulated should approach zero when returning",
+            0f, accumulated, 0.01f)
     }
     
     // ============== Display Rotation Vector Remapping Tests ==============
@@ -727,36 +748,22 @@ class ParallaxSensorManagerTest {
     // ============== Latency Optimization Tests ==============
     
     @Test
-    fun `high filter alpha provides near-instant response`() {
-        // With FILTER_ALPHA = 0.85, we reach 85% of target in first frame
-        var filtered = 0f
+    fun `direct pass-through reaches target in 1 frame`() {
+        // With direct pass-through, 100% of target is reached in a single frame
         val target = 1f
+        val filtered = target  // Direct assignment
         
-        // Single update
-        filtered += FILTER_ALPHA * (target - filtered)
-        
-        // Should reach 85% immediately (vs old 40% with alpha=0.4)
-        assertTrue("Should reach at least 80% of target in first frame", filtered >= 0.80f)
-        
-        // Second update gets us to 97.75%
-        filtered += FILTER_ALPHA * (target - filtered)
-        assertTrue("Should reach at least 97% after 2 frames", filtered >= 0.97f)
+        assertEquals("Should reach 100% of target in 1 frame", target, filtered, 0.001f)
     }
     
     @Test
-    fun `latency is under 2 frames with high alpha`() {
-        // Target: reach 95% of target in under 2 frames (vs ~8 frames with old alpha)
-        var filtered = 0f
+    fun `zero-latency output matches reference app`() {
+        // Reference app (kaka.wallpaper.forest RotationManager.java) uses no filter.
+        // Both sensor modes now output directly with zero sensor-side latency.
         val target = 0.8f
-        var framesTo95Percent = 0
+        val output = target  // Direct, no filtering
         
-        while (filtered < target * 0.95f && framesTo95Percent < 100) {
-            filtered += FILTER_ALPHA * (target - filtered)
-            framesTo95Percent++
-        }
-        
-        assertTrue("Should reach 95% of target in 2 frames or less (got $framesTo95Percent)", 
-            framesTo95Percent <= 2)
+        assertEquals("Output should exactly equal target (zero latency)", target, output, 0.001f)
     }
     
     @Test
@@ -782,12 +789,9 @@ class ParallaxSensorManagerTest {
     fun `reference app latency target is 20ms`() {
         // At 50Hz sensor rate (SENSOR_DELAY_GAME = ~20ms), we want:
         // - Sensor event arrives: +20ms
-        // - Processing (near-instant with direct output): +0-1ms
+        // - Processing (instant with direct output): +0ms
         // - Next render frame picks up value: +16ms max (60fps)
         // Total: ~36ms worst case, ~20ms typical
-        
-        // With high FILTER_ALPHA (0.85), single frame convergence is ~85%
-        // This matches reference app's direct-value approach closely
         
         val sensorDelayMs = 20L  // SENSOR_DELAY_GAME
         val renderDelayMs = 16L  // 60fps
@@ -799,27 +803,27 @@ class ParallaxSensorManagerTest {
     // ============== Shake Unlock Delay Tests ==============
     
     @Test
-    fun `shake unlock delay default is 500ms`() {
-        // Default unlock delay should prevent accidental triggers after phone unlock
-        val defaultDelay = 500L
-        assertTrue("Default unlock delay should be 500ms", defaultDelay == 500L)
+    fun `shake unlock delay default is 2500ms`() {
+        // Default unlock delay prevents accidental triggers after phone unlock
+        val defaultDelay = 2500L
+        assertTrue("Default unlock delay should be 2500ms", defaultDelay == 2500L)
     }
     
     @Test
     fun `shake ignored during unlock delay period`() {
         // Simulate the unlock delay logic
         val screenOnTime = 1000L
-        val shakeUnlockDelayMs = 500L
-        val shakeTimeWithinDelay = 1200L  // 200ms after screen on
-        val shakeTimeAfterDelay = 1600L   // 600ms after screen on
+        val shakeUnlockDelayMs = 2500L
+        val shakeTimeWithinDelay = 2000L  // 1000ms after screen on
+        val shakeTimeAfterDelay = 4000L   // 3000ms after screen on
         
         // Shake within delay period should be ignored
         val ignoredWithinDelay = shakeTimeWithinDelay - screenOnTime < shakeUnlockDelayMs
-        assertTrue("Shake 200ms after screen on should be ignored", ignoredWithinDelay)
+        assertTrue("Shake 1000ms after screen on should be ignored", ignoredWithinDelay)
         
         // Shake after delay period should be accepted
         val ignoredAfterDelay = shakeTimeAfterDelay - screenOnTime < shakeUnlockDelayMs
-        assertTrue("Shake 600ms after screen on should be accepted", !ignoredAfterDelay)
+        assertTrue("Shake 3000ms after screen on should be accepted", !ignoredAfterDelay)
     }
     
     @Test
@@ -1049,55 +1053,55 @@ class ParallaxSensorManagerTest {
     
     @Test
     fun `shake warmup ignores first N sensor events after start`() {
-        // Sensor warmup period: first 10 sensor events are ignored
+        // Sensor warmup period: first 30 sensor events are ignored
         // This prevents stale queued events from triggering shakes after unlock
-        val SHAKE_WARMUP_SAMPLES = 10
+        val SHAKE_WARMUP_SAMPLES = 30
         
         var warmupRemaining = SHAKE_WARMUP_SAMPLES
         var shakeTriggered = false
         
-        // Simulate 15 sensor events with high gForce (would normally trigger shake)
-        for (i in 1..15) {
+        // Simulate 35 sensor events with high gForce (would normally trigger shake)
+        for (i in 1..35) {
             if (warmupRemaining > 0) {
                 warmupRemaining--
                 // Skip processing during warmup
                 continue
             }
             // After warmup, shakes can be triggered
-            if (i > 10) {
+            if (i > 30) {
                 shakeTriggered = true
             }
         }
         
         assertTrue("Shake should only trigger after warmup period", shakeTriggered)
-        assertEquals("Warmup should complete after 10 samples", 0, warmupRemaining)
+        assertEquals("Warmup should complete after 30 samples", 0, warmupRemaining)
     }
     
     @Test
     fun `shake warmup counter resets on sensor restart`() {
         // When sensors are restarted (e.g., screen on/off), warmup counter should reset
-        val SHAKE_WARMUP_SAMPLES = 10
+        val SHAKE_WARMUP_SAMPLES = 30
         
         // First start
         var warmupRemaining = SHAKE_WARMUP_SAMPLES
         
         // Process some samples
-        for (i in 1..5) {
+        for (i in 1..15) {
             if (warmupRemaining > 0) warmupRemaining--
         }
-        assertEquals("After 5 samples, 5 warmup remaining", 5, warmupRemaining)
+        assertEquals("After 15 samples, 15 warmup remaining", 15, warmupRemaining)
         
         // Simulate restart (stop + start)
         warmupRemaining = SHAKE_WARMUP_SAMPLES  // Reset on start()
         
-        assertEquals("After restart, warmup should reset to 10", SHAKE_WARMUP_SAMPLES, warmupRemaining)
+        assertEquals("After restart, warmup should reset to 30", SHAKE_WARMUP_SAMPLES, warmupRemaining)
     }
     
     @Test
     fun `shake warmup prevents immediate triggers after phone unlock`() {
         // Combined test: warmup + unlock delay should prevent false triggers
-        val SHAKE_WARMUP_SAMPLES = 10
-        val shakeUnlockDelayMs = 500L
+        val SHAKE_WARMUP_SAMPLES = 30
+        val shakeUnlockDelayMs = 2500L
         val screenOnTime = 1000L
         
         var warmupRemaining = SHAKE_WARMUP_SAMPLES
@@ -1109,7 +1113,7 @@ class ParallaxSensorManagerTest {
         var eventTime = screenOnTime
         val sensorInterval = 20L  // ~50Hz sensor rate
         
-        for (i in 1..30) {
+        for (i in 1..200) {
             eventTime += sensorInterval
             
             // Check warmup first
@@ -1129,14 +1133,13 @@ class ParallaxSensorManagerTest {
             shakeAccepted++
         }
         
-        // First 10 events ignored by warmup
-        assertEquals("10 events ignored by warmup", 10, shakeIgnoredDueToWarmup)
+        // First 30 events ignored by warmup
+        assertEquals("30 events ignored by warmup", 30, shakeIgnoredDueToWarmup)
         
-        // Events 11-25 (200ms-500ms) should be ignored by unlock delay
-        // At 20ms intervals: event 11 is at 220ms, event 25 is at 500ms
+        // Events after warmup but before 2500ms unlock delay should be ignored
         assertTrue("Some events ignored by unlock delay", shakeIgnoredDueToUnlockDelay > 0)
         
-        // Events after warmup AND unlock delay should be accepted
+        // Events after both warmup AND unlock delay should be accepted
         assertTrue("Events after both protections should be accepted", shakeAccepted > 0)
     }
 }
