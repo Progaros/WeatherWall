@@ -373,7 +373,7 @@ class ParallaxScene(
             val parallaxEnabled = prefs.getBoolean("pref_parallax_enabled", true)
             
             // Sensor mode: rotation_vector (our robust implementation) or gyroscope
-            val sensorMode = prefs.getString("pref_parallax_sensor_mode", PreferenceDefaults.PARALLAX_SENSOR_MODE) ?: "rotation_vector"
+            val sensorMode = prefs.getString("pref_parallax_sensor_mode", PreferenceDefaults.PARALLAX_SENSOR_MODE) ?: "gyroscope"
             val parallaxMode = when (sensorMode) {
                 "gyroscope" -> info.olli.weatherlwp.parallax.ParallaxSensorManager.ParallaxMode.GYROSCOPE
                 else -> info.olli.weatherlwp.parallax.ParallaxSensorManager.ParallaxMode.ROTATION_VECTOR
@@ -413,10 +413,10 @@ class ParallaxScene(
             // Legacy pixel offset (not used when percentage is set, but kept for compatibility)
             parallaxMaxOffsetPx = 130f
             
-            // Smoothing slider: map 1..100 -> 0.02f..0.40f (wider range)
-            // 1 = nearly instant, 50 = moderate smoothing, 100 = floaty
-            val smoothingVal = prefs.getInt("pref_parallax_smoothing", 30).coerceIn(1, 100)
-            val smoothingFactor = 0.02f + (smoothingVal / 100f) * 0.38f
+            // Smoothing slider: map 0..100 -> 0f..0.40f
+            // 0 = instant/direct (reference app behavior), 50 = moderate smoothing, 100 = floaty
+            val smoothingVal = prefs.getInt("pref_parallax_smoothing", PreferenceDefaults.PARALLAX_SMOOTHING).coerceIn(0, 100)
+            val smoothingFactor = if (smoothingVal <= 0) 0f else 0.02f + (smoothingVal / 100f) * 0.38f
             
             // Edge easing slider: map 0..100 -> 0f..1f
             // 0 = linear (no easing), 50 = moderate easing, 100 = extreme (center-only movement)
@@ -438,7 +438,7 @@ class ParallaxScene(
             
             // Return speed slider: map 0..100 -> 0f..1f (default 15 = slow return)
             // 0 = no return (scene stays offset), 50 = medium, 100 = fast return to center
-            val returnSpeedVal = prefs.getInt("pref_parallax_return_speed", 15).coerceIn(0, 100)
+            val returnSpeedVal = prefs.getInt("pref_parallax_return_speed", PreferenceDefaults.PARALLAX_RETURN_SPEED).coerceIn(0, 100)
             val returnSpeed = returnSpeedVal / 100f  // 0->0, 100->1
             
             // Axis inversion settings (for correcting inverted movement direction)

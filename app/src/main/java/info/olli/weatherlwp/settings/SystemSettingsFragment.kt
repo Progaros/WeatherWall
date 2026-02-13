@@ -11,6 +11,7 @@ import androidx.preference.SwitchPreferenceCompat
 import info.olli.weatherlwp.BuildConfig
 import info.olli.weatherlwp.DebugTracer
 import info.olli.weatherlwp.R
+import info.olli.weatherlwp.WeatherWallApp
 import info.olli.weatherlwp.wallpaper.WeatherWallpaper
 import info.olli.weatherlwp.weather.WeatherRepository
 
@@ -66,6 +67,12 @@ class SystemSettingsFragment : PreferenceFragmentCompat() {
             isChecked = DebugTracer.isEnabled()
         }
         
+        // Copy all settings to clipboard
+        findPreference<Preference>("pref_copy_settings")?.setOnPreferenceClickListener {
+            copyAllSettingsToClipboard()
+            true
+        }
+
         // Preview wallpaper
         findPreference<Preference>("pref_preview")?.setOnPreferenceClickListener {
             openWallpaperPreview()
@@ -109,6 +116,13 @@ class SystemSettingsFragment : PreferenceFragmentCompat() {
         }
     }
     
+    private fun copyAllSettingsToClipboard() {
+        val context = requireContext()
+        val export = SettingsExporter.export(context)
+        WeatherWallApp.copyToClipboard(context, export, "WeatherWall Settings")
+        Toast.makeText(context, "All settings copied to clipboard", Toast.LENGTH_SHORT).show()
+    }
+
     private fun openWallpaperPreview() {
         try {
             val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER)

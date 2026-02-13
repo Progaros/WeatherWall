@@ -81,8 +81,8 @@
         <ListPreference
             android:key="pref_parallax_sensor_mode"
             android:title="Sensor Mode"
-            android:summary="rotation_vector=robust (default), gyroscope=smooth"
-            android:defaultValue="rotation_vector"
+            android:summary="gyroscope=responsive (default), rotation_vector=robust"
+            android:defaultValue="gyroscope"
             android:entries="@array/parallax_sensor_mode_entries"
             android:entryValues="@array/parallax_sensor_mode_values"
             android:dependency="pref_parallax_enabled" />
@@ -113,7 +113,7 @@
             android:key="pref_parallax_return_speed"
             android:title="Return Speed"
             android:summary="Recenter speed (0=stay, 50=~0.3s, 100=instant)"
-            android:defaultValue="15"
+            android:defaultValue="0"
             android:max="100"
             app:min="0"
             app:showSeekBarValue="true"
@@ -123,10 +123,10 @@
         <SeekBarPreference
             android:key="pref_parallax_smoothing"
             android:title="Smoothing"
-            android:summary="Movement smoothness (1=responsive, 100=floaty)"
-            android:defaultValue="30"
+            android:summary="Movement smoothness (0=instant, 50=moderate, 100=floaty)"
+            android:defaultValue="0"
             android:max="100"
-            app:min="1"
+            app:min="0"
             app:showSeekBarValue="true"
             app:updatesContinuously="true"
             android:dependency="pref_parallax_enabled" />

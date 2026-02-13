@@ -110,7 +110,7 @@ class ParallaxCalculator {
      * 1.0 = instant return
      * Only applies when tilt magnitude is low (near zero).
      */
-    var returnSpeed = 0.15f             // Default: moderate pull (pref_parallax_return_speed=15)
+    var returnSpeed = 0f                // Default: no return (reference app behavior)
     
     /**
      * Parallax perspective: controls which layers move more.

@@ -316,8 +316,8 @@ class ParallaxCalculatorTest {
     fun testReturnSpeedDefault() {
         val calculator = ParallaxCalculator()
         
-        // Default should be slow return (0.15)
-        assertEquals("Default return speed should be 0.15", 0.15f, calculator.returnSpeed, 0.01f)
+        // Default should be 0 (no auto-return, like reference app)
+        assertEquals("Default return speed should be 0", 0f, calculator.returnSpeed, 0.001f)
     }
     
     @Test

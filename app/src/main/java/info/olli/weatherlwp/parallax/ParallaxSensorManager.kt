@@ -275,8 +275,8 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         gyroSignChanges = 0
         gyroWiggleStart = 0L
         
-        // Use SENSOR_DELAY_GAME for shake detection (responsive wiggle detection)
-        val sensorRate = SensorManager.SENSOR_DELAY_GAME
+        // Use SENSOR_DELAY_FASTEST for shake detection (responsive wiggle detection)
+        val sensorRate = SensorManager.SENSOR_DELAY_FASTEST
         
         // ALWAYS register accelerometer for shake - gForce detection is proven reliable
         // We don't use LINEAR_ACCELERATION anymore as it's often too smoothed on some devices
@@ -343,9 +343,9 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             // This prevents stale queued events from triggering shakes immediately after unlock
             shakeWarmupSamplesRemaining = SHAKE_WARMUP_SAMPLES
             
-            // Use SENSOR_DELAY_GAME (~20ms, 50Hz) for responsive parallax
+            // Use SENSOR_DELAY_FASTEST for minimal latency parallax (reference app uses fastest)
             // Battery savings come from unregistering when not visible (done in stop())
-            val sensorRate = SensorManager.SENSOR_DELAY_GAME
+            val sensorRate = SensorManager.SENSOR_DELAY_FASTEST
             val okActive = sensorManager.registerListener(this, activeSensor, sensorRate)
             Log.d(TAG, "Active sensor registered=$okActive type=${activeSensor?.type} name=${activeSensor?.name}")
             
@@ -789,7 +789,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         val zCompRaw = remappedMatrix[8]
         updateScreenDownState(zCompRaw)
         val zComponent = abs(zCompRaw)
-        poseGain = (zComponent / 0.3f).coerceIn(0f, 1f)  // Fade sensitivity below 0.3
+        poseGain = (zComponent / 0.05f).coerceIn(0f, 1f)  // Only attenuate very near gimbal lock (|z|<0.05)
         
         processOrientationAngles(pitch, roll)
     }
@@ -818,7 +818,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         // gzn is the normalized Z gravity component. Use hysteresis to prevent flip-flopping
         // at vertical, then use absolute for poseGain to reduce sensitivity near vertical.
         updateScreenDownState(-gzn)  // Negate because gravity Z sign is opposite to rotation matrix Z
-        poseGain = (abs(gzn) / 0.3f).coerceIn(0f, 1f)  // Fade sensitivity below |gz| = 0.3
+        poseGain = (abs(gzn) / 0.05f).coerceIn(0f, 1f)  // Only attenuate very near gimbal lock (|gz|<0.05)
         
         // Correct formulas for pitch/roll from gravity:
         // When solving for angle about axis A, exclude A-component from denominator
