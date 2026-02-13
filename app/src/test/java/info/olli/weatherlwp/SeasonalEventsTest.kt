@@ -210,12 +210,16 @@ class SeasonalEventsTest {
     
     @Test
     fun `christmas should have snowflake effects`() {
-        assertTrue("Christmas should have snowflakes", "christmas" == "christmas")
+        // Verify Christmas season is detected correctly near Dec 25
+        assertEquals("CHRISTMAS", getSeasonByDateHelper(Calendar.DECEMBER, 24))
+        assertEquals("CHRISTMAS", getSeasonByDateHelper(Calendar.DECEMBER, 26))
     }
     
     @Test
     fun `newyear should have firework effects`() {
-        assertTrue("New Year should have fireworks", "newyear" == "newyear")
+        // Verify New Year season is detected correctly near Jan 1
+        assertEquals("NEW_YEAR", getSeasonByDateHelper(Calendar.JANUARY, 1))
+        assertEquals("NEW_YEAR", getSeasonByDateHelper(Calendar.JANUARY, 5))
     }
     
     // ============== Height Scaling Tests ==============
@@ -696,12 +700,12 @@ class SeasonalEventsTest {
         // Rockets now explode based on frame count, not velocity
         // This prevents slow-motion lingering at apex
         val launchFrame = 100
-        val explodeAfterFrames = 45 + 15  // Mid-range: 60 frames
+        val explodeAfterFrames = 75 + 22  // Mid-range: 97 frames (75 + nextInt(45)/2)
         val explodeAtFrame = launchFrame + explodeAfterFrames
         
-        // At 60fps, 60 frames = 1 second of flight time
+        // At 60fps, 97 frames ≈ 1.6 seconds of flight time
         val flightTimeSeconds = explodeAfterFrames / 60f
-        assertTrue("Flight time should be around 1 second", flightTimeSeconds in 0.75f..1.25f)
+        assertTrue("Flight time should be around 1.6 seconds", flightTimeSeconds in 1.2f..2.1f)
         
         // Test explosion timing
         var currentFrame = launchFrame
@@ -720,20 +724,21 @@ class SeasonalEventsTest {
     
     @Test
     fun `rocket explosion timing is randomized`() {
-        // Rockets explode 45-75 frames after launch (~0.75-1.25 seconds)
-        val minFrames = 45
-        val maxFrames = 75
+        // Rockets explode 75 + Random.nextInt(45) frames after launch
+        // Range: 75-119 frames (~1.25-2.0 seconds at 60fps)
+        val minFrames = 75
+        val maxFrames = 119  // 75 + 44 (nextInt(45) gives 0..44)
         
         // Verify range is reasonable
         val minSeconds = minFrames / 60f
         val maxSeconds = maxFrames / 60f
         
-        assertTrue("Min flight time should be ~0.75s", minSeconds >= 0.7f)
-        assertTrue("Max flight time should be ~1.25s", maxSeconds <= 1.3f)
+        assertTrue("Min flight time should be ~1.25s", minSeconds >= 1.2f)
+        assertTrue("Max flight time should be ~2.0s", maxSeconds <= 2.1f)
         
-        // Range of 30 frames gives good variety
+        // Range of 44 frames gives good variety
         val range = maxFrames - minFrames
-        assertEquals("Range should be 30 frames", 30, range)
+        assertEquals("Range should be 44 frames", 44, range)
     }
     
     @Test
@@ -747,6 +752,6 @@ class SeasonalEventsTest {
         val initialVy = -15f
         val framesToStop = -initialVy / deceleration
         
-        assertTrue("Rockets should still be moving when they explode", framesToStop > 75)
+        assertTrue("Rockets should still be moving when they explode", framesToStop > 119)
     }
 }

@@ -105,6 +105,7 @@ class WeatherWallpaper : WallpaperService() {
                 prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
                 stopRender()
                 scene.stop()
+                scene.destroy()
             } catch (e: Exception) {
                 Log.e(TAG, "Error in onDestroy", e)
             }

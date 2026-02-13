@@ -304,14 +304,11 @@ class ParallaxScene(
                 }
             }
             
-            // Draw Seasonal Events (Christmas Star only - in front of everything)
-            // Note: Fireworks are rendered via renderBehindTerrain() to appear behind hills
+            // Seasonal render() removed - it was a no-op (all rendering done
+            // via renderBehindMountains/renderBehindTerrain). Keeping just the
+            // per-frame settings reload to pick up preference changes.
             if (seasonalEnabled) {
-                try {
-                    seasonalEvents.render(canvas, true)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error drawing seasonal", e)
-                }
+                seasonalEvents.updateSettingsIfNeeded()
             }
             
             // Draw Vignette Overlay (always last - on top of everything)
@@ -353,6 +350,10 @@ class ParallaxScene(
                     }
                 }
             }
+            
+            // Clear temporary references to avoid holding canvas/state across frames
+            lastCanvas = null
+            lastState = null
         } catch (e: Exception) {
             Log.e(TAG, "Error rendering scene", e)
         }

@@ -65,6 +65,7 @@ object PreferenceDefaults {
     const val WEATHER_LAYERS = 3  // 1-5
     const val WEATHER_LAYER_SEPARATION = 30  // 0-100
     const val WEATHER_LAYER_DEPTH = 20  // 0-100
+    const val WIND_MULTIPLIER = 200  // 0-300, wind effect strength %
     
     // === Seasonal Settings ===
     const val SEASONAL_ENABLED = true

@@ -90,6 +90,7 @@ class PreferenceDefaultsTest {
             "pref_weather_layers" to PreferenceDefaults.WEATHER_LAYERS,
             "pref_weather_layer_separation" to PreferenceDefaults.WEATHER_LAYER_SEPARATION,
             "pref_weather_layer_depth" to PreferenceDefaults.WEATHER_LAYER_DEPTH,
+            "pref_wind_multiplier" to PreferenceDefaults.WIND_MULTIPLIER,
             
             // Seasonal settings
             "pref_seasonal_enabled" to PreferenceDefaults.SEASONAL_ENABLED,

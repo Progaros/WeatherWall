@@ -103,7 +103,7 @@ class SimulationSettings(context: Context) {
         }
         
         // Wind multiplier for increasing/decreasing wind effect (0-300% range)
-        val windMultVal = prefs.getInt("pref_wind_multiplier", 100)
+        val windMultVal = prefs.getInt("pref_wind_multiplier", info.olli.weatherlwp.PreferenceDefaults.WIND_MULTIPLIER)
         windMultiplier = windMultVal / 100f
         
         // Tree sway speed (0-200% range, default 100%)

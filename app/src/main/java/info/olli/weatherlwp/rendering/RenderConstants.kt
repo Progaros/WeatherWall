@@ -367,13 +367,13 @@ object RenderConstants {
     }
     
     /**
-     * Apply ambient tint to a color based on time of day.
-     * Objects should take on the ambient light color, especially at night/dusk.
+     * Calculate ambient tint blend amount based on distance/depth.
+     * Objects further away blend more with the ambient light color (atmospheric perspective).
      * 
-     * @param baseColor The object's base color
-     * @param ambientColor The ambient/sky color to blend with
+     * @param baseColor The object's base color (reserved for future per-color tint curves)
+     * @param ambientColor The ambient/sky color (reserved for future intensity-based scaling)
      * @param distance 0.0 = foreground (less tint), 1.0 = background (more tint)
-     * @return The tinted color
+     * @return Blend amount (0.05 foreground to 0.45 background) for use with [blendWithAmbient]
      */
     @Suppress("UNUSED_PARAMETER")
     fun applyAmbientTint(baseColor: Int, ambientColor: Int, distance: Float): Float {

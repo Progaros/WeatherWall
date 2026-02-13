@@ -442,7 +442,9 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
             { AlienEvent(random, seed) },
             { SquirrelEvent(random, seed) },
             { DragonflyEvent(random, seed) },
-            { SnowflakeEvent(random, seed) }
+            { SnowflakeEvent(random, seed) },
+            { BatEvent(random, seed) },
+            { DeerEvent(random, seed) }
         )
         
         val event = eventTypes[random.nextInt(eventTypes.size)]()
@@ -476,6 +478,8 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
             "squirrel" -> SquirrelEvent(random, seed)
             "dragonfly" -> DragonflyEvent(random, seed)
             "snowflake" -> SnowflakeEvent(random, seed)
+            "bat" -> BatEvent(random, seed)
+            "deer" -> DeerEvent(random, seed)
             else -> null
         }
         

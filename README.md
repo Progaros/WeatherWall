@@ -113,7 +113,7 @@ docker run --rm -v "$PWD":/workspace -w /workspace weatherwall-builder ./gradlew
 
 ## 🧪 Testing
 
-The project includes 550+ unit tests covering all major features:
+The project includes 600+ unit tests covering all major features:
 
 ```bash
 # Run all tests locally
@@ -128,7 +128,7 @@ open app/build/reports/tests/testDebugUnitTest/index.html
 
 **CI Pipeline:**
 - Lint checks (Android Lint)
-- Unit tests (550+ tests)
+- Unit tests (600+ tests)
 - Debug APK build
 - Release publishing (on version bump)
 

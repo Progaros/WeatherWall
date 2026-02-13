@@ -556,6 +556,17 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
      * Threshold is tuned by sensitivity setting.
      */
     private fun detectShakeFromAccelerometer(values: FloatArray) {
+        val now = System.currentTimeMillis()
+        
+        // Sensor warmup: decrement on EVERY accelerometer event (not just high-gForce)
+        // so stale queued events burn through the counter before real shakes are processed.
+        // Previously this was after the gForce check, meaning only actual shakes decremented
+        // the counter - allowing queued shake events from unlock to trigger immediately.
+        if (shakeWarmupSamplesRemaining > 0) {
+            shakeWarmupSamplesRemaining--
+            return
+        }
+        
         val g = SensorManager.GRAVITY_EARTH
         val gX = values[0] / g
         val gY = values[1] / g
@@ -564,15 +575,6 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         
         // Only process if gForce exceeds threshold (tuned by sensitivity)
         if (gForce < shakeThresholdGravity) return
-        
-        val now = System.currentTimeMillis()
-        
-        // Sensor warmup: skip first N samples after start to ignore stale queued events
-        if (shakeWarmupSamplesRemaining > 0) {
-            shakeWarmupSamplesRemaining--
-            Log.d(TAG, "Shake ignored: sensor warmup ($shakeWarmupSamplesRemaining samples remaining)")
-            return
-        }
         
         // Check unlock delay: ignore shakes immediately after screen on
         // This prevents accidental triggers from phone unlock gesture
@@ -622,9 +624,13 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     private fun detectGyroWiggle(values: FloatArray) {
         val now = System.currentTimeMillis()
 
-        // Sensor warmup: skip first N samples after start to ignore stale queued events
-        // Note: warmup counter is decremented in detectShakeFromAccelerometer, which runs first
-        if (shakeWarmupSamplesRemaining > 0) return
+        // Sensor warmup: skip until warmup counter reaches zero.
+        // Counter is decremented by detectShakeFromAccelerometer on every accel event.
+        // Also decrement here as fallback in case gyro events arrive without accel events.
+        if (shakeWarmupSamplesRemaining > 0) {
+            shakeWarmupSamplesRemaining--
+            return
+        }
         
         // Unlock delay + cooldown
         if (shakeUnlockDelayMs > 0 && now - screenOnTime < shakeUnlockDelayMs) return

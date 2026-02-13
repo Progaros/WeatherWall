@@ -98,7 +98,7 @@ class SeasonalEvents(private val context: Context? = null) {
         var y: Float = 0f,
         var vy: Float = 0f,
         var targetY: Float = 0f,
-        var colors: IntArray = intArrayOf(),  // 1-3 colors for this rocket's explosion
+        var colors: List<Int> = emptyList(),  // 1-3 colors for this rocket's explosion
         var active: Boolean = false,
         var explodeAfterFrame: Int = 0,  // Frame number when rocket should explode
         var trailX1: Float = 0f, var trailY1: Float = 0f,
@@ -387,16 +387,22 @@ class SeasonalEvents(private val context: Context? = null) {
         }
     }
 
+    /**
+     * Check if settings need reloading and reload if so.
+     * Call this once per frame from the scene renderer instead of
+     * reloading in every render entry point, which was wasteful.
+     */
+    fun updateSettingsIfNeeded() {
+        val now = System.currentTimeMillis()
+        if (now - lastSettingsLoad > SETTINGS_RELOAD_INTERVAL_MS) {
+            loadSettings()
+        }
+    }
+
     fun render(canvas: Canvas, enabled: Boolean) {
         if (!enabled) return
 
         try {
-            // Periodically reload settings to pick up preference changes
-            val now = System.currentTimeMillis()
-            if (now - lastSettingsLoad > SETTINGS_RELOAD_INTERVAL_MS) {
-                loadSettings()
-            }
-            
             val season = getCurrentSeason()
             if (season == Season.NONE) return
 
@@ -408,17 +414,8 @@ class SeasonalEvents(private val context: Context? = null) {
                 initialized = true
             }
 
-            when (season) {
-                // Christmas star is now drawn in renderBehindMountains() to appear in the sky
-                Season.CHRISTMAS -> {}  // handled by renderBehindMountains
-                // NEW_YEAR and CN_NEW_YEAR fireworks are now drawn via renderBehindTerrain()
-                // to appear behind hills but in front of mountains
-                Season.NEW_YEAR -> {}  // handled by renderBehindTerrain
-                Season.CN_NEW_YEAR -> {}  // handled by renderBehindTerrain
-                // ST_PATRICKS (rainbow) is drawn behind mountains via renderBehindMountains()
-                Season.ST_PATRICKS -> {}  // handled elsewhere
-                Season.NONE -> {}
-            }
+            // All rendering is now handled by renderBehindMountains/renderBehindTerrain
+            // This method only ensures initialization for screen size changes
         } catch (e: Exception) {
             Log.e(TAG, "Error rendering seasonal events", e)
         }
@@ -434,11 +431,7 @@ class SeasonalEvents(private val context: Context? = null) {
     fun renderBehindMountains(canvas: Canvas, enabled: Boolean, parallaxOffsetX: Float = 0f, parallaxOffsetY: Float = 0f) {
         if (!enabled) return
         try {
-            // Ensure settings are loaded and screen size is initialized
-            val now = System.currentTimeMillis()
-            if (now - lastSettingsLoad > SETTINGS_RELOAD_INTERVAL_MS) {
-                loadSettings()
-            }
+            // Settings are now reloaded centrally via updateSettingsIfNeeded()
             val season = getCurrentSeason()
             if (season == Season.NONE) return
             if (!initialized || screenWidth != canvas.width || screenHeight != canvas.height) {
@@ -450,7 +443,7 @@ class SeasonalEvents(private val context: Context? = null) {
             }
             when (season) {
                 Season.ST_PATRICKS -> renderStPatricksDay(canvas)
-                Season.CHRISTMAS -> renderChristmasStars(canvas, parallaxOffsetX, parallaxOffsetY)  // Star in sky behind mountains
+                Season.CHRISTMAS -> renderChristmasStars(canvas, parallaxOffsetX, parallaxOffsetY)
                 else -> {}
             }
         } catch (e: Exception) {
@@ -470,10 +463,7 @@ class SeasonalEvents(private val context: Context? = null) {
 
         if (!enabled && !hasActiveFireworks) return
         try {
-            val now = System.currentTimeMillis()
-            if (now - lastSettingsLoad > SETTINGS_RELOAD_INTERVAL_MS) {
-                loadSettings()
-            }
+            // Settings are now reloaded centrally via updateSettingsIfNeeded()
             val season = getCurrentSeason()
             
             // Allow rendering if we have active fireworks (from shake) even if season is NONE
@@ -838,13 +828,13 @@ class SeasonalEvents(private val context: Context? = null) {
                 r.vy = -14f - Random.nextFloat() * 6f
                 r.targetY = screenHeight * 0.08f + Random.nextFloat() * screenHeight * 0.22f
                 
-                // Explode after 75-120 frames (~1.25-2.0 seconds at 60fps)
+                // Explode after 75-119 frames (~1.25-2.0 seconds at 60fps)
                 // Longer flight time ensures rockets clear mountains (which are at 30-60% from bottom)
                 r.explodeAfterFrame = frameCounter + 75 + Random.nextInt(45)
                 
                 // Choose 1-3 colors for this rocket's explosion
                 val numColors = 1 + Random.nextInt(3)  // 1, 2, or 3 colors
-                r.colors = IntArray(numColors) { fireworkColors[Random.nextInt(fireworkColors.size)] }
+                r.colors = List(numColors) { fireworkColors[Random.nextInt(fireworkColors.size)] }
                 
                 r.active = true
                 r.trailX1 = r.x

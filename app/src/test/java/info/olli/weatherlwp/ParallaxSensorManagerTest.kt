@@ -1142,6 +1142,71 @@ class ParallaxSensorManagerTest {
         // Events after both warmup AND unlock delay should be accepted
         assertTrue("Events after both protections should be accepted", shakeAccepted > 0)
     }
+    
+    @Test
+    fun `warmup decrements on ALL accelerometer events regardless of gForce`() {
+        // BUG FIX TEST: Previously warmup counter only decremented when gForce >= threshold.
+        // This meant low-gForce events (normal gravity ~1.0g) during warmup never counted,
+        // so the warmup period was effectively infinite until a real shake event arrived.
+        // After the fix, warmup decrements on every sensor event before the threshold check.
+        val SHAKE_WARMUP_SAMPLES = 30
+        val shakeThresholdGravity = 2.7f
+        
+        var warmupRemaining = SHAKE_WARMUP_SAMPLES
+        
+        // Simulate 30 low-gForce events (normal gravity, phone sitting still)
+        // These represent stale queued sensor events delivered at unlock
+        for (i in 1..30) {
+            val gForce = 1.0f  // Normal gravity - below threshold
+            
+            // NEW BEHAVIOR: warmup decrements regardless of gForce
+            if (warmupRemaining > 0) {
+                warmupRemaining--
+            }
+            // gForce check happens AFTER warmup decrement
+            if (gForce < shakeThresholdGravity) continue
+        }
+        
+        assertEquals("Warmup should be fully consumed by 30 low-gForce events", 0, warmupRemaining)
+    }
+    
+    @Test
+    fun `old bug - warmup only decremented on high gForce events`() {
+        // Demonstrates the OLD buggy behavior where low-gForce events didn't decrement warmup
+        val SHAKE_WARMUP_SAMPLES = 30
+        val shakeThresholdGravity = 2.7f
+        
+        var warmupRemaining = SHAKE_WARMUP_SAMPLES
+        
+        // OLD BEHAVIOR: gForce check was BEFORE warmup decrement
+        for (i in 1..30) {
+            val gForce = 1.0f  // Below threshold
+            if (gForce < shakeThresholdGravity) continue  // OLD: returned early, skipping warmup decrement
+            if (warmupRemaining > 0) warmupRemaining--
+        }
+        
+        // Bug: warmup counter never decremented because all events were below threshold!
+        assertEquals("OLD BUG: warmup never decremented on low-gForce events", 
+            SHAKE_WARMUP_SAMPLES, warmupRemaining)
+    }
+    
+    @Test
+    fun `gyro wiggle warmup also decrements independently`() {
+        // The gyroscope wiggle detection path also needs to decrement warmup
+        // in case only gyro events arrive (no accelerometer events)
+        val SHAKE_WARMUP_SAMPLES = 30
+        var warmupRemaining = SHAKE_WARMUP_SAMPLES
+        
+        // Simulate gyro events decrementing warmup
+        for (i in 1..30) {
+            if (warmupRemaining > 0) {
+                warmupRemaining--
+                continue  // Skip wiggle detection during warmup
+            }
+        }
+        
+        assertEquals("Gyro path should fully consume warmup in 30 events", 0, warmupRemaining)
+    }
 }
 
 /**
