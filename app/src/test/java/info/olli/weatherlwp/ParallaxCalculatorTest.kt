@@ -459,11 +459,11 @@ class ParallaxCalculatorTest {
     }
     
     @Test
-    fun testDefaultSmoothingIsZero() {
-        // Verify the new default is 0 (direct/instant mode like reference app)
+    fun testDefaultSmoothingIsNonZero() {
+        // Verify the default is 0.134 (smoothing=30 → 0.02 + 0.3*0.38)
         val newCalculator = ParallaxCalculator()
         
-        assertEquals("Default smoothing should be 0 (direct mode)", 0f, newCalculator.smoothing, 0.001f)
+        assertEquals("Default smoothing should be 0.134", 0.134f, newCalculator.smoothing, 0.01f)
     }
     
     @Test

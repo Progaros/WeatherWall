@@ -30,14 +30,14 @@ object PreferenceDefaults {
     const val PARALLAX_ENABLED = true
     const val PARALLAX_STRENGTH = 25  // 1-100%, log scale
     const val PARALLAX_MAX_OFFSET = 20  // % of screen height (increased from 15)
-    const val PARALLAX_RETURN_SPEED = 0  // 0-100 (0=no return, like reference app)
-    const val PARALLAX_SMOOTHING = 0  // 0-100 (0=instant/direct, like reference app)
+    const val PARALLAX_RETURN_SPEED = 15  // 0-100
+    const val PARALLAX_SMOOTHING = 30  // 1-100
     const val PARALLAX_DEPTH = 33  // 0-100
     const val PARALLAX_PERSPECTIVE = 100  // 0-100
     const val PARALLAX_ASPECT_RATIO = 100  // 50-150
     const val PARALLAX_INVERT_X = false
     const val PARALLAX_INVERT_Y = false
-    const val PARALLAX_SENSOR_MODE = "gyroscope"  // Reference app uses gyroscope
+    const val PARALLAX_SENSOR_MODE = "rotation_vector"
     const val PARALLAX_EDGE_EASING = 0  // 0-100, 0=linear, 100=extreme quadratic
     const val PARALLAX_RETURN_UNLOCKED = true  // true=fast return regardless of position
     

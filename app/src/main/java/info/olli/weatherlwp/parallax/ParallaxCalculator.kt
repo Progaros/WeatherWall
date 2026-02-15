@@ -46,7 +46,7 @@ class ParallaxCalculator {
     var strength = 0.075f               // Default: 25% on log scale → ~0.075
     var maxOffsetPx = 130f              // Legacy: used when maxOffsetPercent is 0
     var maxOffsetPercent = 20f          // Default: 20% of screen height (increased for more movement)
-    var smoothing = 0f                  // Default: 0 = direct/instant (reference app behavior)
+    var smoothing = 0.134f              // Default: 30 → 0.02 + 0.3*0.38 = 0.134
     var depthSeparation = 1.32f         // Default: (33/100)*4.0 = 1.32 (pref_parallax_depth=33)
     
     // Axis inversion settings - for correcting inverted parallax directions
@@ -110,7 +110,7 @@ class ParallaxCalculator {
      * 1.0 = instant return
      * Only applies when tilt magnitude is low (near zero).
      */
-    var returnSpeed = 0f                // Default: no return (reference app behavior)
+    var returnSpeed = 0.15f             // Default: moderate pull (pref_parallax_return_speed=15)
     
     /**
      * Parallax perspective: controls which layers move more.
