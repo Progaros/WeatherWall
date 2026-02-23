@@ -104,10 +104,10 @@ class RenderConstantsTest {
     
     @Test
     fun `time thresholds are in order`() {
-        val nightEnd = 5.0f
-        val dawnStart = 5.0f
-        val dawnEnd = 7.5f
-        val dayEnd = 17.0f
+        val nightEnd = 5.5f
+        val dawnStart = 5.5f
+        val dawnEnd = 7.0f
+        val dayEnd = 17.5f
         val duskEnd = 20.0f
         
         assertEquals("Night end = dawn start", nightEnd, dawnStart, 0.01f)
@@ -118,8 +118,8 @@ class RenderConstantsTest {
     
     @Test
     fun `dawn is in morning`() {
-        val dawnStart = 5.0f
-        val dawnEnd = 7.5f
+        val dawnStart = 5.5f
+        val dawnEnd = 7.0f
         
         assertTrue("Dawn starts early", dawnStart >= 4f && dawnStart <= 7f)
         assertTrue("Dawn ends in morning", dawnEnd >= 6f && dawnEnd <= 9f)
@@ -127,7 +127,7 @@ class RenderConstantsTest {
     
     @Test
     fun `dusk is in evening`() {
-        val dayEnd = 17.0f
+        val dayEnd = 17.5f
         val duskEnd = 20.0f
         
         assertTrue("Day ends in late afternoon", dayEnd >= 16f && dayEnd <= 19f)

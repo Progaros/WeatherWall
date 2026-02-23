@@ -44,26 +44,26 @@ class PreferenceSyncTest {
             ),
             SyncedPreference(
                 key = "pref_parallax_strength",
-                defaultValue = "25",
+                defaultValue = "16",
                 min = 1,
                 max = 100
             ),
             SyncedPreference(
                 key = "pref_parallax_max_offset",
-                defaultValue = "10",
+                defaultValue = "40",
                 min = 2,
-                max = 20
+                max = 40
             ),
             SyncedPreference(
                 key = "pref_parallax_return_speed",
-                defaultValue = "15",
+                defaultValue = "47",
                 min = 0,
                 max = 100
             ),
             SyncedPreference(
                 key = "pref_parallax_smoothing",
-                defaultValue = "30",
-                min = 1,
+                defaultValue = "1",
+                min = 0,
                 max = 100
             ),
             SyncedPreference(
@@ -74,7 +74,7 @@ class PreferenceSyncTest {
             ),
             SyncedPreference(
                 key = "pref_cloud_speed",
-                defaultValue = "5",
+                defaultValue = "45",
                 min = 0,
                 max = 100
             )
@@ -102,7 +102,7 @@ class PreferenceSyncTest {
     fun `parallax strength has consistent defaults`() {
         val pref = SYNCED_PREFERENCES.find { it.key == "pref_parallax_strength" }
         assertNotNull("pref_parallax_strength should be documented", pref)
-        assertEquals("Default should be 25", "25", pref?.defaultValue)
+        assertEquals("Default should be 16", "16", pref?.defaultValue)
         assertEquals("Min should be 1", 1, pref?.min)
         assertEquals("Max should be 100", 100, pref?.max)
     }
@@ -111,9 +111,9 @@ class PreferenceSyncTest {
     fun `parallax max offset has consistent defaults`() {
         val pref = SYNCED_PREFERENCES.find { it.key == "pref_parallax_max_offset" }
         assertNotNull("pref_parallax_max_offset should be documented", pref)
-        assertEquals("Default should be 10 (10% of screen height)", "10", pref?.defaultValue)
+        assertEquals("Default should be 40 (40% of screen height)", "40", pref?.defaultValue)
         assertEquals("Min should be 2", 2, pref?.min)
-        assertEquals("Max should be 20", 20, pref?.max)
+        assertEquals("Max should be 40", 40, pref?.max)
     }
     
     @Test

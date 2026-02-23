@@ -84,19 +84,19 @@ class SeasonalEventsTest {
     }
 
     @Test
-    fun `christmas season - Dec 20 within default ±5 interval`() {
-        assertEquals("CHRISTMAS", getSeasonByDateHelper(Calendar.DECEMBER, 20))
+    fun `christmas season - Dec 24 within default interval`() {
+        assertEquals("CHRISTMAS", getSeasonByDateHelper(Calendar.DECEMBER, 24))
     }
 
     @Test
-    fun `christmas season - Dec 30 within default ±5 interval`() {
-        assertEquals("CHRISTMAS", getSeasonByDateHelper(Calendar.DECEMBER, 30))
+    fun `christmas season - Dec 26 within default interval`() {
+        assertEquals("CHRISTMAS", getSeasonByDateHelper(Calendar.DECEMBER, 26))
     }
 
     @Test
-    fun `christmas season - Dec 19 outside default ±5 interval`() {
-        // Dec 19 is 6 days before Dec 25, outside ±5
-        assertNotEquals("CHRISTMAS", getSeasonByDateHelper(Calendar.DECEMBER, 19))
+    fun `christmas season - Dec 23 outside default interval`() {
+        // Dec 23 is 2 days before Dec 25, outside ±1
+        assertNotEquals("CHRISTMAS", getSeasonByDateHelper(Calendar.DECEMBER, 23))
     }
 
     @Test
@@ -106,38 +106,37 @@ class SeasonalEventsTest {
     }
 
     @Test
-    fun `new year season - Jan 8 within default ±7 interval`() {
-        assertEquals("NEW_YEAR", getSeasonByDateHelper(Calendar.JANUARY, 8))
+    fun `new year season - Jan 2 within default interval`() {
+        assertEquals("NEW_YEAR", getSeasonByDateHelper(Calendar.JANUARY, 2))
     }
 
     @Test
-    fun `new year season - Jan 9 outside default ±7 interval`() {
-        assertNotEquals("NEW_YEAR", getSeasonByDateHelper(Calendar.JANUARY, 9))
+    fun `new year season - Jan 3 outside default interval`() {
+        assertNotEquals("NEW_YEAR", getSeasonByDateHelper(Calendar.JANUARY, 3))
     }
 
     @Test
-    fun `cn new year season - Feb 1 with default interval`() {
+    fun `cn new year season - Feb 1 exact match with default interval`() {
+        // With interval=0, only exact match works
         assertEquals("CN_NEW_YEAR", getSeasonByDateHelper(Calendar.FEBRUARY, 1))
     }
 
     @Test
-    fun `cn new year season - Jan 18 within default ±14 interval`() {
-        assertEquals("CN_NEW_YEAR", getSeasonByDateHelper(Calendar.JANUARY, 18))
+    fun `cn new year season - Jan 31 outside default interval`() {
+        // With interval=0, even 1 day away is outside
+        assertNotEquals("CN_NEW_YEAR", getSeasonByDateHelper(Calendar.JANUARY, 31))
     }
 
     @Test
-    fun `st patricks season - Mar 17 with default interval`() {
+    fun `st patricks season - Mar 17 exact match with default interval`() {
+        // With interval=0, only exact match works
         assertEquals("ST_PATRICKS", getSeasonByDateHelper(Calendar.MARCH, 17))
     }
 
     @Test
-    fun `st patricks season - Mar 15 within default ±2 interval`() {
-        assertEquals("ST_PATRICKS", getSeasonByDateHelper(Calendar.MARCH, 15))
-    }
-
-    @Test
-    fun `st patricks season - Mar 14 outside default ±2 interval`() {
-        assertNotEquals("ST_PATRICKS", getSeasonByDateHelper(Calendar.MARCH, 14))
+    fun `st patricks season - Mar 16 outside default interval`() {
+        // With interval=0, even 1 day away is outside
+        assertNotEquals("ST_PATRICKS", getSeasonByDateHelper(Calendar.MARCH, 16))
     }
 
     @Test
@@ -149,14 +148,14 @@ class SeasonalEventsTest {
 
     @Test
     fun `christmas takes priority over new year on overlap dates`() {
-        // Dec 25 is within both Christmas (±5: Dec 20-30) and New Year (±7: Dec 25-Jan 8)
+        // Dec 25 is within Christmas (±1: Dec 24-26)
         // Christmas should win due to priority order
         assertEquals("CHRISTMAS", getSeasonByDateHelper(Calendar.DECEMBER, 25))
     }
 
     @Test
     fun `new year wins on Dec 31 when outside christmas interval`() {
-        // Dec 31 is 6 days from Dec 25 (outside ±5) but only 1 day from Jan 1 (inside ±7)
+        // Dec 31 is 6 days from Dec 25 (outside ±1) but only 1 day from Jan 1 (inside ±1)
         assertEquals("NEW_YEAR", getSeasonByDateHelper(Calendar.DECEMBER, 31))
     }
 
@@ -219,7 +218,7 @@ class SeasonalEventsTest {
     fun `newyear should have firework effects`() {
         // Verify New Year season is detected correctly near Jan 1
         assertEquals("NEW_YEAR", getSeasonByDateHelper(Calendar.JANUARY, 1))
-        assertEquals("NEW_YEAR", getSeasonByDateHelper(Calendar.JANUARY, 5))
+        assertEquals("NEW_YEAR", getSeasonByDateHelper(Calendar.JANUARY, 2))
     }
     
     // ============== Height Scaling Tests ==============

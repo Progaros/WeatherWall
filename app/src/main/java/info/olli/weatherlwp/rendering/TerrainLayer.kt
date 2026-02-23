@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Shader
 import androidx.preference.PreferenceManager
+import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationState
 import info.olli.weatherlwp.util.SeasonHelper
@@ -997,7 +998,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         treeSparsity = prefs.getInt("pref_tree_sparsity", 30) / 100f
         
         // Tree size randomness: variation in tree sizes (0=uniform, 100=very varied)
-        treeSizeRandomness = prefs.getInt("pref_tree_size_randomness", 30) / 100f
+        treeSizeRandomness = prefs.getInt("pref_tree_size_randomness", PreferenceDefaults.TREE_SIZE_RANDOMNESS) / 100f
         
         hillStartY = prefs.getInt("pref_hill_lower_start", 60) / 100f  // 60% instead of 50%
         // Hills extend below screen (1.0 = bottom edge, >1.0 = below screen)
@@ -1010,11 +1011,11 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         // Hill amplitude: controls hill vertical height (0-1000)
         // 0 = flat, 100 = normal (1.0), 1000 = extreme (10.0)
-        val ampVal = prefs.getInt("pref_hill_amplitude", 100)
+        val ampVal = prefs.getInt("pref_hill_amplitude", PreferenceDefaults.HILL_AMPLITUDE)
         hillAmplitude = ampVal / 100f  // 0 -> 0.0, 100 -> 1.0, 1000 -> 10.0
         
         // Hill frequency: controls how many hills visible per layer (0-1000 -> 0.0-10.0)
-        val freqVal = prefs.getInt("pref_hill_frequency", 100)
+        val freqVal = prefs.getInt("pref_hill_frequency", PreferenceDefaults.HILL_FREQUENCY)
         hillFrequency = freqVal / 100f
         
         // Hill distance: pushes hills away from camera (0=at camera, 100=near mountains)
@@ -1031,7 +1032,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val widthVal = prefs.getInt("pref_tree_width", 100)
         treeWidthScale = widthVal / 100f
         
-        treeColorVariation = prefs.getInt("pref_tree_color_variation", 100) / 100f
+        treeColorVariation = prefs.getInt("pref_tree_color_variation", PreferenceDefaults.TREE_COLOR_VARIATION) / 100f
         treeSegments = prefs.getInt("pref_tree_segments", 1).coerceIn(1, 5)
         
         // Seasonal terrain settings

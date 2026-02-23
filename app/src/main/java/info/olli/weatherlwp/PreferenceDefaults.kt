@@ -28,34 +28,34 @@ object PreferenceDefaults {
     
     // === Parallax Settings ===
     const val PARALLAX_ENABLED = true
-    const val PARALLAX_STRENGTH = 25  // 1-100%, log scale
-    const val PARALLAX_MAX_OFFSET = 20  // % of screen height (increased from 15)
-    const val PARALLAX_RETURN_SPEED = 15  // 0-100
-    const val PARALLAX_SMOOTHING = 30  // 1-100
-    const val PARALLAX_DEPTH = 33  // 0-100
+    const val PARALLAX_STRENGTH = 16  // 1-100%, log scale (subtle but responsive)
+    const val PARALLAX_MAX_OFFSET = 40  // % of screen height (full range for immersive depth)
+    const val PARALLAX_RETURN_SPEED = 47  // 0-100 (faster re-centering)
+    const val PARALLAX_SMOOTHING = 1  // 1-100 (very responsive, minimal lag)
+    const val PARALLAX_DEPTH = 70  // 0-100 (strong 3D layer separation)
     const val PARALLAX_PERSPECTIVE = 100  // 0-100
     const val PARALLAX_ASPECT_RATIO = 100  // 50-150
     const val PARALLAX_INVERT_X = false
-    const val PARALLAX_INVERT_Y = false
-    const val PARALLAX_SENSOR_MODE = "rotation_vector"
-    const val PARALLAX_EDGE_EASING = 0  // 0-100, 0=linear, 100=extreme quadratic
+    const val PARALLAX_INVERT_Y = true  // natural Y-axis for most devices
+    const val PARALLAX_SENSOR_MODE = "gyroscope"  // smoother sensor input
+    const val PARALLAX_EDGE_EASING = 10  // 0-100, slight slowdown near edges
     const val PARALLAX_RETURN_UNLOCKED = true  // true=fast return regardless of position
     
     // === Cloud Settings ===
     const val CLOUDS_ENABLED = true
-    const val CLOUD_SPEED = 5  // 0-100, where 50=normal
-    const val CLOUD_OPACITY = 40  // 10-100
+    const val CLOUD_SPEED = 45  // 0-100, visible cloud movement
+    const val CLOUD_OPACITY = 60  // 10-100, clearly visible clouds
     const val CLOUD_STRETCH = 300  // stretch factor
     const val CLOUD_DENSITY = 100  // 50-300
     const val CLOUD_RENDER_MODE = "cached"
     
     // === Tree/Terrain Settings ===
     const val TREE_DENSITY = 50  // 0-100
-    const val TREE_SIZE_RANDOMNESS = 30  // 0-100
-    const val TREE_COLOR_VARIATION = 100  // 0-100
+    const val TREE_SIZE_RANDOMNESS = 50  // 0-100 (natural variation)
+    const val TREE_COLOR_VARIATION = 50  // 0-100 (moderate diversity)
     const val TREE_SWAY_SPEED = 100  // 0-300
-    const val HILL_AMPLITUDE = 100  // 0-500
-    const val HILL_FREQUENCY = 100  // 50-200
+    const val HILL_AMPLITUDE = 354  // 0-1000 (tall rolling hills)
+    const val HILL_FREQUENCY = 170  // 25-200 (denser hill pattern)
     
     // === Mountain Settings ===
     const val MOUNTAIN_BOTTOM_OFFSET = 0  // -30 to 30
@@ -70,18 +70,18 @@ object PreferenceDefaults {
     // === Seasonal Settings ===
     const val SEASONAL_ENABLED = true
     const val CHRISTMAS_ENABLED = true
-    const val CHRISTMAS_INTERVAL = 5  // ±days around Dec 25
+    const val CHRISTMAS_INTERVAL = 1  // ±days around Dec 25 (tight window)
     const val NEWYEAR_ENABLED = true
-    const val NEWYEAR_INTERVAL = 7  // ±days around Jan 1
-    const val CN_NEWYEAR_ENABLED = true
-    const val CN_NEWYEAR_INTERVAL = 14  // ±days around Feb 1
+    const val NEWYEAR_INTERVAL = 1  // ±days around Jan 1 (tight window)
+    const val CN_NEWYEAR_ENABLED = false  // opt-in for Chinese New Year
+    const val CN_NEWYEAR_INTERVAL = 0  // only on the day itself
     const val ST_PATRICKS_ENABLED = true
-    const val ST_PATRICKS_INTERVAL = 2  // ±days around Mar 17
-    const val FIREWORK_FREQUENCY = 50  // 0-100
+    const val ST_PATRICKS_INTERVAL = 0  // only on March 17
+    const val FIREWORK_FREQUENCY = 45  // 0-100
     const val FIREWORK_AMOUNT = 100  // 10-200, particles per explosion
     const val SHAKE_FIREWORKS_ENABLED = true
-    const val SHAKE_SENSITIVITY = 50  // 0-100
-    const val SHAKE_DELAY_MS = 2500  // 0-5000ms, delay after screen on before shake triggers
+    const val SHAKE_SENSITIVITY = 16  // 0-100 (harder shake needed, avoids accidental)
+    const val SHAKE_DELAY_MS = 500  // 0-5000ms, short delay after screen on
     
     // === Visual Settings ===
     const val NIGHT_SHADE_STRENGTH = 35  // 0-100
@@ -96,6 +96,6 @@ object PreferenceDefaults {
     // === Idle Mode Settings ===
     const val IDLE_ENABLED = true
     const val IDLE_TIMEOUT = "5"  // seconds (as String for ListPreference)
-    const val IDLE_FPS = 10  // 5-20
+    const val IDLE_FPS = 20  // 5-20 (higher idle FPS for smoother idle)
     const val MAX_FPS = "30" // 30, 60, 90, 120 (as String for ListPreference)
 }

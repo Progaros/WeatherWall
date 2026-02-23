@@ -221,7 +221,7 @@ class SeasonalEvents(private val context: Context? = null) {
         prefs?.let {
             starSizeMultiplier = (it.getInt("pref_christmas_star_size", 100) / 100f).coerceIn(0.5f, 2.0f)
             trailLengthMultiplier = (it.getInt("pref_christmas_star_trail", 100) / 100f).coerceIn(0f, 2.0f)
-            fireworkFrequency = it.getInt("pref_firework_frequency", 50).coerceIn(0, 100)
+            fireworkFrequency = it.getInt("pref_firework_frequency", PreferenceDefaults.FIREWORK_FREQUENCY).coerceIn(0, 100)
             fireworkAmount = it.getInt("pref_firework_amount", PreferenceDefaults.FIREWORK_AMOUNT).coerceIn(10, 200)
             
             // Rainbow settings

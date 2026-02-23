@@ -370,10 +370,10 @@ class ParallaxScene(
 
     fun loadPrefs() {
         try {
-            val parallaxEnabled = prefs.getBoolean("pref_parallax_enabled", true)
+            val parallaxEnabled = prefs.getBoolean("pref_parallax_enabled", PreferenceDefaults.PARALLAX_ENABLED)
             
             // Sensor mode: rotation_vector (our robust implementation) or gyroscope
-            val sensorMode = prefs.getString("pref_parallax_sensor_mode", PreferenceDefaults.PARALLAX_SENSOR_MODE) ?: "rotation_vector"
+            val sensorMode = prefs.getString("pref_parallax_sensor_mode", PreferenceDefaults.PARALLAX_SENSOR_MODE) ?: PreferenceDefaults.PARALLAX_SENSOR_MODE
             val parallaxMode = when (sensorMode) {
                 "gyroscope" -> info.olli.weatherlwp.parallax.ParallaxSensorManager.ParallaxMode.GYROSCOPE
                 else -> info.olli.weatherlwp.parallax.ParallaxSensorManager.ParallaxMode.ROTATION_VECTOR
@@ -397,7 +397,7 @@ class ParallaxScene(
             // Fine control at low values (~1 old scale), high values reach ~5 old scale
             // Log formula: min * (max/min)^((slider-1)/99)
             // At 1% → 0.01, at 25% → ~0.075, at 50% → ~0.22, at 100% → 5.0
-            val sensitivityVal = prefs.getInt("pref_parallax_strength", 25).coerceIn(1, 100)
+            val sensitivityVal = prefs.getInt("pref_parallax_strength", PreferenceDefaults.PARALLAX_STRENGTH).coerceIn(1, 100)
             val minStrength = 0.01f
             val maxStrength = 5.0f
             val logBase = maxStrength / minStrength  // 500
@@ -407,7 +407,7 @@ class ParallaxScene(
             
             // Max offset as percentage of screen height: 2..40% (default 20%)
             // This ensures movement scales proportionally with screen size
-            val maxOffsetPercentVal = prefs.getInt("pref_parallax_max_offset", 20).coerceIn(2, 40)
+            val maxOffsetPercentVal = prefs.getInt("pref_parallax_max_offset", PreferenceDefaults.PARALLAX_MAX_OFFSET).coerceIn(2, 40)
             val maxOffsetPercent = maxOffsetPercentVal.toFloat()
             
             // Legacy pixel offset (not used when percentage is set, but kept for compatibility)
@@ -420,20 +420,20 @@ class ParallaxScene(
             
             // Edge easing slider: map 0..100 -> 0f..1f
             // 0 = linear (no easing), 50 = moderate easing, 100 = extreme (center-only movement)
-            val edgeEasingVal = prefs.getInt("pref_parallax_edge_easing", 0).coerceIn(0, 100)
+            val edgeEasingVal = prefs.getInt("pref_parallax_edge_easing", PreferenceDefaults.PARALLAX_EDGE_EASING).coerceIn(0, 100)
             val edgeEasing = edgeEasingVal / 100f
             
             // Return speed unlocked: when true, return to center is always fast
-            val returnSpeedUnlocked = prefs.getBoolean("pref_parallax_return_unlocked", true)
+            val returnSpeedUnlocked = prefs.getBoolean("pref_parallax_return_unlocked", PreferenceDefaults.PARALLAX_RETURN_UNLOCKED)
             
             // Depth separation slider: map 0..100 -> 0f..4.0f (default 33 = ~1.3x effect)
-            val depthVal = prefs.getInt("pref_parallax_depth", 33).coerceIn(0, 100)
+            val depthVal = prefs.getInt("pref_parallax_depth", PreferenceDefaults.PARALLAX_DEPTH).coerceIn(0, 100)
             val depthSeparation = (depthVal / 100f) * 4.0f
             
             // Perspective slider: map 0..100 -> 0f..1f (default 100 = background moves)
             // 0 = foreground moves most (head tilts, window stays)
             // 100 = background moves most (window shifts, head stays)
-            val perspectiveVal = prefs.getInt("pref_parallax_perspective", 100).coerceIn(0, 100)
+            val perspectiveVal = prefs.getInt("pref_parallax_perspective", PreferenceDefaults.PARALLAX_PERSPECTIVE).coerceIn(0, 100)
             val perspective = perspectiveVal / 100f
             
             // Return speed slider: map 0..100 -> 0f..1f (default 15 = slow return)
@@ -442,13 +442,13 @@ class ParallaxScene(
             val returnSpeed = returnSpeedVal / 100f  // 0->0, 100->1
             
             // Axis inversion settings (for correcting inverted movement direction)
-            val invertX = prefs.getBoolean("pref_parallax_invert_x", false)
-            val invertY = prefs.getBoolean("pref_parallax_invert_y", false)
+            val invertX = prefs.getBoolean("pref_parallax_invert_x", PreferenceDefaults.PARALLAX_INVERT_X)
+            val invertY = prefs.getBoolean("pref_parallax_invert_y", PreferenceDefaults.PARALLAX_INVERT_Y)
             
             // Aspect ratio compensation: map 50..150 -> 0.5..1.5 (default 100 = 1:1 ratio)
             // Adjusts horizontal movement relative to vertical
             // At 100: horizontal uses same % of height as vertical (equal pixel movement)
-            val aspectRatioVal = prefs.getInt("pref_parallax_aspect_ratio", 100).coerceIn(50, 150)
+            val aspectRatioVal = prefs.getInt("pref_parallax_aspect_ratio", PreferenceDefaults.PARALLAX_ASPECT_RATIO).coerceIn(50, 150)
             val aspectRatioCompensation = aspectRatioVal / 100f
             
             // Apply to parallax calculator
@@ -492,7 +492,7 @@ class ParallaxScene(
             
             // Configure shake detection based on settings
             val shakeEnabled = prefs.getBoolean("pref_shake_fireworks_enabled", true)
-            val shakeSensitivity = prefs.getInt("pref_shake_sensitivity", 50) / 100f
+            val shakeSensitivity = prefs.getInt("pref_shake_sensitivity", PreferenceDefaults.SHAKE_SENSITIVITY) / 100f
             val shakeDelayMs = prefs.getInt("pref_shake_delay", PreferenceDefaults.SHAKE_DELAY_MS).coerceIn(0, 5000)
             sensor.setShakeSettings(shakeEnabled, shakeSensitivity, shakeDelayMs)
             

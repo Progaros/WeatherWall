@@ -14,6 +14,7 @@ import android.graphics.RectF
 import android.graphics.Shader
 import android.os.Build
 import androidx.preference.PreferenceManager
+import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationState
 import info.olli.weatherlwp.util.ColorMath
@@ -865,21 +866,21 @@ class CloudLayer(private val context: Context) : SceneLayer {
         randomSeed = newSeed
         
         // Cloud stretch setting: 50-500 -> 0.5-5.0
-        val stretchVal = prefs.getInt("pref_cloud_stretch", 300)
+        val stretchVal = prefs.getInt("pref_cloud_stretch", PreferenceDefaults.CLOUD_STRETCH)
         val newStretch = stretchVal / 100f
         
         // Cloud opacity setting: 10-100 -> 0.1-1.0
-        val opacityVal = prefs.getInt("pref_cloud_opacity", 40)
+        val opacityVal = prefs.getInt("pref_cloud_opacity", PreferenceDefaults.CLOUD_OPACITY)
         val newOpacity = opacityVal / 100f
         
         // Cloud speed setting: 0-100 -> 0.0-2.0 (50 = normal 1.0)
-        val speedVal = prefs.getInt("pref_cloud_speed", 5)
+        val speedVal = prefs.getInt("pref_cloud_speed", PreferenceDefaults.CLOUD_SPEED)
         cloudSpeedMultiplier = speedVal / 50f  // 0=frozen, 50=normal, 100=2x speed
         
         // Fluffiness/density multiplier: 50-300 -> 0.5-3.0 (controls puffs per cloud)
         // Higher = more puffs per cloud = denser/fluffier individual clouds
         // Does NOT affect number of clouds (that comes from weather data)
-        val densityVal = prefs.getInt("pref_cloud_density", 100)
+        val densityVal = prefs.getInt("pref_cloud_density", PreferenceDefaults.CLOUD_DENSITY)
         val newFluffiness = densityVal / 100f
         val fluffinessChanged = kotlin.math.abs(newFluffiness - fluffinessMultiplier) > 0.01f
         fluffinessMultiplier = newFluffiness

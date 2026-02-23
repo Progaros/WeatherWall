@@ -133,38 +133,45 @@ object RenderConstants {
     // Horizon should be significantly lighter than top (atmosphere thickness)
     // NOTE: Lazy initialization prevents unit test failures when only math functions are used
     
-    // Night: Deep space -> Dark blue -> Slightly lighter horizon
-    val SKY_NIGHT_TOP: Int by lazy { Color.parseColor("#0B0B1A") }      // Deep space
-    val SKY_NIGHT_MID: Int by lazy { Color.parseColor("#141428") }      // Dark blue
-    val SKY_NIGHT_BOTTOM: Int by lazy { Color.parseColor("#252540") }   // Lighter horizon
+    // Night: Deep space -> Dark blue -> Slightly warmer horizon
+    // True dark sky has subtle blue tint, not pure black (atmospheric airglow + light pollution)
+    val SKY_NIGHT_TOP: Int by lazy { Color.parseColor("#0B0D1E") }      // Deep space (hint of blue)
+    val SKY_NIGHT_MID: Int by lazy { Color.parseColor("#151830") }      // Dark navy blue
+    val SKY_NIGHT_BOTTOM: Int by lazy { Color.parseColor("#252848") }   // Warmer blue at horizon
     
-    // Dawn: Orange-purple transition with bright horizon
-    val SKY_DAWN_TOP: Int by lazy { Color.parseColor("#4A3060") }       // Purple-ish
-    val SKY_DAWN_MID: Int by lazy { Color.parseColor("#FF8855") }       // Orange
-    val SKY_DAWN_BOTTOM: Int by lazy { Color.parseColor("#FFCC88") }    // Bright horizon
+    // Dawn: Navy-blue transitioning through muted coral to warm golden horizon
+    // Dawn colors are slightly less vivid than dusk per atmospheric science
+    // (morning air is cleaner -> less Rayleigh scattering -> softer sunrise colors)
+    val SKY_DAWN_TOP: Int by lazy { Color.parseColor("#2E3B5E") }       // Deep navy-blue
+    val SKY_DAWN_MID: Int by lazy { Color.parseColor("#C8887A") }       // Muted coral-salmon (slightly desaturated)
+    val SKY_DAWN_BOTTOM: Int by lazy { Color.parseColor("#F0D0A8") }    // Warm pale golden horizon
     
     // Day: Deep blue -> Blue -> Light horizon haze
     val SKY_DAY_TOP: Int by lazy { Color.parseColor("#1565C0") }        // Deep blue
     val SKY_DAY_MID: Int by lazy { Color.parseColor("#42A5F5") }        // Bright blue
     val SKY_DAY_BOTTOM: Int by lazy { Color.parseColor("#B3E5FC") }     // Light horizon
     
-    // Dusk: Purple -> Orange -> Bright glow at horizon
-    val SKY_DUSK_TOP: Int by lazy { Color.parseColor("#4A2060") }       // Deep purple
-    val SKY_DUSK_MID: Int by lazy { Color.parseColor("#FF6B35") }       // Orange
-    val SKY_DUSK_BOTTOM: Int by lazy { Color.parseColor("#FFAB76") }    // Bright horizon glow
+    // Dusk: Deep purple-blue -> Warm terracotta -> Soft golden-orange horizon
+    // Dusk is more vivid than dawn per atmospheric science (NOAA: evening air
+    // contains more particles from daytime convection -> enhanced Rayleigh scattering
+    // -> deeper oranges and reds)
+    val SKY_DUSK_TOP: Int by lazy { Color.parseColor("#2A1A40") }       // Rich purple-blue (slightly warmer than dawn)
+    val SKY_DUSK_MID: Int by lazy { Color.parseColor("#C85030") }       // Vivid terracotta-orange (more saturated than dawn)
+    val SKY_DUSK_BOTTOM: Int by lazy { Color.parseColor("#F0A060") }    // Warm deep golden-orange horizon
     
-    // Ambient tint colors for global tinting
+    // Ambient tint colors for global tinting (more muted for realism)
     val AMBIENT_NIGHT: Int by lazy { Color.parseColor("#2A2040") }      // Purple-blue night tint
-    val AMBIENT_DAWN: Int by lazy { Color.parseColor("#FF9966") }       // Warm orange dawn tint
+    val AMBIENT_DAWN: Int by lazy { Color.parseColor("#E89070") }       // Muted warm salmon dawn tint
     val AMBIENT_DAY: Int by lazy { Color.parseColor("#E8F0F8") }        // Very light neutral (nearly white with hint of sky)
-    val AMBIENT_DUSK: Int by lazy { Color.parseColor("#FF7744") }       // Orange-red dusk tint
+    val AMBIENT_DUSK: Int by lazy { Color.parseColor("#D06040") }       // Warm terracotta dusk tint
     
     // ============== Time Thresholds (hours) ==============
+    // These are fallback defaults. SkyLayer uses dynamic sunrise/sunset from weather data.
     
-    const val TIME_NIGHT_END = 5.0f
-    const val TIME_DAWN_START = 5.0f
-    const val TIME_DAWN_END = 7.5f
-    const val TIME_DAY_END = 17.0f
+    const val TIME_NIGHT_END = 5.5f
+    const val TIME_DAWN_START = 5.5f
+    const val TIME_DAWN_END = 7.0f
+    const val TIME_DAY_END = 17.5f
     const val TIME_DUSK_END = 20.0f
     
     // ============== Mountain Colors ==============

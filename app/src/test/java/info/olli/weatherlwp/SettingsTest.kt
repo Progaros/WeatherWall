@@ -12,6 +12,7 @@ import org.mockito.Mockito.anyBoolean
 import org.mockito.Mockito.anyInt
 import org.mockito.Mockito.anyString
 import org.mockito.junit.MockitoJUnitRunner
+import info.olli.weatherlwp.PreferenceDefaults
 
 /**
  * Unit tests for Settings & Preferences
@@ -136,22 +137,22 @@ class SettingsTest {
     @Test
     fun testColorVariationRange() {
         // Test minimum (no variation)
-        `when`(mockPrefs.getInt("pref_tree_color_variation", 100)).thenReturn(0)
-        val noVariation = mockPrefs.getInt("pref_tree_color_variation", 100) / 100f
+        `when`(mockPrefs.getInt("pref_tree_color_variation", PreferenceDefaults.TREE_COLOR_VARIATION)).thenReturn(0)
+        val noVariation = mockPrefs.getInt("pref_tree_color_variation", PreferenceDefaults.TREE_COLOR_VARIATION) / 100f
         assertEquals("Zero variation", 0f, noVariation, 0.001f)
         
         // Test maximum (full variation)
-        `when`(mockPrefs.getInt("pref_tree_color_variation", 100)).thenReturn(100)
-        val fullVariation = mockPrefs.getInt("pref_tree_color_variation", 100) / 100f
+        `when`(mockPrefs.getInt("pref_tree_color_variation", PreferenceDefaults.TREE_COLOR_VARIATION)).thenReturn(100)
+        val fullVariation = mockPrefs.getInt("pref_tree_color_variation", PreferenceDefaults.TREE_COLOR_VARIATION) / 100f
         assertEquals("Full variation", 1f, fullVariation, 0.001f)
     }
 
     // C1: Test cloud density integer value (0 = no clouds)
     @Test
     fun testCloudDensityNone() {
-        `when`(mockPrefs.getInt("pref_cloud_density", 15)).thenReturn(0)
+        `when`(mockPrefs.getInt("pref_cloud_density", PreferenceDefaults.CLOUD_DENSITY)).thenReturn(0)
         
-        val density = mockPrefs.getInt("pref_cloud_density", 15)
+        val density = mockPrefs.getInt("pref_cloud_density", PreferenceDefaults.CLOUD_DENSITY)
         
         assertEquals("Density 0 should have 0 clouds", 0, density)
     }
@@ -159,9 +160,9 @@ class SettingsTest {
     // C2: Test cloud density integer value (50 = maximum)
     @Test
     fun testCloudDensityMaximum() {
-        `when`(mockPrefs.getInt("pref_cloud_density", 15)).thenReturn(50)
+        `when`(mockPrefs.getInt("pref_cloud_density", PreferenceDefaults.CLOUD_DENSITY)).thenReturn(50)
         
-        val density = mockPrefs.getInt("pref_cloud_density", 15)
+        val density = mockPrefs.getInt("pref_cloud_density", PreferenceDefaults.CLOUD_DENSITY)
         
         assertEquals("Max density should have 50 clouds", 50, density)
     }
@@ -172,8 +173,8 @@ class SettingsTest {
         val testCases = listOf(0, 10, 15, 25, 40, 50)
         
         testCases.forEach { expected ->
-            `when`(mockPrefs.getInt("pref_cloud_density", 15)).thenReturn(expected)
-            val density = mockPrefs.getInt("pref_cloud_density", 15)
+            `when`(mockPrefs.getInt("pref_cloud_density", PreferenceDefaults.CLOUD_DENSITY)).thenReturn(expected)
+            val density = mockPrefs.getInt("pref_cloud_density", PreferenceDefaults.CLOUD_DENSITY)
             assertEquals("Density $expected should return $expected", expected, density)
         }
     }
