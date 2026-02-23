@@ -108,6 +108,40 @@ class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
         drawWing(1f)
         canvas.restore()
         
+        // Wing spots (darker circles on each wing)
+        val spotColor = RenderConstants.blendWithAmbient(
+            Color.argb(140, 40, 30, 20), ambientColor, 0.2f)
+        paint.color = spotColor
+        // Spots scale with wing opening
+        canvas.save()
+        canvas.scale(leftScale, 1f, currentX, currentY)
+        canvas.drawCircle(currentX - size * 1.2f, currentY - size * 0.6f, size * 0.25f, paint)
+        canvas.drawCircle(currentX - size * 0.8f, currentY + size * 0.5f, size * 0.18f, paint)
+        canvas.restore()
+        canvas.save()
+        canvas.scale(rightScale, 1f, currentX, currentY)
+        canvas.drawCircle(currentX + size * 1.2f, currentY - size * 0.6f, size * 0.25f, paint)
+        canvas.drawCircle(currentX + size * 0.8f, currentY + size * 0.5f, size * 0.18f, paint)
+        canvas.restore()
+        
+        // Body (thin dark line between wings)
+        paint.color = RenderConstants.blendWithAmbient(Color.rgb(40, 30, 20), ambientColor, 0.2f)
+        canvas.drawOval(currentX - size * 0.08f, currentY - size * 0.4f, 
+                        currentX + size * 0.08f, currentY + size * 0.4f, paint)
+        
+        // Antennae
+        strokePaint.color = paint.color
+        strokePaint.strokeWidth = size * 0.04f
+        strokePaint.style = Paint.Style.STROKE
+        canvas.drawLine(currentX - size * 0.05f, currentY - size * 0.35f,
+                        currentX - size * 0.5f, currentY - size * 1.2f, strokePaint)
+        canvas.drawLine(currentX + size * 0.05f, currentY - size * 0.35f,
+                        currentX + size * 0.5f, currentY - size * 1.2f, strokePaint)
+        // Antenna tips (small dots)
+        paint.style = Paint.Style.FILL
+        canvas.drawCircle(currentX - size * 0.5f, currentY - size * 1.2f, size * 0.06f, paint)
+        canvas.drawCircle(currentX + size * 0.5f, currentY - size * 1.2f, size * 0.06f, paint)
+        
         canvas.restore()
     }
 }

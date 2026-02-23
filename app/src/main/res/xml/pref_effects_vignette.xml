@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="Bottom Edge">
+        <SeekBarPreference
+            android:key="pref_vignette_bottom_distance"
+            android:title="Bottom Distance"
+            android:summary="How far vignette extends into screen (0=off, 50=half)"
+            android:defaultValue="25"
+            android:max="50"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_vignette_bottom_fade"
+            android:title="Bottom Fade"
+            android:summary="Fade zone size (5=sharp, 50=smooth)"
+            android:defaultValue="15"
+            android:max="50"
+            app:min="5"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_vignette_bottom_alpha"
+            android:title="Bottom Opacity"
+            android:summary="How dark the solid part is (0=transparent, 100=black)"
+            android:defaultValue="70"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="Top Edge">
+        <SeekBarPreference
+            android:key="pref_vignette_top_distance"
+            android:title="Top Distance"
+            android:summary="How far vignette extends into screen (0=off)"
+            android:defaultValue="0"
+            android:max="50"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_vignette_top_fade"
+            android:title="Top Fade"
+            android:summary="Fade zone size (5=sharp, 50=smooth)"
+            android:defaultValue="20"
+            android:max="50"
+            app:min="5"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_vignette_top_alpha"
+            android:title="Top Opacity"
+            android:summary="How dark the solid part is (0=transparent, 100=black)"
+            android:defaultValue="60"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="Left Edge">
+        <SeekBarPreference
+            android:key="pref_vignette_left_distance"
+            android:title="Left Distance"
+            android:summary="How far vignette extends into screen (0=off)"
+            android:defaultValue="0"
+            android:max="50"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_vignette_left_fade"
+            android:title="Left Fade"
+            android:summary="Fade zone size (5=sharp, 50=smooth)"
+            android:defaultValue="20"
+            android:max="50"
+            app:min="5"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_vignette_left_alpha"
+            android:title="Left Opacity"
+            android:summary="How dark the solid part is (0=transparent, 100=black)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="Right Edge">
+        <SeekBarPreference
+            android:key="pref_vignette_right_distance"
+            android:title="Right Distance"
+            android:summary="How far vignette extends into screen (0=off)"
+            android:defaultValue="0"
+            android:max="50"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_vignette_right_fade"
+            android:title="Right Fade"
+            android:summary="Fade zone size (5=sharp, 50=smooth)"
+            android:defaultValue="20"
+            android:max="50"
+            app:min="5"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_vignette_right_alpha"
+            android:title="Right Opacity"
+            android:summary="How dark the solid part is (0=transparent, 100=black)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

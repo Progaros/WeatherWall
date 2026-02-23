@@ -18,3 +18,4 @@ __pycache__/
 .venv/
 *.log
 ai.md
+event_renders/

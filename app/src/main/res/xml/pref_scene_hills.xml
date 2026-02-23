@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="Hill Geometry">
+        <SeekBarPreference
+            android:key="pref_hill_lower_start"
+            android:title="Far Hills Position"
+            android:summary="Where far hills start (30-70%)"
+            android:defaultValue="60"
+            android:max="70"
+            app:min="30"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_hill_upper_end"
+            android:title="Near Hills Position"
+            android:summary="Where near hills end (60-100%)"
+            android:defaultValue="95"
+            android:max="100"
+            app:min="60"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_hill_roughness"
+            android:title="Hill Roughness"
+            android:summary="Curve detail (0=smooth, 100=normal, 200=rough)"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_hill_amplitude"
+            android:title="Hill Height"
+            android:summary="Vertical scale (0=flat, 100=normal, 1000=extreme)"
+            android:defaultValue="354"
+            android:max="1000"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_hill_frequency"
+            android:title="Hill Frequency"
+            android:summary="Hills per layer (50=few, 100=normal, 200=many)"
+            android:defaultValue="170"
+            android:max="200"
+            app:min="25"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_hill_distance"
+            android:title="Hill Distance"
+            android:summary="Pushes hills away (0=at camera, 100=near mountains)"
+            android:defaultValue="0"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_hill_depth_spread"
+            android:title="Hill Depth Spread"
+            android:summary="Z-axis spread (0=flat layer, 100=deep range)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

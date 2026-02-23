@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="Simulation Overrides">
+        <SeekBarPreference
+            android:key="pref_manual_time"
+            android:title="Time of Day"
+            android:summary="Minutes since midnight (0-1439)"
+            android:defaultValue="720"
+            android:max="1439"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_wind_strength"
+            android:title="Wind Strength"
+            android:summary="Simulated wind (0=calm, 100=storm)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <ListPreference
+            android:key="pref_weather_type"
+            android:title="Weather Type"
+            android:summary="Force specific weather"
+            android:entries="@array/weather_options"
+            android:entryValues="@array/weather_values"
+            android:defaultValue="auto" />
+
+        <ListPreference
+            android:key="pref_debug_cloud_override"
+            android:title="Cloud Density"
+            android:summary="Force cloud amount"
+            android:entries="@array/cloud_density_options"
+            android:entryValues="@array/cloud_density_values"
+            android:defaultValue="auto" />
+
+        <ListPreference
+            android:key="pref_debug_season"
+            android:title="Season Override"
+            android:summary="Force seasonal events"
+            android:entries="@array/season_options"
+            android:entryValues="@array/season_values"
+            android:defaultValue="auto" />
+
+        <ListPreference
+            android:key="pref_terrain_season"
+            android:title="Terrain Season"
+            android:summary="Override terrain (flowers, grass, snow)"
+            android:entries="@array/terrain_season_options"
+            android:entryValues="@array/terrain_season_values"
+            android:defaultValue="auto" />
+
+        <SeekBarPreference
+            android:key="pref_moon_phase"
+            android:title="Moon Phase"
+            android:summary="0=New, 50=Full, 100=New (cycle end)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

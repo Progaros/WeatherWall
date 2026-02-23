@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="Spring">
+        <SwitchPreferenceCompat
+            android:key="pref_spring_flowers"
+            android:title="Spring Flowers"
+            android:summary="Colorful flower dots on hills in spring"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_spring_flower_density"
+            android:title="Flower Density"
+            android:summary="Total flowers across all hills (0=few, 1000=many)"
+            android:defaultValue="500"
+            android:max="1000"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_spring_flowers" />
+
+        <SeekBarPreference
+            android:key="pref_spring_flower_spread"
+            android:title="Flower Spread"
+            android:summary="How far down hills flowers spread (0=on line, 100=full)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_spring_flowers" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="Autumn">
+        <SwitchPreferenceCompat
+            android:key="pref_autumn_grass"
+            android:title="Autumn Grass Color"
+            android:summary="Browner grass color in autumn"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_autumn_grass_intensity"
+            android:title="Autumn Intensity"
+            android:summary="How brown the grass becomes (0=subtle, 100=very brown)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_autumn_grass" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="Winter">
+        <SwitchPreferenceCompat
+            android:key="pref_winter_snow_hills"
+            android:title="Winter Snow Patches"
+            android:summary="Snow patches on hill tops in winter"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_winter_snow_coverage"
+            android:title="Snow Coverage"
+            android:summary="How much of hill tops are covered (0=light, 100=heavy)"
+            android:defaultValue="25"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_winter_snow_hills" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

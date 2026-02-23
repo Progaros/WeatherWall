@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <!-- Christmas -->
+    <PreferenceCategory android:title="Christmas">
+        <SwitchPreferenceCompat
+            android:key="pref_christmas_enabled"
+            android:title="Christmas"
+            android:summary="Bethlehem star with trail (around Dec 25)"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_christmas_interval"
+            android:title="Christmas Interval"
+            android:summary="±days around Dec 25 (0=only Dec 25, 15=Dec 10 - Jan 9)"
+            android:defaultValue="1"
+            android:max="30"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_christmas_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_christmas_star_size"
+            android:title="Christmas Star Size"
+            android:summary="Bethlehem star size (50-200%)"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="50"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_christmas_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_christmas_star_trail"
+            android:title="Star Trail Length"
+            android:summary="Trailing light effect (0-200%)"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_christmas_enabled" />
+    </PreferenceCategory>
+
+    <!-- New Year -->
+    <PreferenceCategory android:title="New Year">
+        <SwitchPreferenceCompat
+            android:key="pref_newyear_enabled"
+            android:title="New Year"
+            android:summary="Fireworks (around Jan 1)"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_newyear_interval"
+            android:title="New Year Interval"
+            android:summary="±days around Jan 1 (0=only Jan 1, 15=Dec 17 - Jan 16)"
+            android:defaultValue="1"
+            android:max="30"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_newyear_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_firework_frequency"
+            android:title="Firework Frequency"
+            android:summary="How often fireworks launch (0=rare, 100=constant)"
+            android:defaultValue="45"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_newyear_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_firework_amount"
+            android:title="Firework Amount"
+            android:summary="Particles per explosion (10=subtle, 200=spectacular)"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="10"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_newyear_enabled" />
+    </PreferenceCategory>
+
+    <!-- Chinese New Year -->
+    <PreferenceCategory android:title="Chinese New Year">
+        <SwitchPreferenceCompat
+            android:key="pref_cn_newyear_enabled"
+            android:title="Chinese New Year"
+            android:summary="Dragon + fireworks (around Feb 1)"
+            android:defaultValue="false" />
+
+        <SeekBarPreference
+            android:key="pref_cn_newyear_interval"
+            android:title="CN New Year Interval"
+            android:summary="±days around Feb 1 (0=only Feb 1, 20=Jan 12 - Feb 21)"
+            android:defaultValue="0"
+            android:max="30"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_cn_newyear_enabled" />
+    </PreferenceCategory>
+
+    <!-- St. Patrick's Day -->
+    <PreferenceCategory android:title="St. Patrick's Day">
+        <SwitchPreferenceCompat
+            android:key="pref_st_patricks_enabled"
+            android:title="St. Patrick's Day"
+            android:summary="Rainbow (around Mar 17)"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_st_patricks_interval"
+            android:title="St. Patrick's Interval"
+            android:summary="±days around Mar 17 (0=only Mar 17, 10=Mar 7 - Mar 27)"
+            android:defaultValue="0"
+            android:max="30"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_st_patricks_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_rainbow_position_x"
+            android:title="Rainbow Horizontal Position"
+            android:summary="Left to right placement (0=left, 100=right)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_st_patricks_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_rainbow_position_y"
+            android:title="Rainbow Vertical Position"
+            android:summary="Top to bottom placement (0=top, 100=bottom)"
+            android:defaultValue="40"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_st_patricks_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_rainbow_size"
+            android:title="Rainbow Size"
+            android:summary="Arc size (20=small, 200=large)"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="20"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_st_patricks_enabled" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

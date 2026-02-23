@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="Weather Particles">
+        <SeekBarPreference
+            android:key="pref_weather_layers"
+            android:title="Depth Layers"
+            android:summary="Number of particle depth layers (1=flat, 3=default, 5=deep)"
+            android:defaultValue="3"
+            android:max="5"
+            app:min="1"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_weather_layer_separation"
+            android:title="Layer Separation"
+            android:summary="Size difference between layers (10=subtle, 30=default, 50=extreme)"
+            android:defaultValue="30"
+            android:max="50"
+            app:min="10"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_weather_layer_depth"
+            android:title="Layer Parallax Depth"
+            android:summary="How much back layers move with parallax (10=subtle, 20=default, 40=extreme)"
+            android:defaultValue="20"
+            android:max="40"
+            app:min="10"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="Shadows &amp; Lighting">
+        <SwitchPreferenceCompat
+            android:key="pref_mountain_shadows_enabled"
+            android:title="Mountain Shadows"
+            android:summary="Mountain sides darken based on sun position"
+            android:defaultValue="true" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_tree_shadows_enabled"
+            android:title="Tree Shadows"
+            android:summary="Trees cast shadows on the ground"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_shadow_strength"
+            android:title="Shadow Intensity"
+            android:summary="Darkness of shadows (0=subtle, 50=normal, 100=strong)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

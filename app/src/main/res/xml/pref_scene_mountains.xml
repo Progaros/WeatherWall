@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="Mountain Geometry">
+        <SeekBarPreference
+            android:key="pref_mountain_width"
+            android:title="Mountain Width"
+            android:summary="Width scale (50=narrow, 100=normal, 200=wide)"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="50"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_mountain_height"
+            android:title="Mountain Height"
+            android:summary="Height scale (50=short, 100=normal, 200=tall)"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="25"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_mountain_roughness"
+            android:title="Mountain Roughness"
+            android:summary="Jaggedness (0=smooth, 100=normal, 200=rough)"
+            android:defaultValue="80"
+            android:max="200"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_mountain_ridge_roughness"
+            android:title="Ridge Roughness"
+            android:summary="Center ridge detail (0=smooth, 100=jagged)"
+            android:defaultValue="50"
+            android:max="200"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_mountain_bottom_offset"
+            android:title="Mountain Position"
+            android:summary="Shift mountains up (0=bottom, 50=halfway)"
+            android:defaultValue="0"
+            android:max="50"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

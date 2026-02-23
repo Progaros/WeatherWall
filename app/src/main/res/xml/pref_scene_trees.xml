@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="Tree Placement">
+        <SeekBarPreference
+            android:key="pref_tree_spread"
+            android:title="Tree Spread"
+            android:summary="Placement range (0=peaks, 100=full hills)"
+            android:defaultValue="80"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_tree_sparsity"
+            android:title="Tree Gaps"
+            android:summary="Gap size (0=uniform, 30=natural, 80=sparse)"
+            android:defaultValue="30"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="Tree Appearance">
+        <SeekBarPreference
+            android:key="pref_tree_size_randomness"
+            android:title="Size Variation"
+            android:summary="Tree size variety (0=uniform, 100=varied)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_tree_size"
+            android:title="Tree Size"
+            android:summary="Overall scale (50=small, 100=normal, 200=tall)"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="25"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_tree_width"
+            android:title="Tree Width"
+            android:summary="Width ratio (50=thin, 100=normal, 200=wide)"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="20"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_tree_segments"
+            android:title="Tree Segments"
+            android:summary="Tiers per tree (1=simple, 5=detailed)"
+            android:defaultValue="1"
+            android:max="5"
+            app:min="1"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_tree_color_variation"
+            android:title="Color Variation"
+            android:summary="Color diversity (0=uniform, 100=varied)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

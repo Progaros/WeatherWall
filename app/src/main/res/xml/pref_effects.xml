@@ -2,39 +2,19 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <!-- Sky & Celestial -->
-    <PreferenceCategory android:title="Sky">
+    <!-- Effects - Essential toggles only, details in sub-screens -->
+    <PreferenceCategory android:title="Key Effects">
         <SwitchPreferenceCompat
-            android:key="pref_sun_enabled"
-            android:title="Show Sun"
-            android:summary="Display sun in daytime sky"
+            android:key="pref_parallax_enabled"
+            android:title="Enable 3D Parallax"
+            android:summary="Tilt phone to look around the scene"
             android:defaultValue="true" />
 
         <SwitchPreferenceCompat
-            android:key="pref_moon_enabled"
-            android:title="Show Moon"
-            android:summary="Display moon at night"
+            android:key="pref_clouds_enabled"
+            android:title="Enable Clouds"
+            android:summary="Moving clouds in the sky"
             android:defaultValue="true" />
-
-        <SeekBarPreference
-            android:key="pref_celestial_size"
-            android:title="Sun/Moon Size"
-            android:summary="Size of celestial bodies (50=small, 100=normal, 200=large)"
-            android:defaultValue="100"
-            android:max="200"
-            app:min="25"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true" />
-
-        <SeekBarPreference
-            android:key="pref_celestial_arc_height"
-            android:title="Arc Height"
-            android:summary="How high sun/moon travel (100=top, 50=middle, 0=near horizon)"
-            android:defaultValue="66"
-            android:max="100"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true" />
 
         <SeekBarPreference
             android:key="pref_night_shade_strength"
@@ -47,471 +27,42 @@
             app:updatesContinuously="true" />
     </PreferenceCategory>
 
-    <!-- Wind Effects -->
-    <PreferenceCategory android:title="Wind Animation">
-        <SeekBarPreference
-            android:key="pref_wind_multiplier"
-            android:title="Tree Flexibility"
-            android:summary="How much trees bend in gusts (0=rigid, 100=normal, 300=very flexible)"
-            android:defaultValue="200"
-            android:max="300"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true" />
+    <PreferenceCategory android:title="Customize">
+        <Preference
+            android:key="pref_nav_sky"
+            android:title="Sky &amp; Wind"
+            android:summary="Sun, moon, celestial size, tree sway"
+            app:fragment="info.olli.weatherlwp.settings.EffectsSkyFragment" />
 
-        <SeekBarPreference
-            android:key="pref_tree_sway_speed"
-            android:title="Sway Speed"
-            android:summary="How fast trees sway back (0=frozen, 100=normal, 200=fast)"
-            android:defaultValue="100"
-            android:max="200"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true" />
-    </PreferenceCategory>
+        <Preference
+            android:key="pref_nav_parallax"
+            android:title="3D Parallax"
+            android:summary="Sensor, sensitivity, depth, smoothing"
+            app:fragment="info.olli.weatherlwp.settings.EffectsParallaxFragment" />
 
-    <!-- 3D Parallax Settings -->
-    <PreferenceCategory android:title="3D Parallax">
-        <SwitchPreferenceCompat
-            android:key="pref_parallax_enabled"
-            android:title="Enable 3D Parallax"
-            android:summary="Tilt phone to look around the scene"
-            android:defaultValue="true" />
+        <Preference
+            android:key="pref_nav_clouds"
+            android:title="Clouds"
+            android:summary="Fluffiness, shape, opacity, speed, render mode"
+            app:fragment="info.olli.weatherlwp.settings.EffectsCloudsFragment" />
 
-        <ListPreference
-            android:key="pref_parallax_sensor_mode"
-            android:title="Sensor Mode"
-            android:summary="rotation_vector=robust (default), gyroscope=smooth"
-            android:defaultValue="gyroscope"
-            android:entries="@array/parallax_sensor_mode_entries"
-            android:entryValues="@array/parallax_sensor_mode_values"
-            android:dependency="pref_parallax_enabled" />
+        <Preference
+            android:key="pref_nav_weather_shadows"
+            android:title="Weather &amp; Shadows"
+            android:summary="Rain/snow particles, shadow settings"
+            app:fragment="info.olli.weatherlwp.settings.EffectsWeatherShadowsFragment" />
 
-        <SeekBarPreference
-            android:key="pref_parallax_strength"
-            android:title="Tilt Sensitivity"
-            android:summary="Response to phone tilt (1%=subtle, 100%=high)"
-            android:defaultValue="16"
-            android:max="100"
-            app:min="1"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_parallax_enabled" />
+        <Preference
+            android:key="pref_nav_seasonal"
+            android:title="Seasonal Terrain"
+            android:summary="Spring flowers, autumn grass, winter snow"
+            app:fragment="info.olli.weatherlwp.settings.EffectsSeasonalFragment" />
 
-        <SeekBarPreference
-            android:key="pref_parallax_max_offset"
-            android:title="Max Movement"
-            android:summary="Scene shift as % of screen height (2-40%)"
-            android:defaultValue="40"
-            android:max="40"
-            app:min="2"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_parallax_enabled" />
-
-        <SeekBarPreference
-            android:key="pref_parallax_return_speed"
-            android:title="Return Speed"
-            android:summary="Recenter speed (0=stay, 50=~0.3s, 100=instant)"
-            android:defaultValue="47"
-            android:max="100"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_parallax_enabled" />
-
-        <SeekBarPreference
-            android:key="pref_parallax_smoothing"
-            android:title="Smoothing"
-            android:summary="Movement smoothness (0=instant, 1=responsive, 100=floaty)"
-            android:defaultValue="1"
-            android:max="100"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_parallax_enabled" />
-
-        <SeekBarPreference
-            android:key="pref_parallax_edge_easing"
-            android:title="Edge Easing"
-            android:summary="Slowdown near edges (0=linear, 50=soft, 100=center-only)"
-            android:defaultValue="10"
-            android:max="100"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_parallax_enabled" />
-
-        <SwitchPreferenceCompat
-            android:key="pref_parallax_return_unlocked"
-            android:title="Fast Return"
-            android:summary="Return to center ignores edge easing (always fast)"
-            android:defaultValue="true"
-            android:dependency="pref_parallax_enabled" />
-
-        <SeekBarPreference
-            android:key="pref_parallax_depth"
-            android:title="Depth Effect"
-            android:summary="Layer separation (0=flat, 50=normal, 100=max 3D)"
-            android:defaultValue="70"
-            android:max="100"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_parallax_enabled" />
-
-        <SeekBarPreference
-            android:key="pref_parallax_perspective"
-            android:title="Perspective"
-            android:summary="0=foreground moves (head tilts), 100=background moves (window shifts)"
-            android:defaultValue="100"
-            android:max="100"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_parallax_enabled" />
-
-        <SwitchPreferenceCompat
-            android:key="pref_parallax_invert_x"
-            android:title="Invert Horizontal"
-            android:summary="Reverse left/right parallax direction"
-            android:defaultValue="false"
-            android:dependency="pref_parallax_enabled" />
-
-        <SwitchPreferenceCompat
-            android:key="pref_parallax_invert_y"
-            android:title="Invert Vertical"
-            android:summary="Reverse up/down parallax direction"
-            android:defaultValue="true"
-            android:dependency="pref_parallax_enabled" />
-
-        <SeekBarPreference
-            android:key="pref_parallax_aspect_ratio"
-            android:title="H/V Ratio"
-            android:summary="Horizontal vs vertical movement (50=less H, 100=equal, 150=more H)"
-            android:defaultValue="100"
-            android:max="150"
-            app:min="50"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_parallax_enabled" />
-    </PreferenceCategory>
-
-    <!-- Cloud Settings -->
-    <PreferenceCategory android:title="Clouds">
-        <SwitchPreferenceCompat
-            android:key="pref_clouds_enabled"
-            android:title="Enable Clouds"
-            android:summary="Moving clouds in the sky"
-            android:defaultValue="true" />
-
-        <SeekBarPreference
-            android:key="pref_cloud_density"
-            android:title="Cloud Fluffiness"
-            android:summary="Density per cloud (50=thin, 100=normal, 300=fluffy)"
-            android:defaultValue="100"
-            android:max="300"
-            app:min="50"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_clouds_enabled" />
-
-        <SeekBarPreference
-            android:key="pref_cloud_stretch"
-            android:title="Cloud Shape"
-            android:summary="Horizontal stretch (100=round, 400=wispy)"
-            android:defaultValue="300"
-            android:max="500"
-            app:min="50"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_clouds_enabled" />
-
-        <SeekBarPreference
-            android:key="pref_cloud_opacity"
-            android:title="Cloud Opacity"
-            android:summary="Transparency (10=faint, 40=normal, 100=solid)"
-            android:defaultValue="60"
-            android:max="100"
-            app:min="10"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_clouds_enabled" />
-
-        <SeekBarPreference
-            android:key="pref_cloud_speed"
-            android:title="Cloud Speed"
-            android:summary="Movement speed (0=frozen, 50=normal, 100=fast)"
-            android:defaultValue="45"
-            android:max="100"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_clouds_enabled" />
-
-        <ListPreference
-            android:key="pref_cloud_render_mode"
-            android:title="Cloud Render Mode"
-            android:summary="Drawing method (Cached=detailed default, Tiled=fast stylized, Shader=GPU)"
-            android:entries="@array/cloud_render_mode_options"
-            android:entryValues="@array/cloud_render_mode_values"
-            android:defaultValue="cached"
-            android:dependency="pref_clouds_enabled" />
-    </PreferenceCategory>
-
-    <!-- Shadows & Lighting -->
-    <PreferenceCategory android:title="Shadows &amp; Lighting">
-        <SwitchPreferenceCompat
-            android:key="pref_mountain_shadows_enabled"
-            android:title="Mountain Shadows"
-            android:summary="Mountain sides darken based on sun position"
-            android:defaultValue="true" />
-
-        <SwitchPreferenceCompat
-            android:key="pref_tree_shadows_enabled"
-            android:title="Tree Shadows"
-            android:summary="Trees cast shadows on the ground"
-            android:defaultValue="true" />
-
-        <SeekBarPreference
-            android:key="pref_shadow_strength"
-            android:title="Shadow Intensity"
-            android:summary="Darkness of shadows (0=subtle, 50=normal, 100=strong)"
-            android:defaultValue="50"
-            android:max="100"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true" />
-    </PreferenceCategory>
-
-    <!-- Seasonal Terrain Effects -->
-    <!-- Weather Effects (Rain/Snow/Lightning) -->
-    <PreferenceCategory android:title="Weather Effects">
-        <SeekBarPreference
-            android:key="pref_weather_layers"
-            android:title="Depth Layers"
-            android:summary="Number of particle depth layers (1=flat, 3=default, 5=deep)"
-            android:defaultValue="3"
-            android:max="5"
-            app:min="1"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true" />
-
-        <SeekBarPreference
-            android:key="pref_weather_layer_separation"
-            android:title="Layer Separation"
-            android:summary="Size difference between layers (10=subtle, 30=default, 50=extreme)"
-            android:defaultValue="30"
-            android:max="50"
-            app:min="10"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true" />
-
-        <SeekBarPreference
-            android:key="pref_weather_layer_depth"
-            android:title="Layer Parallax Depth"
-            android:summary="How much back layers move with parallax (10=subtle, 20=default, 40=extreme)"
-            android:defaultValue="20"
-            android:max="40"
-            app:min="10"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true" />
-    </PreferenceCategory>
-
-    <PreferenceCategory android:title="Seasonal Terrain">
-        <!-- Note: Terrain Season Override is in Simulation Mode (System settings) -->
-
-        <!-- Spring Flowers -->
-        <SwitchPreferenceCompat
-            android:key="pref_spring_flowers"
-            android:title="Spring Flowers"
-            android:summary="Colorful flower dots on hills in spring"
-            android:defaultValue="true" />
-
-        <SeekBarPreference
-            android:key="pref_spring_flower_density"
-            android:title="Flower Density"
-            android:summary="Total flowers across all hills (0=few, 1000=many)"
-            android:defaultValue="500"
-            android:max="1000"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_spring_flowers" />
-
-        <SeekBarPreference
-            android:key="pref_spring_flower_spread"
-            android:title="Flower Spread"
-            android:summary="How far down hills flowers spread (0=on line, 100=full)"
-            android:defaultValue="50"
-            android:max="100"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_spring_flowers" />
-
-        <!-- Autumn Grass -->
-        <SwitchPreferenceCompat
-            android:key="pref_autumn_grass"
-            android:title="Autumn Grass Color"
-            android:summary="Browner grass color in autumn"
-            android:defaultValue="true" />
-
-        <SeekBarPreference
-            android:key="pref_autumn_grass_intensity"
-            android:title="Autumn Intensity"
-            android:summary="How brown the grass becomes (0=subtle, 100=very brown)"
-            android:defaultValue="50"
-            android:max="100"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_autumn_grass" />
-
-        <!-- Winter Snow on Hills -->
-        <SwitchPreferenceCompat
-            android:key="pref_winter_snow_hills"
-            android:title="Winter Snow Patches"
-            android:summary="Snow patches on hill tops in winter"
-            android:defaultValue="true" />
-
-        <SeekBarPreference
-            android:key="pref_winter_snow_coverage"
-            android:title="Snow Coverage"
-            android:summary="How much of hill tops are covered (0=light, 100=heavy)"
-            android:defaultValue="25"
-            android:max="100"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_winter_snow_hills" />
-    </PreferenceCategory>
-
-    <!-- Vignette / Edge Darkening -->
-    <PreferenceCategory android:title="Edge Vignette">
-        <!-- Bottom (for app dock) -->
-        <SeekBarPreference
-            android:key="pref_vignette_bottom_distance"
-            android:title="Bottom Distance"
-            android:summary="How far vignette extends into screen (0=off, 50=half)"
-            android:defaultValue="25"
-            android:max="50"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true" />
-
-        <SeekBarPreference
-            android:key="pref_vignette_bottom_fade"
-            android:title="Bottom Fade"
-            android:summary="Fade zone size (5=sharp, 50=smooth)"
-            android:defaultValue="15"
-            android:max="50"
-            app:min="5"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true" />
-
-        <SeekBarPreference
-            android:key="pref_vignette_bottom_alpha"
-            android:title="Bottom Opacity"
-            android:summary="How dark the solid part is (0=transparent, 100=black)"
-            android:defaultValue="70"
-            android:max="100"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true" />
-
-        <!-- Top -->
-        <SeekBarPreference
-            android:key="pref_vignette_top_distance"
-            android:title="Top Distance"
-            android:summary="How far vignette extends into screen (0=off)"
-            android:defaultValue="0"
-            android:max="50"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true" />
-
-        <SeekBarPreference
-            android:key="pref_vignette_top_fade"
-            android:title="Top Fade"
-            android:summary="Fade zone size (5=sharp, 50=smooth)"
-            android:defaultValue="20"
-            android:max="50"
-            app:min="5"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true" />
-
-        <SeekBarPreference
-            android:key="pref_vignette_top_alpha"
-            android:title="Top Opacity"
-            android:summary="How dark the solid part is (0=transparent, 100=black)"
-            android:defaultValue="60"
-            android:max="100"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true" />
-
-        <!-- Left -->
-        <SeekBarPreference
-            android:key="pref_vignette_left_distance"
-            android:title="Left Distance"
-            android:summary="How far vignette extends into screen (0=off)"
-            android:defaultValue="0"
-            android:max="50"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true" />
-
-        <SeekBarPreference
-            android:key="pref_vignette_left_fade"
-            android:title="Left Fade"
-            android:summary="Fade zone size (5=sharp, 50=smooth)"
-            android:defaultValue="20"
-            android:max="50"
-            app:min="5"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true" />
-
-        <SeekBarPreference
-            android:key="pref_vignette_left_alpha"
-            android:title="Left Opacity"
-            android:summary="How dark the solid part is (0=transparent, 100=black)"
-            android:defaultValue="50"
-            android:max="100"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true" />
-
-        <!-- Right -->
-        <SeekBarPreference
-            android:key="pref_vignette_right_distance"
-            android:title="Right Distance"
-            android:summary="How far vignette extends into screen (0=off)"
-            android:defaultValue="0"
-            android:max="50"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true" />
-
-        <SeekBarPreference
-            android:key="pref_vignette_right_fade"
-            android:title="Right Fade"
-            android:summary="Fade zone size (5=sharp, 50=smooth)"
-            android:defaultValue="20"
-            android:max="50"
-            app:min="5"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true" />
-
-        <SeekBarPreference
-            android:key="pref_vignette_right_alpha"
-            android:title="Right Opacity"
-            android:summary="How dark the solid part is (0=transparent, 100=black)"
-            android:defaultValue="50"
-            android:max="100"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true" />
+        <Preference
+            android:key="pref_nav_vignette"
+            android:title="Edge Vignette"
+            android:summary="Screen edge darkening (bottom, top, sides)"
+            app:fragment="info.olli.weatherlwp.settings.EffectsVignetteFragment" />
     </PreferenceCategory>
 
 </PreferenceScreen>

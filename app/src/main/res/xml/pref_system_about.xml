@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="Version">
+        <Preference
+            android:key="pref_version"
+            android:title="Version"
+            android:selectable="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="Weather Data">
+        <Preference
+            android:key="pref_check_breezy"
+            android:title="Check Connection"
+            android:summary="Test Breezy Weather connection" />
+
+        <Preference
+            android:key="pref_copy_weather_data"
+            android:title="Copy Weather Data"
+            android:summary="Copy raw JSON to clipboard for debugging" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="Debug">
+        <SwitchPreferenceCompat
+            android:key="pref_debug_logging"
+            android:title="Debug Logging"
+            android:summary="Enable tracing (copies log when disabled)"
+            android:defaultValue="false" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_debug_frame_timing"
+            android:title="Frame Timing"
+            android:summary="Log slow frames (&gt;16ms) for performance analysis"
+            android:defaultValue="false" />
+
+        <info.olli.weatherlwp.settings.DebugOverlayPreference
+            android:key="pref_debug_overlay_enabled"
+            android:title="🐞 Debug Overlay"
+            android:summary="Show FPS, frame time, and debug info on screen"
+            android:defaultValue="false" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="Actions">
+        <Preference
+            android:key="pref_copy_settings"
+            android:title="Copy All Settings"
+            android:summary="Copy every preference value to clipboard" />
+
+        <Preference
+            android:key="pref_preview"
+            android:title="Preview Wallpaper"
+            android:summary="Open wallpaper preview" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

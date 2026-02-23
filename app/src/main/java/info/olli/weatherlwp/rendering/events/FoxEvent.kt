@@ -94,7 +94,12 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         // Body
         canvas.drawOval(-2.4f*s, -1.2f*s, 2.0f*s, 0.2f*s, paint)
         
+        // Belly (lighter underside)
+        paint.color = RenderConstants.blendWithAmbient(Color.rgb(230, 190, 140), ambientColor, 0.3f)
+        canvas.drawOval(-1.8f*s, -0.5f*s, 1.5f*s, 0.15f*s, paint)
+        
         // Head + snout
+        paint.color = RenderConstants.blendWithAmbient(Color.rgb(200, 90, 30), ambientColor, 0.3f)
         canvas.drawOval(1.7f*s, -1.8f*s, 3.2f*s, -0.6f*s, paint)
         paint.color = Color.rgb(240, 200, 180)
         canvas.drawOval(2.7f*s, -1.4f*s, 3.7f*s, -0.9f*s, paint)
@@ -127,12 +132,36 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         path.close()
         canvas.drawPath(path, paint)
         
+        // Inner ear (pink)
+        paint.color = RenderConstants.blendWithAmbient(Color.rgb(200, 130, 120), ambientColor, 0.3f)
+        path.reset()
+        path.moveTo(2.25f*s, -1.65f*s)
+        path.lineTo(2.15f*s, -2.15f*s)
+        path.lineTo(2.5f*s, -1.65f*s)
+        path.close()
+        canvas.drawPath(path, paint)
+        
+        path.reset()
+        path.moveTo(2.85f*s, -1.65f*s)
+        path.lineTo(2.95f*s, -2.05f*s)
+        path.lineTo(3.15f*s, -1.65f*s)
+        path.close()
+        canvas.drawPath(path, paint)
+        
         // Eye (small dark dot on head)
         paint.color = Color.rgb(20, 15, 10)
         canvas.drawCircle(2.6f*s, -1.35f*s, 0.12f*s, paint)
         
         // Nose (black dot on snout)
         canvas.drawCircle(3.5f*s, -1.15f*s, 0.1f*s, paint)
+        
+        // Whiskers
+        strokePaint.color = Color.argb(80, 60, 40, 30)
+        strokePaint.strokeWidth = 0.04f * s
+        strokePaint.style = Paint.Style.STROKE
+        canvas.drawLine(3.4f*s, -1.1f*s, 4.1f*s, -1.35f*s, strokePaint)
+        canvas.drawLine(3.4f*s, -1.1f*s, 4.2f*s, -1.1f*s, strokePaint)
+        canvas.drawLine(3.4f*s, -1.05f*s, 4.1f*s, -0.85f*s, strokePaint)
         
         canvas.restore()
         canvas.restore()

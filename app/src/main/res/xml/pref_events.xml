@@ -2,7 +2,7 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <!-- Random Events -->
+    <!-- Events - Essential toggles only, details in sub-screens -->
     <PreferenceCategory android:title="Random Events">
         <SwitchPreferenceCompat
             android:key="pref_events_enabled"
@@ -26,127 +26,14 @@
             android:title="Spawn Random Event"
             android:summary="Manually trigger a random enabled event"
             android:dependency="pref_events_enabled" />
+
+        <Preference
+            android:key="pref_nav_choose_events"
+            android:title="Choose Events"
+            android:summary="Enable/disable individual event types"
+            app:fragment="info.olli.weatherlwp.settings.EventsChooseFragment" />
     </PreferenceCategory>
 
-    <!-- Sky Events (using custom spawn preference) -->
-    <PreferenceCategory android:title="Sky Events">
-        <info.olli.weatherlwp.settings.SpawnSwitchPreference
-            android:key="pref_event_airplane"
-            android:title="Airplanes"
-            android:summary="Planes with contrails"
-            android:defaultValue="true"
-            android:dependency="pref_events_enabled" />
-
-        <info.olli.weatherlwp.settings.SpawnSwitchPreference
-            android:key="pref_event_birds"
-            android:title="Bird Flocks"
-            android:summary="V-formation flocks"
-            android:defaultValue="true"
-            android:dependency="pref_events_enabled" />
-
-        <info.olli.weatherlwp.settings.SpawnSwitchPreference
-            android:key="pref_event_eagle"
-            android:title="Eagles"
-            android:summary="Soaring silhouettes"
-            android:defaultValue="true"
-            android:dependency="pref_events_enabled" />
-
-        <info.olli.weatherlwp.settings.SpawnSwitchPreference
-            android:key="pref_event_owl"
-            android:title="Owls"
-            android:summary="Night-only silhouettes"
-            android:defaultValue="true"
-            android:dependency="pref_events_enabled" />
-
-        <info.olli.weatherlwp.settings.SpawnSwitchPreference
-            android:key="pref_event_balloon"
-            android:title="Hot Air Balloons"
-            android:summary="Drifting in good weather"
-            android:defaultValue="true"
-            android:dependency="pref_events_enabled" />
-
-        <info.olli.weatherlwp.settings.SpawnSwitchPreference
-            android:key="pref_event_shootingstar"
-            android:title="Shooting Stars"
-            android:summary="Clear night skies"
-            android:defaultValue="true"
-            android:dependency="pref_events_enabled" />
-
-        <info.olli.weatherlwp.settings.SpawnSwitchPreference
-            android:key="pref_event_alien"
-            android:title="UFOs"
-            android:summary="Very rare night sightings"
-            android:defaultValue="true"
-            android:dependency="pref_events_enabled" />
-    </PreferenceCategory>
-
-    <!-- Ground Events -->
-    <PreferenceCategory android:title="Ground Events">
-        <info.olli.weatherlwp.settings.SpawnSwitchPreference
-            android:key="pref_event_butterfly"
-            android:title="Butterflies"
-            android:summary="Spring &amp; Summer only"
-            android:defaultValue="true"
-            android:dependency="pref_events_enabled" />
-
-        <info.olli.weatherlwp.settings.SpawnSwitchPreference
-            android:key="pref_event_dragonfly"
-            android:title="Dragonflies"
-            android:summary="Summer only - hovering insects"
-            android:defaultValue="true"
-            android:dependency="pref_events_enabled" />
-
-        <info.olli.weatherlwp.settings.SpawnSwitchPreference
-            android:key="pref_event_rabbit"
-            android:title="Rabbits"
-            android:summary="Hopping across terrain"
-            android:defaultValue="true"
-            android:dependency="pref_events_enabled" />
-
-        <info.olli.weatherlwp.settings.SpawnSwitchPreference
-            android:key="pref_event_fox"
-            android:title="Foxes"
-            android:summary="Walking through hills"
-            android:defaultValue="true"
-            android:dependency="pref_events_enabled" />
-
-        <info.olli.weatherlwp.settings.SpawnSwitchPreference
-            android:key="pref_event_squirrel"
-            android:title="Squirrels"
-            android:summary="Autumn mostly - gathering nuts"
-            android:defaultValue="true"
-            android:dependency="pref_events_enabled" />
-
-        <info.olli.weatherlwp.settings.SpawnSwitchPreference
-            android:key="pref_event_fireflies"
-            android:title="Fireflies"
-            android:summary="Summer nights only"
-            android:defaultValue="true"
-            android:dependency="pref_events_enabled" />
-
-        <info.olli.weatherlwp.settings.SpawnSwitchPreference
-            android:key="pref_event_snowflake"
-            android:title="Snowflakes"
-            android:summary="Winter decorative flakes (non-weather)"
-            android:defaultValue="true"
-            android:dependency="pref_events_enabled" />
-
-        <info.olli.weatherlwp.settings.SpawnSwitchPreference
-            android:key="pref_event_bat"
-            android:title="Bats"
-            android:summary="Night flyers - chaotic movement"
-            android:defaultValue="true"
-            android:dependency="pref_events_enabled" />
-
-        <info.olli.weatherlwp.settings.SpawnSwitchPreference
-            android:key="pref_event_deer"
-            android:title="Deer"
-            android:summary="Autumn/Winter - grazing and walking"
-            android:defaultValue="true"
-            android:dependency="pref_events_enabled" />
-    </PreferenceCategory>
-
-    <!-- Seasonal -->
     <PreferenceCategory android:title="Seasonal Events">
         <SwitchPreferenceCompat
             android:key="pref_seasonal_enabled"
@@ -154,162 +41,13 @@
             android:summary="Holiday effects (Christmas, New Year, etc.)"
             android:defaultValue="true" />
 
-        <!-- Christmas -->
-        <SwitchPreferenceCompat
-            android:key="pref_christmas_enabled"
-            android:title="Christmas"
-            android:summary="Bethlehem star with trail (around Dec 25)"
-            android:defaultValue="true"
-            android:dependency="pref_seasonal_enabled" />
-
-        <SeekBarPreference
-            android:key="pref_christmas_interval"
-            android:title="Christmas Interval"
-            android:summary="±days around Dec 25 (0=only Dec 25, 15=Dec 10 - Jan 9)"
-            android:defaultValue="1"
-            android:max="30"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_christmas_enabled" />
-
-        <SeekBarPreference
-            android:key="pref_christmas_star_size"
-            android:title="Christmas Star Size"
-            android:summary="Bethlehem star size (50-200%)"
-            android:defaultValue="100"
-            android:max="200"
-            app:min="50"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_christmas_enabled" />
-
-        <SeekBarPreference
-            android:key="pref_christmas_star_trail"
-            android:title="Star Trail Length"
-            android:summary="Trailing light effect (0-200%)"
-            android:defaultValue="100"
-            android:max="200"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_christmas_enabled" />
-
-        <!-- New Year -->
-        <SwitchPreferenceCompat
-            android:key="pref_newyear_enabled"
-            android:title="New Year"
-            android:summary="Fireworks (around Jan 1)"
-            android:defaultValue="true"
-            android:dependency="pref_seasonal_enabled" />
-
-        <SeekBarPreference
-            android:key="pref_newyear_interval"
-            android:title="New Year Interval"
-            android:summary="±days around Jan 1 (0=only Jan 1, 15=Dec 17 - Jan 16)"
-            android:defaultValue="1"
-            android:max="30"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_newyear_enabled" />
-
-        <SeekBarPreference
-            android:key="pref_firework_frequency"
-            android:title="Firework Frequency"
-            android:summary="How often fireworks launch (0=rare, 100=constant)"
-            android:defaultValue="45"
-            android:max="100"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_newyear_enabled" />
-
-        <SeekBarPreference
-            android:key="pref_firework_amount"
-            android:title="Firework Amount"
-            android:summary="Particles per explosion (10=subtle, 200=spectacular)"
-            android:defaultValue="100"
-            android:max="200"
-            app:min="10"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_newyear_enabled" />
-
-        <!-- Chinese New Year -->
-        <SwitchPreferenceCompat
-            android:key="pref_cn_newyear_enabled"
-            android:title="Chinese New Year"
-            android:summary="Dragon + fireworks (around Feb 1)"
-            android:defaultValue="false"
-            android:dependency="pref_seasonal_enabled" />
-
-        <SeekBarPreference
-            android:key="pref_cn_newyear_interval"
-            android:title="CN New Year Interval"
-            android:summary="±days around Feb 1 (0=only Feb 1, 20=Jan 12 - Feb 21)"
-            android:defaultValue="0"
-            android:max="30"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_cn_newyear_enabled" />
-
-        <!-- St. Patrick's Day -->
-        <SwitchPreferenceCompat
-            android:key="pref_st_patricks_enabled"
-            android:title="St. Patrick's Day"
-            android:summary="Rainbow (around Mar 17)"
-            android:defaultValue="true"
-            android:dependency="pref_seasonal_enabled" />
-
-        <SeekBarPreference
-            android:key="pref_st_patricks_interval"
-            android:title="St. Patrick's Interval"
-            android:summary="±days around Mar 17 (0=only Mar 17, 10=Mar 7 - Mar 27)"
-            android:defaultValue="0"
-            android:max="30"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_st_patricks_enabled" />
-
-        <!-- Rainbow Settings (St. Patrick's Day) -->
-        <SeekBarPreference
-            android:key="pref_rainbow_position_x"
-            android:title="Rainbow Horizontal Position"
-            android:summary="Left to right placement (0=left, 100=right)"
-            android:defaultValue="50"
-            android:max="100"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_st_patricks_enabled" />
-
-        <SeekBarPreference
-            android:key="pref_rainbow_position_y"
-            android:title="Rainbow Vertical Position"
-            android:summary="Top to bottom placement (0=top, 100=bottom)"
-            android:defaultValue="40"
-            android:max="100"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_st_patricks_enabled" />
-
-        <SeekBarPreference
-            android:key="pref_rainbow_size"
-            android:title="Rainbow Size"
-            android:summary="Arc size (20=small, 200=large)"
-            android:defaultValue="100"
-            android:max="200"
-            app:min="20"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_st_patricks_enabled" />
+        <Preference
+            android:key="pref_nav_seasonal"
+            android:title="Seasonal Details"
+            android:summary="Christmas, New Year, St. Patrick's settings"
+            app:fragment="info.olli.weatherlwp.settings.EventsSeasonalFragment" />
     </PreferenceCategory>
 
-    <!-- Shake-to-Fireworks -->
     <PreferenceCategory android:title="Shake Gesture">
         <SwitchPreferenceCompat
             android:key="pref_shake_fireworks_enabled"
@@ -317,38 +55,11 @@
             android:summary="Shake phone 3 times to launch fireworks"
             android:defaultValue="true" />
 
-        <SeekBarPreference
-            android:key="pref_shake_fireworks_count"
-            android:title="Firework Count"
-            android:summary="Number of fireworks on shake (5-50)"
-            android:defaultValue="15"
-            android:max="50"
-            app:min="5"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_shake_fireworks_enabled" />
-
-        <SeekBarPreference
-            android:key="pref_shake_sensitivity"
-            android:title="Shake Sensitivity"
-            android:summary="How hard to shake (0=hard, 100=gentle)"
-            android:defaultValue="16"
-            android:max="100"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_shake_fireworks_enabled" />
-
-        <SeekBarPreference
-            android:key="pref_shake_delay"
-            android:title="Unlock Delay"
-            android:summary="Ignore shakes after screen on (0-5000ms, prevents accidental triggers)"
-            android:defaultValue="500"
-            android:max="5000"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_shake_fireworks_enabled" />
+        <Preference
+            android:key="pref_nav_shake"
+            android:title="Shake Settings"
+            android:summary="Firework count, sensitivity, delay"
+            app:fragment="info.olli.weatherlwp.settings.EventsShakeFragment" />
     </PreferenceCategory>
 
 </PreferenceScreen>

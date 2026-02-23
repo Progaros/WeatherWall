@@ -63,6 +63,14 @@
             android:layout_height="0dp"
             android:layout_weight="1" />
 
+        <!-- Detail fragment container for sub-settings (hidden by default) -->
+        <FrameLayout
+            android:id="@+id/settings_detail_container"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:visibility="gone" />
+
         <!-- Tab Layout at bottom -->
         <com.google.android.material.tabs.TabLayout
             android:id="@+id/tab_layout"

@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <!-- Sky Events -->
+    <PreferenceCategory android:title="Sky Events">
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_airplane"
+            android:title="Airplanes"
+            android:summary="Planes with contrails"
+            android:defaultValue="true" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_birds"
+            android:title="Bird Flocks"
+            android:summary="V-formation flocks"
+            android:defaultValue="true" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_eagle"
+            android:title="Eagles"
+            android:summary="Soaring silhouettes"
+            android:defaultValue="true" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_owl"
+            android:title="Owls"
+            android:summary="Night-only silhouettes"
+            android:defaultValue="true" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_balloon"
+            android:title="Hot Air Balloons"
+            android:summary="Drifting in good weather"
+            android:defaultValue="true" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_shootingstar"
+            android:title="Shooting Stars"
+            android:summary="Clear night skies"
+            android:defaultValue="true" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_alien"
+            android:title="UFOs"
+            android:summary="Very rare night sightings"
+            android:defaultValue="true" />
+    </PreferenceCategory>
+
+    <!-- Ground Events -->
+    <PreferenceCategory android:title="Ground Events">
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_butterfly"
+            android:title="Butterflies"
+            android:summary="Spring &amp; Summer only"
+            android:defaultValue="true" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_dragonfly"
+            android:title="Dragonflies"
+            android:summary="Summer only - hovering insects"
+            android:defaultValue="true" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_rabbit"
+            android:title="Rabbits"
+            android:summary="Hopping across terrain"
+            android:defaultValue="true" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_fox"
+            android:title="Foxes"
+            android:summary="Walking through hills"
+            android:defaultValue="true" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_squirrel"
+            android:title="Squirrels"
+            android:summary="Autumn mostly - gathering nuts"
+            android:defaultValue="true" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_fireflies"
+            android:title="Fireflies"
+            android:summary="Summer nights only"
+            android:defaultValue="true" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_snowflake"
+            android:title="Snowflakes"
+            android:summary="Winter decorative flakes (non-weather)"
+            android:defaultValue="true" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_bat"
+            android:title="Bats"
+            android:summary="Night flyers - chaotic movement"
+            android:defaultValue="true" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_deer"
+            android:title="Deer"
+            android:summary="Autumn/Winter - grazing and walking"
+            android:defaultValue="true" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

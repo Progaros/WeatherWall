@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="Celestial Bodies">
+        <SwitchPreferenceCompat
+            android:key="pref_sun_enabled"
+            android:title="Show Sun"
+            android:summary="Display sun in daytime sky"
+            android:defaultValue="true" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_moon_enabled"
+            android:title="Show Moon"
+            android:summary="Display moon at night"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_celestial_size"
+            android:title="Sun/Moon Size"
+            android:summary="Size of celestial bodies (50=small, 100=normal, 200=large)"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="25"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_celestial_arc_height"
+            android:title="Arc Height"
+            android:summary="How high sun/moon travel (100=top, 50=middle, 0=near horizon)"
+            android:defaultValue="66"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="Wind Animation">
+        <SeekBarPreference
+            android:key="pref_wind_multiplier"
+            android:title="Tree Flexibility"
+            android:summary="How much trees bend in gusts (0=rigid, 100=normal, 300=very flexible)"
+            android:defaultValue="200"
+            android:max="300"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_tree_sway_speed"
+            android:title="Sway Speed"
+            android:summary="How fast trees sway back (0=frozen, 100=normal, 200=fast)"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

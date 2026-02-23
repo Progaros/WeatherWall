@@ -124,7 +124,16 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
             paint
         )
         
+        // Belly (lighter underside)
+        paint.color = RenderConstants.blendWithAmbient(bellyColor, ambientColor, 0.3f)
+        canvas.drawOval(
+            screenX - unit * 1.2f, screenY - unit * 0.2f,
+            screenX + unit * 0.5f, screenY + unit * 0.6f,
+            paint
+        )
+        
         // Draw head
+        paint.color = RenderConstants.blendWithAmbient(bodyColor, ambientColor, 0.3f)
         canvas.drawCircle(screenX + unit * 1.2f, screenY - unit * 0.2f, unit * 0.7f, paint)
         
         // Ear
@@ -138,6 +147,18 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
         // Eye
         paint.color = Color.BLACK
         canvas.drawCircle(screenX + unit * 1.5f, screenY - unit * 0.3f, unit * 0.12f, paint)
+        
+        // Nose
+        paint.color = Color.rgb(60, 40, 30)
+        canvas.drawCircle(screenX + unit * 1.85f, screenY - unit * 0.1f, unit * 0.08f, paint)
+        
+        // Cheek tuft
+        paint.color = RenderConstants.blendWithAmbient(bellyColor, ambientColor, 0.3f)
+        canvas.drawOval(
+            screenX + unit * 1.0f, screenY + unit * 0.0f,
+            screenX + unit * 1.6f, screenY + unit * 0.4f,
+            paint
+        )
         
         // Legs (animated when running)
         paint.color = RenderConstants.blendWithAmbient(bodyColor, ambientColor, 0.3f)

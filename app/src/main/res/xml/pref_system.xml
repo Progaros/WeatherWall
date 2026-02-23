@@ -2,7 +2,7 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <!-- Time & Weather -->
+    <!-- System - Essential settings only, details in sub-screens -->
     <PreferenceCategory android:title="Time &amp; Weather">
         <SwitchPreferenceCompat
             android:key="pref_daynight_enabled"
@@ -16,16 +16,6 @@
             android:summary="Get weather from Breezy Weather app"
             android:defaultValue="true" />
 
-        <Preference
-            android:key="pref_check_breezy"
-            android:title="Check Connection"
-            android:summary="Test Breezy Weather connection" />
-
-        <Preference
-            android:key="pref_copy_weather_data"
-            android:title="Copy Weather Data"
-            android:summary="Copy raw JSON to clipboard for debugging" />
-
         <SwitchPreferenceCompat
             android:key="pref_weather_enabled"
             android:title="Weather Effects"
@@ -33,7 +23,6 @@
             android:defaultValue="true" />
     </PreferenceCategory>
 
-    <!-- Performance -->
     <PreferenceCategory android:title="Performance">
         <ListPreference
             android:key="pref_max_fps"
@@ -49,139 +38,31 @@
             android:summary="Reduce FPS when scene is static (battery saver)"
             android:defaultValue="true" />
 
-        <SeekBarPreference
-            android:key="pref_idle_fps"
-            android:title="Idle FPS"
-            android:summary="Frame rate when idle (5-20)"
-            android:defaultValue="20"
-            android:max="20"
-            app:min="5"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_idle_mode_enabled" />
-
-        <ListPreference
-            android:key="pref_idle_timeout"
-            android:title="Idle Timeout"
-            android:summary="Time before entering idle mode"
-            android:defaultValue="5"
-            android:entries="@array/idle_timeout_entries"
-            android:entryValues="@array/idle_timeout_values"
-            android:dependency="pref_idle_mode_enabled" />
+        <Preference
+            android:key="pref_nav_idle"
+            android:title="Idle Settings"
+            android:summary="Idle FPS, timeout duration"
+            app:fragment="info.olli.weatherlwp.settings.SystemIdleFragment" />
     </PreferenceCategory>
 
-    <!-- Simulation Mode -->
-    <PreferenceCategory android:title="Simulation Mode">
+    <PreferenceCategory android:title="Testing">
         <SwitchPreferenceCompat
             android:key="pref_debug_enabled"
             android:title="Enable Simulation"
             android:summary="Override weather, time, wind for testing"
             android:defaultValue="false" />
 
-        <SeekBarPreference
-            android:key="pref_manual_time"
-            android:title="Time of Day"
-            android:summary="Minutes since midnight (0-1439)"
-            android:defaultValue="720"
-            android:max="1439"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_debug_enabled" />
-
-        <SeekBarPreference
-            android:key="pref_wind_strength"
-            android:title="Wind Strength"
-            android:summary="Simulated wind (0=calm, 100=storm)"
-            android:defaultValue="50"
-            android:max="100"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_debug_enabled" />
-
-        <ListPreference
-            android:key="pref_weather_type"
-            android:title="Weather Type"
-            android:summary="Force specific weather"
-            android:entries="@array/weather_options"
-            android:entryValues="@array/weather_values"
-            android:defaultValue="auto"
-            android:dependency="pref_debug_enabled" />
-
-        <ListPreference
-            android:key="pref_debug_cloud_override"
-            android:title="Cloud Density"
-            android:summary="Force cloud amount"
-            android:entries="@array/cloud_density_options"
-            android:entryValues="@array/cloud_density_values"
-            android:defaultValue="auto"
-            android:dependency="pref_debug_enabled" />
-
-        <ListPreference
-            android:key="pref_debug_season"
-            android:title="Season Override"
-            android:summary="Force seasonal events"
-            android:entries="@array/season_options"
-            android:entryValues="@array/season_values"
-            android:defaultValue="auto"
-            android:dependency="pref_debug_enabled" />
-
-        <ListPreference
-            android:key="pref_terrain_season"
-            android:title="Terrain Season"
-            android:summary="Override terrain (flowers, grass, snow)"
-            android:entries="@array/terrain_season_options"
-            android:entryValues="@array/terrain_season_values"
-            android:defaultValue="auto"
-            android:dependency="pref_debug_enabled" />
-
-        <SeekBarPreference
-            android:key="pref_moon_phase"
-            android:title="Moon Phase"
-            android:summary="0=New, 50=Full, 100=New (cycle end)"
-            android:defaultValue="50"
-            android:max="100"
-            app:min="0"
-            app:showSeekBarValue="true"
-            app:updatesContinuously="true"
-            android:dependency="pref_debug_enabled" />
-    </PreferenceCategory>
-
-    <!-- About -->
-    <PreferenceCategory android:title="About">
         <Preference
-            android:key="pref_version"
-            android:title="Version"
-            android:selectable="true" />
-
-        <SwitchPreferenceCompat
-            android:key="pref_debug_logging"
-            android:title="Debug Logging"
-            android:summary="Enable tracing (copies log when disabled)"
-            android:defaultValue="false" />
-
-        <SwitchPreferenceCompat
-            android:key="pref_debug_frame_timing"
-            android:title="Frame Timing"
-            android:summary="Log slow frames (&gt;16ms) for performance analysis"
-            android:defaultValue="false" />
-
-        <info.olli.weatherlwp.settings.DebugOverlayPreference
-            android:key="pref_debug_overlay_enabled"
-            android:title="🐞 Debug Overlay"
-            android:summary="Show FPS, frame time, and debug info on screen"
-            android:defaultValue="false" />
+            android:key="pref_nav_simulation"
+            android:title="Simulation Mode"
+            android:summary="Time, wind, weather, season overrides"
+            app:fragment="info.olli.weatherlwp.settings.SystemSimulationFragment" />
 
         <Preference
-            android:key="pref_copy_settings"
-            android:title="Copy All Settings"
-            android:summary="Copy every preference value to clipboard" />
-
-        <Preference
-            android:key="pref_preview"
-            android:title="Preview Wallpaper"
-            android:summary="Open wallpaper preview" />
+            android:key="pref_nav_about"
+            android:title="About &amp; Debug"
+            android:summary="Version, logging, weather data, export"
+            app:fragment="info.olli.weatherlwp.settings.SystemAboutFragment" />
     </PreferenceCategory>
 
 </PreferenceScreen>

@@ -109,6 +109,29 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         val bodyY = -unit * 8f
         canvas.drawOval(-unit * 4f, bodyY - unit * 2.5f, unit * 4f, bodyY + unit * 2.5f, paint)
         
+        // Belly (lighter underside)
+        val bellyBase = if (isFawn) Color.rgb(210, 180, 150) else Color.rgb(180, 150, 120)
+        paint.color = RenderConstants.blendWithAmbient(
+            Color.argb((200 * alpha).toInt(),
+                       Color.red(bellyBase), Color.green(bellyBase), Color.blue(bellyBase)),
+            ambientColor, 0.25f)
+        canvas.drawOval(-unit * 3f, bodyY - unit * 0.5f, unit * 3f, bodyY + unit * 2f, paint)
+        
+        // Fawn spots (white dots on flanks)
+        if (isFawn) {
+            paint.color = Color.argb((120 * alpha).toInt(), 255, 250, 240)
+            val spotPositions = listOf(
+                -2f to -1.5f, -0.5f to -1.8f, 1.5f to -1.2f,
+                -1f to -0.5f, 1f to -0.8f, 2.5f to -1.5f,
+                0f to -1f, -2.5f to -0.8f
+            )
+            for ((sx, sy) in spotPositions) {
+                canvas.drawCircle(unit * sx, bodyY + unit * sy, unit * 0.35f, paint)
+            }
+        }
+        
+        paint.color = bodyColor
+        
         // Neck
         path.reset()
         path.moveTo(unit * 3f, bodyY - unit * 1f)
@@ -125,6 +148,25 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         val headY = bodyY - unit * 7f + headLower
         canvas.drawOval(headX - unit * 1.5f, headY - unit * 1f, 
                         headX + unit * 2f, headY + unit * 1.2f, paint)
+        
+        // Muzzle (lighter patch)
+        val muzzleColor = if (isFawn) Color.rgb(220, 200, 170) else Color.rgb(190, 160, 130)
+        paint.color = RenderConstants.blendWithAmbient(
+            Color.argb((200 * alpha).toInt(),
+                       Color.red(muzzleColor), Color.green(muzzleColor), Color.blue(muzzleColor)),
+            ambientColor, 0.25f)
+        canvas.drawOval(headX + unit * 0.5f, headY - unit * 0.3f,
+                        headX + unit * 1.8f, headY + unit * 0.8f, paint)
+        
+        // Eye
+        paint.color = Color.argb((180 * alpha).toInt(), 30, 25, 20)
+        canvas.drawCircle(headX + unit * 0.3f, headY - unit * 0.2f, unit * 0.25f, paint)
+        
+        // Nose
+        paint.color = Color.argb((200 * alpha).toInt(), 40, 35, 30)
+        canvas.drawCircle(headX + unit * 1.7f, headY + unit * 0.3f, unit * 0.2f, paint)
+        
+        paint.color = bodyColor
         
         // Ears (larger, alert)
         path.reset()

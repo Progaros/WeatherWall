@@ -33,8 +33,11 @@ import info.olli.weatherlwp.settings.SystemSettingsFragment
 import android.os.Handler
 import android.os.Looper
 import android.widget.FrameLayout
+import androidx.activity.OnBackPressedCallback
+import androidx.preference.Preference
+import androidx.preference.PreferenceFragmentCompat
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceStartFragmentCallback {
     companion object {
         private const val TAG = "MainActivity"
         // Match wallpaper FPS (30) for consistent parallax preview
@@ -75,6 +78,11 @@ class MainActivity : AppCompatActivity() {
     
     // FAB for applying wallpaper
     private var fabApply: ExtendedFloatingActionButton? = null
+    
+    // Sub-settings navigation
+    private lateinit var settingsDetailContainer: FrameLayout
+    private lateinit var viewPager: ViewPager2
+    private lateinit var tabLayout: TabLayout
     
     // Preference change listener for live preview updates
     private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -171,8 +179,9 @@ class MainActivity : AppCompatActivity() {
         })
 
         // Setup tabbed settings
-        val viewPager = findViewById<ViewPager2>(R.id.view_pager)
-        val tabLayout = findViewById<TabLayout>(R.id.tab_layout)
+        viewPager = findViewById(R.id.view_pager)
+        tabLayout = findViewById(R.id.tab_layout)
+        settingsDetailContainer = findViewById(R.id.settings_detail_container)
         
         viewPager.adapter = SettingsPagerAdapter(this)
         
@@ -192,6 +201,25 @@ class MainActivity : AppCompatActivity() {
             openWallpaperChooser()
         }
         updateFabVisibility()
+        
+        // Handle back press for sub-settings navigation
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (supportFragmentManager.backStackEntryCount > 0) {
+                    supportFragmentManager.popBackStack()
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                }
+            }
+        })
+        
+        // Restore main settings view when back stack empties
+        supportFragmentManager.addOnBackStackChangedListener {
+            if (supportFragmentManager.backStackEntryCount == 0) {
+                showMainSettings()
+            }
+        }
     }
     
     /**
@@ -210,6 +238,62 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+    
+    // ── Sub-settings navigation ──────────────────────────────────────
+    
+    /**
+     * Called when a Preference with app:fragment is clicked.
+     * Hides the ViewPager+tabs and shows the sub-settings fragment.
+     */
+    override fun onPreferenceStartFragment(
+        caller: PreferenceFragmentCompat,
+        pref: Preference
+    ): Boolean {
+        val fragmentClass = pref.fragment ?: return false
+        val args = pref.extras
+        val title = pref.title?.toString() ?: "Settings"
+        
+        val fragment = supportFragmentManager.fragmentFactory.instantiate(
+            classLoader, fragmentClass
+        )
+        fragment.arguments = args
+        
+        showDetailFragment(fragment, title)
+        return true
+    }
+    
+    private fun showDetailFragment(fragment: Fragment, title: String) {
+        viewPager.visibility = View.GONE
+        tabLayout.visibility = View.GONE
+        settingsDetailContainer.visibility = View.VISIBLE
+        
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.settings_detail_container, fragment)
+            .addToBackStack(title)
+            .commit()
+        
+        supportActionBar?.title = title
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+    }
+    
+    private fun showMainSettings() {
+        settingsDetailContainer.visibility = View.GONE
+        viewPager.visibility = View.VISIBLE
+        tabLayout.visibility = View.VISIBLE
+        
+        supportActionBar?.title = getString(R.string.app_name)
+        supportActionBar?.setDisplayHomeAsUpEnabled(false)
+    }
+    
+    override fun onSupportNavigateUp(): Boolean {
+        if (supportFragmentManager.backStackEntryCount > 0) {
+            supportFragmentManager.popBackStack()
+            return true
+        }
+        return super.onSupportNavigateUp()
+    }
+    
+    // ── Lifecycle ────────────────────────────────────────────────────
     
     override fun onResume() {
         super.onResume()

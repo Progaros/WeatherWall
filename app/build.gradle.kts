@@ -11,8 +11,8 @@ android {
         applicationId = "info.olli.weatherlwp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 151
-        versionName = "1.9.4"
+        versionCode = 152
+        versionName = "1.9.5"
     }
 
     buildFeatures {
@@ -65,4 +65,5 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.mockito:mockito-core:5.8.0")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.2.1")
+    testImplementation("org.robolectric:robolectric:4.14.1")
 }
