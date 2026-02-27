@@ -127,7 +127,7 @@ class SimulationController(private val context: Context) {
         
         // Smooth time transitions for eased color changes
         val rawTime = clock.getTimeOfDayHours()
-        val smoothedTime = smoothTimeTransitions(rawTime)
+        val smoothedTime = smoothTimeTransitions(rawTime, deltaSec)
         
         // Get dynamic sun times from clock (set from weather data or defaults)
         val sunriseHours = clock.getSunriseHour()
@@ -191,6 +191,7 @@ class SimulationController(private val context: Context) {
             snowLevel = historySnapshot.snowDepth,
             riverLevel = historySnapshot.riverLevel,
             temperatureCelsius = extendedData.temperatureCelsius,
+            weatherDataFresh = WeatherRepository.isDataFresh(context),
             seasonTransitionProgress = seasonBlend.transitionProgress,
             currentSeason = seasonBlend.primarySeason.toStringKey(),
             previousSeason = seasonBlend.previousSeason.toStringKey(),
@@ -262,8 +263,11 @@ class SimulationController(private val context: Context) {
     /**
      * Smooth time transitions to prevent color jumps when using time slider.
      * On first call (wallpaper load), skip smoothing to avoid sun/moon jumping.
+     *
+     * Uses frame-rate-independent exponential smoothing: the base lerp rate is
+     * scaled by `deltaSec` so behaviour is consistent across 30/60/120 Hz devices.
      */
-    private fun smoothTimeTransitions(rawTime: Float): Float {
+    private fun smoothTimeTransitions(rawTime: Float, deltaSec: Float): Float {
         // On first call, initialize immediately to avoid jump from 0 to current time
         if (!timeInitialized) {
             timeInitialized = true
@@ -279,14 +283,17 @@ class SimulationController(private val context: Context) {
             return rawTime
         }
         
-        // Use lerp that smoothly approaches target without sudden jump
-        // Factor increases as we get closer to prevent slow crawl at the end
-        val lerpFactor = when {
-            timeDelta > 2f -> 0.03f      // Large jump (e.g. time slider): slow start
-            timeDelta > 0.5f -> 0.08f    // Medium jump: moderate speed
-            timeDelta > 0.1f -> 0.15f    // Small gap: faster to catch up
-            else -> 0.3f                  // Tiny gap: quick finish
+        // Base lerp rate (per second). Larger gaps use slower rates so the
+        // transition is visually pleasant; smaller gaps converge quickly.
+        val baseRate = when {
+            timeDelta > 2f -> 1.8f       // Large jump (e.g. time slider): slow start
+            timeDelta > 0.5f -> 4.8f     // Medium jump: moderate speed
+            timeDelta > 0.1f -> 9.0f     // Small gap: faster to catch up
+            else -> 18.0f                // Tiny gap: quick finish
         }
+        
+        // Frame-rate-independent factor: convert per-second rate to per-frame
+        val lerpFactor = (baseRate * deltaSec).coerceIn(0f, 1f)
         
         lastSmoothedTime = lastSmoothedTime + (rawTime - lastSmoothedTime) * lerpFactor
         return lastSmoothedTime

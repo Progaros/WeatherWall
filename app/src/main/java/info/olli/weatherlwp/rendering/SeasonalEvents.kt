@@ -100,7 +100,7 @@ class SeasonalEvents(private val context: Context? = null) {
         var targetY: Float = 0f,
         var colors: List<Int> = emptyList(),  // 1-3 colors for this rocket's explosion
         var active: Boolean = false,
-        var explodeAfterFrame: Int = 0,  // Frame number when rocket should explode
+        var explodeAfterFrame: Long = 0,  // Frame number when rocket should explode
         var trailX1: Float = 0f, var trailY1: Float = 0f,
         var trailX2: Float = 0f, var trailY2: Float = 0f,
         var trailX3: Float = 0f, var trailY3: Float = 0f
@@ -152,8 +152,8 @@ class SeasonalEvents(private val context: Context? = null) {
     // All pixel values are designed for 1920px height and scaled proportionally
     private var heightScale = 1f
     
-    // Global frame counter for time-based rocket explosions
-    private var frameCounter = 0
+    // Global frame counter for time-based rocket explosions (Long to avoid overflow)
+    private var frameCounter = 0L
 
     private var fireworkTimer = 0
     private val fireworkColors = intArrayOf(

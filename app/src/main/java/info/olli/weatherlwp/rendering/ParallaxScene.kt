@@ -268,10 +268,10 @@ class ParallaxScene(
             for (layer in layers) {
                 try {
                     // Skip randomEventLayer in normal iteration - ground events drawn by terrain callback
-                    if (layer === randomEventLayer) continue
+                    if (layer.layerType == LayerType.RANDOM_EVENTS) continue
                     
                     // Before drawing mountainLayer, draw far sky events and behind-mountain seasonal effects
-                    if (layer === mountainLayer) {
+                    if (layer.layerType == LayerType.MOUNTAINS) {
                         randomEventLayer.drawFarSkyEvents(canvas, state, parallaxCalculator)
                         // Draw seasonal background elements that should appear behind mountains (e.g. rainbow, Christmas star)
                         // Use sky-layer parallax depth for Christmas star (matches background stars)
@@ -282,7 +282,7 @@ class ParallaxScene(
                     
                     // After drawing mountainLayer, draw mid sky events (birds, planes, eagles)
                     // and fireworks (which launch from behind hills but in front of mountains)
-                    if (layer === mountainLayer) {
+                    if (layer.layerType == LayerType.MOUNTAINS) {
                         layer.draw(canvas, state, parallaxCalculator)
                         randomEventLayer.drawMidSkyEvents(canvas, state, parallaxCalculator)
                         // Draw fireworks behind terrain/hills but in front of mountains

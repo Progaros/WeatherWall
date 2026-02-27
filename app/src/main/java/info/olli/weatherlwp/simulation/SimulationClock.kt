@@ -128,7 +128,12 @@ class SimulationClock {
     }
     
     /**
-     * Check if it's dawn (sunrise transition, ~1.5 hours around sunrise).
+     * Check if it's in the post-sunrise golden-hour window.
+     * This covers sunrise to sunrise+1.5h (e.g. 6:00-7:30).
+     * 
+     * Note: This differs from SimulationState.getLightLevel() which uses
+     * a pre-sunrise ramp (sunrise-1h to sunrise) for light calculations.
+     * isDawn() identifies the warm color-temperature period after sunrise.
      */
     fun isDawn(): Boolean {
         val hour = getTimeOfDayHours()
@@ -137,7 +142,11 @@ class SimulationClock {
     }
     
     /**
-     * Check if it's dusk (sunset transition, ~3 hours before sunset).
+     * Check if it's in the pre-sunset golden-hour window.
+     * This covers sunset-3h to sunset (e.g. 17:00-20:00).
+     * 
+     * Note: The 3-hour window is intentionally wider than isDawn() to model
+     * the longer warm-light period visible during late afternoon.
      */
     fun isDusk(): Boolean {
         val hour = getTimeOfDayHours()

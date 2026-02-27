@@ -20,6 +20,7 @@ import kotlin.random.Random
  * Event classes are in the events/ package for better organization.
  */
 class RandomEventLayer(private val context: Context) : SceneLayer {
+    override val layerType = LayerType.RANDOM_EVENTS
     
     // Thread-safe event list using volatile + immutable list pattern
     @Volatile private var events: List<RandomEvent> = emptyList()

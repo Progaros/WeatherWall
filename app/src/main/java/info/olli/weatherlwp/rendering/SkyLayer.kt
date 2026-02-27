@@ -34,6 +34,7 @@ import kotlin.random.Random
  * - Moon visible at night
  */
 class SkyLayer(private val context: Context? = null) : SceneLayer {
+    override val layerType = LayerType.SKY
     private val skyPaint = Paint()
     private val starPaint = Paint().apply { 
         color = Color.WHITE 
@@ -67,6 +68,19 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
     // Cached vignette gradient to avoid allocations every frame
     private var cachedVignetteGradient: RadialGradient? = null
     private var cachedVignetteAlpha = -1
+    
+    // Cached sun glow gradient to avoid per-frame RadialGradient allocation
+    private var cachedSunGradient: RadialGradient? = null
+    private var cachedSunGlowCenterX = Float.NaN
+    private var cachedSunGlowCenterY = Float.NaN
+    private var cachedSunGlowRadius = 0f
+    private var cachedSunElevation = -1f
+    
+    // Cached moon glow gradient to avoid per-frame RadialGradient allocation
+    private var cachedMoonGradient: RadialGradient? = null
+    private var cachedMoonGlowCenterX = Float.NaN
+    private var cachedMoonGlowCenterY = Float.NaN
+    private var cachedMoonGlowRadius = 0f
     
     // Stars - generated once with fixed seed for consistency
     private val stars = ArrayList<FloatArray>()
@@ -364,19 +378,33 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         val outerB = (50 + 80 * elevationFactor).toInt()
         
         val glowRadius = radius * 3f
-        val sunGradient = RadialGradient(
-            sunX + parallaxX, sunY + parallaxY, glowRadius,
-            intArrayOf(
-                Color.argb(255, centerR, centerG, centerB),  // Warm center (shifts with elevation)
-                Color.argb(200, midR, midG, midB),
-                Color.argb(100, outerR, outerG, outerB),
-                Color.argb(0, 255, 180, 50)
-            ),
-            floatArrayOf(0f, 0.3f, 0.6f, 1f),
-            Shader.TileMode.CLAMP
-        )
+        val cx = sunX + parallaxX
+        val cy = sunY + parallaxY
+        // Only recreate gradient when position or elevation changes meaningfully
+        val elevBucket = (elevationFactor * 10).toInt() // 10 discrete steps
+        if (cachedSunGradient == null
+            || kotlin.math.abs(cx - cachedSunGlowCenterX) > 2f
+            || kotlin.math.abs(cy - cachedSunGlowCenterY) > 2f
+            || kotlin.math.abs(glowRadius - cachedSunGlowRadius) > 1f
+            || elevBucket.toFloat() / 10f != cachedSunElevation) {
+            cachedSunGlowCenterX = cx
+            cachedSunGlowCenterY = cy
+            cachedSunGlowRadius = glowRadius
+            cachedSunElevation = elevBucket.toFloat() / 10f
+            cachedSunGradient = RadialGradient(
+                cx, cy, glowRadius,
+                intArrayOf(
+                    Color.argb(255, centerR, centerG, centerB),
+                    Color.argb(200, midR, midG, midB),
+                    Color.argb(100, outerR, outerG, outerB),
+                    Color.argb(0, 255, 180, 50)
+                ),
+                floatArrayOf(0f, 0.3f, 0.6f, 1f),
+                Shader.TileMode.CLAMP
+            )
+        }
         
-        sunPaint.shader = sunGradient
+        sunPaint.shader = cachedSunGradient
         canvas.drawCircle(sunX + parallaxX, sunY + parallaxY, glowRadius, sunPaint)
         
         // Solid sun core
@@ -434,18 +462,27 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         // Determine if waxing (right side lit) or waning (left side lit)
         val isWaxing = phase < 0.5f
         
-        // Draw outer soft glow first (uses shader - only one gradient for performance)
+        // Draw outer soft glow first (uses cached shader to avoid per-frame allocation)
         val glowRadius = radius * 2.5f
-        moonPaint.shader = RadialGradient(
-            moonX, moonY, glowRadius,
-            intArrayOf(
-                Color.argb(40, 200, 220, 255),
-                Color.argb(15, 180, 200, 240),
-                Color.TRANSPARENT
-            ),
-            floatArrayOf(0f, 0.5f, 1f),
-            Shader.TileMode.CLAMP
-        )
+        if (cachedMoonGradient == null
+            || kotlin.math.abs(moonX - cachedMoonGlowCenterX) > 2f
+            || kotlin.math.abs(moonY - cachedMoonGlowCenterY) > 2f
+            || kotlin.math.abs(glowRadius - cachedMoonGlowRadius) > 1f) {
+            cachedMoonGlowCenterX = moonX
+            cachedMoonGlowCenterY = moonY
+            cachedMoonGlowRadius = glowRadius
+            cachedMoonGradient = RadialGradient(
+                moonX, moonY, glowRadius,
+                intArrayOf(
+                    Color.argb(40, 200, 220, 255),
+                    Color.argb(15, 180, 200, 240),
+                    Color.TRANSPARENT
+                ),
+                floatArrayOf(0f, 0.5f, 1f),
+                Shader.TileMode.CLAMP
+            )
+        }
+        moonPaint.shader = cachedMoonGradient
         canvas.drawCircle(moonX, moonY, glowRadius, moonPaint)
         moonPaint.shader = null
         

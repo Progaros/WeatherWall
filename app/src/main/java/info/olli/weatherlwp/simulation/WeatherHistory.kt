@@ -210,39 +210,13 @@ class WeatherHistory(private val context: Context) {
     ) {
         val effectiveTemp = if (temp.isNaN()) estimateTempFromWeather(weatherType) else temp
 
-        // Snow accumulation
-        if (weatherType == WeatherType.SNOW || weatherType == WeatherType.HAIL) {
-            val snowRate = if (weatherType == WeatherType.HAIL) 0.5f else 1f
-            snowDepth += SNOW_ACCUMULATION_RATE * precipWeight * snowRate
-        }
+        val isSnowing = weatherType == WeatherType.SNOW || weatherType == WeatherType.HAIL
+        val snowRate = if (weatherType == WeatherType.HAIL) 0.5f else 1f
+        val snowHours = if (isSnowing) precipWeight * snowRate else 0f
+        val isRaining = weatherType == WeatherType.RAIN || weatherType == WeatherType.THUNDERSTORM
+        val rainHours = if (isRaining) precipWeight else 0f
 
-        // Snow melting
-        if (effectiveTemp > 0f) {
-            val melt = SNOW_MELT_RATE_PER_DEGREE * effectiveTemp
-            val melted = minOf(melt, snowDepth)
-            snowDepth -= melted
-            riverLevel += melted * RIVER_SNOWMELT_RATE
-        }
-
-        // Rain washes snow and fills river
-        if (weatherType == WeatherType.RAIN || weatherType == WeatherType.THUNDERSTORM) {
-            if (snowDepth > 0f) {
-                val washed = minOf(SNOW_RAIN_WASH_RATE * precipWeight, snowDepth)
-                snowDepth -= washed
-                riverLevel += washed * RIVER_SNOWMELT_RATE  // washed snow becomes water
-            }
-            riverLevel += RIVER_RAIN_RATE * precipWeight
-        }
-
-        // Natural drainage
-        riverLevel -= RIVER_DRAIN_RATE
-        if (effectiveTemp > 15f) {
-            riverLevel -= RIVER_EVAPORATION_RATE  // faster evaporation in heat
-        }
-
-        // Clamp
-        snowDepth = snowDepth.coerceIn(0f, 1f)
-        riverLevel = riverLevel.coerceIn(0f, 1f)
+        applyPhysicsStep(effectiveTemp, snowHours, rainHours, hours = 1)
     }
 
     /**
@@ -252,10 +226,21 @@ class WeatherHistory(private val context: Context) {
         val temp = if (day.avgTemp.isNaN()) 10f else day.avgTemp
         val hours = day.samples.coerceAtLeast(1)
 
-        // Snow accumulation from snowfall
-        snowDepth += SNOW_ACCUMULATION_RATE * day.snowHours
+        applyPhysicsStep(temp, day.snowHours, day.rainHours, hours)
+    }
 
-        // Melt over the day
+    /**
+     * Core physics step shared by both hourly updates and day simulation.
+     * @param temp Effective temperature in °C
+     * @param snowHours Weighted snow accumulation hours
+     * @param rainHours Weighted rain hours
+     * @param hours Number of hours this step represents (1 for hourly, N for daily)
+     */
+    private fun applyPhysicsStep(temp: Float, snowHours: Float, rainHours: Float, hours: Int) {
+        // Snow accumulation
+        snowDepth += SNOW_ACCUMULATION_RATE * snowHours
+
+        // Snow melting
         if (temp > 0f) {
             val melt = SNOW_MELT_RATE_PER_DEGREE * temp * hours
             val melted = minOf(melt, snowDepth)
@@ -263,22 +248,23 @@ class WeatherHistory(private val context: Context) {
             riverLevel += melted * RIVER_SNOWMELT_RATE
         }
 
-        // Rain effects
-        if (day.rainHours > 0f) {
+        // Rain washes snow and fills river
+        if (rainHours > 0f) {
             if (snowDepth > 0f) {
-                val washed = minOf(SNOW_RAIN_WASH_RATE * day.rainHours, snowDepth)
+                val washed = minOf(SNOW_RAIN_WASH_RATE * rainHours, snowDepth)
                 snowDepth -= washed
                 riverLevel += washed * RIVER_SNOWMELT_RATE
             }
-            riverLevel += RIVER_RAIN_RATE * day.rainHours
+            riverLevel += RIVER_RAIN_RATE * rainHours
         }
 
-        // Drainage over the day
+        // Natural drainage
         riverLevel -= RIVER_DRAIN_RATE * hours
         if (temp > 15f) {
             riverLevel -= RIVER_EVAPORATION_RATE * hours
         }
 
+        // Clamp
         snowDepth = snowDepth.coerceIn(0f, 1f)
         riverLevel = riverLevel.coerceIn(0f, 1f)
     }

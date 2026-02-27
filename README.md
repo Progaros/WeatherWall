@@ -187,9 +187,7 @@ app/src/main/java/info/olli/weatherlwp/
 ├── wallpaper/
 │   └── WeatherWallpaper.kt      # WallpaperService implementation
 └── weather/
-    ├── BreezyWeatherProvider.kt # Breezy Weather integration
     ├── BreezyWeatherReceiver.kt # Broadcast receiver for weather updates
-    ├── WeatherProvider.kt       # Weather data interface
     ├── WeatherRepository.kt     # Weather data storage
     └── WeatherType.kt           # Weather type enumeration
 ```

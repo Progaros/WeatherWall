@@ -5,6 +5,14 @@ import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationState
 
 /**
+ * Identifies each layer type for draw-order logic without identity checks.
+ */
+enum class LayerType {
+    SKY, CLOUDS, MOUNTAINS, TERRAIN, RIVER,
+    RANDOM_EVENTS, WEATHER, VIGNETTE, DEBUG_OVERLAY
+}
+
+/**
  * Interface for a distinct layer in the parallax scene.
  * Each layer is responsible for its own rendering and parallax handling.
  * 
@@ -15,6 +23,8 @@ import info.olli.weatherlwp.simulation.SimulationState
  * - Screen dimensions
  */
 interface SceneLayer {
+    /** Identifies this layer's type for draw-order dispatching. */
+    val layerType: LayerType
     /**
      * Called when the surface dimensions change.
      */

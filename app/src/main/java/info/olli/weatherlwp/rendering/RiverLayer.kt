@@ -31,6 +31,7 @@ import kotlin.math.sin
  * drawn after terrain but before vignette.
  */
 class RiverLayer(private val context: Context) : SceneLayer {
+    override val layerType = LayerType.RIVER
 
     companion object {
         private const val TAG = "RiverLayer"

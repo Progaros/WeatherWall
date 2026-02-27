@@ -25,6 +25,7 @@ import kotlin.random.Random
  * - Weather effects should "sell the feeling" of the weather
  */
 class WeatherLayer : SceneLayer {
+    override val layerType = LayerType.WEATHER
 
     /**
      * Effect type for weather rendering.

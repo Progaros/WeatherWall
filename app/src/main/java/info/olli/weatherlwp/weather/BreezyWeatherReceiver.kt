@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import org.json.JSONObject
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 /**
  * Receives weather data from Breezy Weather via the Gadgetbridge intent.
@@ -19,6 +21,10 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
     companion object {
         private const val TAG = "BreezyWeatherReceiver"
         private const val ACTION_WEATHER = "nodomain.freeyourgadget.gadgetbridge.ACTION_GENERIC_WEATHER"
+        // Single-thread executor shared across broadcasts to avoid spawning a thread per intent
+        private val executor: ExecutorService = Executors.newSingleThreadExecutor { r ->
+            Thread(r, "BreezyWeatherWorker").apply { isDaemon = true }
+        }
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -28,7 +34,7 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
             // Use goAsync() to avoid ANR - JSON parsing can take time
             val pendingResult = goAsync()
             
-            Thread {
+            executor.execute {
                 try {
                     // Data is sent as JSON string
                     val jsonString = intent.getStringExtra("WeatherJson")
@@ -44,7 +50,7 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
                     // Must call finish() to release the BroadcastReceiver
                     pendingResult.finish()
                 }
-            }.start()
+            }
         }
     }
 
@@ -64,8 +70,10 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
                 in 600..622 -> WeatherType.SNOW          // Snow
                 in 701..781 -> WeatherType.FOG           // Atmosphere (fog, mist, etc.)
                 800 -> WeatherType.CLEAR                 // Clear
-                801 -> WeatherType.CLEAR                 // Few clouds
-                in 802..804 -> WeatherType.CLOUDY        // Clouds
+                801 -> WeatherType.PARTLY_CLOUDY         // Few clouds (11-25%)
+                802 -> WeatherType.PARTLY_CLOUDY         // Scattered clouds (25-50%)
+                803 -> WeatherType.CLOUDY                // Broken clouds (51-84%)
+                804 -> WeatherType.OVERCAST               // Overcast (85-100%)
                 else -> WeatherType.CLEAR
             }
             

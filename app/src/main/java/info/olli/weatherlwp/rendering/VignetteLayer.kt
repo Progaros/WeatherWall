@@ -27,6 +27,7 @@ import info.olli.weatherlwp.simulation.SimulationState
  * - Top 20% of vignette (6% of screen) fades from 80% to 0% opacity
  */
 class VignetteLayer(private val context: Context) : SceneLayer {
+    override val layerType = LayerType.VIGNETTE
 
     private val paint = Paint().apply {
         isAntiAlias = false  // Not needed for gradient fills

@@ -166,6 +166,8 @@ class WeatherWallpaper : WallpaperService() {
             maxFrameTimeMs = 0L
             
             renderThread = Thread {
+                // Elevate thread priority for smoother rendering
+                android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_DISPLAY)
                 try {
                     while (!Thread.currentThread().isInterrupted) {
                         if (!isVisible) {

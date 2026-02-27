@@ -26,6 +26,7 @@ import info.olli.weatherlwp.simulation.SimulationState
  * - Parallax offset
  */
 class DebugOverlayLayer(private val context: Context) : SceneLayer {
+    override val layerType = LayerType.DEBUG_OVERLAY
     
     // Available debug data items
     enum class DebugItem(val key: String, val label: String) {

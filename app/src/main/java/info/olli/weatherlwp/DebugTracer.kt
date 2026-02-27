@@ -19,7 +19,12 @@ object DebugTracer {
     @Volatile
     private var enabled = false
     
-    private val entries = Collections.synchronizedList(mutableListOf<TraceEntry>())
+    // Ring buffer: fixed-size array with write index, avoids O(n) removeAt(0)
+    private val ringBuffer = arrayOfNulls<TraceEntry>(MAX_ENTRIES)
+    private var ringWriteIndex = 0
+    private var ringCount = 0
+    private val ringLock = Any()
+    
     private val startTimes = Collections.synchronizedMap(mutableMapOf<String, Long>())
     private var sessionStartTime = 0L
     
@@ -36,7 +41,11 @@ object DebugTracer {
      * Enable tracing. Clears previous data.
      */
     fun enable() {
-        entries.clear()
+        synchronized(ringLock) {
+            ringBuffer.fill(null)
+            ringWriteIndex = 0
+            ringCount = 0
+        }
         startTimes.clear()
         sessionStartTime = System.currentTimeMillis()
         enabled = true
@@ -94,23 +103,39 @@ object DebugTracer {
     }
     
     private fun addEntry(entry: TraceEntry) {
-        if (entries.size >= MAX_ENTRIES) {
-            entries.removeAt(0)
+        synchronized(ringLock) {
+            ringBuffer[ringWriteIndex] = entry
+            ringWriteIndex = (ringWriteIndex + 1) % MAX_ENTRIES
+            if (ringCount < MAX_ENTRIES) ringCount++
         }
-        entries.add(entry)
+    }
+    
+    /** Snapshot entries in chronological order for report generation. */
+    private fun snapshotEntries(): List<TraceEntry> {
+        synchronized(ringLock) {
+            if (ringCount == 0) return emptyList()
+            val result = ArrayList<TraceEntry>(ringCount)
+            val start = if (ringCount < MAX_ENTRIES) 0 else ringWriteIndex
+            for (i in 0 until ringCount) {
+                val idx = (start + i) % MAX_ENTRIES
+                ringBuffer[idx]?.let { result.add(it) }
+            }
+            return result
+        }
     }
     
     private fun generateReport(): String {
         val dateFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
         val sb = StringBuilder()
+        val snapshot = snapshotEntries()
         
         sb.appendLine("=== WeatherWall Debug Trace ===")
         sb.appendLine("Session: ${dateFormat.format(Date(sessionStartTime))}")
-        sb.appendLine("Entries: ${entries.size}")
+        sb.appendLine("Entries: ${snapshot.size}")
         sb.appendLine()
         
         // Calculate timing statistics
-        val timings = entries.filter { it.durationNanos != null }
+        val timings = snapshot.filter { it.durationNanos != null }
             .groupBy { it.label }
         
         if (timings.isNotEmpty()) {
@@ -127,7 +152,7 @@ object DebugTracer {
         }
         
         sb.appendLine("=== Event Log ===")
-        for (entry in entries) {
+        for (entry in snapshot) {
             val time = dateFormat.format(Date(entry.timestamp))
             when {
                 entry.durationNanos != null -> {

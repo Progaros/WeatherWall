@@ -54,6 +54,7 @@ enum class CloudRenderMode {
  * - timeOfDayHours (for sunrise/sunset coloring)
  */
 class CloudLayer(private val context: Context) : SceneLayer {
+    override val layerType = LayerType.CLOUDS
     
     // Paint for rendering to bitmap (with blur)
     // PERFORMANCE: Reduced blur radius from 15 to 10 for faster rendering
@@ -910,8 +911,16 @@ class CloudLayer(private val context: Context) : SceneLayer {
     }
 
     override fun destroy() {
-        // Shutdown background bitmap renderer
-        bitmapExecutor.shutdownNow()
+        // Graceful shutdown: let in-flight bitmap renders finish (up to 2s)
+        bitmapExecutor.shutdown()
+        try {
+            if (!bitmapExecutor.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS)) {
+                bitmapExecutor.shutdownNow()
+            }
+        } catch (_: InterruptedException) {
+            bitmapExecutor.shutdownNow()
+            Thread.currentThread().interrupt()
+        }
         
         // Cleanup cached cloud group bitmaps to prevent memory leaks
         for (group in cloudGroups) {

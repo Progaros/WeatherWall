@@ -31,6 +31,7 @@ import kotlin.random.Random
  * - Add atmospheric haze overlay at bottom of mountains
  */
 class MountainLayer(private val context: Context) : SceneLayer {
+    override val layerType = LayerType.MOUNTAINS
     private val paint = Paint().apply { 
         style = Paint.Style.FILL 
         isAntiAlias = true 

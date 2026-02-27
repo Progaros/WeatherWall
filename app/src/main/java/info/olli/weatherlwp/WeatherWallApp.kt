@@ -2,8 +2,11 @@ package info.olli.weatherlwp
 
 import android.app.Application
 import android.content.ClipData
+import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
+import android.os.Build
+import android.os.PersistableBundle
 import android.util.Log
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -24,6 +27,12 @@ class WeatherWallApp : Application() {
             try {
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 val clip = ClipData.newPlainText(label, text)
+                // Mark as sensitive on Android 13+ so it doesn't appear in clipboard preview
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    clip.description.extras = PersistableBundle().apply {
+                        putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
+                    }
+                }
                 clipboard.setPrimaryClip(clip)
                 Log.d(TAG, "Copied to clipboard: $label")
             } catch (e: Exception) {

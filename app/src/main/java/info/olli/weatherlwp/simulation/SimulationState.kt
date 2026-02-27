@@ -66,6 +66,7 @@ data class SimulationState(
     val snowLevel: Float = 0f,          // 0-1 accumulated snow depth from weather history
     val riverLevel: Float = 0f,         // 0-1 river water level from rainfall/snowmelt
     val temperatureCelsius: Float = Float.NaN,  // Current temperature (NaN = unknown)
+    val weatherDataFresh: Boolean = true,  // False when weather data is stale (>1h old)
     
     // Season transition (gradual blending between seasons)
     val seasonTransitionProgress: Float = 1f,  // 0=fully previous, 1=fully current

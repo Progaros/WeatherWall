@@ -42,8 +42,6 @@ This document provides a summary of the project's source code to assist with mai
 
 ## Weather Data
 - **WeatherRepository.kt**: Repository for fetching/storing weather data.
-- **WeatherProvider.kt**: Interface for weather data sources.
-- **BreezyWeatherProvider.kt**: Implementation for Breezy Weather app integration.
 - **BreezyWeatherReceiver.kt**: Broadcast receiver for external weather updates.
 - **WeatherType.kt**: Enum defining supported weather conditions.
 

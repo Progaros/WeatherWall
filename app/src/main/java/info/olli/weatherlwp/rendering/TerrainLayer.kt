@@ -32,6 +32,7 @@ import kotlin.random.Random
  * Supports integration with RandomEventLayer to draw ground animals at correct depth.
  */
 class TerrainLayer(private val context: Context) : SceneLayer {
+    override val layerType = LayerType.TERRAIN
     private val hillPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val treePaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val shadowPaint = Paint().apply { 
