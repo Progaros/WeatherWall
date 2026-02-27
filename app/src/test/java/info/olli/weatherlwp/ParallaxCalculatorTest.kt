@@ -444,7 +444,7 @@ class ParallaxCalculatorTest {
     @Test
     fun testDirectModeInstantResponse() {
         // When smoothing=0, position should instantly match target (no lerping)
-        // This matches reference app behavior
+        // This matches expected behavior
         calculator.smoothing = 0f
         calculator.strength = 1.0f
         calculator.maxOffsetPx = 40f

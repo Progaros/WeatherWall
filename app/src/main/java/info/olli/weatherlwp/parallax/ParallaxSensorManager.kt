@@ -19,7 +19,7 @@ import kotlin.math.sqrt
  * Uses TYPE_ROTATION_VECTOR (preferred) or TYPE_GAME_ROTATION_VECTOR for orientation.
  * Falls back to TYPE_GRAVITY if rotation vectors unavailable.
  * 
- * KEY IMPLEMENTATION (aligned with kaka.wallpaper.forest reference):
+ * KEY IMPLEMENTATION:
  * 1. Direct pass-through: no exponential smoothing, no deadzone on sensor side
  * 2. Gyroscope mode: 3-sample moving average, direct integration, ±18° clamp
  * 3. Rotation vector mode: delta-based accumulation, no decay
@@ -126,7 +126,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     private var poseGain = 1f
 
     // Auto-return rate: controls gentle return-to-center when device is held still.
-    // 1.0 = no decay (holds forever, reference app behavior)
+    // 1.0 = no decay (holds position indefinitely)
     // <1.0 = gentle decay per sensor sample (only when device is not moving)
     // Set via setAutoReturnRate(). NOT applied during active tilting.
     private var autoReturnRate = 1f
@@ -389,7 +389,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
      */
     fun setAutoReturnRate(speed: Float) {
         // Map user's return-speed 0..1 to per-sample rate:
-        //   speed=0   → rate=1.0     (no decay, like reference app)
+        //   speed=0   → rate=1.0     (no decay, holds position)
         //   speed=0.15→ rate≈0.99994 (≈0.3%/sec at 50 Hz, very gentle)
         //   speed=1.0 → rate=0.9995  (≈2.5%/sec at 50 Hz, noticeable)
         autoReturnRate = if (speed <= 0.001f) 1f
@@ -459,20 +459,20 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     }
     
     /**
-     * Handle gyroscope sensor data (reference app approach).
+     * Handle gyroscope sensor data.
      * 
-     * Reference app RotationManager.java:
-     * - values[0] → lastYaw (Z-axis rotation rate - twisting phone)
-     * - values[1] → lastPitch (X-axis rotation rate - tilting forward/back)
-     * - values[2] → lastRoll (Y-axis rotation rate - tilting left/right)
+     * Gyroscope approach:
+     * - values[0] → yaw (Z-axis rotation rate - twisting phone)
+     * - values[1] → pitch (X-axis rotation rate - tilting forward/back)
+     * - values[2] → roll (Y-axis rotation rate - tilting left/right)
      * 
-     * Reference app accumulates RAW values without display rotation adjustment.
-     * Display rotation is applied AFTER accumulation in ForestRenderer:
-     * - ROTATION_0: tiltX = -lastPitch, tiltY = lastYaw
-     * - ROTATION_90: tiltX = -lastYaw, tiltY = -lastPitch
-     * - ROTATION_270: tiltX = lastYaw, tiltY = lastPitch
+     * Accumulates RAW values without display rotation adjustment.
+     * Display rotation is applied AFTER accumulation:
+     * - ROTATION_0: tiltX = -pitch, tiltY = yaw
+     * - ROTATION_90: tiltX = -yaw, tiltY = -pitch
+     * - ROTATION_270: tiltX = yaw, tiltY = pitch
      * 
-     * EXACT MATCH to reference app RotationManager.java:
+     * Algorithm:
      * 1. Add raw gyro values to 3-sample averagers (no deadzone before averaging)
      * 2. Formula: angle += avgRate * deltaTimeNanos * 1e-8 * 6 * DEG_TO_RAD
      * 3. Clamp each angle to ±18° (0.31415927 rad)
@@ -480,26 +480,15 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
      * 5. Display rotation applied AFTER accumulation when converting to tiltX/tiltY
      */
     private fun handleGyroscope(values: FloatArray, displayRotation: Int) {
-        // Reference app RotationManager.java (lines 63-66):
-        // averagers[0].add(values[0]) → lastYaw (Z-axis / twist)
-        // averagers[1].add(values[1]) → lastPitch (X-axis / forward-back)
-        // averagers[2].add(values[2]) → lastRoll (Y-axis / left-right)
-        // 
-        // Android gyroscope axis definition:
-        // values[0] = rotation rate around X axis (pitch rate - tilting device forward/back)
-        // values[1] = rotation rate around Y axis (roll rate - tilting device left/right)
+        // Gyroscope axis mapping:
+        // values[0] = rotation rate around X axis (pitch rate - tilting forward/back)
+        // values[1] = rotation rate around Y axis (roll rate - tilting left/right)
         // values[2] = rotation rate around Z axis (yaw rate - twisting/rotating device)
-        //
-        // Reference app mapping (confusingly named):
-        // values[0] → "yaw" averager → lastYaw
-        // values[1] → "pitch" averager → lastPitch  
-        // values[2] → "roll" averager → lastRoll
         
         // Step 1: Add raw values to averagers (NO deadzone, NO display rotation adjustment)
-        // This matches reference exactly - accumulate raw sensor values
-        avgYaw.add(values[0])    // X-axis rate → "yaw" (reference naming)
-        avgPitch.add(values[1])  // Y-axis rate → "pitch" (reference naming)
-        avgRoll.add(values[2])   // Z-axis rate → "roll" (reference naming)
+        avgYaw.add(values[0])    // X-axis rate
+        avgPitch.add(values[1])  // Y-axis rate
+        avgRoll.add(values[2])   // Z-axis rate
         
         // Step 2: Calculate time delta
         val currentTime = System.nanoTime()
@@ -511,12 +500,12 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
             return
         }
         
-        // Step 3: Reference formula exactly: f = deltaTimeNanos * 1e-8 * 6.0 * DEG_TO_RAD
+        // Step 3: Integration formula: f = deltaTimeNanos * 1e-8 * 6.0 * DEG_TO_RAD
         // DEG_TO_RAD = 0.017453292 = π/180
         val f = deltaTimeNanos * 1e-8f * 6.0f * 0.017453292f
         
         // Step 4: Accumulate averaged angular velocity into angles
-        // NO deadzone check, NO decay - matches reference exactly
+        // No deadzone check, no decay - angles hold until moved
         gyroYaw = (gyroYaw + avgYaw.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
         gyroPitch = (gyroPitch + avgPitch.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
         gyroRoll = (gyroRoll + avgRoll.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
@@ -524,11 +513,10 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         // Update time AFTER accumulation
         lastGyroTime = currentTime
         
-        // Step 5: Apply display rotation to get tiltX/tiltY (matches ForestRenderer.java lines 580-593)
-        // Reference ForestRenderer.java:
-        // ROTATION_0:   tiltX = -lastPitch, tiltY = lastYaw
-        // ROTATION_90:  tiltX = -lastYaw,   tiltY = -lastPitch  
-        // ROTATION_270: tiltX = lastYaw,    tiltY = lastPitch
+        // Step 5: Apply display rotation to get tiltX/tiltY
+        // ROTATION_0:   tiltX = -pitch, tiltY = yaw
+        // ROTATION_90:  tiltX = -yaw,   tiltY = -pitch  
+        // ROTATION_270: tiltX = yaw,    tiltY = pitch
         val (rawTiltX, rawTiltY) = when (displayRotation) {
             Surface.ROTATION_90 -> Pair(-gyroYaw, -gyroPitch)
             Surface.ROTATION_180 -> Pair(gyroPitch, -gyroYaw)  // Interpolated from pattern
@@ -540,7 +528,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         val tiltX = (rawTiltX / MAX_TILT_RAD).coerceIn(-1f, 1f)
         val tiltY = (rawTiltY / MAX_TILT_RAD).coerceIn(-1f, 1f)
         
-        // Output directly - no additional filtering (reference app has no extra smoothing)
+        // Output directly - no additional filtering on sensor side
         filteredX = tiltX
         filteredY = tiltY
         
@@ -900,7 +888,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         
         // Auto-return: gentle decay ONLY when device is not actively moving.
         // During active tilting the accumulated values pass through unchanged
-        // (zero-latency, matching the kaka.wallpaper.forest reference app).
+        // (zero-latency for responsive parallax).
         if (autoReturnRate < 1f) {
             val motionMag = sqrt(deltaPitch * deltaPitch + deltaRoll * deltaRoll)
             if (motionMag < 0.002f) {
@@ -914,8 +902,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     
     private fun processTiltValues(targetX: Float, targetY: Float) {
         // Direct pass-through: no deadzone, no exponential filter.
-        // Reference app (kaka.wallpaper.forest) uses zero sensor-side smoothing;
-        // all smoothing/return-to-center is handled by ParallaxCalculator.
+        // All smoothing/return-to-center is handled by ParallaxCalculator.
         filteredX = targetX
         filteredY = targetY
 

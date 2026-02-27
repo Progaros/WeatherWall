@@ -397,8 +397,8 @@ class ParallaxCalculatorTest {
     }
     
     @Test
-    fun testDirectResponseMatchesReferenceApp() {
-        // Reference app (ForestRenderer.java) reads rotation values directly each frame
+    fun testDirectResponseMatchesExpectedBehavior() {
+        // Direct mode reads rotation values directly each frame
         // Our implementation should match this with near-instant lerp
         val calculator = ParallaxCalculator()
         calculator.strength = 1.0f

@@ -7,14 +7,14 @@ import kotlin.math.sqrt
 /**
  * Unit tests for ParallaxSensorManager
  * 
- * Key approach (aligned with kaka.wallpaper.forest reference):
+ * Key approach:
  * - Direct pass-through: no exponential smoothing, no deadzone on sensor side
  * - Gyroscope mode: 3-sample moving average, direct integration, ±18° clamp
  * - Rotation vector mode: delta-based accumulation, no decay during motion
  * - All smoothing/return-to-center handled by ParallaxCalculator
  * 
  * Latency:
- * - Reference app uses no smoothing filter at all
+ * - No smoothing filter
  * - Both sensor modes output directly (zero sensor-side latency)
  * - Optional auto-return only when device is held still
  */
@@ -77,7 +77,7 @@ class ParallaxSensorManagerTest {
     @Test
     fun `small values pass through without deadzone`() {
         // Previously small values were killed by DEADZONE=0.03
-        // Now all values pass through directly (reference app behavior)
+        // Now all values pass through directly (expected behavior)
         val tinyX = 0.005f
         val tinyY = 0.002f
         
@@ -447,14 +447,15 @@ class ParallaxSensorManagerTest {
         assertEquals("Negative max should map to -1.0", -1f, negativeTilt, 0.001f)
     }
     
-    // ============== Gyroscope Reference App Match Tests ==============
-    // Tests now match RotationManager.java from reference app exactly
+    // ============== Gyroscope Integration Tests ==============
+    // Tests verify correct gyroscope integration
     
     @Test
     fun `gyroscope raw values map directly to averagers`() {
-        // Reference app: averagers[0].add(values[0]) → lastYaw
-        //               averagers[1].add(values[1]) → lastPitch
-        //               averagers[2].add(values[2]) → lastRoll
+        // Raw gyroscope values go directly to averagers:
+        //   averagers[0].add(values[0]) → lastYaw
+        //   averagers[1].add(values[1]) → lastPitch
+        //   averagers[2].add(values[2]) → lastRoll
         // NO axis remapping before averaging - raw sensor values used directly
         val values = floatArrayOf(0.5f, 0.3f, 0.1f)
         
@@ -470,7 +471,7 @@ class ParallaxSensorManagerTest {
     
     @Test
     fun `gyroscope ROTATION_0 maps pitch to tiltX and yaw to tiltY`() {
-        // Reference ForestRenderer.java line 584: ROTATION_0: tiltX = -lastPitch, tiltY = lastYaw
+        // Expected: ROTATION_0: tiltX = -lastPitch, tiltY = lastYaw
         val MAX_TILT_RAD = 0.31415927f
         val gyroYaw = 0.15f
         val gyroPitch = 0.1f
@@ -488,7 +489,7 @@ class ParallaxSensorManagerTest {
     
     @Test
     fun `gyroscope ROTATION_90 maps yaw to tiltX and pitch to tiltY`() {
-        // Reference ForestRenderer.java line 587: ROTATION_90: tiltX = -lastYaw, tiltY = -lastPitch
+        // Expected: ROTATION_90: tiltX = -lastYaw, tiltY = -lastPitch
         val MAX_TILT_RAD = 0.31415927f
         val gyroYaw = 0.15f
         val gyroPitch = 0.1f
@@ -506,7 +507,7 @@ class ParallaxSensorManagerTest {
     
     @Test
     fun `gyroscope ROTATION_270 maps yaw to tiltX and pitch to tiltY opposite to 90`() {
-        // Reference ForestRenderer.java line 591: ROTATION_270: tiltX = lastYaw, tiltY = lastPitch
+        // Expected: ROTATION_270: tiltX = lastYaw, tiltY = lastPitch
         val MAX_TILT_RAD = 0.31415927f
         val gyroYaw = 0.15f
         val gyroPitch = 0.1f
@@ -523,8 +524,8 @@ class ParallaxSensorManagerTest {
     }
     
     @Test
-    fun `gyroscope no deadzone before averaging matches reference`() {
-        // Reference app adds ALL values to averagers without any deadzone filtering
+    fun `gyroscope no deadzone before averaging`() {
+        // ALL values go to averagers without any deadzone filtering
         // The deadzone was previously applied BEFORE averaging - this was wrong
         val testAverager = TestAverager(3)
         
@@ -540,14 +541,14 @@ class ParallaxSensorManagerTest {
     }
     
     @Test
-    fun `gyroscope no decay matches reference`() {
-        // Reference app NEVER decays accumulated angles - they hold until moved
+    fun `gyroscope no decay - angles hold until moved`() {
+        // Accumulated angles should NEVER decay - they hold until moved
         val MAX_TILT_RAD = 0.31415927f
         var gyroAngle = 0.15f  // Some accumulated angle
         
-        // In reference app, when no motion, angle stays the same (no decay)
+        // When no motion, angle stays the same (no decay)
         // Old buggy code: gyroAngle *= GYRO_DECAY_RATE (0.998)
-        // Reference code: gyroAngle = gyroAngle (no change)
+        // Correct: gyroAngle = gyroAngle (no change)
         
         val originalAngle = gyroAngle
         // Simulate 100 frames with no motion - angle should stay exactly the same
@@ -556,7 +557,7 @@ class ParallaxSensorManagerTest {
             // gyroAngle = gyroAngle (stays same)
         }
         
-        assertEquals("Angle should not decay (reference behavior)", originalAngle, gyroAngle, 0.001f)
+        assertEquals("Angle should not decay (expected behavior)", originalAngle, gyroAngle, 0.001f)
     }
     
     // ============== gForce Shake Detection Tests ==============
@@ -757,8 +758,8 @@ class ParallaxSensorManagerTest {
     }
     
     @Test
-    fun `zero-latency output matches reference app`() {
-        // Reference app (kaka.wallpaper.forest RotationManager.java) uses no filter.
+    fun `zero-latency output works correctly`() {
+        // Direct output mode uses no filter.
         // Both sensor modes now output directly with zero sensor-side latency.
         val target = 0.8f
         val output = target  // Direct, no filtering
@@ -769,7 +770,7 @@ class ParallaxSensorManagerTest {
     @Test
     fun `gyroscope mode uses direct output without filter`() {
         // Gyroscope mode should bypass filter entirely for minimum latency
-        // This matches reference app behavior (RotationManager.java)
+        // This matches expected direct output behavior
         val MAX_TILT_RAD = 0.31415927f
         
         // Simulating gyro output calculation
@@ -786,7 +787,7 @@ class ParallaxSensorManagerTest {
     }
     
     @Test
-    fun `reference app latency target is 20ms`() {
+    fun `latency target is 20ms`() {
         // At 50Hz sensor rate (SENSOR_DELAY_GAME = ~20ms), we want:
         // - Sensor event arrives: +20ms
         // - Processing (instant with direct output): +0ms

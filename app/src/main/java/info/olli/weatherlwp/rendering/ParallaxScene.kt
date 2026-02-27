@@ -414,7 +414,7 @@ class ParallaxScene(
             parallaxMaxOffsetPx = 130f
             
             // Smoothing slider: map 0..100 -> 0f..0.40f
-            // 0 = instant/direct (reference app behavior), 50 = moderate smoothing, 100 = floaty
+            // 0 = instant/direct (no smoothing), 50 = moderate smoothing, 100 = floaty
             val smoothingVal = prefs.getInt("pref_parallax_smoothing", PreferenceDefaults.PARALLAX_SMOOTHING).coerceIn(0, 100)
             val smoothingFactor = if (smoothingVal <= 0) 0f else 0.02f + (smoothingVal / 100f) * 0.38f
             

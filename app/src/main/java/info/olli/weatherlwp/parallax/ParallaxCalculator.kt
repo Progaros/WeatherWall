@@ -1,6 +1,8 @@
 package info.olli.weatherlwp.parallax
 
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.math.atan
+import kotlin.math.tan
 
 /**
  * Calculates parallax offset values using a position-based (tilt-following) system.
@@ -10,6 +12,7 @@ import java.util.concurrent.atomic.AtomicReference
  * - Holding the phone at an angle keeps the scene offset stable
  * - Smooth interpolation (lerp) toward target for natural feel
  * - Optional return-to-center when tilt is near zero (controlled by returnSpeed)
+ * - tan() perspective curve gives natural depth perception
  * 
  * Performance optimized:
  * - Uses AtomicReference for lock-free thread safety
@@ -22,11 +25,16 @@ import java.util.concurrent.atomic.AtomicReference
  */
 class ParallaxCalculator {
     companion object {
-        /** How fast position approaches target (per frame, 0-1)
-         * Reference app uses direct values (no lerping) with tan() transformation
-         * For compatibility with smoothing slider, we lerp but support instant mode
+        /** How fast position approaches target (per frame, 0-1).
+         * High value = more responsive. Direct mode (no lerp) used for low smoothing.
          */
-        private const val POSITION_LERP_RATE = 0.9f
+        private const val POSITION_LERP_RATE = 0.95f
+        
+        /** Maximum tilt angle for tan() perspective curve (18 degrees in radians) */
+        private const val MAX_TILT_ANGLE = 0.31415927f
+        
+        /** Precomputed 1/tan(MAX_TILT_ANGLE) for normalizing tan() output */
+        private val TAN_NORMALIZER = 1f / tan(MAX_TILT_ANGLE)
     }
     
     // Tilt holder for atomic operations (lock-free)
@@ -122,7 +130,7 @@ class ParallaxCalculator {
     
     /**
      * Calculate movement multiplier for a given depth, accounting for perspective.
-     * Blends between foreground-heavy (depth) and background-heavy (1-depth) based on perspective.
+     * Uses a nonlinear curve: layers further away shift more, creating natural depth.
      */
     private fun movementMultiplier(depthFactor: Float): Float {
         val d = depthFactor.coerceIn(0f, 1f)
@@ -130,6 +138,20 @@ class ParallaxCalculator {
         val backgroundHeavy = 1f - d      // Model B: background moves most
         val mixed = foregroundHeavy + (backgroundHeavy - foregroundHeavy) * perspective
         return mixed * depthSeparation
+    }
+    
+    /**
+     * Apply tan() perspective curve to a normalized position value.
+     * Converts linear tilt into perspective-correct displacement:
+     * - Near center: nearly linear (natural small movements)
+     * - Near edges: accelerates (like looking through a window at an angle)
+     * 
+     * @param normalizedPos Position in -1..1 range
+     * @return Perspective-corrected position in -1..1 range
+     */
+    private fun applyTanCurve(normalizedPos: Float): Float {
+        val clamped = normalizedPos.coerceIn(-1f, 1f)
+        return tan(clamped * MAX_TILT_ANGLE) * TAN_NORMALIZER
     }
     
     /**
@@ -203,44 +225,43 @@ class ParallaxCalculator {
             targetY = tiltTargetY
         }
         
-        // Determine interpolation speed based on state
-        // If tilt is low (device flat), we use "Return Speed" to control recentering
-        val isReturning = tiltMagnitude < 0.1f
+        // Determine interpolation speed
+        // Blend smoothly between tilt-following and return-to-center based on tilt magnitude
+        // (avoids abrupt mode switch at a fixed threshold)
+        val returnBlend = (1f - tiltMagnitude / 0.15f).coerceIn(0f, 1f)  // 1=flat, 0=tilted
         
         // Calculate edge easing multiplier based on current position
-        // Only applies when moving AWAY from center (not when returning)
-        val edgeEasingMultiplier = if (edgeEasing > 0.01f && !isReturning) {
+        val edgeEasingMultiplier = if (edgeEasing > 0.01f) {
             calculateEdgeEasingMultiplier(xLimit, yLimit)
         } else {
             1f
         }
         
-        val effectiveLerpRate = if (isReturning) {
-            if (returnSpeed <= 0.001f) {
-                // returnSpeed=0: Hold position (freeze) when flat
-                0f
-            } else {
-                // Use returnSpeed for lerp rate (0.001 to 0.5)
-                // returnSpeed=1.0 -> 0.5 (Very fast)
-                // returnSpeed=0.1 -> 0.05 (Slow)
-                val baseLerp = (returnSpeed * 0.5f * deltaScale).coerceAtMost(0.9f)
-                // Apply edge easing to return speed only if not unlocked
-                if (returnSpeedUnlocked) baseLerp else baseLerp * edgeEasingMultiplier
-            }
+        // Tilt lerp rate: direct mode for low smoothing, graduated for higher
+        val tiltLerp = if (smoothing <= 0.02f) {
+            // Direct mode: instant response, no lerping
+            1.0f
         } else {
-            // Smoothing=0 means instant/direct response (matches reference app)
-            // Smoothing>0 adds progressive lerp-based smoothing
-            val baseLerp = if (smoothing <= 0.01f) {
-                // Direct mode: instant response, no lerping (reference app behavior)
-                1.0f
-            } else {
-                // Standard smoothing when active (tilting)
-                val baseLerpRate = POSITION_LERP_RATE * (1f - smoothing * 0.6f) * deltaScale
-                baseLerpRate.coerceAtMost(0.95f)
-            }
-            // Apply edge easing - only slow down when moving away from center
-            val movingAwayFromCenter = isMovingAwayFromCenter(targetX, targetY)
-            if (movingAwayFromCenter) baseLerp * edgeEasingMultiplier else baseLerp
+            val baseLerpRate = POSITION_LERP_RATE * (1f - smoothing * 0.5f) * deltaScale
+            baseLerpRate.coerceIn(0.1f, 0.98f)
+        }
+        
+        // Return-to-center rate
+        val returnLerp = if (returnSpeed <= 0.001f) {
+            0f  // No return: hold position when flat
+        } else {
+            (returnSpeed * 0.5f * deltaScale).coerceAtMost(0.9f)
+        }
+        
+        // Blend between tilt response and return-to-center
+        val baseLerp = tiltLerp * (1f - returnBlend) + returnLerp * returnBlend
+        
+        // Apply edge easing only when moving away from center
+        val effectiveLerpRate = if (edgeEasing > 0.01f && isMovingAwayFromCenter(targetX, targetY)) {
+            val eased = if (returnSpeedUnlocked && returnBlend > 0.5f) baseLerp else baseLerp * edgeEasingMultiplier
+            eased
+        } else {
+            baseLerp
         }
         
         // Apply interpolation
@@ -275,30 +296,52 @@ class ParallaxCalculator {
     
     /**
      * Get parallax offset for a specific layer depth.
-     * Uses perspective setting to control foreground vs background emphasis.
+     * Applies tan() perspective curve for natural depth perception,
+     * then scales by depth-dependent movement multiplier.
      * 
      * @param depthFactor Layer depth: 0.0 = background, 1.0 = foreground
      * @return (x, y) offset to apply to this layer
      */
     fun getOffsetForDepth(depthFactor: Float): Pair<Float, Float> {
         val mult = movementMultiplier(depthFactor)
-        return Pair(positionX * mult, positionY * mult)
+        // Apply perspective curve: tan() gives natural acceleration at larger tilts
+        val effectiveMaxOffset = getEffectiveMaxOffset()
+        val normX = if (effectiveMaxOffset > 0) positionX / effectiveMaxOffset else 0f
+        val normY = if (effectiveMaxOffset > 0) positionY / effectiveMaxOffset else 0f
+        val curvedX = applyTanCurve(normX) * effectiveMaxOffset
+        val curvedY = applyTanCurve(normY) * effectiveMaxOffset
+        return Pair(curvedX * mult, curvedY * mult)
     }
     
     /**
      * Get X offset for a specific depth.
-     * Uses perspective setting for "window" vs "head" movement feel.
+     * Applies tan() perspective curve for natural depth perception.
      */
     fun getOffsetXForDepth(depthFactor: Float): Float {
-        return positionX * movementMultiplier(depthFactor)
+        val mult = movementMultiplier(depthFactor)
+        val effectiveMaxOffset = getEffectiveMaxOffset()
+        val normX = if (effectiveMaxOffset > 0) positionX / effectiveMaxOffset else 0f
+        return applyTanCurve(normX) * effectiveMaxOffset * mult
     }
     
     /**
      * Get Y offset for a specific depth.
-     * Uses perspective setting for "window" vs "head" movement feel.
+     * Applies tan() perspective curve for natural depth perception.
      */
     fun getOffsetYForDepth(depthFactor: Float): Float {
-        return positionY * movementMultiplier(depthFactor)
+        val mult = movementMultiplier(depthFactor)
+        val effectiveMaxOffset = getEffectiveMaxOffset()
+        val normY = if (effectiveMaxOffset > 0) positionY / effectiveMaxOffset else 0f
+        return applyTanCurve(normY) * effectiveMaxOffset * mult
+    }
+    
+    /** Get the effective max offset in pixels based on current settings. */
+    private fun getEffectiveMaxOffset(): Float {
+        return if (maxOffsetPercent > 0) {
+            canvasHeight * (maxOffsetPercent / 100f)
+        } else {
+            maxOffsetPx * scaleFactor
+        }
     }
     
     /**

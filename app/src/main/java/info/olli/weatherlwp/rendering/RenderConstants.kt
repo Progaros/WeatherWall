@@ -142,22 +142,22 @@ object RenderConstants {
     // Dawn: Navy-blue transitioning through muted coral to warm golden horizon
     // Dawn colors are slightly less vivid than dusk per atmospheric science
     // (morning air is cleaner -> less Rayleigh scattering -> softer sunrise colors)
-    val SKY_DAWN_TOP: Int by lazy { Color.parseColor("#2E3B5E") }       // Deep navy-blue
-    val SKY_DAWN_MID: Int by lazy { Color.parseColor("#C8887A") }       // Muted coral-salmon (slightly desaturated)
-    val SKY_DAWN_BOTTOM: Int by lazy { Color.parseColor("#F0D0A8") }    // Warm pale golden horizon
+    val SKY_DAWN_TOP: Int by lazy { Color.parseColor("#354880") }       // Brighter navy-blue (more light reaching)
+    val SKY_DAWN_MID: Int by lazy { Color.parseColor("#D08868") }       // Warm coral-salmon (slightly more vivid)
+    val SKY_DAWN_BOTTOM: Int by lazy { Color.parseColor("#F0B880") }    // Warm golden-orange horizon
     
-    // Day: Deep blue -> Blue -> Light horizon haze
-    val SKY_DAY_TOP: Int by lazy { Color.parseColor("#1565C0") }        // Deep blue
-    val SKY_DAY_MID: Int by lazy { Color.parseColor("#42A5F5") }        // Bright blue
-    val SKY_DAY_BOTTOM: Int by lazy { Color.parseColor("#B3E5FC") }     // Light horizon
+    // Day: Clear blue -> Blue -> Light horizon haze
+    // Lighter/paler than Material Design blues for photorealistic sky
+    val SKY_DAY_TOP: Int by lazy { Color.parseColor("#2E80D0") }        // Clear sky blue (less saturated)
+    val SKY_DAY_MID: Int by lazy { Color.parseColor("#60B8F5") }        // Bright sky blue
+    val SKY_DAY_BOTTOM: Int by lazy { Color.parseColor("#D0EFFF") }     // Pale hazy horizon
     
     // Dusk: Deep purple-blue -> Warm terracotta -> Soft golden-orange horizon
-    // Dusk is more vivid than dawn per atmospheric science (NOAA: evening air
-    // contains more particles from daytime convection -> enhanced Rayleigh scattering
-    // -> deeper oranges and reds)
-    val SKY_DUSK_TOP: Int by lazy { Color.parseColor("#2A1A40") }       // Rich purple-blue (slightly warmer than dawn)
-    val SKY_DUSK_MID: Int by lazy { Color.parseColor("#C85030") }       // Vivid terracotta-orange (more saturated than dawn)
-    val SKY_DUSK_BOTTOM: Int by lazy { Color.parseColor("#F0A060") }    // Warm deep golden-orange horizon
+    // Dusk is more vivid than dawn (NOAA: evening air contains more particles
+    // from daytime convection -> enhanced Rayleigh scattering)
+    val SKY_DUSK_TOP: Int by lazy { Color.parseColor("#2E2850") }       // Rich purple-blue
+    val SKY_DUSK_MID: Int by lazy { Color.parseColor("#D05838") }       // Vivid terracotta-orange
+    val SKY_DUSK_BOTTOM: Int by lazy { Color.parseColor("#E89050") }    // Warm deep golden-orange horizon
     
     // Ambient tint colors for global tinting (more muted for realism)
     val AMBIENT_NIGHT: Int by lazy { Color.parseColor("#2A2040") }      // Purple-blue night tint
