@@ -243,20 +243,16 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
 
         // Stars visible at night, dusk, and dawn (fading as sunrise approaches)
         // Per atmospheric science: stars remain visible until civil twilight
-        if (state.isNight || state.isDusk || state.isDawn) {
+        // Smooth star alpha based on time of day to avoid abrupt transitions
+        val starAlphaBase = computeNightAlpha(state, 150, 80, 60)
+        if (starAlphaBase > 5) {
             val time = state.absoluteTimeMs
-            val starAlphaBase = when {
-                state.isNight -> 150
-                state.isDusk -> 80
-                state.isDawn -> 60  // Fainter during dawn as sky brightens
-                else -> 0
-            }
             
             val (starPx, starPy) = parallaxCalculator.getOffsetForDepth(RenderConstants.PARALLAX_STARS)
             
             for (star in stars) {
                 val twinkle = sin((time * RenderConstants.STAR_TWINKLE_SPEED + star[0] * 10).toDouble())
-                val alpha = (starAlphaBase + 50 * twinkle).toInt().coerceIn(30, 220)
+                val alpha = (starAlphaBase + 50 * twinkle).toInt().coerceIn(5, 220)
                 starPaint.alpha = alpha
                 
                 val x = star[0] * width + starPx
@@ -280,13 +276,9 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         }
         
         // Vignette effect for night/dusk/dawn - darker corners for atmosphere
-        if (state.isNight || state.isDusk || state.isDawn) {
-            val vignetteAlpha = when {
-                state.isNight -> 80
-                state.isDusk -> 40
-                state.isDawn -> 30  // Subtle dawn vignette
-                else -> 0
-            }
+        // Smooth vignette alpha to avoid abrupt transitions
+        val vignetteAlpha = computeNightAlpha(state, 80, 40, 30)
+        if (vignetteAlpha > 3) {
             drawVignette(canvas, vignetteAlpha)
         }
     }
@@ -295,6 +287,47 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
      * Draw a radial vignette (darker corners) for atmospheric effect.
      * Uses cached gradient to avoid allocations every frame.
      */
+    /**
+     * Compute a smooth alpha value for night/dusk/dawn effects based on time of day.
+     * Uses continuous interpolation instead of hard boolean checks.
+     * 
+     * @param nightVal Alpha when fully night
+     * @param duskVal Alpha at dusk peak
+     * @param dawnVal Alpha at dawn peak
+     * @return Smoothly interpolated alpha value (0 during full day)
+     */
+    private fun computeNightAlpha(state: SimulationState, nightVal: Int, duskVal: Int, dawnVal: Int): Int {
+        val hour = state.timeOfDayHours
+        val sunrise = state.sunriseHours
+        val sunset = state.sunsetHours
+        
+        // Pre-dawn: Night→Dawn (1h before sunrise to sunrise)
+        val dawnStart = sunrise - 1.0f
+        if (hour >= dawnStart && hour < sunrise) {
+            val t = (hour - dawnStart) / (sunrise - dawnStart)
+            return (nightVal + (dawnVal - nightVal) * t).toInt()
+        }
+        // Dawn→Day: (sunrise to sunrise+0.5h)
+        if (hour >= sunrise && hour < sunrise + 0.5f) {
+            val t = (hour - sunrise) / 0.5f
+            return (dawnVal * (1f - t)).toInt()
+        }
+        // Day→Dusk: (sunset-1.5h to sunset)
+        if (hour >= sunset - 1.5f && hour < sunset) {
+            val t = (hour - (sunset - 1.5f)) / 1.5f
+            return (duskVal * t).toInt()
+        }
+        // Dusk→Night: (sunset to sunset+1h)
+        if (hour >= sunset && hour < sunset + 1.0f) {
+            val t = (hour - sunset) / 1.0f
+            return (duskVal + (nightVal - duskVal) * t).toInt()
+        }
+        // Full day
+        if (hour >= sunrise + 0.5f && hour < sunset - 1.5f) return 0
+        // Full night
+        return nightVal
+    }
+    
     private fun drawVignette(canvas: Canvas, alpha: Int) {
         val centerX = width / 2f
         val centerY = height / 2f

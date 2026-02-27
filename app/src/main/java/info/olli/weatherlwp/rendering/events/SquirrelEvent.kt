@@ -31,8 +31,8 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
     // Baseline Y - will be adjusted by hill height
     private val baseY = 0.78f + random.nextFloat() * 0.08f
     
-    // Movement speed (squirrels are quick!)
-    private val speed = 0.00008f + random.nextFloat() * 0.00004f
+    // Movement speed (squirrels are quick but not unrealistic)
+    private val speed = 0.00004f + random.nextFloat() * 0.00002f
     override val durationMs: Long = (1.2f / speed).toLong()
     
     // Animation phases

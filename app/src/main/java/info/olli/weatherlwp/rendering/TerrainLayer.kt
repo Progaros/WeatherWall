@@ -182,14 +182,31 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     )
     @Volatile private var mushroomsByHill: Map<Int, List<MushroomData>> = emptyMap()
     
-    // Pre-generated berry positions (per tree index)
+    // Pre-generated berry positions (per bush index)
     private data class BerryData(
         val xOffset: Float,
         val yRatio: Float,
         val color: Int,
         val size: Float
     )
-    @Volatile private var berriesByTree: Map<Int, List<BerryData>> = emptyMap()
+    @Volatile private var berriesByBush: Map<Int, List<BerryData>> = emptyMap()
+    
+    // Bush data - small round/oval bushes placed on hills
+    private data class BushData(
+        val xRatio: Float,    // 0-1 across extended width
+        val yRatio: Float,    // Ground Y position
+        val scale: Float,
+        val depthFactor: Float,
+        val dayColor: Int,
+        val index: Int = -1
+    )
+    @Volatile private var bushes: List<BushData> = emptyList()
+    @Volatile private var bushesByDepth: Map<Float, List<BushData>> = emptyMap()
+    
+    // Bush settings
+    private var bushesEnabled = true
+    private var bushDensity = 30      // 0-100
+    private var bushSize = 1.0f       // Scale factor
     
     private val pineconePaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val leafPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
@@ -197,6 +214,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private val mushroomCapPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val berryPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val frostPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
+    private val bushPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     
     // Pre-generated snow patch positions (per hill)
     private data class SnowPatchData(
@@ -276,7 +294,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private fun generateTerrain() {
         generateHills()
         generateTrees()
+        generateBushes()
         generateTreeDecorations()
+        generateBushDecorations()
     }
     
     private fun generateHills() {
@@ -359,19 +379,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 (Color.blue(RenderConstants.HILL_BASE_COLOR) * brightness).toInt()
             )
             
-            // Apply autumn brown tint if enabled (with transition blending)
-            val currentSeason = getCurrentTerrainSeason()
-            if (autumnGrassEnabled) {
-                val autumnWeight = when {
-                    currentSeason == "autumn" -> 1f
-                    else -> 0f
-                }
-                if (autumnWeight > 0f) {
-                    val autumnIntensity = autumnGrassIntensity / 100f * 0.5f * autumnWeight
-                    dayColor = autumnColor(dayColor, autumnIntensity)
-                }
-            }
-            
+            // Autumn tint is now applied at draw time for smooth season transitions
             newHills.add(HillData(points, depthFactor, heightOffset, dayColor))
         }
         // Sort by depthFactor: most negative (background) draws first
@@ -385,11 +393,14 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     }
     
     private fun generateSeasonalDecorations(currentHills: List<HillData>) {
-        val season = getCurrentTerrainSeason()
         val random = Random(randomSeed.toLong() + 5000)
         
-        // Generate spring flowers
-        if (springFlowersEnabled && season == "spring") {
+        // Always pre-generate all seasonal decorations.
+        // Visibility/opacity is controlled at draw time using season blend factors,
+        // enabling smooth transitions between seasons.
+        
+        // Generate spring flowers (always, visibility controlled at draw time)
+        if (springFlowersEnabled) {
             val flowerColors = intArrayOf(
                 Color.rgb(255, 182, 193),  // Light pink
                 Color.rgb(255, 255, 0),    // Yellow
@@ -421,8 +432,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             flowersByHill = emptyMap()
         }
         
-        // Generate winter snow patches
-        if (winterSnowEnabled && season == "winter") {
+        // Generate winter snow patches (always, visibility controlled at draw time)
+        if (winterSnowEnabled) {
             val newSnow = mutableMapOf<Int, List<SnowPatchData>>()
             val patchesPerHill = (winterSnowCoverage / 20).coerceAtLeast(1)
             
@@ -444,8 +455,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             snowByHill = emptyMap()
         }
         
-        // Generate fallen leaves (autumn)
-        if (fallenLeavesEnabled && (season == "autumn" || season == "winter")) {
+        // Generate fallen leaves (always, visibility controlled at draw time)
+        if (fallenLeavesEnabled) {
             val leafColors = intArrayOf(
                 Color.rgb(200, 80, 20),    // Orange-red
                 Color.rgb(180, 120, 30),   // Golden
@@ -475,8 +486,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             fallenLeavesByHill = emptyMap()
         }
         
-        // Generate mushrooms (autumn, after rain - always placed, visibility controlled in draw)
-        if (mushroomsEnabled && (season == "autumn" || season == "summer")) {
+        // Generate mushrooms (always, visibility controlled at draw time)
+        if (mushroomsEnabled) {
             val capColors = intArrayOf(
                 Color.rgb(180, 50, 30),    // Red cap
                 Color.rgb(200, 160, 80),   // Tan/beige cap
@@ -509,12 +520,14 @@ class TerrainLayer(private val context: Context) : SceneLayer {
      * Generate tree decorations (pinecones, berries) after trees are generated.
      */
     private fun generateTreeDecorations() {
-        val season = getCurrentTerrainSeason()
         val currentTrees = trees
         val random = Random(randomSeed.toLong() + 7000)
         
-        // Generate pinecones (autumn and winter)
-        if (pineconesEnabled && (season == "autumn" || season == "winter")) {
+        // Always pre-generate all tree decorations.
+        // Visibility/opacity controlled at draw time using season blend.
+        
+        // Generate pinecones (always, visibility controlled at draw time)
+        if (pineconesEnabled) {
             val newPinecones = mutableMapOf<Int, List<PineconeData>>()
             val pineconeProbability = pineconeDensity / 100f
             
@@ -534,36 +547,6 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             pineconesByTree = newPinecones
         } else {
             pineconesByTree = emptyMap()
-        }
-        
-        // Generate berries (summer and autumn)
-        if (berriesEnabled && (season == "summer" || season == "autumn")) {
-            val berryColors = intArrayOf(
-                Color.rgb(200, 30, 30),    // Red berries
-                Color.rgb(60, 60, 180),    // Blueberries
-                Color.rgb(180, 50, 100),   // Dark pink
-                Color.rgb(100, 20, 60)     // Dark berry
-            )
-            val newBerries = mutableMapOf<Int, List<BerryData>>()
-            val berryProbability = berryDensity / 100f
-            
-            for ((index, _) in currentTrees.withIndex()) {
-                if (random.nextFloat() > berryProbability) continue
-                val treeBerries = mutableListOf<BerryData>()
-                val numBerries = 2 + random.nextInt(5)  // 2-6 berries per tree
-                for (b in 0 until numBerries) {
-                    treeBerries.add(BerryData(
-                        xOffset = (random.nextFloat() - 0.5f) * 0.8f,
-                        yRatio = 0.2f + random.nextFloat() * 0.6f,
-                        color = berryColors[random.nextInt(berryColors.size)],
-                        size = 0.002f + random.nextFloat() * 0.002f
-                    ))
-                }
-                newBerries[index] = treeBerries
-            }
-            berriesByTree = newBerries
-        } else {
-            berriesByTree = emptyMap()
         }
     }
     
@@ -698,6 +681,113 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         treesByDepth = groupedByDepth
     }
     
+    /**
+     * Generate bushes placed on hills, similar to trees but smaller and rounder.
+     * Bushes can have berries on them.
+     */
+    private fun generateBushes() {
+        val currentHills = hills
+        if (currentHills.isEmpty() || !bushesEnabled || bushDensity <= 0 || extendedWidth <= 0) {
+            bushes = emptyList()
+            bushesByDepth = emptyMap()
+            return
+        }
+        
+        val widthRatio = extendedWidth / (height * RenderConstants.REFERENCE_ASPECT_RATIO).coerceAtLeast(1f)
+        val bushCount = ((bushDensity / 100f) * 60 * widthRatio).toInt().coerceIn(0, 500)
+        if (bushCount <= 0) {
+            bushes = emptyList()
+            bushesByDepth = emptyMap()
+            return
+        }
+        
+        val newBushes = ArrayList<BushData>(bushCount)
+        val random = Random(randomSeed.toLong() + 5000)  // Different seed from trees
+        
+        val bushesPerHill = (bushCount.toFloat() / currentHills.size).toInt().coerceAtLeast(1)
+        
+        for (hillIndex in currentHills.indices) {
+            val hill = currentHills[hillIndex]
+            val depthFactor = hill.depthFactor
+            
+            val hillBushCount = bushesPerHill.coerceAtMost(bushCount - newBushes.size)
+            
+            for (b in 0 until hillBushCount) {
+                val xRatio = random.nextFloat()
+                val groundY = getHillY(xRatio, hill)
+                
+                // Bushes sit on or slightly below the hill line
+                val verticalOffset = random.nextFloat() * 0.06f
+                val yRatio = groundY + verticalOffset
+                
+                // Normalize depth for scale
+                val hillsRange = RenderConstants.PARALLAX_HILLS_MAX - RenderConstants.PARALLAX_HILLS_MIN
+                val normalizedDepth = ((depthFactor - RenderConstants.PARALLAX_HILLS_MIN) / hillsRange).coerceIn(0f, 1f)
+                
+                // Bushes are smaller than trees, scale with depth
+                val baseScale = 0.4f + normalizedDepth * 0.6f
+                val sizeVariation = 0.7f + random.nextFloat() * 0.6f
+                val scale = baseScale * sizeVariation * bushSize
+                
+                // Green/dark green color for bush
+                val varR = random.nextInt(20) - 10
+                val varG = random.nextInt(30)
+                val dayColor = Color.rgb(
+                    (40 + varR).coerceIn(0, 255),
+                    (80 + varG).coerceIn(0, 255),
+                    30
+                )
+                
+                newBushes.add(BushData(xRatio, yRatio, scale, depthFactor, dayColor, newBushes.size))
+            }
+        }
+        
+        newBushes.sortBy { it.depthFactor }
+        
+        val groupedByDepth = newBushes.groupBy { it.depthFactor }
+            .mapValues { (_, b) -> b.sortedBy { it.yRatio } }
+        
+        bushes = newBushes
+        bushesByDepth = groupedByDepth
+    }
+    
+    /**
+     * Generate berry decorations for bushes.
+     */
+    private fun generateBushDecorations() {
+        val currentBushes = bushes
+        val random = Random(randomSeed.toLong() + 8000)
+        
+        if (berriesEnabled && currentBushes.isNotEmpty()) {
+            val berryColors = intArrayOf(
+                Color.rgb(200, 30, 30),    // Red berries
+                Color.rgb(60, 60, 180),    // Blueberries
+                Color.rgb(180, 50, 100),   // Dark pink
+                Color.rgb(100, 20, 60)     // Dark berry
+            )
+            val newBerries = mutableMapOf<Int, List<BerryData>>()
+            val berryProbability = berryDensity / 100f
+            
+            for ((index, _) in currentBushes.withIndex()) {
+                if (random.nextFloat() > berryProbability) continue
+                val bushBerries = mutableListOf<BerryData>()
+                val numBerries = 2 + random.nextInt(4)  // 2-5 berries per bush
+                for (b in 0 until numBerries) {
+                    bushBerries.add(BerryData(
+                        xOffset = (random.nextFloat() - 0.5f) * 0.8f,
+                        yRatio = 0.2f + random.nextFloat() * 0.6f,
+                        color = berryColors[random.nextInt(berryColors.size)],
+                        size = 0.002f + random.nextFloat() * 0.002f
+                    ))
+                }
+                newBerries[index] = bushBerries
+            }
+            berriesByBush = newBerries
+        } else {
+            berriesByBush = emptyMap()
+        }
+    }
+    
     private fun getHillY(xRatio: Float, hill: HillData): Float {
         val points = hill.controlPoints
         // Need at least 2 points to interpolate between
@@ -774,6 +864,43 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     @Volatile private var cachedPrevSeason: String = "summer"
     private var dynamicSnowLevel: Float = 0f  // Snow from weather history (0-1)
     
+    /**
+     * Compute smooth weight (0-1) for a given season based on current transition state.
+     * Returns 1.0 when fully in the target season, 0.0 when not in it at all,
+     * and intermediate values during transitions into/out of the season.
+     */
+    private fun getSeasonWeight(season: String): Float {
+        return when {
+            cachedSeason == season && cachedPrevSeason == season -> 1f
+            cachedSeason == season -> cachedSeasonBlend        // Transitioning INTO this season
+            cachedPrevSeason == season -> 1f - cachedSeasonBlend  // Transitioning OUT of this season
+            else -> 0f
+        }
+    }
+    
+    /**
+     * Blend tree foliage toward autumn colours based on weight.
+     * Shifts green toward orange/red/golden tones per tree.
+     */
+    private fun autumnTreeColor(baseColor: Int, weight: Float, treeIndex: Int): Int {
+        if (weight <= 0f) return baseColor
+        // Each tree gets a slightly different autumn hue based on its index
+        val hueShift = (treeIndex * 37) % 3  // 0, 1, or 2
+        val (targetR, targetG, targetB) = when (hueShift) {
+            0 -> Triple(200, 90, 20)    // Orange
+            1 -> Triple(180, 140, 30)   // Golden
+            else -> Triple(190, 60, 25) // Red-orange
+        }
+        val r = Color.red(baseColor)
+        val g = Color.green(baseColor)
+        val b = Color.blue(baseColor)
+        return Color.rgb(
+            (r + (targetR - r) * weight).toInt().coerceIn(0, 255),
+            (g + (targetG - g) * weight).toInt().coerceIn(0, 255),
+            (b + (targetB - b) * weight).toInt().coerceIn(0, 255)
+        )
+    }
+    
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         if (width <= 0 || height <= 0) return
         
@@ -796,7 +923,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // Get ambient color for current time of day (global tint system)
         val ambientColor = RenderConstants.getAmbientColor(
             state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
-            state.nightShadeStrength
+            state.nightShadeStrength, state.sunriseHours, state.sunsetHours
         )
         
         // Draw Hills AND their Trees together, sorted by depth
@@ -810,9 +937,19 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             canvas.save()
             canvas.translate(px, py)
             
+            // Apply autumn brown tint at draw time for smooth season transitions
+            var effectiveDayColor = hill.dayColor
+            if (autumnGrassEnabled) {
+                val autumnWeight = getSeasonWeight("autumn")
+                if (autumnWeight > 0f) {
+                    val autumnIntensity = autumnGrassIntensity / 100f * 0.5f * autumnWeight
+                    effectiveDayColor = autumnColor(effectiveDayColor, autumnIntensity)
+                }
+            }
+            
             // Blend with ambient color based on depth (distant hills blend more)
-            val blendAmount = RenderConstants.applyAmbientTint(hill.dayColor, ambientColor, hill.depthFactor)
-            val hillColor = RenderConstants.blendWithAmbient(hill.dayColor, ambientColor, blendAmount)
+            val blendAmount = RenderConstants.applyAmbientTint(effectiveDayColor, ambientColor, hill.depthFactor)
+            val hillColor = RenderConstants.blendWithAmbient(effectiveDayColor, ambientColor, blendAmount)
             drawHill(canvas, hill, hillColor)
             
             // Draw seasonal decorations on top of hill
@@ -823,29 +960,34 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             // Get trees and animals for this depth range
             val nextDepth = currentHills.getOrNull(index + 1)?.depthFactor ?: Float.MAX_VALUE
             val hillTrees = currentTreesByDepth[hill.depthFactor] ?: emptyList()
+            val hillBushes = bushesByDepth[hill.depthFactor] ?: emptyList()
             
             // Get animals for this depth range (may be empty)
             val animals = groundEventDrawer?.getEventsInRange(hill.depthFactor, nextDepth) ?: emptyList()
             
-            // Optimization: if no animals, just draw trees directly (already Y-sorted during generation)
-            if (animals.isEmpty()) {
+            // Optimization: if no animals, just draw trees and bushes directly (already Y-sorted during generation)
+            // Pre-compute autumn foliage weight once per frame (shared by all trees)
+            val treeAutumnWeight = getSeasonWeight("autumn")
+            
+            if (animals.isEmpty() && hillBushes.isEmpty()) {
                 for (tree in hillTrees) {
                     val treePx = parallaxCalculator.getOffsetXForDepth(tree.depthFactor)
                     val treePy = parallaxCalculator.getOffsetYForDepth(tree.depthFactor)
                     canvas.save()
                     canvas.translate(treePx, treePy)
                     
+                    // Blend tree foliage toward autumn colours during transition
+                    val effectiveTreeColor = autumnTreeColor(tree.dayColor, treeAutumnWeight, tree.index)
                     val yBasedDepth = ((tree.yRatio - 0.6f) / 0.35f).coerceIn(0f, 1f)
                     val timeMultiplier = if (!state.isNight && !state.isDawn && !state.isDusk) 0.15f else 1.0f
-                    val treeBlendAmount = RenderConstants.applyAmbientTint(tree.dayColor, ambientColor, yBasedDepth) * timeMultiplier
-                    treePaint.color = RenderConstants.blendWithAmbient(tree.dayColor, ambientColor, treeBlendAmount)
+                    val treeBlendAmount = RenderConstants.applyAmbientTint(effectiveTreeColor, ambientColor, yBasedDepth) * timeMultiplier
+                    treePaint.color = RenderConstants.blendWithAmbient(effectiveTreeColor, ambientColor, treeBlendAmount)
                     drawTree(canvas, tree, state, tree.index)
                     
                     canvas.restore()
                 }
             } else {
-                // Animals present: merge trees and animals by Y position for correct draw order
-                // Trees are already sorted by yRatio; use merge sort approach
+                // Merge trees, bushes, and animals by Y position for correct draw order
                 val drawables = mutableListOf<Pair<Float, () -> Unit>>()
                 
                 // Add trees as drawables
@@ -856,12 +998,26 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                         canvas.save()
                         canvas.translate(treePx, treePy)
                         
+                        // Blend tree foliage toward autumn colours during transition
+                        val effectiveTreeColor = autumnTreeColor(tree.dayColor, treeAutumnWeight, tree.index)
                         val yBasedDepth = ((tree.yRatio - 0.6f) / 0.35f).coerceIn(0f, 1f)
                         val timeMultiplier = if (!state.isNight && !state.isDawn && !state.isDusk) 0.15f else 1.0f
-                        val treeBlendAmount = RenderConstants.applyAmbientTint(tree.dayColor, ambientColor, yBasedDepth) * timeMultiplier
-                        treePaint.color = RenderConstants.blendWithAmbient(tree.dayColor, ambientColor, treeBlendAmount)
+                        val treeBlendAmount = RenderConstants.applyAmbientTint(effectiveTreeColor, ambientColor, yBasedDepth) * timeMultiplier
+                        treePaint.color = RenderConstants.blendWithAmbient(effectiveTreeColor, ambientColor, treeBlendAmount)
                         drawTree(canvas, tree, state, tree.index)
                         
+                        canvas.restore()
+                    })
+                }
+                
+                // Add bushes as drawables
+                for (bush in hillBushes) {
+                    drawables.add(Pair(bush.yRatio) {
+                        val bushPx = parallaxCalculator.getOffsetXForDepth(bush.depthFactor)
+                        val bushPy = parallaxCalculator.getOffsetYForDepth(bush.depthFactor)
+                        canvas.save()
+                        canvas.translate(bushPx, bushPy)
+                        drawBush(canvas, bush, state, ambientColor)
                         canvas.restore()
                     })
                 }
@@ -981,8 +1137,17 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // Note: Snow is now integrated into the hill gradient (drawHill),
         // so we no longer draw floating snow patches here.
         
-        // Draw flowers (small colored dots)
-        flowersByHill[hillIndex]?.let { flowers ->
+        // Compute season weights for gradual visibility control
+        val springWeight = getSeasonWeight("spring")
+        val summerWeight = getSeasonWeight("summer")
+        val autumnWeight = getSeasonWeight("autumn")
+        val winterWeight = getSeasonWeight("winter")
+        
+        // Flowers: visible in spring + summer, fade out in autumn
+        val flowerAlpha = (springWeight + summerWeight).coerceIn(0f, 1f)
+        if (flowerAlpha > 0.01f) {
+            flowersByHill[hillIndex]?.let { flowers ->
+            flowerPaint.alpha = (255 * flowerAlpha).toInt()
             for (flower in flowers) {
                 val x = startX + flower.xRatio * (endX - startX)
                 
@@ -995,14 +1160,20 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 // Blend flower color with ambient for time-of-day consistency
                 val blendedColor = RenderConstants.blendWithAmbient(flower.color, ambientColor, 0.15f)
                 flowerPaint.color = blendedColor
+                flowerPaint.alpha = (Color.alpha(blendedColor) * flowerAlpha).toInt()
                 // Scale flower size by height for consistent proportions
-                val flowerRadius = flower.size * height
+                val flowerRadius = flower.size * height * (0.5f + flowerAlpha * 0.5f)  // Grow as they appear
                 canvas.drawCircle(x, y, flowerRadius, flowerPaint)
             }
+            flowerPaint.alpha = 255
+        }
         }
         
-        // Draw fallen leaves (small colored ovals scattered on hills)
+        // Fallen leaves: visible in autumn + winter
+        val leafAlpha = (autumnWeight + winterWeight).coerceIn(0f, 1f)
+        if (leafAlpha > 0.01f) {
         fallenLeavesByHill[hillIndex]?.let { leaves ->
+            leafPaint.alpha = (255 * leafAlpha).toInt()
             for (leaf in leaves) {
                 val x = startX + leaf.xRatio * (endX - startX)
                 
@@ -1013,6 +1184,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 
                 val blendedColor = RenderConstants.blendWithAmbient(leaf.color, ambientColor, 0.15f)
                 leafPaint.color = blendedColor
+                leafPaint.alpha = (Color.alpha(blendedColor) * leafAlpha).toInt()
                 val leafSize = leaf.size * height
                 
                 canvas.save()
@@ -1021,9 +1193,13 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 canvas.drawOval(x - leafSize, y - leafSize * 0.5f, x + leafSize, y + leafSize * 0.5f, leafPaint)
                 canvas.restore()
             }
+            leafPaint.alpha = 255
+        }
         }
         
-        // Draw mushrooms (small stem + cap shapes)
+        // Mushrooms: visible in summer + autumn
+        val mushroomAlpha = (summerWeight + autumnWeight).coerceIn(0f, 1f)
+        if (mushroomAlpha > 0.01f) {
         mushroomsByHill[hillIndex]?.let { mushrooms ->
             for (mushroom in mushrooms) {
                 val x = startX + mushroom.xRatio * (endX - startX)
@@ -1033,32 +1209,37 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 val yRatio = hill.heightOffset + 0.12f * (1f - hill.controlPoints[pointIndex])
                 val y = yRatio * height + mushroom.yOffset
                 
-                val size = mushroom.size * height
+                val size = mushroom.size * height * (0.5f + mushroomAlpha * 0.5f)  // Grow as they appear
                 
                 // Stem (light beige)
                 val stemColor = RenderConstants.blendWithAmbient(Color.rgb(230, 210, 180), ambientColor, 0.2f)
                 mushroomPaint.color = stemColor
+                mushroomPaint.alpha = (Color.alpha(stemColor) * mushroomAlpha).toInt()
                 canvas.drawRect(x - size * 0.2f, y - size * 0.8f, x + size * 0.2f, y, mushroomPaint)
                 
                 // Cap (colored dome)
                 val capColor = RenderConstants.blendWithAmbient(mushroom.capColor, ambientColor, 0.15f)
                 mushroomCapPaint.color = capColor
+                mushroomCapPaint.alpha = (Color.alpha(capColor) * mushroomAlpha).toInt()
                 canvas.drawOval(x - size * 0.6f, y - size * 1.3f, x + size * 0.6f, y - size * 0.5f, mushroomCapPaint)
             }
+            mushroomPaint.alpha = 255
+            mushroomCapPaint.alpha = 255
+        }
         }
         
-        // Draw frost overlay on hill (winter - subtle white shimmer on edges)
+        // Frost: visible in winter (already uses smooth blending via getSeasonWeight)
         if (frostEnabled) {
-            val showFrost = (useWeatherSnow && dynamicSnowLevel > 0.2f) ||
-                (cachedSeason == "winter") ||
-                (cachedPrevSeason == "winter" && cachedSeasonBlend < 0.8f)
-            if (showFrost) {
+            val frostWeight = if (useWeatherSnow && dynamicSnowLevel > 0.2f) {
+                dynamicSnowLevel.coerceIn(0f, 1f)
+            } else {
+                winterWeight
+            }
+            if (frostWeight > 0.05f) {
                 val frostAlpha = if (useWeatherSnow && dynamicSnowLevel > 0.2f) {
                     (dynamicSnowLevel * 40).toInt().coerceIn(0, 35)
-                } else if (cachedSeason == "winter") {
-                    (25 * (if (cachedPrevSeason != "winter") cachedSeasonBlend else 1f)).toInt()
                 } else {
-                    (25 * (1f - cachedSeasonBlend)).toInt()
+                    (25 * frostWeight).toInt()
                 }
                 if (frostAlpha > 3) {
                     frostPaint.color = Color.argb(frostAlpha, 220, 230, 255)
@@ -1279,10 +1460,13 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             }
         }
         
-        // Draw pinecones hanging from branches (treeIndex from TreeData.index)
+        // Draw pinecones hanging from branches: visible in autumn + winter
+        val pineconeAlpha = (getSeasonWeight("autumn") + getSeasonWeight("winter")).coerceIn(0f, 1f)
+        if (pineconeAlpha > 0.01f) {
         pineconesByTree[treeIndex]?.let { cones ->
             val ambientColor = RenderConstants.getAmbientColor(
-                state.dayProgress, state.isNight, state.isDawn, state.isDusk)
+                state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
+                state.nightShadeStrength, state.sunriseHours, state.sunsetHours)
             for (cone in cones) {
                 val segIndex = (cone.yRatio * treeSegments).toInt().coerceIn(0, treeSegments - 1)
                 val segBaseY = groundY - segIndex * segmentHeight * 0.7f
@@ -1291,44 +1475,93 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 
                 val coneX = x + cone.xOffset * segWidth * 2f
                 val coneY = segBaseY - segmentHeight * 0.3f
-                val coneSize = cone.size * height
+                val coneSize = cone.size * height * (0.5f + pineconeAlpha * 0.5f)  // Grow in
                 
                 // Brown pinecone
                 val coneColor = RenderConstants.blendWithAmbient(
                     Color.rgb(120, 80, 30), ambientColor, 0.2f)
                 pineconePaint.color = coneColor
+                pineconePaint.alpha = (Color.alpha(coneColor) * pineconeAlpha).toInt()
                 // Teardrop shape: oval body
                 canvas.drawOval(
                     coneX - coneSize * 0.4f, coneY - coneSize,
                     coneX + coneSize * 0.4f, coneY + coneSize * 0.3f,
                     pineconePaint)
             }
+            pineconePaint.alpha = 255
         }
-        
-        // Draw berries as small colored clusters (treeIndex from TreeData.index)
-        berriesByTree[treeIndex]?.let { berries ->
-            val ambientColor = RenderConstants.getAmbientColor(
-                state.dayProgress, state.isNight, state.isDawn, state.isDusk)
-            for (berry in berries) {
-                val segIndex = (berry.yRatio * treeSegments).toInt().coerceIn(0, treeSegments - 1)
-                val widthMultiplier = 1.0f - (segIndex.toFloat() / treeSegments * 0.6f)
-                val segWidth = baseTreeWidth * widthMultiplier
-                val segBaseY = groundY - segIndex * segmentHeight * 0.7f
-                
-                val berryX = x + berry.xOffset * segWidth * 2f
-                val berryY = segBaseY - segmentHeight * 0.4f
-                val berrySize = berry.size * height
-                
-                val berryColor = RenderConstants.blendWithAmbient(berry.color, ambientColor, 0.15f)
-                berryPaint.color = berryColor
-                // Small cluster of 2-3 circles
-                canvas.drawCircle(berryX, berryY, berrySize, berryPaint)
-                canvas.drawCircle(berryX + berrySize * 0.8f, berryY + berrySize * 0.4f, berrySize * 0.8f, berryPaint)
-                canvas.drawCircle(berryX - berrySize * 0.5f, berryY + berrySize * 0.6f, berrySize * 0.7f, berryPaint)
-            }
         }
         
         canvas.restore()
+    }
+
+    /**
+     * Draw a bush as an oval/round shape with optional berries.
+     */
+    private fun drawBush(canvas: Canvas, bush: BushData, state: SimulationState, ambientColor: Int) {
+        val x = bush.xRatio * extendedWidth - extendedOffset
+        val groundY = bush.yRatio * height
+        
+        // Bush size: smaller than trees
+        val bushHeight = height * 0.025f * bush.scale * bushSize
+        val bushWidth = bushHeight * (1.2f + (bush.index % 3) * 0.15f)  // Slightly varied width
+        
+        // Blend bush color with ambient and add autumn tint
+        val autumnWeight = getSeasonWeight("autumn")
+        var effectiveColor = if (autumnWeight > 0f) {
+            autumnTreeColor(bush.dayColor, autumnWeight * 0.7f, bush.index)
+        } else {
+            bush.dayColor
+        }
+        
+        val yBasedDepth = ((bush.yRatio - 0.6f) / 0.35f).coerceIn(0f, 1f)
+        val timeMultiplier = if (!state.isNight && !state.isDawn && !state.isDusk) 0.15f else 1.0f
+        val blendAmount = RenderConstants.applyAmbientTint(effectiveColor, ambientColor, yBasedDepth) * timeMultiplier
+        val blendedColor = RenderConstants.blendWithAmbient(effectiveColor, ambientColor, blendAmount)
+        bushPaint.color = blendedColor
+        
+        // Slight wind sway (less than trees)
+        val windStrength = state.windStrength.coerceIn(0f, 1f) * state.windMultiplier
+        val swaySpeed = state.treeSwaySpeed
+        val timeSec = state.timeSeconds
+        val sway = sin((timeSec * 1.5f * swaySpeed + bush.xRatio * 3f).toDouble()).toFloat() * windStrength * bushWidth * 0.1f
+        
+        // Draw bush as overlapping ovals for organic shape
+        val centerY = groundY - bushHeight * 0.5f
+        
+        // Main body
+        canvas.drawOval(
+            x - bushWidth + sway, centerY - bushHeight * 0.5f,
+            x + bushWidth + sway, centerY + bushHeight * 0.5f,
+            bushPaint
+        )
+        // Top bump (slightly offset)
+        val darker = darkenColor(blendedColor, 0.85f)
+        bushPaint.color = darker
+        canvas.drawOval(
+            x - bushWidth * 0.6f + sway, centerY - bushHeight * 0.8f,
+            x + bushWidth * 0.4f + sway, centerY,
+            bushPaint
+        )
+        
+        // Draw berries on bush (summer season)
+        val berryAlpha = getSeasonWeight("summer")
+        if (berryAlpha > 0.01f) {
+            berriesByBush[bush.index]?.let { berries ->
+                for (berry in berries) {
+                    val berryX = x + berry.xOffset * bushWidth * 2f + sway
+                    val berryY = centerY + (berry.yRatio - 0.5f) * bushHeight
+                    val berrySize = berry.size * height * (0.5f + berryAlpha * 0.5f)
+                    
+                    val berryColor = RenderConstants.blendWithAmbient(berry.color, ambientColor, 0.15f)
+                    berryPaint.color = berryColor
+                    berryPaint.alpha = (Color.alpha(berryColor) * berryAlpha).toInt()
+                    canvas.drawCircle(berryX, berryY, berrySize, berryPaint)
+                    canvas.drawCircle(berryX + berrySize * 0.7f, berryY + berrySize * 0.3f, berrySize * 0.7f, berryPaint)
+                }
+                berryPaint.alpha = 255
+            }
+        }
     }
 
     override fun reloadSettings() {
@@ -1414,6 +1647,11 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         berriesEnabled = prefs.getBoolean("pref_berries_enabled", PreferenceDefaults.BERRIES_ENABLED)
         berryDensity = prefs.getInt("pref_berry_density", PreferenceDefaults.BERRY_DENSITY)
         frostEnabled = prefs.getBoolean("pref_frost_enabled", PreferenceDefaults.FROST_ENABLED)
+        
+        // Bush settings
+        bushesEnabled = prefs.getBoolean("pref_bushes_enabled", PreferenceDefaults.BUSHES_ENABLED)
+        bushDensity = prefs.getInt("pref_bush_density", PreferenceDefaults.BUSH_DENSITY)
+        bushSize = prefs.getInt("pref_bush_size", PreferenceDefaults.BUSH_SIZE) / 100f
         
         // Wind is now from SimulationState, not a separate setting
         

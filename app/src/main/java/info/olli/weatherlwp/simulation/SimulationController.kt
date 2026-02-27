@@ -150,7 +150,8 @@ class SimulationController(private val context: Context) {
         val seasonBlend = SeasonHelper.getEffectiveSeasonBlend(
             settings.debugEnabled,
             settings.terrainSeasonOverride,
-            seasonTransitionDays
+            seasonTransitionDays,
+            settings.seasonDayOfYearOverride
         )
         
         return SimulationState(

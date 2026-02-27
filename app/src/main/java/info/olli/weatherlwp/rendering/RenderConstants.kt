@@ -424,6 +424,15 @@ object RenderConstants {
     
     /**
      * Get the ambient color for a given time of day.
+     * Uses smooth interpolation when sunriseHours/sunsetHours are provided (non-zero).
+     * 
+     * Timeline (e.g. sunrise=6, sunset=20):
+     * - Night: after dusk transition, before dawn transition
+     * - Pre-dawn: sunrise-1h .. sunrise  → lerp(NIGHT, DAWN)
+     * - Dawn→Day: sunrise .. sunrise+0.5h → lerp(DAWN, DAY)
+     * - Day: sunrise+0.5h .. sunset-1.5h
+     * - Day→Dusk: sunset-1.5h .. sunset  → lerp(DAY, DUSK)
+     * - Post-dusk: sunset .. sunset+1h    → lerp(DUSK, NIGHT)
      */
     @Suppress("UNUSED_PARAMETER")
     fun getAmbientColor(
@@ -431,13 +440,54 @@ object RenderConstants {
         isNight: Boolean,
         isDawn: Boolean,
         isDusk: Boolean,
-        nightShadeStrength: Float = 0f
+        nightShadeStrength: Float = 0f,
+        sunriseHours: Float = 0f,
+        sunsetHours: Float = 0f
     ): Int {
-        val base = when {
-            isNight -> AMBIENT_NIGHT
-            isDawn -> AMBIENT_DAWN
-            isDusk -> AMBIENT_DUSK
-            else -> AMBIENT_DAY
+        val base = if (sunriseHours > 0f && sunsetHours > 0f) {
+            // Smooth time-based interpolation
+            val hour = timeOfDayHours
+            val dawnTransStart = sunriseHours - 1.0f        // Night→Dawn starts
+            val dawnTransEnd = sunriseHours                  // Night→Dawn ends (= Dawn peak)
+            val dawnToDayEnd = sunriseHours + 0.5f           // Dawn→Day ends
+            val dayToDuskStart = sunsetHours - 1.5f          // Day→Dusk starts
+            val duskTransStart = sunsetHours                 // Dusk peak
+            val duskTransEnd = sunsetHours + 1.0f            // Dusk→Night ends
+
+            when {
+                // Pre-dawn: Night → Dawn
+                hour >= dawnTransStart && hour < dawnTransEnd -> {
+                    val t = easeInOutCubic(((hour - dawnTransStart) / (dawnTransEnd - dawnTransStart)).coerceIn(0f, 1f))
+                    lerpColorRGB(AMBIENT_NIGHT, AMBIENT_DAWN, t)
+                }
+                // Dawn → Day
+                hour >= dawnTransEnd && hour < dawnToDayEnd -> {
+                    val t = easeInOutCubic(((hour - dawnTransEnd) / (dawnToDayEnd - dawnTransEnd)).coerceIn(0f, 1f))
+                    lerpColorRGB(AMBIENT_DAWN, AMBIENT_DAY, t)
+                }
+                // Day
+                hour >= dawnToDayEnd && hour < dayToDuskStart -> AMBIENT_DAY
+                // Day → Dusk
+                hour >= dayToDuskStart && hour < duskTransStart -> {
+                    val t = easeInOutCubic(((hour - dayToDuskStart) / (duskTransStart - dayToDuskStart)).coerceIn(0f, 1f))
+                    lerpColorRGB(AMBIENT_DAY, AMBIENT_DUSK, t)
+                }
+                // Post-dusk: Dusk → Night
+                hour >= duskTransStart && hour < duskTransEnd -> {
+                    val t = easeInOutCubic(((hour - duskTransStart) / (duskTransEnd - duskTransStart)).coerceIn(0f, 1f))
+                    lerpColorRGB(AMBIENT_DUSK, AMBIENT_NIGHT, t)
+                }
+                // Night
+                else -> AMBIENT_NIGHT
+            }
+        } else {
+            // Fallback: boolean-based (legacy callers)
+            when {
+                isNight -> AMBIENT_NIGHT
+                isDawn -> AMBIENT_DAWN
+                isDusk -> AMBIENT_DUSK
+                else -> AMBIENT_DAY
+            }
         }
 
         return if (isNight && nightShadeStrength > 0f) {
@@ -445,6 +495,16 @@ object RenderConstants {
         } else {
             base
         }
+    }
+    
+    /**
+     * Linear RGB color interpolation.
+     */
+    fun lerpColorRGB(from: Int, to: Int, t: Float): Int {
+        val r = (Color.red(from) + (Color.red(to) - Color.red(from)) * t).toInt().coerceIn(0, 255)
+        val g = (Color.green(from) + (Color.green(to) - Color.green(from)) * t).toInt().coerceIn(0, 255)
+        val b = (Color.blue(from) + (Color.blue(to) - Color.blue(from)) * t).toInt().coerceIn(0, 255)
+        return Color.rgb(r, g, b)
     }
     
     /**

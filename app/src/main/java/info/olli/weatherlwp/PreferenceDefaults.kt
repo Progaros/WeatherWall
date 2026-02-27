@@ -108,6 +108,11 @@ object PreferenceDefaults {
     const val BERRY_DENSITY = 30     // 0-100
     const val FROST_ENABLED = true   // Winter frost overlay
     
+    // === Bush Settings ===
+    const val BUSHES_ENABLED = true
+    const val BUSH_DENSITY = 30      // 0-100 percentage
+    const val BUSH_SIZE = 100        // 50-200 percentage scale
+    
     // === Debug Settings ===
     const val DEBUG_OVERLAY_ENABLED = false
     const val DEBUG_FRAME_TIMING = false

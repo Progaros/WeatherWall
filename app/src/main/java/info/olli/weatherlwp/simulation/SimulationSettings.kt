@@ -68,6 +68,8 @@ class SimulationSettings(context: Context) {
         private set
     var terrainSeasonOverride: String = "auto"
         private set
+    var seasonDayOfYearOverride: Int = 0  // 0=auto, 1-365=override day
+        private set
     
     // Debug
     var debugEnabled: Boolean = false
@@ -149,6 +151,13 @@ class SimulationSettings(context: Context) {
             prefs.getString("pref_terrain_season", "auto") ?: "auto"
         } else {
             "auto"
+        }
+        
+        // Day-of-year override (only in debug mode, 0=auto)
+        seasonDayOfYearOverride = if (debugEnabled) {
+            prefs.getInt("pref_season_day_override", 0)
+        } else {
+            0
         }
         
         // Debug - also handle cloud and weather overrides from simulation mode

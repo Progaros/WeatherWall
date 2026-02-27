@@ -275,7 +275,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         
         val ambientColor = RenderConstants.getAmbientColor(
             state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
-            state.nightShadeStrength
+            state.nightShadeStrength, state.sunriseHours, state.sunsetHours
         )
         
         for (event in currentEvents) {
@@ -307,7 +307,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         
         val ambientColor = RenderConstants.getAmbientColor(
             state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
-            state.nightShadeStrength
+            state.nightShadeStrength, state.sunriseHours, state.sunsetHours
         )
         
         for (event in currentEvents) {
@@ -338,7 +338,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         
         val ambientColor = RenderConstants.getAmbientColor(
             state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
-            state.nightShadeStrength
+            state.nightShadeStrength, state.sunriseHours, state.sunsetHours
         )
         
         val result = mutableListOf<Pair<Float, () -> Unit>>()
@@ -378,7 +378,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         
         val ambientColor = RenderConstants.getAmbientColor(
             state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
-            state.nightShadeStrength
+            state.nightShadeStrength, state.sunriseHours, state.sunsetHours
         )
         
         for (event in currentEvents) {
@@ -403,7 +403,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         
         val ambientColor = RenderConstants.getAmbientColor(
             state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
-            state.nightShadeStrength
+            state.nightShadeStrength, state.sunriseHours, state.sunsetHours
         )
         
         for (event in currentEvents) {

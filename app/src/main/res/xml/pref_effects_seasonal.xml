@@ -50,17 +50,46 @@
             android:dependency="pref_spring_flowers" />
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="Summer / Autumn">
+    <PreferenceCategory android:title="Bushes">
+        <SwitchPreferenceCompat
+            android:key="pref_bushes_enabled"
+            android:title="Bushes"
+            android:summary="Small round bushes scattered on hills"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_bush_density"
+            android:title="Bush Density"
+            android:summary="How many bushes (0=few, 100=many)"
+            android:defaultValue="30"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_bushes_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_bush_size"
+            android:title="Bush Size"
+            android:summary="Size scale for bushes (50=small, 200=large)"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="50"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_bushes_enabled" />
+
         <SwitchPreferenceCompat
             android:key="pref_berries_enabled"
-            android:title="Berries on Trees"
-            android:summary="Small berry clusters on trees (summer + autumn)"
-            android:defaultValue="true" />
+            android:title="Berries on Bushes"
+            android:summary="Small berry clusters on bushes (summer)"
+            android:defaultValue="true"
+            android:dependency="pref_bushes_enabled" />
 
         <SeekBarPreference
             android:key="pref_berry_density"
             android:title="Berry Density"
-            android:summary="Probability of berries per tree (0=rare, 100=many)"
+            android:summary="Probability of berries per bush (0=rare, 100=many)"
             android:defaultValue="30"
             android:max="100"
             app:min="0"

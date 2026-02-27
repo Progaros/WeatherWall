@@ -208,16 +208,28 @@ object SeasonHelper {
     
     /**
      * Get the effective season blend considering debug override.
+     * 
+     * @param debugEnabled Whether debug/simulation mode is active
+     * @param seasonOverride Season override key ("auto", "spring", etc.)
+     * @param transitionDays Transition period in days
+     * @param dayOfYearOverride Day-of-year override (0=disabled, 1-365=override)
      */
     fun getEffectiveSeasonBlend(
         debugEnabled: Boolean,
         seasonOverride: String,
-        transitionDays: Int = DEFAULT_TRANSITION_DAYS
+        transitionDays: Int = DEFAULT_TRANSITION_DAYS,
+        dayOfYearOverride: Int = 0
     ): SeasonBlend {
         if (debugEnabled && seasonOverride != "auto") {
             val season = TerrainSeason.fromString(seasonOverride)
                 ?: return getCurrentSeasonBlend(transitionDays)
             return SeasonBlend(season, season, 1f)  // No transition in debug override
+        }
+        // If day-of-year override is active in debug mode, simulate that date
+        if (debugEnabled && dayOfYearOverride > 0) {
+            val cal = Calendar.getInstance()
+            cal.set(Calendar.DAY_OF_YEAR, dayOfYearOverride.coerceIn(1, cal.getActualMaximum(Calendar.DAY_OF_YEAR)))
+            return getSeasonBlendForDate(cal, transitionDays)
         }
         return getCurrentSeasonBlend(transitionDays)
     }

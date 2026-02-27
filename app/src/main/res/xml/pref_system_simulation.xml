@@ -64,6 +64,16 @@
             app:min="0"
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_season_day_override"
+            android:title="Day of Year"
+            android:summary="Override calendar day (0=auto, 1=Jan 1, 365=Dec 31). Controls season, decorations, transitions."
+            android:defaultValue="0"
+            android:max="365"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
     </PreferenceCategory>
 
 </PreferenceScreen>
