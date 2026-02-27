@@ -79,6 +79,27 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
                 data.optDouble("windSpeed", 0.0)).toFloat()
             val windSpeed = windSpeedKmh / 3.6f
             
+            // Temperature data (Breezy Weather sends in Kelvin or Celsius depending on version)
+            // Try currentTemp first, then temp, then temperature
+            val tempK = data.optDouble("currentTemp", 
+                data.optDouble("temp",
+                    data.optDouble("temperature", Double.NaN)))
+            val feelsLikeK = data.optDouble("currentFeelsLikeTemp",
+                data.optDouble("feelsLikeTemp", Double.NaN))
+            val dewPointK = data.optDouble("dewPoint", Double.NaN)
+            
+            // Breezy Weather via Gadgetbridge sends temperature in Kelvin
+            // Convert to Celsius: K - 273.15
+            val tempC = if (!tempK.isNaN() && tempK > 100) (tempK - 273.15).toFloat()
+                       else if (!tempK.isNaN()) tempK.toFloat()  // Already Celsius
+                       else Float.NaN
+            val feelsC = if (!feelsLikeK.isNaN() && feelsLikeK > 100) (feelsLikeK - 273.15).toFloat()
+                        else if (!feelsLikeK.isNaN()) feelsLikeK.toFloat()
+                        else Float.NaN
+            val dewC = if (!dewPointK.isNaN() && dewPointK > 100) (dewPointK - 273.15).toFloat()
+                      else if (!dewPointK.isNaN()) dewPointK.toFloat()
+                      else Float.NaN
+            
             // Extended weather data
             val extendedData = WeatherRepository.ExtendedWeatherData(
                 precipProbability = data.optInt("precipProbability", 0),
@@ -89,13 +110,17 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
                 moonPhase = data.optInt("moonPhase", 0),
                 moonRise = data.optLong("moonRise", -1L),
                 moonSet = data.optLong("moonSet", -1L),
-                windDirection = data.optInt("windDirection", 0)
+                windDirection = data.optInt("windDirection", 0),
+                temperatureCelsius = tempC,
+                feelsLikeCelsius = feelsC,
+                dewPointCelsius = dewC
             )
             
             // Store in repository (including raw JSON for debugging)
             WeatherRepository.updateWeather(context, weatherType, sunrise, sunset, windSpeed, json, extendedData)
             
             Log.i(TAG, "Weather updated: $weatherType (code=$conditionCode), wind=${windSpeedKmh}km/h (${windSpeed}m/s), " +
+                "temp=${if (tempC.isNaN()) "?" else "%.1f°C".format(tempC)}, " +
                 "precip=${extendedData.precipProbability}%, clouds=${extendedData.cloudCover}%")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse weather JSON", e)

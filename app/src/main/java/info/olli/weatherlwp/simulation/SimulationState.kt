@@ -62,6 +62,17 @@ data class SimulationState(
     val screenWidth: Float,
     val screenHeight: Float,
     
+    // Weather history derived values
+    val snowLevel: Float = 0f,          // 0-1 accumulated snow depth from weather history
+    val riverLevel: Float = 0f,         // 0-1 river water level from rainfall/snowmelt
+    val temperatureCelsius: Float = Float.NaN,  // Current temperature (NaN = unknown)
+    
+    // Season transition (gradual blending between seasons)
+    val seasonTransitionProgress: Float = 1f,  // 0=fully previous, 1=fully current
+    val currentSeason: String = "summer",       // Primary season key
+    val previousSeason: String = "summer",      // Season we're blending from
+    val seasonTransitionDays: Int = 14,         // Configured transition duration
+    
     // Debug/Override flags
     val isDebugMode: Boolean
 ) {
@@ -341,6 +352,13 @@ data class SimulationState(
             treeSwaySpeed = 1f,
             screenWidth = 1080f,
             screenHeight = 1920f,
+            snowLevel = 0f,
+            riverLevel = 0f,
+            temperatureCelsius = Float.NaN,
+            seasonTransitionProgress = 1f,
+            currentSeason = "summer",
+            previousSeason = "summer",
+            seasonTransitionDays = 14,
             isDebugMode = false
         )
     }

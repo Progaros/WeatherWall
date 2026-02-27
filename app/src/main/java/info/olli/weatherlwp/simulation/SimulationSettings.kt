@@ -63,6 +63,12 @@ class SimulationSettings(context: Context) {
     var moonPhase: Float = 0.5f  // 0-1: 0=new, 0.5=full, 1=new (cycle end)
         private set
     
+    // Season transition
+    var seasonTransitionDays: Int = 14  // 0=instant, 30=very gradual
+        private set
+    var terrainSeasonOverride: String = "auto"
+        private set
+    
     // Debug
     var debugEnabled: Boolean = false
         private set
@@ -133,6 +139,17 @@ class SimulationSettings(context: Context) {
         // Moon phase - only used in simulation mode (0-100 -> 0.0-1.0)
         val moonPhaseVal = prefs.getInt("pref_moon_phase", 50)
         moonPhase = moonPhaseVal / 100f
+        
+        // Season transition speed (0-30 days, default 14)
+        seasonTransitionDays = prefs.getInt("pref_season_transition_days", 
+            info.olli.weatherlwp.PreferenceDefaults.SEASON_TRANSITION_DAYS)
+        
+        // Terrain season override
+        terrainSeasonOverride = if (debugEnabled) {
+            prefs.getString("pref_terrain_season", "auto") ?: "auto"
+        } else {
+            "auto"
+        }
         
         // Debug - also handle cloud and weather overrides from simulation mode
         if (debugEnabled) {

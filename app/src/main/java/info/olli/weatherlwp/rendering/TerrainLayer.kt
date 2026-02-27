@@ -86,7 +86,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val yRatio: Float,
         val scale: Float,
         val depthFactor: Float,
-        val dayColor: Int
+        val dayColor: Int,
+        val index: Int = -1   // Global index for decoration lookup
     )
     
     // Thread-safe terrain data using volatile references + immutable lists
@@ -127,6 +128,23 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private var winterSnowEnabled = true
     private var winterSnowCoverage = 50   // 0-100 how much of hill tops are covered
     
+    // Dynamic snow from weather history
+    private var useWeatherSnow = true  // Use weather history for snow level
+    
+    // Season transition
+    private var seasonTransitionDays = 14
+    
+    // New seasonal decoration settings
+    private var pineconesEnabled = true
+    private var pineconeDensity = 30  // 0-100
+    private var fallenLeavesEnabled = true
+    private var fallenLeavesDensity = 50  // 0-100
+    private var mushroomsEnabled = true
+    private var mushroomDensity = 20  // 0-100
+    private var berriesEnabled = true
+    private var berryDensity = 30    // 0-100
+    private var frostEnabled = true  // Winter frost overlay
+    
     // Pre-generated flower positions (per hill)
     private data class FlowerData(
         val xRatio: Float,    // 0-1 along hill
@@ -135,6 +153,49 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val size: Float
     )
     @Volatile private var flowersByHill: Map<Int, List<FlowerData>> = emptyMap()
+    
+    // Pre-generated pinecone positions (per tree index)
+    private data class PineconeData(
+        val xOffset: Float,   // Horizontal offset from tree trunk
+        val yRatio: Float,    // Vertical position on tree (0=top, 1=bottom)
+        val size: Float
+    )
+    @Volatile private var pineconesByTree: Map<Int, List<PineconeData>> = emptyMap()
+    
+    // Pre-generated fallen leaf positions (per hill)
+    private data class FallenLeafData(
+        val xRatio: Float,
+        val yOffset: Float,
+        val color: Int,
+        val size: Float,
+        val rotation: Float  // Degrees
+    )
+    @Volatile private var fallenLeavesByHill: Map<Int, List<FallenLeafData>> = emptyMap()
+    
+    // Pre-generated mushroom positions (per hill)
+    private data class MushroomData(
+        val xRatio: Float,
+        val yOffset: Float,
+        val capColor: Int,
+        val size: Float
+    )
+    @Volatile private var mushroomsByHill: Map<Int, List<MushroomData>> = emptyMap()
+    
+    // Pre-generated berry positions (per tree index)
+    private data class BerryData(
+        val xOffset: Float,
+        val yRatio: Float,
+        val color: Int,
+        val size: Float
+    )
+    @Volatile private var berriesByTree: Map<Int, List<BerryData>> = emptyMap()
+    
+    private val pineconePaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
+    private val leafPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
+    private val mushroomPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
+    private val mushroomCapPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
+    private val berryPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
+    private val frostPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     
     // Pre-generated snow patch positions (per hill)
     private data class SnowPatchData(
@@ -214,6 +275,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private fun generateTerrain() {
         generateHills()
         generateTrees()
+        generateTreeDecorations()
     }
     
     private fun generateHills() {
@@ -296,10 +358,17 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 (Color.blue(RenderConstants.HILL_BASE_COLOR) * brightness).toInt()
             )
             
-            // Apply autumn brown tint if enabled
-            if (autumnGrassEnabled && getCurrentTerrainSeason() == "autumn") {
-                val autumnIntensity = autumnGrassIntensity / 100f * 0.5f  // Max 50% brown
-                dayColor = autumnColor(dayColor, autumnIntensity)
+            // Apply autumn brown tint if enabled (with transition blending)
+            val currentSeason = getCurrentTerrainSeason()
+            if (autumnGrassEnabled) {
+                val autumnWeight = when {
+                    currentSeason == "autumn" -> 1f
+                    else -> 0f
+                }
+                if (autumnWeight > 0f) {
+                    val autumnIntensity = autumnGrassIntensity / 100f * 0.5f * autumnWeight
+                    dayColor = autumnColor(dayColor, autumnIntensity)
+                }
             }
             
             newHills.add(HillData(points, depthFactor, heightOffset, dayColor))
@@ -329,24 +398,19 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 Color.rgb(255, 255, 255)   // White
             )
             val newFlowers = mutableMapOf<Int, List<FlowerData>>()
-            // Scale: density 1000 gives ~1000 total flowers across all hills
-            // With ~8 hills, that's ~125 per hill at max
-            // Formula: density / 8 gives even distribution across hills
             val flowersPerHill = (springFlowerDensity / 8).coerceIn(5, 200)
             
             for (index in currentHills.indices) {
                 val hillFlowers = mutableListOf<FlowerData>()
                 for (f in 0 until flowersPerHill) {
                     val xRatio = random.nextFloat()
-                    // Flower spread: how far down from hill line flowers can appear
-                    // Similar to tree spread logic
-                    val maxVerticalOffset = springFlowerSpread * 0.12f  // Max 12% of height below hill line
+                    val maxVerticalOffset = springFlowerSpread * 0.12f
                     val verticalOffset = random.nextFloat() * maxVerticalOffset * height
                     hillFlowers.add(FlowerData(
                         xRatio = xRatio,
-                        yOffset = verticalOffset,  // Spread below hill line
+                        yOffset = verticalOffset,
                         color = flowerColors[random.nextInt(flowerColors.size)],
-                        size = 0.002f + random.nextFloat() * 0.003f  // 0.2-0.5% of height
+                        size = 0.002f + random.nextFloat() * 0.003f
                     ))
                 }
                 newFlowers[index] = hillFlowers
@@ -364,7 +428,6 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             for ((index, _) in currentHills.withIndex()) {
                 val hillSnow = mutableListOf<SnowPatchData>()
                 for (p in 0 until patchesPerHill) {
-                    // Random position for snow patches
                     val startX = random.nextFloat() * 0.9f
                     val width = 0.05f + random.nextFloat() * 0.1f * (winterSnowCoverage / 50f)
                     hillSnow.add(SnowPatchData(
@@ -378,6 +441,128 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             snowByHill = newSnow
         } else {
             snowByHill = emptyMap()
+        }
+        
+        // Generate fallen leaves (autumn)
+        if (fallenLeavesEnabled && (season == "autumn" || season == "winter")) {
+            val leafColors = intArrayOf(
+                Color.rgb(200, 80, 20),    // Orange-red
+                Color.rgb(180, 120, 30),   // Golden
+                Color.rgb(160, 50, 20),    // Dark red
+                Color.rgb(210, 150, 40),   // Yellow-gold
+                Color.rgb(140, 70, 20),    // Brown
+                Color.rgb(220, 100, 30)    // Bright orange
+            )
+            val newLeaves = mutableMapOf<Int, List<FallenLeafData>>()
+            val leavesPerHill = (fallenLeavesDensity * currentHills.size / 100 + 3).coerceIn(3, 80)
+            
+            for (index in currentHills.indices) {
+                val hillLeaves = mutableListOf<FallenLeafData>()
+                for (l in 0 until leavesPerHill) {
+                    hillLeaves.add(FallenLeafData(
+                        xRatio = random.nextFloat(),
+                        yOffset = random.nextFloat() * 0.08f * height,
+                        color = leafColors[random.nextInt(leafColors.size)],
+                        size = 0.003f + random.nextFloat() * 0.004f,
+                        rotation = random.nextFloat() * 360f
+                    ))
+                }
+                newLeaves[index] = hillLeaves
+            }
+            fallenLeavesByHill = newLeaves
+        } else {
+            fallenLeavesByHill = emptyMap()
+        }
+        
+        // Generate mushrooms (autumn, after rain - always placed, visibility controlled in draw)
+        if (mushroomsEnabled && (season == "autumn" || season == "summer")) {
+            val capColors = intArrayOf(
+                Color.rgb(180, 50, 30),    // Red cap
+                Color.rgb(200, 160, 80),   // Tan/beige cap
+                Color.rgb(160, 120, 60),   // Brown cap
+                Color.rgb(255, 200, 50),   // Yellow cap
+                Color.rgb(140, 90, 40)     // Dark brown
+            )
+            val newMushrooms = mutableMapOf<Int, List<MushroomData>>()
+            val mushroomsPerHill = (mushroomDensity * currentHills.size / 150 + 1).coerceIn(1, 30)
+            
+            for (index in currentHills.indices) {
+                val hillMushrooms = mutableListOf<MushroomData>()
+                for (m in 0 until mushroomsPerHill) {
+                    hillMushrooms.add(MushroomData(
+                        xRatio = random.nextFloat(),
+                        yOffset = random.nextFloat() * 0.04f * height,
+                        capColor = capColors[random.nextInt(capColors.size)],
+                        size = 0.004f + random.nextFloat() * 0.005f
+                    ))
+                }
+                newMushrooms[index] = hillMushrooms
+            }
+            mushroomsByHill = newMushrooms
+        } else {
+            mushroomsByHill = emptyMap()
+        }
+    }
+    
+    /**
+     * Generate tree decorations (pinecones, berries) after trees are generated.
+     */
+    private fun generateTreeDecorations() {
+        val season = getCurrentTerrainSeason()
+        val currentTrees = trees
+        val random = Random(randomSeed.toLong() + 7000)
+        
+        // Generate pinecones (autumn and winter)
+        if (pineconesEnabled && (season == "autumn" || season == "winter")) {
+            val newPinecones = mutableMapOf<Int, List<PineconeData>>()
+            val pineconeProbability = pineconeDensity / 100f
+            
+            for ((index, _) in currentTrees.withIndex()) {
+                if (random.nextFloat() > pineconeProbability) continue
+                val cones = mutableListOf<PineconeData>()
+                val numCones = 1 + random.nextInt(3)  // 1-3 pinecones per tree
+                for (c in 0 until numCones) {
+                    cones.add(PineconeData(
+                        xOffset = (random.nextFloat() - 0.5f) * 0.6f,  // -0.3 to 0.3 of tree width
+                        yRatio = 0.3f + random.nextFloat() * 0.5f,     // mid to lower portion
+                        size = 0.003f + random.nextFloat() * 0.003f
+                    ))
+                }
+                newPinecones[index] = cones
+            }
+            pineconesByTree = newPinecones
+        } else {
+            pineconesByTree = emptyMap()
+        }
+        
+        // Generate berries (summer and autumn)
+        if (berriesEnabled && (season == "summer" || season == "autumn")) {
+            val berryColors = intArrayOf(
+                Color.rgb(200, 30, 30),    // Red berries
+                Color.rgb(60, 60, 180),    // Blueberries
+                Color.rgb(180, 50, 100),   // Dark pink
+                Color.rgb(100, 20, 60)     // Dark berry
+            )
+            val newBerries = mutableMapOf<Int, List<BerryData>>()
+            val berryProbability = berryDensity / 100f
+            
+            for ((index, _) in currentTrees.withIndex()) {
+                if (random.nextFloat() > berryProbability) continue
+                val treeBerries = mutableListOf<BerryData>()
+                val numBerries = 2 + random.nextInt(5)  // 2-6 berries per tree
+                for (b in 0 until numBerries) {
+                    treeBerries.add(BerryData(
+                        xOffset = (random.nextFloat() - 0.5f) * 0.8f,
+                        yRatio = 0.2f + random.nextFloat() * 0.6f,
+                        color = berryColors[random.nextInt(berryColors.size)],
+                        size = 0.002f + random.nextFloat() * 0.002f
+                    ))
+                }
+                newBerries[index] = treeBerries
+            }
+            berriesByTree = newBerries
+        } else {
+            berriesByTree = emptyMap()
         }
     }
     
@@ -496,7 +681,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                     Color.blue(RenderConstants.TREE_BASE_COLOR)
                 )
                 
-                newTrees.add(TreeData(xRatio, yRatio, scale, depthFactor, dayColor))
+                newTrees.add(TreeData(xRatio, yRatio, scale, depthFactor, dayColor, newTrees.size))
             }
         }
         // Sort by depthFactor: LOWER depthFactor (background) draws first
@@ -584,6 +769,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
 
     // Cached season to avoid repeated calls per-frame
     @Volatile private var cachedSeason: String = "summer"
+    @Volatile private var cachedSeasonBlend: Float = 1f  // 1 = fully in cached season
+    @Volatile private var cachedPrevSeason: String = "summer"
+    private var dynamicSnowLevel: Float = 0f  // Snow from weather history (0-1)
     
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         if (width <= 0 || height <= 0) return
@@ -593,7 +781,16 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val currentTreesByDepth = treesByDepth  // Use pre-grouped map instead of per-frame filter
         
         // Cache current season once per frame (avoid repeated lookups in loops)
-        cachedSeason = getCurrentTerrainSeason()
+        cachedSeason = state.currentSeason
+        cachedPrevSeason = state.previousSeason
+        cachedSeasonBlend = state.seasonTransitionProgress
+        
+        // Dynamic snow level: use weather history if available, else calendar-based
+        dynamicSnowLevel = if (useWeatherSnow) {
+            state.snowLevel
+        } else {
+            0f
+        }
         
         // Get ambient color for current time of day (global tint system)
         val ambientColor = RenderConstants.getAmbientColor(
@@ -641,7 +838,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                     val timeMultiplier = if (!state.isNight && !state.isDawn && !state.isDusk) 0.15f else 1.0f
                     val treeBlendAmount = RenderConstants.applyAmbientTint(tree.dayColor, ambientColor, yBasedDepth) * timeMultiplier
                     treePaint.color = RenderConstants.blendWithAmbient(tree.dayColor, ambientColor, treeBlendAmount)
-                    drawTree(canvas, tree, state)
+                    drawTree(canvas, tree, state, tree.index)
                     
                     canvas.restore()
                 }
@@ -662,7 +859,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                         val timeMultiplier = if (!state.isNight && !state.isDawn && !state.isDusk) 0.15f else 1.0f
                         val treeBlendAmount = RenderConstants.applyAmbientTint(tree.dayColor, ambientColor, yBasedDepth) * timeMultiplier
                         treePaint.color = RenderConstants.blendWithAmbient(tree.dayColor, ambientColor, treeBlendAmount)
-                        drawTree(canvas, tree, state)
+                        drawTree(canvas, tree, state, tree.index)
                         
                         canvas.restore()
                     })
@@ -710,14 +907,35 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         hillPath.lineTo(endX, bottomY)
         hillPath.close()
         
-        // Check if we should apply snow cap effect (use cached season)
-        val applySnow = winterSnowEnabled && cachedSeason == "winter"
+        // Check if we should apply snow cap effect
+        // Uses weather-driven snow level when available, otherwise calendar season
+        val effectiveSnowCoverage = if (useWeatherSnow && dynamicSnowLevel > 0.01f) {
+            // Weather-driven snow: coverage scales with accumulated snow depth
+            (dynamicSnowLevel * 100).toInt().coerceIn(5, 100)
+        } else if (winterSnowEnabled && cachedSeason == "winter") {
+            // Calendar-based winter snow with transition blending
+            val seasonWeight = if (cachedPrevSeason != "winter" && cachedSeason == "winter") {
+                cachedSeasonBlend  // Blending INTO winter
+            } else if (cachedSeason != "winter" && cachedPrevSeason == "winter") {
+                1f - cachedSeasonBlend  // Blending OUT of winter
+            } else if (cachedSeason == "winter") {
+                1f
+            } else {
+                0f
+            }
+            (winterSnowCoverage * seasonWeight).toInt()
+        } else if (cachedPrevSeason == "winter" && cachedSeason != "winter" && cachedSeasonBlend < 1f) {
+            // Transitioning OUT of winter - fade snow
+            (winterSnowCoverage * (1f - cachedSeasonBlend)).toInt()
+        } else {
+            0
+        }
+        val applySnow = effectiveSnowCoverage > 0
         
         // Apply linear gradient from top to bottom
         val gradient = if (applySnow) {
-            // Winter: white snow at top, transitioning to hill color, then darker at bottom
-            // Snow coverage determines how far down the white extends
-            val snowDepth = (winterSnowCoverage / 100f).coerceIn(0.1f, 0.6f)  // 10-60% of hill
+            // Snow coverage: use effectiveSnowCoverage for dynamic depth
+            val snowDepth = (effectiveSnowCoverage / 100f).coerceIn(0.1f, 0.6f)  // 10-60% of hill
             val snowColor = Color.rgb(255, 255, 255)  // Fully opaque white
             val snowTransition = Color.rgb(
                 (Color.red(hillColor) + 255) / 2,
@@ -781,9 +999,83 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 canvas.drawCircle(x, y, flowerRadius, flowerPaint)
             }
         }
+        
+        // Draw fallen leaves (small colored ovals scattered on hills)
+        fallenLeavesByHill[hillIndex]?.let { leaves ->
+            for (leaf in leaves) {
+                val x = startX + leaf.xRatio * (endX - startX)
+                
+                val pointIndex = (leaf.xRatio * (hill.controlPoints.size - 1)).toInt()
+                    .coerceIn(0, hill.controlPoints.size - 1)
+                val yRatio = hill.heightOffset + 0.12f * (1f - hill.controlPoints[pointIndex])
+                val y = yRatio * height + leaf.yOffset
+                
+                val blendedColor = RenderConstants.blendWithAmbient(leaf.color, ambientColor, 0.15f)
+                leafPaint.color = blendedColor
+                val leafSize = leaf.size * height
+                
+                canvas.save()
+                canvas.rotate(leaf.rotation, x, y)
+                // Oval leaf shape
+                canvas.drawOval(x - leafSize, y - leafSize * 0.5f, x + leafSize, y + leafSize * 0.5f, leafPaint)
+                canvas.restore()
+            }
+        }
+        
+        // Draw mushrooms (small stem + cap shapes)
+        mushroomsByHill[hillIndex]?.let { mushrooms ->
+            for (mushroom in mushrooms) {
+                val x = startX + mushroom.xRatio * (endX - startX)
+                
+                val pointIndex = (mushroom.xRatio * (hill.controlPoints.size - 1)).toInt()
+                    .coerceIn(0, hill.controlPoints.size - 1)
+                val yRatio = hill.heightOffset + 0.12f * (1f - hill.controlPoints[pointIndex])
+                val y = yRatio * height + mushroom.yOffset
+                
+                val size = mushroom.size * height
+                
+                // Stem (light beige)
+                val stemColor = RenderConstants.blendWithAmbient(Color.rgb(230, 210, 180), ambientColor, 0.2f)
+                mushroomPaint.color = stemColor
+                canvas.drawRect(x - size * 0.2f, y - size * 0.8f, x + size * 0.2f, y, mushroomPaint)
+                
+                // Cap (colored dome)
+                val capColor = RenderConstants.blendWithAmbient(mushroom.capColor, ambientColor, 0.15f)
+                mushroomCapPaint.color = capColor
+                canvas.drawOval(x - size * 0.6f, y - size * 1.3f, x + size * 0.6f, y - size * 0.5f, mushroomCapPaint)
+            }
+        }
+        
+        // Draw frost overlay on hill (winter - subtle white shimmer on edges)
+        if (frostEnabled) {
+            val showFrost = (useWeatherSnow && dynamicSnowLevel > 0.2f) ||
+                (cachedSeason == "winter") ||
+                (cachedPrevSeason == "winter" && cachedSeasonBlend < 0.8f)
+            if (showFrost) {
+                val frostAlpha = if (useWeatherSnow && dynamicSnowLevel > 0.2f) {
+                    (dynamicSnowLevel * 40).toInt().coerceIn(0, 35)
+                } else if (cachedSeason == "winter") {
+                    (25 * (if (cachedPrevSeason != "winter") cachedSeasonBlend else 1f)).toInt()
+                } else {
+                    (25 * (1f - cachedSeasonBlend)).toInt()
+                }
+                if (frostAlpha > 3) {
+                    frostPaint.color = Color.argb(frostAlpha, 220, 230, 255)
+                    // Draw frost as thin lines along hill contour
+                    val points = hill.controlPoints
+                    for (i in 0 until points.size - 1) {
+                        val x1 = startX + (i.toFloat() / (points.size - 1)) * (endX - startX)
+                        val x2 = startX + ((i + 1).toFloat() / (points.size - 1)) * (endX - startX)
+                        val y1 = (hill.heightOffset + 0.12f * (1f - points[i])) * height
+                        val y2 = (hill.heightOffset + 0.12f * (1f - points[i + 1])) * height
+                        canvas.drawLine(x1, y1, x2, y2, frostPaint)
+                    }
+                }
+            }
+        }
     }
     
-    private fun drawTree(canvas: Canvas, tree: TreeData, state: SimulationState) {
+    private fun drawTree(canvas: Canvas, tree: TreeData, state: SimulationState, treeIndex: Int = -1) {
         // xRatio is 0-1 across extended width, convert to screen coordinates
         // xRatio=0 is left edge of extended canvas, xRatio=1 is right edge
         // Screen center corresponds to xRatio=0.5 when extendedWidth == width
@@ -955,11 +1247,20 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             
             canvas.drawPath(treePath, treePaint)
             
-            // Draw snow on tree if winter and snow enabled (use cached season)
-            if (winterSnowEnabled && cachedSeason == "winter") {
-                // Snow covers the top portion of each tree segment
-                // More coverage on upper segments
-                val snowCoverage = (winterSnowCoverage / 100f).coerceIn(0.1f, 0.8f)
+            // Draw snow on tree if snow is present (weather-driven or calendar)
+            val treeSnowActive = (useWeatherSnow && dynamicSnowLevel > 0.05f) || 
+                (winterSnowEnabled && cachedSeason == "winter") ||
+                (cachedPrevSeason == "winter" && cachedSeasonBlend < 1f)
+            if (treeSnowActive) {
+                // Snow coverage driven by weather history or settings
+                val treeSnowAmount = if (useWeatherSnow && dynamicSnowLevel > 0.05f) {
+                    dynamicSnowLevel
+                } else if (cachedSeason == "winter") {
+                    (winterSnowCoverage / 100f) * (if (cachedPrevSeason != "winter") cachedSeasonBlend else 1f)
+                } else {
+                    (winterSnowCoverage / 100f) * (1f - cachedSeasonBlend)
+                }
+                val snowCoverage = treeSnowAmount.coerceIn(0.1f, 0.8f)
                 val segmentSnowFactor = (1f - baseHeightRatio) * 0.3f + 0.5f  // Upper segments have more snow
                 val snowHeight = segmentHeight * snowCoverage * segmentSnowFactor
                 val snowTipY = segTipY
@@ -974,6 +1275,55 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 treeSnowPath.close()
                 
                 canvas.drawPath(treeSnowPath, treeSnowPaint)
+            }
+        }
+        
+        // Draw pinecones hanging from branches (treeIndex from TreeData.index)
+        pineconesByTree[treeIndex]?.let { cones ->
+            val ambientColor = RenderConstants.getAmbientColor(
+                state.dayProgress, state.isNight, state.isDawn, state.isDusk)
+            for (cone in cones) {
+                val segIndex = (cone.yRatio * treeSegments).toInt().coerceIn(0, treeSegments - 1)
+                val segBaseY = groundY - segIndex * segmentHeight * 0.7f
+                val widthMultiplier = 1.0f - (segIndex.toFloat() / treeSegments * 0.6f)
+                val segWidth = baseTreeWidth * widthMultiplier
+                
+                val coneX = x + cone.xOffset * segWidth * 2f
+                val coneY = segBaseY - segmentHeight * 0.3f
+                val coneSize = cone.size * height
+                
+                // Brown pinecone
+                val coneColor = RenderConstants.blendWithAmbient(
+                    Color.rgb(120, 80, 30), ambientColor, 0.2f)
+                pineconePaint.color = coneColor
+                // Teardrop shape: oval body
+                canvas.drawOval(
+                    coneX - coneSize * 0.4f, coneY - coneSize,
+                    coneX + coneSize * 0.4f, coneY + coneSize * 0.3f,
+                    pineconePaint)
+            }
+        }
+        
+        // Draw berries as small colored clusters (treeIndex from TreeData.index)
+        berriesByTree[treeIndex]?.let { berries ->
+            val ambientColor = RenderConstants.getAmbientColor(
+                state.dayProgress, state.isNight, state.isDawn, state.isDusk)
+            for (berry in berries) {
+                val segIndex = (berry.yRatio * treeSegments).toInt().coerceIn(0, treeSegments - 1)
+                val widthMultiplier = 1.0f - (segIndex.toFloat() / treeSegments * 0.6f)
+                val segWidth = baseTreeWidth * widthMultiplier
+                val segBaseY = groundY - segIndex * segmentHeight * 0.7f
+                
+                val berryX = x + berry.xOffset * segWidth * 2f
+                val berryY = segBaseY - segmentHeight * 0.4f
+                val berrySize = berry.size * height
+                
+                val berryColor = RenderConstants.blendWithAmbient(berry.color, ambientColor, 0.15f)
+                berryPaint.color = berryColor
+                // Small cluster of 2-3 circles
+                canvas.drawCircle(berryX, berryY, berrySize, berryPaint)
+                canvas.drawCircle(berryX + berrySize * 0.8f, berryY + berrySize * 0.4f, berrySize * 0.8f, berryPaint)
+                canvas.drawCircle(berryX - berrySize * 0.5f, berryY + berrySize * 0.6f, berrySize * 0.7f, berryPaint)
             }
         }
         
@@ -1050,6 +1400,19 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         autumnGrassIntensity = prefs.getInt("pref_autumn_grass_intensity", 50)
         winterSnowEnabled = prefs.getBoolean("pref_winter_snow_hills", true)
         winterSnowCoverage = prefs.getInt("pref_winter_snow_coverage", 50)
+        useWeatherSnow = prefs.getBoolean("pref_weather_snow_enabled", true)
+        seasonTransitionDays = prefs.getInt("pref_season_transition_days", PreferenceDefaults.SEASON_TRANSITION_DAYS)
+        
+        // New seasonal decoration settings
+        pineconesEnabled = prefs.getBoolean("pref_pinecones_enabled", PreferenceDefaults.PINECONES_ENABLED)
+        pineconeDensity = prefs.getInt("pref_pinecone_density", PreferenceDefaults.PINECONE_DENSITY)
+        fallenLeavesEnabled = prefs.getBoolean("pref_fallen_leaves_enabled", PreferenceDefaults.FALLEN_LEAVES_ENABLED)
+        fallenLeavesDensity = prefs.getInt("pref_fallen_leaves_density", PreferenceDefaults.FALLEN_LEAVES_DENSITY)
+        mushroomsEnabled = prefs.getBoolean("pref_mushrooms_enabled", PreferenceDefaults.MUSHROOMS_ENABLED)
+        mushroomDensity = prefs.getInt("pref_mushroom_density", PreferenceDefaults.MUSHROOM_DENSITY)
+        berriesEnabled = prefs.getBoolean("pref_berries_enabled", PreferenceDefaults.BERRIES_ENABLED)
+        berryDensity = prefs.getInt("pref_berry_density", PreferenceDefaults.BERRY_DENSITY)
+        frostEnabled = prefs.getBoolean("pref_frost_enabled", PreferenceDefaults.FROST_ENABLED)
         
         // Wind is now from SimulationState, not a separate setting
         

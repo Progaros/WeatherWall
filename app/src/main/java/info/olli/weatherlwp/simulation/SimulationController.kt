@@ -3,6 +3,7 @@ package info.olli.weatherlwp.simulation
 import android.content.Context
 import info.olli.weatherlwp.weather.WeatherRepository
 import info.olli.weatherlwp.weather.WeatherType
+import info.olli.weatherlwp.util.SeasonHelper
 import kotlin.math.sin
 
 /**
@@ -15,6 +16,7 @@ class SimulationController(private val context: Context) {
     
     private val clock = SimulationClock()
     private val settings = SimulationSettings(context)
+    private val weatherHistory = WeatherHistory(context)
     
     private var screenWidth = 1080f
     private var screenHeight = 1920f
@@ -139,6 +141,18 @@ class SimulationController(private val context: Context) {
         val isBlueHour = rawTime in (sunriseHours - blueHourDuration)..sunriseHours ||
                          rawTime in sunsetHours..(sunsetHours + blueHourDuration)
         
+        // Record weather history (deduplicates internally to once per hour)
+        weatherHistory.recordCurrentWeather()
+        val historySnapshot = weatherHistory.getSnapshot()
+        
+        // Season transition blend
+        val seasonTransitionDays = settings.seasonTransitionDays
+        val seasonBlend = SeasonHelper.getEffectiveSeasonBlend(
+            settings.debugEnabled,
+            settings.terrainSeasonOverride,
+            seasonTransitionDays
+        )
+        
         return SimulationState(
             timeOfDayHours = rawTime,
             timeSeconds = clock.getTimeSeconds(),
@@ -174,6 +188,13 @@ class SimulationController(private val context: Context) {
             nightShadeStrength = settings.nightShadeStrength,
             screenWidth = screenWidth,
             screenHeight = screenHeight,
+            snowLevel = historySnapshot.snowDepth,
+            riverLevel = historySnapshot.riverLevel,
+            temperatureCelsius = extendedData.temperatureCelsius,
+            seasonTransitionProgress = seasonBlend.transitionProgress,
+            currentSeason = seasonBlend.primarySeason.toStringKey(),
+            previousSeason = seasonBlend.previousSeason.toStringKey(),
+            seasonTransitionDays = seasonTransitionDays,
             isDebugMode = settings.debugEnabled
         )
     }

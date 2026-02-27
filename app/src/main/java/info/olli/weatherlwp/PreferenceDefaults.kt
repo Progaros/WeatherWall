@@ -69,6 +69,7 @@ object PreferenceDefaults {
     
     // === Seasonal Settings ===
     const val SEASONAL_ENABLED = true
+    const val SEASON_TRANSITION_DAYS = 14  // 0-30, gradual season blending
     const val CHRISTMAS_ENABLED = true
     const val CHRISTMAS_INTERVAL = 1  // ±days around Dec 25 (tight window)
     const val NEWYEAR_ENABLED = true
@@ -88,6 +89,24 @@ object PreferenceDefaults {
     const val VIGNETTE_ENABLED = true
     const val VIGNETTE_STRENGTH = 30  // 0-100
     const val VIGNETTE_SIZE = 60  // 20-100
+    
+    // === River Settings ===
+    const val RIVER_ENABLED = false  // Off by default (opt-in)
+    const val RIVER_STYLE = "wavy"   // "flat", "wavy", "reflective"
+    const val RIVER_WIDTH = 40       // 0-100 (% of foreground terrain width)
+    const val RIVER_OPACITY = 70     // 0-100
+    const val RIVER_SPEED = 50       // 0-100 flow animation speed
+    
+    // === Seasonal Decoration Settings ===
+    const val PINECONES_ENABLED = true
+    const val PINECONE_DENSITY = 30  // 0-100
+    const val FALLEN_LEAVES_ENABLED = true
+    const val FALLEN_LEAVES_DENSITY = 50  // 0-100
+    const val MUSHROOMS_ENABLED = true
+    const val MUSHROOM_DENSITY = 20  // 0-100
+    const val BERRIES_ENABLED = true
+    const val BERRY_DENSITY = 30     // 0-100
+    const val FROST_ENABLED = true   // Winter frost overlay
     
     // === Debug Settings ===
     const val DEBUG_OVERLAY_ENABLED = false

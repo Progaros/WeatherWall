@@ -119,7 +119,28 @@ class PreferenceDefaultsTest {
             // Idle mode settings
             "pref_idle_enabled" to PreferenceDefaults.IDLE_ENABLED,
             "pref_idle_timeout" to PreferenceDefaults.IDLE_TIMEOUT,
-            "pref_idle_fps" to PreferenceDefaults.IDLE_FPS
+            "pref_idle_fps" to PreferenceDefaults.IDLE_FPS,
+            
+            // Season transition settings
+            "pref_season_transition_days" to PreferenceDefaults.SEASON_TRANSITION_DAYS,
+            
+            // River settings
+            "pref_river_enabled" to PreferenceDefaults.RIVER_ENABLED,
+            "pref_river_style" to PreferenceDefaults.RIVER_STYLE,
+            "pref_river_width" to PreferenceDefaults.RIVER_WIDTH,
+            "pref_river_opacity" to PreferenceDefaults.RIVER_OPACITY,
+            "pref_river_speed" to PreferenceDefaults.RIVER_SPEED,
+            
+            // Seasonal decoration settings
+            "pref_pinecones_enabled" to PreferenceDefaults.PINECONES_ENABLED,
+            "pref_pinecone_density" to PreferenceDefaults.PINECONE_DENSITY,
+            "pref_fallen_leaves_enabled" to PreferenceDefaults.FALLEN_LEAVES_ENABLED,
+            "pref_fallen_leaves_density" to PreferenceDefaults.FALLEN_LEAVES_DENSITY,
+            "pref_mushrooms_enabled" to PreferenceDefaults.MUSHROOMS_ENABLED,
+            "pref_mushroom_density" to PreferenceDefaults.MUSHROOM_DENSITY,
+            "pref_berries_enabled" to PreferenceDefaults.BERRIES_ENABLED,
+            "pref_berry_density" to PreferenceDefaults.BERRY_DENSITY,
+            "pref_frost_enabled" to PreferenceDefaults.FROST_ENABLED
         )
     }
     

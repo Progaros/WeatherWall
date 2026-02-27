@@ -168,4 +168,87 @@ class SeasonHelperTest {
         val winterMonths = listOf(11, 0, 1)  // Calendar.DECEMBER, JANUARY, FEBRUARY
         assertEquals("Winter has 3 months", 3, winterMonths.size)
     }
+    
+    // ============== TerrainSeason next/prev Tests ==============
+    
+    @Test
+    fun `TerrainSeason next cycles correctly`() {
+        assertEquals(TerrainSeason.SUMMER, TerrainSeason.SPRING.next())
+        assertEquals(TerrainSeason.AUTUMN, TerrainSeason.SUMMER.next())
+        assertEquals(TerrainSeason.WINTER, TerrainSeason.AUTUMN.next())
+        assertEquals(TerrainSeason.SPRING, TerrainSeason.WINTER.next())
+    }
+    
+    @Test
+    fun `TerrainSeason prev cycles correctly`() {
+        assertEquals(TerrainSeason.WINTER, TerrainSeason.SPRING.prev())
+        assertEquals(TerrainSeason.SPRING, TerrainSeason.SUMMER.prev())
+        assertEquals(TerrainSeason.SUMMER, TerrainSeason.AUTUMN.prev())
+        assertEquals(TerrainSeason.AUTUMN, TerrainSeason.WINTER.prev())
+    }
+    
+    // ============== SeasonBlend Tests ==============
+    
+    @Test
+    fun `getCurrentSeasonBlend returns valid blend`() {
+        val blend = SeasonHelper.getCurrentSeasonBlend(14)
+        assertNotNull(blend)
+        assertTrue("Primary season must be valid",
+            blend.primarySeason in TerrainSeason.values())
+        assertTrue("Previous season must be valid",
+            blend.previousSeason in TerrainSeason.values())
+        assertTrue("Progress must be 0-1",
+            blend.transitionProgress in 0f..1f)
+    }
+    
+    @Test
+    fun `SeasonBlend with 0 transition days is not transitioning`() {
+        val blend = SeasonHelper.getCurrentSeasonBlend(0)
+        assertFalse("Should not be transitioning with 0 days", blend.isTransitioning)
+        assertEquals(1f, blend.primaryWeight, 0.01f)
+        assertEquals(0f, blend.previousWeight, 0.01f)
+    }
+    
+    @Test
+    fun `SeasonBlend weights sum to 1`() {
+        val blend = SeasonHelper.getCurrentSeasonBlend(14)
+        assertEquals("Weights must sum to 1", 1f,
+            blend.primaryWeight + blend.previousWeight, 0.01f)
+    }
+    
+    @Test
+    fun `getEffectiveSeasonBlend uses override when debug enabled`() {
+        val blend = SeasonHelper.getEffectiveSeasonBlend(
+            debugEnabled = true,
+            seasonOverride = "winter",
+            transitionDays = 14
+        )
+        assertEquals(TerrainSeason.WINTER, blend.primarySeason)
+        assertFalse("Override should not be transitioning", blend.isTransitioning)
+        assertEquals(1f, blend.transitionProgress, 0.01f)
+    }
+    
+    @Test
+    fun `getEffectiveSeasonBlend ignores override when debug disabled`() {
+        val blend = SeasonHelper.getEffectiveSeasonBlend(
+            debugEnabled = false,
+            seasonOverride = "winter",
+            transitionDays = 14
+        )
+        // Should use calendar, not override
+        assertNotNull(blend)
+        assertTrue(blend.primarySeason in TerrainSeason.values())
+    }
+    
+    @Test
+    fun `getEffectiveSeasonBlend uses calendar when auto`() {
+        val blend = SeasonHelper.getEffectiveSeasonBlend(
+            debugEnabled = true,
+            seasonOverride = "auto",
+            transitionDays = 14
+        )
+        // Should use calendar since "auto" specified
+        assertNotNull(blend)
+        assertTrue(blend.primarySeason in TerrainSeason.values())
+    }
 }

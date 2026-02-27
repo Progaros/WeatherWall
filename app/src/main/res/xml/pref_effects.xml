@@ -55,8 +55,14 @@
         <Preference
             android:key="pref_nav_seasonal"
             android:title="Seasonal Terrain"
-            android:summary="Spring flowers, autumn grass, winter snow"
+            android:summary="Flowers, leaves, mushrooms, pinecones, frost, snow"
             app:fragment="info.olli.weatherlwp.settings.EffectsSeasonalFragment" />
+
+        <Preference
+            android:key="pref_nav_river"
+            android:title="River"
+            android:summary="Optional river with weather-driven water level"
+            app:fragment="info.olli.weatherlwp.settings.EffectsRiverFragment" />
 
         <Preference
             android:key="pref_nav_vignette"

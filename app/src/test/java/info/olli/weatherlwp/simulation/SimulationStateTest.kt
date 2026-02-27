@@ -417,6 +417,72 @@ class SimulationStateTest {
         assertEquals("Default moon should be full (0.5)", 0.5f, state.moonPhase, 0.01f)
     }
     
+    // ============== Weather History Fields Tests ==============
+    
+    @Test
+    fun `default state has zero snow level`() {
+        val state = SimulationState.default()
+        assertEquals(0f, state.snowLevel, 0.01f)
+    }
+    
+    @Test
+    fun `default state has zero river level`() {
+        val state = SimulationState.default()
+        assertEquals(0f, state.riverLevel, 0.01f)
+    }
+    
+    @Test
+    fun `default state has NaN temperature`() {
+        val state = SimulationState.default()
+        assertTrue(state.temperatureCelsius.isNaN())
+    }
+    
+    @Test
+    fun `snow level can be set between 0 and 1`() {
+        val state = SimulationState.default().copy(snowLevel = 0.75f)
+        assertEquals(0.75f, state.snowLevel, 0.01f)
+    }
+    
+    @Test
+    fun `river level can be set between 0 and 1`() {
+        val state = SimulationState.default().copy(riverLevel = 0.4f)
+        assertEquals(0.4f, state.riverLevel, 0.01f)
+    }
+    
+    @Test
+    fun `temperature can be set`() {
+        val state = SimulationState.default().copy(temperatureCelsius = -5f)
+        assertEquals(-5f, state.temperatureCelsius, 0.01f)
+    }
+    
+    // ============== Season Transition Fields Tests ==============
+    
+    @Test
+    fun `default state has full season transition progress`() {
+        val state = SimulationState.default()
+        assertEquals(1f, state.seasonTransitionProgress, 0.01f)
+    }
+    
+    @Test
+    fun `default state has summer as current season`() {
+        val state = SimulationState.default()
+        assertEquals("summer", state.currentSeason)
+    }
+    
+    @Test
+    fun `season transition fields can be customized`() {
+        val state = SimulationState.default().copy(
+            seasonTransitionProgress = 0.6f,
+            currentSeason = "autumn",
+            previousSeason = "summer",
+            seasonTransitionDays = 21
+        )
+        assertEquals(0.6f, state.seasonTransitionProgress, 0.01f)
+        assertEquals("autumn", state.currentSeason)
+        assertEquals("summer", state.previousSeason)
+        assertEquals(21, state.seasonTransitionDays)
+    }
+    
     @Test
     fun `moonPhase of 0 is new moon`() {
         val state = SimulationState.default().copy(moonPhase = 0f)

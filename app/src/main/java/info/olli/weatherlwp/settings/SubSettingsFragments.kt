@@ -68,6 +68,12 @@ class EffectsVignetteFragment : PreferenceFragmentCompat() {
     }
 }
 
+class EffectsRiverFragment : PreferenceFragmentCompat() {
+    override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+        setPreferencesFromResource(R.xml.pref_effects_river, rootKey)
+    }
+}
+
 // ── Events Sub-screens ───────────────────────────────────────────────
 
 class EventsSeasonalFragment : PreferenceFragmentCompat() {

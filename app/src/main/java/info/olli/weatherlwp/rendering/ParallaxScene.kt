@@ -52,6 +52,7 @@ class ParallaxScene(
     private val mountainLayer = MountainLayer(context)
     private val cloudLayer = CloudLayer(context)
     private val terrainLayer = TerrainLayer(context)
+    private val riverLayer = RiverLayer(context)
     private val randomEventLayer = RandomEventLayer(context)
     private val vignetteLayer = VignetteLayer(context)
     private val debugOverlayLayer = DebugOverlayLayer(context)
@@ -83,6 +84,7 @@ class ParallaxScene(
         layers.add(mountainLayer)
         layers.add(randomEventLayer)  // Ground animals and sky events (behind trees)
         layers.add(terrainLayer) // Hills and Trees (foreground)
+        layers.add(riverLayer)   // River on top of terrain
         
         // Set up ground event drawer for proper depth integration
         // This allows animals to appear behind/in front of trees based on their Y position

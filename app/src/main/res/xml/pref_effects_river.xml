@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="River">
+        <SwitchPreferenceCompat
+            android:key="pref_river_enabled"
+            android:title="Enable River"
+            android:summary="Show a river in the foreground terrain"
+            android:defaultValue="false" />
+
+        <ListPreference
+            android:key="pref_river_style"
+            android:title="River Style"
+            android:summary="Visual rendering approach"
+            android:entries="@array/river_style_options"
+            android:entryValues="@array/river_style_values"
+            android:defaultValue="wavy"
+            android:dependency="pref_river_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_river_width"
+            android:title="River Width"
+            android:summary="Width of the river (10=narrow, 100=wide)"
+            android:defaultValue="40"
+            android:max="100"
+            app:min="10"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_river_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_river_opacity"
+            android:title="Water Opacity"
+            android:summary="Transparency of water (0=clear, 100=opaque)"
+            android:defaultValue="70"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_river_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_river_speed"
+            android:title="Flow Speed"
+            android:summary="How fast the water flows (0=still, 100=fast)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_river_enabled" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

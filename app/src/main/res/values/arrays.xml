@@ -138,4 +138,15 @@
         <item>120</item>
         <item>300</item>
     </string-array>
+
+    <string-array name="river_style_options">
+        <item>Flat (Simple)</item>
+        <item>Wavy (Animated)</item>
+        <item>Reflective (Sky Mirror)</item>
+    </string-array>
+    <string-array name="river_style_values">
+        <item>flat</item>
+        <item>wavy</item>
+        <item>reflective</item>
+    </string-array>
 </resources>

@@ -28,6 +28,9 @@ object WeatherRepository {
     private const val KEY_MOON_RISE = "weather_moon_rise"  // Unix timestamp
     private const val KEY_MOON_SET = "weather_moon_set"  // Unix timestamp
     private const val KEY_WIND_DIRECTION = "weather_wind_direction"  // 0-360 degrees
+    private const val KEY_TEMPERATURE = "weather_temperature"  // Celsius * 10 (for 0.1° precision)
+    private const val KEY_TEMPERATURE_FEELS = "weather_temperature_feels"  // Celsius * 10
+    private const val KEY_DEW_POINT = "weather_dew_point"  // Celsius * 10
     
     /**
      * Extended weather data from Breezy Weather.
@@ -41,7 +44,10 @@ object WeatherRepository {
         val moonPhase: Int = 180,           // 0-360 degrees (0=new, 180=full) - default full
         val moonRise: Long = -1L,           // Unix timestamp
         val moonSet: Long = -1L,            // Unix timestamp
-        val windDirection: Int = 0          // 0-360 degrees
+        val windDirection: Int = 0,         // 0-360 degrees
+        val temperatureCelsius: Float = Float.NaN,  // Current temp in °C (NaN = unknown)
+        val feelsLikeCelsius: Float = Float.NaN,    // Feels-like temp in °C (NaN = unknown)
+        val dewPointCelsius: Float = Float.NaN      // Dew point in °C (NaN = unknown)
     )
     
     fun updateWeather(
@@ -76,6 +82,16 @@ object WeatherRepository {
             editor.putLong(KEY_MOON_RISE, extendedData.moonRise)
             editor.putLong(KEY_MOON_SET, extendedData.moonSet)
             editor.putInt(KEY_WIND_DIRECTION, extendedData.windDirection)
+            // Temperature stored as Celsius * 10 for 0.1° precision in Int storage
+            if (!extendedData.temperatureCelsius.isNaN()) {
+                editor.putInt(KEY_TEMPERATURE, (extendedData.temperatureCelsius * 10).toInt())
+            }
+            if (!extendedData.feelsLikeCelsius.isNaN()) {
+                editor.putInt(KEY_TEMPERATURE_FEELS, (extendedData.feelsLikeCelsius * 10).toInt())
+            }
+            if (!extendedData.dewPointCelsius.isNaN()) {
+                editor.putInt(KEY_DEW_POINT, (extendedData.dewPointCelsius * 10).toInt())
+            }
         }
         
         editor.apply()
@@ -273,6 +289,11 @@ object WeatherRepository {
         val storedDirection = prefs.getInt(KEY_WIND_DIRECTION, -1)
         val windDirection = if (storedDirection >= 0) storedDirection else getDailyWindDirection()
         
+        // Temperature: stored as Celsius * 10, sentinel Int.MIN_VALUE means unknown
+        val tempRaw = prefs.getInt(KEY_TEMPERATURE, Int.MIN_VALUE)
+        val feelsRaw = prefs.getInt(KEY_TEMPERATURE_FEELS, Int.MIN_VALUE)
+        val dewRaw = prefs.getInt(KEY_DEW_POINT, Int.MIN_VALUE)
+        
         return ExtendedWeatherData(
             precipProbability = prefs.getInt(KEY_PRECIP_PROBABILITY, 0),
             cloudCover = prefs.getInt(KEY_CLOUD_COVER, 0),
@@ -282,7 +303,10 @@ object WeatherRepository {
             moonPhase = prefs.getInt(KEY_MOON_PHASE, 180),
             moonRise = prefs.getLong(KEY_MOON_RISE, -1L),
             moonSet = prefs.getLong(KEY_MOON_SET, -1L),
-            windDirection = windDirection
+            windDirection = windDirection,
+            temperatureCelsius = if (tempRaw != Int.MIN_VALUE) tempRaw / 10f else Float.NaN,
+            feelsLikeCelsius = if (feelsRaw != Int.MIN_VALUE) feelsRaw / 10f else Float.NaN,
+            dewPointCelsius = if (dewRaw != Int.MIN_VALUE) dewRaw / 10f else Float.NaN
         )
     }
 }
