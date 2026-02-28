@@ -1,8 +1,10 @@
 package info.olli.weatherlwp.wallpaper
 
+import android.app.WallpaperColors
 import android.content.SharedPreferences
 import android.graphics.Canvas
 import android.graphics.Color
+import android.os.Build
 import android.os.SystemClock
 import android.service.wallpaper.WallpaperService
 import android.util.Log
@@ -10,6 +12,7 @@ import android.view.SurfaceHolder
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.rendering.ParallaxScene
+import info.olli.weatherlwp.rendering.RenderConstants
 import info.olli.weatherlwp.weather.WeatherRepository
 import info.olli.weatherlwp.parallax.ParallaxSensorManager
 
@@ -27,6 +30,9 @@ class WeatherWallpaper : WallpaperService() {
         private lateinit var scene: ParallaxScene
         private val sensorManager = ParallaxSensorManager(this@WeatherWallpaper)
         private val weatherRepo = WeatherRepository
+        
+        // Track atmosphere phase for notifyColorsChanged()
+        private var lastAtmospherePhase = -1
 
         // Preferences
         private var targetFps = 30
@@ -110,6 +116,55 @@ class WeatherWallpaper : WallpaperService() {
                 Log.e(TAG, "Error in onDestroy", e)
             }
             super.onDestroy()
+        }
+
+        /**
+         * Report wallpaper colors to the system for Material You dynamic theming.
+         * Uses current sky and terrain colors based on time of day.
+         */
+        override fun onComputeColors(): WallpaperColors? {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1) return null
+            try {
+                val simState = if (::scene.isInitialized) scene.getSimulationState() else null
+                val phaseVal = simState?.getAtmospherePhase() ?: -1f
+                val phase = when {
+                    phaseVal >= 0.5f -> 2    // day
+                    phaseVal >= -0.25f -> 1  // golden hour (dawn/dusk)
+                    phaseVal >= -0.75f -> 3  // blue hour
+                    else -> 0                // night
+                }
+                
+                val (primary, secondary, tertiary) = when (phase) {
+                    1 -> Triple(  // Dawn
+                        RenderConstants.SKY_DAWN_MID,
+                        RenderConstants.SKY_DAWN_BOTTOM,
+                        RenderConstants.HILL_BASE_COLOR
+                    )
+                    2 -> Triple(  // Day
+                        RenderConstants.SKY_DAY_TOP,
+                        RenderConstants.SKY_DAY_BOTTOM,
+                        RenderConstants.HILL_BASE_COLOR
+                    )
+                    3 -> Triple(  // Dusk
+                        RenderConstants.SKY_DUSK_MID,
+                        RenderConstants.SKY_DUSK_BOTTOM,
+                        RenderConstants.HILL_BASE_COLOR
+                    )
+                    else -> Triple(  // Night
+                        RenderConstants.SKY_NIGHT_TOP,
+                        RenderConstants.SKY_NIGHT_MID,
+                        RenderConstants.HILL_BASE_COLOR
+                    )
+                }
+                return WallpaperColors(
+                    Color.valueOf(primary),
+                    Color.valueOf(secondary),
+                    Color.valueOf(tertiary)
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in onComputeColors", e)
+                return null
+            }
         }
 
         private fun loadPrefs() {
@@ -280,6 +335,24 @@ class WeatherWallpaper : WallpaperService() {
                 // Parallax scene (sky, clouds, mountains, trees, weather overlays, seasonal)
                 // Pass actual frame delta for accurate physics/smoothing
                 scene.render(canvas, deltaTimeMs, isIdle)
+                
+                // Notify system when atmosphere phase changes (dawn/day/dusk/night)
+                // for Material You dynamic theming updates
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                    val state = scene.getSimulationState()
+                    // Bucket: -1=night, -0.5=blue hour, 0=golden hour, 1=day
+                    val phaseVal = state?.getAtmospherePhase() ?: -1f
+                    val currentPhase = when {
+                        phaseVal >= 0.5f -> 2    // day
+                        phaseVal >= -0.25f -> 1  // golden hour (dawn/dusk)
+                        phaseVal >= -0.75f -> 3  // blue hour (dusk/dawn)
+                        else -> 0                // night
+                    }
+                    if (currentPhase != lastAtmospherePhase && lastAtmospherePhase >= 0) {
+                        notifyColorsChanged()
+                    }
+                    lastAtmospherePhase = currentPhase
+                }
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error drawing frame", e)

@@ -21,6 +21,19 @@ import info.olli.weatherlwp.weather.WeatherRepository
  */
 class SystemAboutFragment : PreferenceFragmentCompat() {
     
+    // Easter egg: rapid version clicks
+    private var versionClickCount = 0
+    private var firstClickTime = 0L
+    
+    private val easterEggMessages = arrayOf(
+        "\uD83C\uDF24\uFE0F You found the weather wizard!",
+        "\uD83C\uDF08 Somewhere over the rainbow...",
+        "\u26C8\uFE0F Thunder and lightning, very very frightening!",
+        "\uD83C\uDF27\uFE0F It's raining code!",
+        "\u2744\uFE0F Let it snow, let it snow, let it snow!",
+        "\uD83C\uDF1E Here comes the sun, doo-doo-doo-doo",
+    )
+    
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         setPreferencesFromResource(R.xml.pref_system_about, rootKey)
         
@@ -28,10 +41,27 @@ class SystemAboutFragment : PreferenceFragmentCompat() {
         findPreference<Preference>("pref_version")?.apply {
             summary = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
             setOnPreferenceClickListener {
-                val clipboard = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                val clip = android.content.ClipData.newPlainText("Version", summary)
-                clipboard.setPrimaryClip(clip)
-                Toast.makeText(context, "Version copied", Toast.LENGTH_SHORT).show()
+                val now = System.currentTimeMillis()
+                
+                // Reset counter if >2s since first click
+                if (now - firstClickTime > 2000L) {
+                    versionClickCount = 0
+                    firstClickTime = now
+                }
+                versionClickCount++
+                
+                if (versionClickCount > 3) {
+                    // Easter egg!
+                    val msg = easterEggMessages[(now % easterEggMessages.size).toInt()]
+                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                    versionClickCount = 0
+                } else {
+                    // Normal: copy version
+                    val clipboard = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    val clip = android.content.ClipData.newPlainText("Version", summary)
+                    clipboard.setPrimaryClip(clip)
+                    Toast.makeText(context, "Version copied", Toast.LENGTH_SHORT).show()
+                }
                 true
             }
         }

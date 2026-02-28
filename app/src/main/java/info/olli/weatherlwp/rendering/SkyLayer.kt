@@ -581,13 +581,15 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
     }
 
     override fun reloadSettings() {
-        context?.let { ctx ->
-            val prefs = PreferenceManager.getDefaultSharedPreferences(ctx)
-            sunEnabled = prefs.getBoolean("pref_sun_enabled", true)
-            moonEnabled = prefs.getBoolean("pref_moon_enabled", true)
-            celestialSize = prefs.getInt("pref_celestial_size", 100) / 100f
-            celestialArcHeight = prefs.getInt("pref_celestial_arc_height", 100) / 100f
+        if (context == null) {
+            android.util.Log.w("SkyLayer", "reloadSettings() skipped: context is null")
+            return
         }
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        sunEnabled = prefs.getBoolean("pref_sun_enabled", true)
+        moonEnabled = prefs.getBoolean("pref_moon_enabled", true)
+        celestialSize = prefs.getInt("pref_celestial_size", 100) / 100f
+        celestialArcHeight = prefs.getInt("pref_celestial_arc_height", 100) / 100f
     }
 
     override fun destroy() {

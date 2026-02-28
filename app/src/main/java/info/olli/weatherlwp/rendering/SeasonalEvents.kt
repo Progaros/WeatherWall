@@ -12,6 +12,8 @@ import android.graphics.Shader
 import android.util.Log
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.PreferenceDefaults
+import info.olli.weatherlwp.parallax.ParallaxCalculator
+import info.olli.weatherlwp.simulation.SimulationState
 import java.util.Calendar
 import kotlin.random.Random
 
@@ -42,7 +44,12 @@ private const val DEG_TO_RAD = Math.PI / 180.0
  * Seasonal event effects: Christmas star with trail and New Year fireworks.
  * Active during December 15 - January 7, or when debug override is set.
  */
-class SeasonalEvents(private val context: Context? = null) {
+class SeasonalEvents(private val context: Context? = null) : SceneLayer {
+    override val layerType = LayerType.SEASONAL_EVENTS
+    
+    /** Whether seasonal rendering is enabled (set by ParallaxScene). */
+    var enabled: Boolean = true
+    
     enum class Season {
         NONE,
         CHRISTMAS,      // Dec 15-26
@@ -1198,5 +1205,55 @@ class SeasonalEvents(private val context: Context? = null) {
         dragonOutlinePaint.color = dragonColors[3]
         dragonOutlinePaint.strokeWidth = 2f * scale
         dragonOutlinePaint.style = Paint.Style.STROKE
+    }
+    
+    // === SceneLayer interface implementation ===
+    
+    override fun resize(w: Float, h: Float) {
+        val newW = w.toInt()
+        val newH = h.toInt()
+        if (screenWidth != newW || screenHeight != newH || !initialized) {
+            screenWidth = newW
+            screenHeight = newH
+            heightScale = RenderConstants.getHeightScale(h)
+            initParticles()
+            initialized = true
+        }
+    }
+    
+    override fun update(state: SimulationState, deltaTimeMs: Long) {
+        // Seasonal animation is frame-driven inside render methods
+        updateSettingsIfNeeded()
+    }
+    
+    override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
+        // No-op: SeasonalEvents renders via drawBehindMountains/drawBehindTerrain
+        // called from ParallaxScene at the correct z-depth compositing points
+    }
+    
+    /**
+     * Draw elements behind mountains (Christmas star, rainbow).
+     * Called from ParallaxScene at the sky z-depth.
+     */
+    fun drawBehindMountains(canvas: Canvas, parallaxCalculator: ParallaxCalculator) {
+        val skyPx = parallaxCalculator.getOffsetXForDepth(RenderConstants.PARALLAX_SKY)
+        val skyPy = parallaxCalculator.getOffsetYForDepth(RenderConstants.PARALLAX_SKY)
+        renderBehindMountains(canvas, enabled, skyPx, skyPy)
+    }
+    
+    /**
+     * Draw elements behind terrain (fireworks, CN dragon).
+     * Called from ParallaxScene between mountains and terrain.
+     */
+    fun drawBehindTerrain(canvas: Canvas) {
+        renderBehindTerrain(canvas, enabled)
+    }
+    
+    override fun reloadSettings() {
+        loadSettings()
+    }
+    
+    override fun destroy() {
+        // Pools are fixed-size arrays, no cleanup needed
     }
 }

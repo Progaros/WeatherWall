@@ -9,7 +9,7 @@ import info.olli.weatherlwp.simulation.SimulationState
  */
 enum class LayerType {
     SKY, CLOUDS, MOUNTAINS, TERRAIN, RIVER,
-    RANDOM_EVENTS, WEATHER, VIGNETTE, DEBUG_OVERLAY
+    RANDOM_EVENTS, SEASONAL_EVENTS, WEATHER, VIGNETTE, DEBUG_OVERLAY
 }
 
 /**

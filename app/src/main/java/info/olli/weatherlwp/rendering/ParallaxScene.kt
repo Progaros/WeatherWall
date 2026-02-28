@@ -59,6 +59,8 @@ class ParallaxScene(
     
     // Overlays
     private val weatherLayer = WeatherLayer()
+    
+    // Seasonal events (SceneLayer, but rendered at specific z-depths)
     private val seasonalEvents = SeasonalEvents(context)
     
     // State
@@ -83,6 +85,7 @@ class ParallaxScene(
                                // Let's put them behind mountains for now.
         layers.add(mountainLayer)
         layers.add(randomEventLayer)  // Ground animals and sky events (behind trees)
+        layers.add(seasonalEvents)    // Seasonal effects (rendered at specific z-depths)
         layers.add(terrainLayer) // Hills and Trees (foreground)
         layers.add(riverLayer)   // River on top of terrain
         
@@ -124,6 +127,12 @@ class ParallaxScene(
     // Temporary references for ground event drawer callback
     private var lastCanvas: Canvas? = null
     private var lastState: SimulationState? = null
+
+    /**
+     * Get the current simulation state snapshot.
+     * Used by WeatherWallpaper for onComputeColors() (Material You theming).
+     */
+    fun getSimulationState(): SimulationState? = lastState
 
     fun start() {
         sensor.start()
@@ -201,9 +210,6 @@ class ParallaxScene(
                 parallaxCalculator.setCanvasSize(w, h)
             }
             
-            // Ensure shake fireworks can work even if seasonal events are disabled
-            seasonalEvents.ensureShakeReady(canvas.width, canvas.height)
-            
             // Get current simulation state (single source of truth)
             val state = simulationController.getState()
             
@@ -260,24 +266,21 @@ class ParallaxScene(
             // 1. Sky (gradient)
             // 2. Clouds 
             // 3. FAR SKY events (shooting stars, balloons, UFOs) - behind mountains
-            // 4. Seasonal: rainbow (St. Patrick's) - behind mountains
+            // 4. Seasonal: rainbow (St. Patrick's), Christmas star - behind mountains
             // 5. Mountains
             // 6. MID SKY events (birds, planes, eagles) - in front of mountains
             // 7. Seasonal: fireworks (New Year, Chinese New Year) - behind terrain/hills
             // 8. Terrain (hills + trees + ground animals interleaved by depth)
             for (layer in layers) {
                 try {
-                    // Skip randomEventLayer in normal iteration - ground events drawn by terrain callback
+                    // Skip layers that render at specific z-depths via special methods
                     if (layer.layerType == LayerType.RANDOM_EVENTS) continue
+                    if (layer.layerType == LayerType.SEASONAL_EVENTS) continue
                     
                     // Before drawing mountainLayer, draw far sky events and behind-mountain seasonal effects
                     if (layer.layerType == LayerType.MOUNTAINS) {
                         randomEventLayer.drawFarSkyEvents(canvas, state, parallaxCalculator)
-                        // Draw seasonal background elements that should appear behind mountains (e.g. rainbow, Christmas star)
-                        // Use sky-layer parallax depth for Christmas star (matches background stars)
-                        val skyParallaxX = parallaxCalculator.getOffsetXForDepth(RenderConstants.PARALLAX_SKY)
-                        val skyParallaxY = parallaxCalculator.getOffsetYForDepth(RenderConstants.PARALLAX_SKY)
-                        seasonalEvents.renderBehindMountains(canvas, seasonalEnabled, skyParallaxX, skyParallaxY)
+                        seasonalEvents.drawBehindMountains(canvas, parallaxCalculator)
                     }
                     
                     // After drawing mountainLayer, draw mid sky events (birds, planes, eagles)
@@ -285,8 +288,7 @@ class ParallaxScene(
                     if (layer.layerType == LayerType.MOUNTAINS) {
                         layer.draw(canvas, state, parallaxCalculator)
                         randomEventLayer.drawMidSkyEvents(canvas, state, parallaxCalculator)
-                        // Draw fireworks behind terrain/hills but in front of mountains
-                        seasonalEvents.renderBehindTerrain(canvas, seasonalEnabled)
+                        seasonalEvents.drawBehindTerrain(canvas)
                         continue  // Skip the layer.draw below since we already drew it
                     }
                     
@@ -304,13 +306,6 @@ class ParallaxScene(
                 } catch (e: Exception) {
                     Log.e(TAG, "Error drawing weather", e)
                 }
-            }
-            
-            // Seasonal render() removed - it was a no-op (all rendering done
-            // via renderBehindMountains/renderBehindTerrain). Keeping just the
-            // per-frame settings reload to pick up preference changes.
-            if (seasonalEnabled) {
-                seasonalEvents.updateSettingsIfNeeded()
             }
             
             // Draw Vignette Overlay (always last - on top of everything)
@@ -473,6 +468,7 @@ class ParallaxScene(
             // Weather and seasonal toggles
             weatherEnabled = prefs.getBoolean("pref_weather_enabled", true)
             seasonalEnabled = prefs.getBoolean("pref_seasonal_enabled", true)
+            seasonalEvents.enabled = seasonalEnabled
             
             // Weather particle layer settings (depth effect for rain/snow/lightning)
             val weatherLayers = prefs.getInt("pref_weather_layers", 3).coerceIn(1, 5)
@@ -488,7 +484,6 @@ class ParallaxScene(
                 layer.reloadSettings()
             }
             weatherLayer.reloadSettings()
-            seasonalEvents.loadSettings()
             vignetteLayer.reloadSettings()
             debugOverlayLayer.reloadSettings()
             

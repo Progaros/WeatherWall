@@ -113,6 +113,9 @@ object PreferenceDefaults {
     const val BUSH_DENSITY = 30      // 0-100 percentage
     const val BUSH_SIZE = 100        // 50-200 percentage scale
     
+    // === Tree Type Settings ===
+    const val LEAF_TREE_RATIO = 50   // 0-100: percentage of deciduous trees (0=all needle, 100=all leaf)
+    
     // === Debug Settings ===
     const val DEBUG_OVERLAY_ENABLED = false
     const val DEBUG_FRAME_TIMING = false
