@@ -213,11 +213,10 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         
         paint.color = bodyColor
         
-        // Legs (4 legs with walking animation)
+        // Legs (4 legs with walking animation) — filled shapes for solid look
         val legWidth = unit * 0.6f
-        strokePaint.color = bodyColor
-        strokePaint.strokeWidth = legWidth
-        strokePaint.style = Paint.Style.STROKE
+        paint.color = bodyColor
+        paint.style = Paint.Style.FILL
         
         // Front legs
         val frontLegX1 = unit * 2f
@@ -225,7 +224,12 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         val frontSwing1 = legSwing
         val frontSwing2 = -legSwing * 0.8f
         
-        // Front right leg
+        // Front right leg (filled rounded rect approximation via path+stroke)
+        strokePaint.color = bodyColor
+        strokePaint.strokeWidth = legWidth
+        strokePaint.style = Paint.Style.STROKE
+        strokePaint.strokeCap = Paint.Cap.ROUND
+        
         path.reset()
         path.moveTo(frontLegX1, bodyY + unit * 1.5f)
         path.quadTo(frontLegX1 + frontSwing1 * unit * 3f, bodyY + unit * 4f, 
@@ -258,6 +262,18 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         path.quadTo(backLegX2 + backSwing2 * unit * 3f, bodyY + unit * 4f,
                     backLegX2 + backSwing2 * unit * 2f, 0f)
         canvas.drawPath(path, strokePaint)
+        
+        // Hooves (small dark marks at leg ends)
+        paint.color = Color.argb((180 * alpha).toInt(), 50, 40, 30)
+        val hoofSize = unit * 0.35f
+        canvas.drawOval(frontLegX1 + frontSwing1 * unit * 2f - hoofSize, -hoofSize,
+                        frontLegX1 + frontSwing1 * unit * 2f + hoofSize, hoofSize * 0.5f, paint)
+        canvas.drawOval(frontLegX2 + frontSwing2 * unit * 2f - hoofSize, -hoofSize,
+                        frontLegX2 + frontSwing2 * unit * 2f + hoofSize, hoofSize * 0.5f, paint)
+        canvas.drawOval(backLegX1 + backSwing1 * unit * 2f - hoofSize, -hoofSize,
+                        backLegX1 + backSwing1 * unit * 2f + hoofSize, hoofSize * 0.5f, paint)
+        canvas.drawOval(backLegX2 + backSwing2 * unit * 2f - hoofSize, -hoofSize,
+                        backLegX2 + backSwing2 * unit * 2f + hoofSize, hoofSize * 0.5f, paint)
         
         canvas.restore()
         canvas.restore()

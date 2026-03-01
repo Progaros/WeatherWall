@@ -14,8 +14,9 @@ import info.olli.weatherlwp.simulation.SimulationState
 import kotlin.math.sin
 
 /**
- * Renders a river in the foreground terrain area.
- * 
+ * Renders a river/stream that flows through terrain valleys from
+ * background to foreground, following hill contours.
+ *
  * Water level is driven by weather history:
  * - Rainfall accumulates water
  * - Snowmelt contributes when temperatures rise
@@ -27,8 +28,7 @@ import kotlin.math.sin
  * 2. **Wavy** – animated sine-wave surface with foam
  * 3. **Reflective** – gradient with sky color reflection and sparkle
  *
- * The river sits in the lowest valley between foreground hills,
- * drawn after terrain but before vignette.
+ * The river follows the valleys of each hill layer, drawn after terrain.
  */
 class RiverLayer(private val context: Context) : SceneLayer {
     override val layerType = LayerType.RIVER
@@ -36,6 +36,12 @@ class RiverLayer(private val context: Context) : SceneLayer {
     companion object {
         private const val TAG = "RiverLayer"
     }
+
+    /** Callback to query terrain Y position at a given (xRatio, depthFactor). */
+    var terrainYProvider: ((xRatio: Float, depthFactor: Float) -> Float)? = null
+
+    /** Callback to get the sorted list of hill depth factors. */
+    var hillDepthProvider: (() -> List<Float>)? = null
 
     /** River visual style. */
     enum class RiverStyle {
@@ -114,20 +120,6 @@ class RiverLayer(private val context: Context) : SceneLayer {
         val waterLevel = state.riverLevel
         if (waterLevel < 0.01f) return  // River is dry
 
-        // River position: sits in the lower portion of the screen (foreground terrain area)
-        val riverBaseY = height * 0.88f  // Base Y position
-        val maxRiverHeight = height * 0.08f * riverWidthPercent  // Max river visual height
-        val riverHeight = maxRiverHeight * waterLevel.coerceIn(0f, 1f)
-
-        if (riverHeight < 1f) return  // Too small to draw
-
-        // Parallax offset for river (slightly behind foreground hills)
-        val px = parallaxCalculator.getOffsetXForDepth(RenderConstants.PARALLAX_HILLS_MAX - 0.05f)
-        val py = parallaxCalculator.getOffsetYForDepth(RenderConstants.PARALLAX_HILLS_MAX - 0.05f)
-
-        canvas.save()
-        canvas.translate(px, py)
-
         // Determine if river should be frozen
         val isFrozen = state.snowLevel > FROZEN_THRESHOLD && state.temperatureCelsius.let {
             !it.isNaN() && it < 0f
@@ -135,6 +127,146 @@ class RiverLayer(private val context: Context) : SceneLayer {
 
         // Get water color based on time of day
         val waterColor = getWaterColor(state, isFrozen)
+
+        // Get available hill layers from terrain
+        val depthFactors = hillDepthProvider?.invoke() ?: emptyList()
+        val provider = terrainYProvider
+
+        if (depthFactors.isEmpty() || provider == null) {
+            // Fallback: simple horizontal river near bottom
+            drawFallbackRiver(canvas, state, parallaxCalculator, waterLevel, waterColor, isFrozen)
+            return
+        }
+
+        // Draw water at each hill depth layer (back to front)
+        // Water appears in valley portions of each hill, getting wider toward foreground
+        for ((layerIdx, depth) in depthFactors.withIndex()) {
+            val layerProgress = layerIdx.toFloat() / depthFactors.size.coerceAtLeast(1)
+
+            // River width per layer: narrower in back, wider in front
+            val layerWidthFactor = 0.3f + layerProgress * 0.7f
+            val maxRiverDepthPx = height * 0.04f * riverWidthPercent * layerWidthFactor * waterLevel
+            if (maxRiverDepthPx < 1f) continue
+
+            // Alpha: slightly more transparent in back, more opaque in front
+            val layerAlpha = (0.4f + layerProgress * 0.6f) * opacity
+
+            val px = parallaxCalculator.getOffsetXForDepth(depth)
+            val py = parallaxCalculator.getOffsetYForDepth(depth)
+
+            canvas.save()
+            canvas.translate(px, py)
+
+            // Sample terrain Y across the width to find valleys
+            val left = -extendedOffset - width * 0.05f
+            val right = width + extendedOffset + width * 0.05f
+            val totalW = right - left
+            val numSamples = 50
+
+            // Find the valley floor (lowest Y = highest screen position, so we want MAX Y for valleys)
+            var minTerrainY = Float.MAX_VALUE
+            var maxTerrainY = Float.MIN_VALUE
+            val terrainYs = FloatArray(numSamples + 1)
+            for (i in 0..numSamples) {
+                val xRatio = i.toFloat() / numSamples
+                val terrainY = provider(xRatio, depth) * height
+                terrainYs[i] = terrainY
+                if (terrainY < minTerrainY) minTerrainY = terrainY
+                if (terrainY > maxTerrainY) maxTerrainY = terrainY
+            }
+
+            // The valley threshold: water fills from the deepest point up to a level
+            // determined by water level (0 = only deepest point, 1 = fills to peaks)
+            val valleyRange = maxTerrainY - minTerrainY
+            if (valleyRange < 2f) {
+                canvas.restore()
+                continue  // Flat terrain, skip
+            }
+
+            val waterSurfaceY = maxTerrainY - valleyRange * (1f - waterLevel * 0.6f)
+
+            // Build river path: water fills below waterSurfaceY
+            riverPath.reset()
+            var hasContent = false
+
+            for (i in 0..numSamples) {
+                val screenX = left + (i.toFloat() / numSamples) * totalW
+                val terrainY = terrainYs[i]
+
+                if (terrainY > waterSurfaceY) {
+                    // This point is in a valley below water surface
+                    val waveAmp = if (isFrozen) 0f else (2f + waterLevel * 3f) * layerWidthFactor
+                    val wave = if (isFrozen) 0f
+                               else sin((screenX * 0.02f + flowPhase * 1.5f).toDouble()).toFloat() * waveAmp +
+                                    sin((screenX * 0.045f + flowPhase * 0.7f).toDouble()).toFloat() * waveAmp * 0.3f
+
+                    if (!hasContent) {
+                        riverPath.moveTo(screenX, terrainY + maxRiverDepthPx)  // Bottom of river
+                        hasContent = true
+                    }
+                    riverPath.lineTo(screenX, waterSurfaceY + wave)
+                } else if (hasContent) {
+                    // Leaving valley — close this segment and draw it
+                    riverPath.lineTo(screenX, terrainYs[(i - 1).coerceAtLeast(0)] + maxRiverDepthPx)
+                    riverPath.close()
+                    drawRiverSegment(canvas, state, waterColor, layerAlpha, isFrozen, waterLevel, layerWidthFactor)
+                    riverPath.reset()
+                    hasContent = false
+                }
+            }
+
+            // Close any remaining path
+            if (hasContent) {
+                riverPath.lineTo(right, terrainYs[numSamples] + maxRiverDepthPx)
+                riverPath.close()
+                drawRiverSegment(canvas, state, waterColor, layerAlpha, isFrozen, waterLevel, layerWidthFactor)
+            }
+
+            canvas.restore()
+        }
+    }
+
+    /**
+     * Draw a single river segment (a contiguous valley filled with water).
+     */
+    private fun drawRiverSegment(
+        canvas: Canvas, state: SimulationState,
+        color: Int, alphaFactor: Float, isFrozen: Boolean,
+        waterLevel: Float, widthFactor: Float
+    ) {
+        val alphaMultiplier = (alphaFactor * 255).toInt().coerceIn(0, 255)
+        riverPaint.shader = null
+        riverPaint.color = Color.argb(
+            alphaMultiplier,
+            Color.red(color), Color.green(color), Color.blue(color)
+        )
+        canvas.drawPath(riverPath, riverPaint)
+
+        // Foam/shimmer on top
+        if (!isFrozen && waterLevel > 0.2f) {
+            foamPaint.color = Color.argb((40 * alphaFactor).toInt().coerceIn(10, 70), 255, 255, 255)
+            foamPaint.strokeWidth = 1.5f * widthFactor
+            canvas.drawPath(riverPath, foamPaint)
+        }
+    }
+
+    /**
+     * Fallback: simple horizontal river when no terrain data is available.
+     */
+    private fun drawFallbackRiver(
+        canvas: Canvas, state: SimulationState,
+        parallaxCalculator: ParallaxCalculator,
+        waterLevel: Float, waterColor: Int, isFrozen: Boolean
+    ) {
+        val riverBaseY = height * 0.88f
+        val maxRiverHeight = height * 0.08f * riverWidthPercent
+        val riverHeight = maxRiverHeight * waterLevel.coerceIn(0f, 1f)
+        if (riverHeight < 1f) return
+
+        val px = parallaxCalculator.getOffsetXForDepth(RenderConstants.PARALLAX_HILLS_MAX - 0.05f)
+        val py = parallaxCalculator.getOffsetYForDepth(RenderConstants.PARALLAX_HILLS_MAX - 0.05f)
+        canvas.save()
+        canvas.translate(px, py)
 
         val riverTop = riverBaseY - riverHeight
         val riverBottom = riverBaseY
@@ -144,7 +276,6 @@ class RiverLayer(private val context: Context) : SceneLayer {
             RiverStyle.WAVY -> drawWavy(canvas, state, riverTop, riverBottom, waterColor, waterLevel, isFrozen)
             RiverStyle.REFLECTIVE -> drawReflective(canvas, state, riverTop, riverBottom, waterColor, waterLevel, isFrozen)
         }
-
         canvas.restore()
     }
 

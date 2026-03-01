@@ -118,6 +118,14 @@ class ParallaxScene(
             terrainLayer.getHillYAtPosition(xRatio, depthFactor)
         }
         
+        // Wire river layer to terrain data so water flows through valleys
+        riverLayer.terrainYProvider = { xRatio, depthFactor ->
+            terrainLayer.getHillYAtPosition(xRatio, depthFactor)
+        }
+        riverLayer.hillDepthProvider = {
+            terrainLayer.getHillDepthFactors()
+        }
+        
         // Load settings BEFORE enabling sensor to ensure correct initial strength
         loadPrefs()
         sensor.setListener(this)

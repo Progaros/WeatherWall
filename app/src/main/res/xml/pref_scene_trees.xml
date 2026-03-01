@@ -2,6 +2,18 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <PreferenceCategory android:title="Tree Types">
+        <SeekBarPreference
+            android:key="pref_leaf_tree_ratio"
+            android:title="Leaf / Needle Ratio"
+            android:summary="Percentage of deciduous (leaf) vs conifer trees (0=all needle, 100=all leaf)"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
     <PreferenceCategory android:title="Tree Placement">
         <SeekBarPreference
             android:key="pref_tree_spread"

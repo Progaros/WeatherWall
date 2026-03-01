@@ -142,8 +142,26 @@ class SimulationController(private val context: Context) {
                          rawTime in sunsetHours..(sunsetHours + blueHourDuration)
         
         // Record weather history (deduplicates internally to once per hour)
-        weatherHistory.recordCurrentWeather()
+        // In debug mode, pass the effective (overridden) weather so history tracks simulated conditions
+        if (settings.debugEnabled) {
+            val overridePrecipProb = when (effectiveWeather) {
+                WeatherType.RAIN, WeatherType.THUNDERSTORM, WeatherType.SNOW, WeatherType.HAIL -> 0.85f
+                else -> 0f
+            }
+            weatherHistory.recordCurrentWeather(
+                overrideWeather = effectiveWeather,
+                overridePrecipProb = overridePrecipProb
+            )
+        } else {
+            weatherHistory.recordCurrentWeather()
+        }
         val historySnapshot = weatherHistory.getSnapshot()
+        
+        // Apply simulation overrides for snow/river levels when enabled
+        val effectiveSnowLevel = if (settings.useSimulatedWeatherHistory)
+            settings.simulatedSnowLevel else historySnapshot.snowDepth
+        val effectiveRiverLevel = if (settings.useSimulatedWeatherHistory)
+            settings.simulatedRiverLevel else historySnapshot.riverLevel
         
         // Season transition blend
         val seasonTransitionDays = settings.seasonTransitionDays
@@ -189,8 +207,8 @@ class SimulationController(private val context: Context) {
             nightShadeStrength = settings.nightShadeStrength,
             screenWidth = screenWidth,
             screenHeight = screenHeight,
-            snowLevel = historySnapshot.snowDepth,
-            riverLevel = historySnapshot.riverLevel,
+            snowLevel = effectiveSnowLevel,
+            riverLevel = effectiveRiverLevel,
             temperatureCelsius = extendedData.temperatureCelsius,
             weatherDataFresh = WeatherRepository.isDataFresh(context),
             seasonTransitionProgress = seasonBlend.transitionProgress,

@@ -71,6 +71,14 @@ class SimulationSettings(context: Context) {
     var seasonDayOfYearOverride: Int = 0  // 0=auto, 1-365=override day
         private set
     
+    // Weather history simulation overrides
+    var useSimulatedWeatherHistory: Boolean = false
+        private set
+    var simulatedSnowLevel: Float = 0f   // 0-1 override for snow depth
+        private set
+    var simulatedRiverLevel: Float = 0f  // 0-1 override for river level
+        private set
+    
     // Debug
     var debugEnabled: Boolean = false
         private set
@@ -171,6 +179,19 @@ class SimulationSettings(context: Context) {
             snapInt("pref_season_day_override", 0)
         } else {
             0
+        }
+        
+        // Weather history simulation overrides (only in debug mode)
+        if (debugEnabled) {
+            useSimulatedWeatherHistory = snapBoolean("pref_sim_weather_history", false)
+            val snowVal = snapInt("pref_sim_snow_level", 0)
+            simulatedSnowLevel = snowVal / 100f
+            val riverVal = snapInt("pref_sim_river_level", 0)
+            simulatedRiverLevel = riverVal / 100f
+        } else {
+            useSimulatedWeatherHistory = false
+            simulatedSnowLevel = 0f
+            simulatedRiverLevel = 0f
         }
         
         // Debug - also handle cloud and weather overrides from simulation mode

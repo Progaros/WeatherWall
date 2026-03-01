@@ -76,4 +76,34 @@
             app:updatesContinuously="true" />
     </PreferenceCategory>
 
+    <PreferenceCategory android:title="Weather History">
+        <SwitchPreferenceCompat
+            android:key="pref_sim_weather_history"
+            android:title="Override Weather History"
+            android:summary="Manually set snow depth and river level instead of deriving from weather data"
+            android:defaultValue="false" />
+
+        <SeekBarPreference
+            android:key="pref_sim_snow_level"
+            android:title="Snow Depth"
+            android:summary="Simulated accumulated snow (0=none, 100=deep)"
+            android:defaultValue="0"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_sim_weather_history" />
+
+        <SeekBarPreference
+            android:key="pref_sim_river_level"
+            android:title="River Level"
+            android:summary="Simulated river/water level (0=dry, 100=flooded)"
+            android:defaultValue="0"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_sim_weather_history" />
+    </PreferenceCategory>
+
 </PreferenceScreen>

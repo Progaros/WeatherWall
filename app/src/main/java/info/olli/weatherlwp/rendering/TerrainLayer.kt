@@ -504,6 +504,14 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             ?: Pair(0.85f, requestedDepthFactor)
     }
 
+    /**
+     * Get the sorted list of hill depth factors (back to front).
+     * Used by RiverLayer to draw water segments at each terrain layer.
+     */
+    fun getHillDepthFactors(): List<Float> {
+        return hills.map { it.depthFactor }.sorted()
+    }
+
     override fun resize(w: Float, h: Float) {
         width = w
         height = h

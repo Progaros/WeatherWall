@@ -106,9 +106,17 @@ class WeatherHistory(private val context: Context) {
     /**
      * Record current weather conditions. Call periodically (e.g., every frame or on weather update).
      * Internally deduplicates to at most one sample per hour.
+     *
+     * @param overrideWeather If non-null, use this weather type instead of the real weather
+     *   (e.g. when simulation/debug mode forces a specific weather).
+     * @param overridePrecipProb If not NaN, use this 0–1 precipitation probability instead
+     *   of the value from the weather repository.
      */
     @Synchronized
-    fun recordCurrentWeather() {
+    fun recordCurrentWeather(
+        overrideWeather: WeatherType? = null,
+        overridePrecipProb: Float = Float.NaN
+    ) {
         val cal = Calendar.getInstance()
         val dayId = dayIdFrom(cal)
         val hour = cal.get(Calendar.HOUR_OF_DAY)
@@ -123,11 +131,12 @@ class WeatherHistory(private val context: Context) {
         currentDayId = dayId
         lastRecordHour = hour
 
-        // Read current weather
-        val weatherType = WeatherRepository.getWeatherType(context)
+        // Read current weather (allow simulation override)
+        val weatherType = overrideWeather ?: WeatherRepository.getWeatherType(context)
         val extData = WeatherRepository.getExtendedData(context)
         val temp = extData.temperatureCelsius
-        val precipProb = extData.precipProbability / 100f
+        val precipProb = if (!overridePrecipProb.isNaN()) overridePrecipProb
+                         else extData.precipProbability / 100f
 
         // Accumulate intra-day
         if (!temp.isNaN()) {

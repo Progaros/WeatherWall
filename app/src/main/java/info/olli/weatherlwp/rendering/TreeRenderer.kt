@@ -422,17 +422,62 @@ class TreeRenderer {
     }
 
     /**
-     * Generate 2-4 bare branches for winter deciduous trees.
+     * Generate 6-10 bare branches forming a rounded crown silhouette for winter.
+     * Includes primary branches evenly distributed with sub-branches and twigs.
      */
     private fun generateBranches(random: Random): List<BranchLine> {
-        val count = 2 + random.nextInt(3)  // 2-4 branches
-        val branches = ArrayList<BranchLine>(count)
+        val count = 6 + random.nextInt(5)  // 6-10 main branches
+        val branches = ArrayList<BranchLine>(count * 3)
+
         for (i in 0 until count) {
-            val startY = 0.2f + random.nextFloat() * 0.5f  // Along trunk (0=top, 1=bottom)
-            val side = if (random.nextBoolean()) 1f else -1f
-            val endX = side * (0.2f + random.nextFloat() * 0.4f)
-            val endY = startY - 0.05f - random.nextFloat() * 0.15f  // Branch angles upward
+            // Distribute evenly along the upper trunk with some jitter
+            val baseRatio = i.toFloat() / (count - 1).coerceAtLeast(1)
+            val startY = 0.10f + baseRatio * 0.65f + (random.nextFloat() - 0.5f) * 0.06f
+
+            // Alternate sides so branches balance left/right
+            val side = if (i % 2 == 0) 1f else -1f
+            val sideStrength = 0.85f + random.nextFloat() * 0.30f
+
+            // Upper branches spread wider (crown shape); lower ones tighter
+            val heightFactor = 1f - baseRatio  // 1 at top, 0 at bottom
+            val spread = 0.20f + random.nextFloat() * 0.30f + heightFactor * 0.20f
+            val endX = side * sideStrength * spread
+
+            // Upper branches barely droop or angle upward; lower branches droop more
+            val droop = 0.04f + random.nextFloat() * 0.10f - heightFactor * 0.08f
+            val endY = startY - droop
             branches.add(BranchLine(0f, startY, endX, endY))
+
+            // Sub-branch 1 (main fork, 75% chance)
+            if (random.nextFloat() < 0.75f) {
+                val forkT = 0.45f + random.nextFloat() * 0.30f
+                val forkX = endX * forkT
+                val forkY = startY + (endY - startY) * forkT
+                val subEndX = forkX + side * sideStrength * (0.08f + random.nextFloat() * 0.18f)
+                val subEndY = forkY - 0.03f - random.nextFloat() * 0.08f
+                branches.add(BranchLine(forkX, forkY, subEndX, subEndY))
+
+                // Twig off sub-branch (30%)
+                if (random.nextFloat() < 0.30f) {
+                    val twigT = 0.5f + random.nextFloat() * 0.3f
+                    val twigX = forkX + (subEndX - forkX) * twigT
+                    val twigY = forkY + (subEndY - forkY) * twigT
+                    val twigDir = if (random.nextBoolean()) 1f else -1f
+                    branches.add(BranchLine(twigX, twigY,
+                        twigX + twigDir * (0.04f + random.nextFloat() * 0.08f),
+                        twigY - 0.02f - random.nextFloat() * 0.04f))
+                }
+            }
+
+            // Sub-branch 2 (opposite fork, 40% chance)
+            if (random.nextFloat() < 0.40f) {
+                val forkT = 0.30f + random.nextFloat() * 0.25f
+                val forkX = endX * forkT
+                val forkY = startY + (endY - startY) * forkT
+                val subEndX = forkX - side * 0.5f * (0.08f + random.nextFloat() * 0.12f)
+                val subEndY = forkY - 0.02f - random.nextFloat() * 0.06f
+                branches.add(BranchLine(forkX, forkY, subEndX, subEndY))
+            }
         }
         return branches
     }
@@ -534,8 +579,8 @@ class TreeRenderer {
             val tipSway = tipWave * shadowWindFactor * maxAmplitude * 0.5f + shadowGustLean * totalHeight * 0.5f
 
             // Shadow as a skewed tree triangle flattened onto the ground
-            val shadowLength = totalHeight * skewFactor * 0.8f
-            val shadowBaseWidth = baseTreeWidth * 0.6f
+            val shadowLength = totalHeight * skewFactor * 0.7f
+            val shadowBaseWidth = baseTreeWidth * 0.35f
 
             val shadowTipX = x + shadowLength * skewDirection + tipSway
             val shadowTipY = groundY + 2f
@@ -716,12 +761,15 @@ class TreeRenderer {
             shadowPaint.color = Color.argb(shadowAlpha, 0, 0, 0)
             val skewDirection = if (shadowDx > 0) 1f else -1f
             val skewFactor = kotlin.math.abs(shadowDx).coerceIn(0.2f, 2.0f)
-            val shadowRadius = crownRadius * 1.2f * skewFactor
+            // Thin ground-hugging shadow projected to one side
+            val shadowLength = crownRadius * skewFactor * 1.2f
+            val shadowHeight = totalHeight * 0.025f  // Very thin ellipse
+            val shadowCenterX = x + shadowLength * skewDirection * 0.5f
             canvas.drawOval(
-                x - shadowRadius * 0.6f + shadowRadius * skewDirection * 0.4f,
-                groundY - 2f,
-                x + shadowRadius * 0.6f + shadowRadius * skewDirection * 0.4f,
-                groundY + shadowRadius * 0.15f,
+                shadowCenterX - shadowLength * 0.5f,
+                groundY - shadowHeight * 0.5f,
+                shadowCenterX + shadowLength * 0.5f,
+                groundY + shadowHeight * 0.5f,
                 shadowPaint
             )
         }
@@ -744,35 +792,46 @@ class TreeRenderer {
         trunkPaint.strokeWidth = trunkWidth
         trunkPaint.style = Paint.Style.STROKE
 
-        // Draw trunk
-        canvas.drawLine(x, groundY, x, groundY - totalHeight * 0.55f, trunkPaint)
+        // Draw trunk — extend higher when bare so branch attachment looks natural
+        val trunkTopRatio = if (crownScale < 0.3f) 0.82f else 0.55f
+        canvas.drawLine(x, groundY, x, groundY - totalHeight * trunkTopRatio, trunkPaint)
 
         // Draw bare branches when crown is partially or fully absent (winter/transition)
         if (crownScale < 0.8f) {
-            trunkPaint.strokeWidth = trunkWidth * 0.4f
+            val branchAlpha = ((1f - crownScale) * 255).toInt().coerceIn(0, 255)
+            trunkPaint.strokeCap = Paint.Cap.ROUND
             for (branch in tree.branches) {
                 val bStartX = x + branch.startXOffset * crownRadius
-                val bStartY = groundY - totalHeight * (0.3f + branch.startYRatio * 0.3f)
-                val bEndX = x + branch.endXOffset * crownRadius * 1.5f
-                val bEndY = groundY - totalHeight * (0.3f + branch.endYRatio * 0.3f)
-                // Branches become more visible as crown fades
-                val branchAlpha = ((1f - crownScale) * 255).toInt().coerceIn(0, 255)
+                val bStartY = groundY - totalHeight * (0.20f + branch.startYRatio * 0.62f)
+                val bEndX = x + branch.endXOffset * crownRadius * 1.8f
+                val bEndY = groundY - totalHeight * (0.20f + branch.endYRatio * 0.62f)
+                // Main branches thicker (startXOffset==0), sub-branches thinner
+                val isSub = branch.startXOffset != 0f
+                trunkPaint.strokeWidth = trunkWidth * (if (isSub) 0.25f else 0.42f)
                 trunkPaint.alpha = branchAlpha
                 canvas.drawLine(bStartX, bStartY, bEndX, bEndY, trunkPaint)
             }
             trunkPaint.alpha = 255
+            trunkPaint.strokeCap = Paint.Cap.BUTT
         }
 
         // Draw crown circles: scaled by crownScale (shrinks into winter, grows in spring)
-        if (crownScale > 0.05f) {
+        // Skip when too small to avoid floating green dots above bare trees
+        if (crownScale > 0.15f) {
+            // Fade crown alpha smoothly in the 0.15–0.4 range so it doesn't pop in/out
+            val crownAlpha = if (crownScale < 0.4f)
+                ((crownScale - 0.15f) / 0.25f * 255f).toInt().coerceIn(0, 255)
+            else 255
             for (circle in tree.crownCircles) {
                 val cx = x + circle.xOffset * crownRadius * crownScale
                 val cy = crownCenterY + circle.yOffset * crownRadius * crownScale
                 val r = crownRadius * circle.radiusScale * crownScale
 
                 crownPaint.color = darkenColor(treePaint.color, circle.darkenFactor)
+                crownPaint.alpha = crownAlpha
                 canvas.drawCircle(cx, cy, r, crownPaint)
             }
+            crownPaint.alpha = 255
 
             // Snow on crown
             val treeSnowActive = (useWeatherSnow && dynamicSnowLevel > 0.05f) ||
