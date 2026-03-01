@@ -567,6 +567,7 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
             .unregisterOnSharedPreferenceChangeListener(prefListener)
         stopPreview()
         previewScene?.stop()
+        previewScene?.destroy()
         super.onDestroy()
     }
 }

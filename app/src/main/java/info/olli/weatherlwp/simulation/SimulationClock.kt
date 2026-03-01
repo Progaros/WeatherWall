@@ -28,9 +28,9 @@ class SimulationClock {
     // Base time for animation consistency (doesn't change on reload)
     private val startTimeMs = System.currentTimeMillis()
     
-    // Cached Calendar instances (avoid per-frame allocations)
-    private val cachedCal = Calendar.getInstance(TimeZone.getDefault())
-    private val cachedConvertCal = Calendar.getInstance(TimeZone.getDefault())
+    // Cached Calendar instances per thread (avoid per-frame allocations, thread-safe)
+    private val cachedCal = ThreadLocal.withInitial { Calendar.getInstance(TimeZone.getDefault()) }
+    private val cachedConvertCal = ThreadLocal.withInitial { Calendar.getInstance(TimeZone.getDefault()) }
     
     /**
      * Update sunrise/sunset times from weather data (Unix timestamps in seconds).
@@ -49,8 +49,9 @@ class SimulationClock {
      * Convert Unix timestamp (seconds) to local hour of day (0-24).
      */
     private fun unixToLocalHour(unixSeconds: Long): Float {
-        cachedConvertCal.timeInMillis = unixSeconds * 1000
-        return cachedConvertCal.get(Calendar.HOUR_OF_DAY) + cachedConvertCal.get(Calendar.MINUTE) / 60f
+        val cal = cachedConvertCal.get()!!
+        cal.timeInMillis = unixSeconds * 1000
+        return cal.get(Calendar.HOUR_OF_DAY) + cal.get(Calendar.MINUTE) / 60f
     }
     
     /**
@@ -59,9 +60,10 @@ class SimulationClock {
      */
     fun getTimeOfDayHours(): Float {
         return if (useRealTime) {
-            cachedCal.timeInMillis = System.currentTimeMillis()
-            val hours = cachedCal.get(Calendar.HOUR_OF_DAY)
-            val minutes = cachedCal.get(Calendar.MINUTE)
+            val cal = cachedCal.get()!!
+            cal.timeInMillis = System.currentTimeMillis()
+            val hours = cal.get(Calendar.HOUR_OF_DAY)
+            val minutes = cal.get(Calendar.MINUTE)
             hours + minutes / 60f
         } else {
             manualTimeMinutes / 60f
@@ -73,8 +75,9 @@ class SimulationClock {
      */
     fun getTimeOfDayMinutes(): Int {
         return if (useRealTime) {
-            cachedCal.timeInMillis = System.currentTimeMillis()
-            cachedCal.get(Calendar.HOUR_OF_DAY) * 60 + cachedCal.get(Calendar.MINUTE)
+            val cal = cachedCal.get()!!
+            cal.timeInMillis = System.currentTimeMillis()
+            cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
         } else {
             manualTimeMinutes
         }

@@ -917,6 +917,12 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
         strokeCap = Paint.Cap.BUTT
     }
     
+    // Cached rainbow fade shader — only depends on screen dimensions and position settings
+    private var cachedRainbowFadeShader: android.graphics.LinearGradient? = null
+    private var cachedRainbowCenterX = 0f
+    private var cachedRainbowFadeTop = 0f
+    private var cachedRainbowFadeBottom = 0f
+    
     private fun renderStPatricksDay(canvas: Canvas) {
         rainbowPhase += 0.02f
         
@@ -930,16 +936,31 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
         val startAngle = 180f
         val sweepAngle = 180f
         
-        // Create a vertical fade shader (fade out toward bottom)
+        // Create/cache vertical fade shader (only depends on screen dimensions and position settings)
         val fadeHeight = arcRadius * 0.6f  // How much of bottom portion fades
         val fadeTop = baseY - fadeHeight
-        val fadeShader = android.graphics.LinearGradient(
-            centerX, fadeTop,
-            centerX, baseY + arcRadius * 0.1f,  // Extend slightly below to ensure bottom fades
-            intArrayOf(Color.WHITE, Color.WHITE, Color.TRANSPARENT),
-            floatArrayOf(0f, 0.5f, 1f),
-            android.graphics.Shader.TileMode.CLAMP
-        )
+        val fadeBottom = baseY + arcRadius * 0.1f
+        
+        // Only recreate gradient when parameters actually change (resize or settings change)
+        val fadeShader = if (cachedRainbowFadeShader != null &&
+            cachedRainbowCenterX == centerX &&
+            cachedRainbowFadeTop == fadeTop &&
+            cachedRainbowFadeBottom == fadeBottom) {
+            cachedRainbowFadeShader!!
+        } else {
+            android.graphics.LinearGradient(
+                centerX, fadeTop,
+                centerX, fadeBottom,
+                intArrayOf(Color.WHITE, Color.WHITE, Color.TRANSPARENT),
+                floatArrayOf(0f, 0.5f, 1f),
+                android.graphics.Shader.TileMode.CLAMP
+            ).also {
+                cachedRainbowFadeShader = it
+                cachedRainbowCenterX = centerX
+                cachedRainbowFadeTop = fadeTop
+                cachedRainbowFadeBottom = fadeBottom
+            }
+        }
         
         // Draw rainbow arc bands from outer (red) to inner (violet)
         for (i in rainbowColors.indices.reversed()) {
