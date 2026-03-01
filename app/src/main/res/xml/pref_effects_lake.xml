@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <PreferenceCategory android:title="Lake">
+        <SwitchPreferenceCompat
+            android:key="pref_lake_enabled"
+            android:title="Enable Lake"
+            android:summary="Show a lake on the terrain"
+            android:defaultValue="false" />
+        <SeekBarPreference
+            android:key="pref_lake_position"
+            android:title="Lake Position"
+            android:summary="Horizontal placement (0=left, 100=right)"
+            android:defaultValue="50" android:max="100" app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_lake_enabled" />
+        <SeekBarPreference
+            android:key="pref_lake_size"
+            android:title="Lake Size"
+            android:summary="Width of lake area"
+            android:defaultValue="40" android:max="100" app:min="10"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_lake_enabled" />
+        <SeekBarPreference
+            android:key="pref_lake_depth"
+            android:title="Lake Depth Layer"
+            android:summary="Which terrain layer (0=foreground, 100=background)"
+            android:defaultValue="40" android:max="100" app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_lake_enabled" />
+        <SeekBarPreference
+            android:key="pref_lake_opacity"
+            android:title="Water Opacity"
+            android:defaultValue="75" android:max="100" app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_lake_enabled" />
+    </PreferenceCategory>
+</PreferenceScreen>

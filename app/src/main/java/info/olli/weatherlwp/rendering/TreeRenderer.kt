@@ -651,18 +651,23 @@ class TreeRenderer {
             canvas.drawPath(treePath, treePaint)
 
             // Draw snow on tree if snow is present (weather-driven or calendar)
-            val treeSnowActive = (useWeatherSnow && dynamicSnowLevel > 0.05f) ||
+            // When useWeatherSnow is true, use ONLY weather snow level to avoid
+            // falling back to calendar-based snow (which causes sudden jumps)
+            val treeSnowActive = if (useWeatherSnow) {
+                dynamicSnowLevel > 0.005f
+            } else {
                 (winterSnowEnabled && cachedSeason == "winter") ||
                 (cachedPrevSeason == "winter" && cachedSeasonBlend < 1f)
+            }
             if (treeSnowActive) {
-                val treeSnowAmount = if (useWeatherSnow && dynamicSnowLevel > 0.05f) {
+                val treeSnowAmount = if (useWeatherSnow) {
                     dynamicSnowLevel
                 } else if (cachedSeason == "winter") {
                     (winterSnowCoverage / 100f) * (if (cachedPrevSeason != "winter") cachedSeasonBlend else 1f)
                 } else {
                     (winterSnowCoverage / 100f) * (1f - cachedSeasonBlend)
                 }
-                val snowCoverage = treeSnowAmount.coerceIn(0.1f, 0.8f)
+                val snowCoverage = treeSnowAmount.coerceIn(0.01f, 0.8f)
                 val segmentSnowFactor = (1f - baseHeightRatio) * 0.3f + 0.5f
                 val snowHeight = segmentHeight * snowCoverage * segmentSnowFactor
                 val snowTipY = segTipY
@@ -834,18 +839,22 @@ class TreeRenderer {
             crownPaint.alpha = 255
 
             // Snow on crown
-            val treeSnowActive = (useWeatherSnow && dynamicSnowLevel > 0.05f) ||
+            // When useWeatherSnow is true, use ONLY weather snow level (no calendar fallback)
+            val treeSnowActive = if (useWeatherSnow) {
+                dynamicSnowLevel > 0.005f
+            } else {
                 (winterSnowEnabled && cachedSeason == "winter") ||
                 (cachedPrevSeason == "winter" && cachedSeasonBlend < 1f)
+            }
             if (treeSnowActive && crownScale > 0.3f) {
-                val treeSnowAmount = if (useWeatherSnow && dynamicSnowLevel > 0.05f) {
+                val treeSnowAmount = if (useWeatherSnow) {
                     dynamicSnowLevel
                 } else if (cachedSeason == "winter") {
                     (winterSnowCoverage / 100f) * (if (cachedPrevSeason != "winter") cachedSeasonBlend else 1f)
                 } else {
                     (winterSnowCoverage / 100f) * (1f - cachedSeasonBlend)
                 }
-                val snowR = crownRadius * crownScale * treeSnowAmount.coerceIn(0.2f, 0.5f)
+                val snowR = crownRadius * crownScale * treeSnowAmount.coerceIn(0.01f, 0.5f)
                 canvas.drawOval(
                     x - snowR, crownCenterY - crownRadius * crownScale * 0.6f,
                     x + snowR, crownCenterY - crownRadius * crownScale * 0.3f,

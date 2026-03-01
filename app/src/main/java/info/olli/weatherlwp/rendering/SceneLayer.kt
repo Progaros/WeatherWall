@@ -8,7 +8,7 @@ import info.olli.weatherlwp.simulation.SimulationState
  * Identifies each layer type for draw-order logic without identity checks.
  */
 enum class LayerType {
-    SKY, CLOUDS, MOUNTAINS, TERRAIN, RIVER,
+    SKY, CLOUDS, MOUNTAINS, TERRAIN, RIVER, LAKE,
     RANDOM_EVENTS, SEASONAL_EVENTS, WEATHER, VIGNETTE, DEBUG_OVERLAY
 }
 

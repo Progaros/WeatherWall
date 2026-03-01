@@ -87,6 +87,10 @@ class SpawnSwitchPreference @JvmOverloads constructor(
             "pref_event_snowflake" -> EventPreviewView.EventType.SNOWFLAKE
             "pref_event_bat" -> EventPreviewView.EventType.BAT
             "pref_event_deer" -> EventPreviewView.EventType.DEER
+            // Water events
+            "pref_event_fish" -> EventPreviewView.EventType.FISH
+            "pref_event_duck" -> EventPreviewView.EventType.DUCK
+            "pref_event_frog" -> EventPreviewView.EventType.FROG
             else -> EventPreviewView.EventType.BUTTERFLY  // Default fallback
         }
     }

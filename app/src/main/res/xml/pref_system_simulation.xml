@@ -77,6 +77,12 @@
     </PreferenceCategory>
 
     <PreferenceCategory android:title="Weather History">
+        <Preference
+            android:key="pref_weather_data_display"
+            android:title="Collected Weather Data"
+            android:summary="Loading weather history…"
+            android:selectable="false" />
+
         <SwitchPreferenceCompat
             android:key="pref_sim_weather_history"
             android:title="Override Weather History"
@@ -98,6 +104,17 @@
             android:key="pref_sim_river_level"
             android:title="River Level"
             android:summary="Simulated river/water level (0=dry, 100=flooded)"
+            android:defaultValue="0"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_sim_weather_history" />
+
+        <SeekBarPreference
+            android:key="pref_sim_lake_level"
+            android:title="Lake Level"
+            android:summary="Simulated lake water level (0=dry, 100=full)"
             android:defaultValue="0"
             android:max="100"
             app:min="0"

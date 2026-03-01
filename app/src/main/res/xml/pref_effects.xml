@@ -3,19 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <!-- Effects - Essential toggles only, details in sub-screens -->
-    <PreferenceCategory android:title="Key Effects">
-        <SwitchPreferenceCompat
-            android:key="pref_parallax_enabled"
-            android:title="Enable 3D Parallax"
-            android:summary="Tilt phone to look around the scene"
-            android:defaultValue="true" />
-
-        <SwitchPreferenceCompat
-            android:key="pref_clouds_enabled"
-            android:title="Enable Clouds"
-            android:summary="Moving clouds in the sky"
-            android:defaultValue="true" />
-
+    <PreferenceCategory android:title="Quick Settings">
         <SeekBarPreference
             android:key="pref_night_shade_strength"
             android:title="Night Shade Strength"
@@ -34,40 +22,53 @@
             android:summary="Sun, moon, celestial size, tree sway"
             app:fragment="info.olli.weatherlwp.settings.EffectsSkyFragment" />
 
-        <Preference
-            android:key="pref_nav_parallax"
+        <info.olli.weatherlwp.settings.ToggleNavPreference
+            android:key="pref_parallax_enabled"
             android:title="3D Parallax"
             android:summary="Sensor, sensitivity, depth, smoothing"
+            android:defaultValue="true"
             app:fragment="info.olli.weatherlwp.settings.EffectsParallaxFragment" />
 
-        <Preference
-            android:key="pref_nav_clouds"
+        <info.olli.weatherlwp.settings.ToggleNavPreference
+            android:key="pref_clouds_enabled"
             android:title="Clouds"
             android:summary="Fluffiness, shape, opacity, speed, render mode"
+            android:defaultValue="true"
             app:fragment="info.olli.weatherlwp.settings.EffectsCloudsFragment" />
 
-        <Preference
-            android:key="pref_nav_weather_shadows"
+        <info.olli.weatherlwp.settings.ToggleNavPreference
+            android:key="pref_weather_enabled"
             android:title="Weather &amp; Shadows"
             android:summary="Rain/snow particles, shadow settings"
+            android:defaultValue="true"
             app:fragment="info.olli.weatherlwp.settings.EffectsWeatherShadowsFragment" />
 
-        <Preference
-            android:key="pref_nav_seasonal"
+        <info.olli.weatherlwp.settings.ToggleNavPreference
+            android:key="pref_seasonal_enabled"
             android:title="Seasonal Terrain"
             android:summary="Flowers, leaves, mushrooms, pinecones, frost, snow"
+            android:defaultValue="true"
             app:fragment="info.olli.weatherlwp.settings.EffectsSeasonalFragment" />
 
-        <Preference
-            android:key="pref_nav_river"
+        <info.olli.weatherlwp.settings.ToggleNavPreference
+            android:key="pref_river_enabled"
             android:title="River"
             android:summary="Optional river with weather-driven water level"
+            android:defaultValue="false"
             app:fragment="info.olli.weatherlwp.settings.EffectsRiverFragment" />
 
-        <Preference
-            android:key="pref_nav_vignette"
+        <info.olli.weatherlwp.settings.ToggleNavPreference
+            android:key="pref_lake_enabled"
+            android:title="Lake"
+            android:summary="Still body of water, reacts to weather"
+            android:defaultValue="false"
+            app:fragment="info.olli.weatherlwp.settings.EffectsLakeFragment" />
+
+        <info.olli.weatherlwp.settings.ToggleNavPreference
+            android:key="pref_vignette_enabled"
             android:title="Edge Vignette"
             android:summary="Screen edge darkening (bottom, top, sides)"
+            android:defaultValue="true"
             app:fragment="info.olli.weatherlwp.settings.EffectsVignetteFragment" />
     </PreferenceCategory>
 

@@ -131,6 +131,13 @@ class PreferenceDefaultsTest {
             "pref_river_opacity" to PreferenceDefaults.RIVER_OPACITY,
             "pref_river_speed" to PreferenceDefaults.RIVER_SPEED,
             
+            // Lake settings
+            "pref_lake_enabled" to PreferenceDefaults.LAKE_ENABLED,
+            "pref_lake_position" to PreferenceDefaults.LAKE_POSITION,
+            "pref_lake_size" to PreferenceDefaults.LAKE_SIZE,
+            "pref_lake_depth" to PreferenceDefaults.LAKE_DEPTH_LAYER,
+            "pref_lake_opacity" to PreferenceDefaults.LAKE_OPACITY,
+            
             // Seasonal decoration settings
             "pref_pinecones_enabled" to PreferenceDefaults.PINECONES_ENABLED,
             "pref_pinecone_density" to PreferenceDefaults.PINECONE_DENSITY,

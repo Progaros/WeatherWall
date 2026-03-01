@@ -444,11 +444,13 @@ class CloudLayer(private val context: Context) : SceneLayer {
      * to prevent frame stutters during allocation/blur operations.
      */
     private fun drawCachedMode(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
-        // Cloud count comes directly from weather/simulation data
-        val aspectRatio = height / width
-        val aspectScale = (aspectRatio / 1.5f).coerceIn(0.8f, 1.5f)
+        // Cloud count from weather, scaled by visible sky area.
+        // On tall screens or wide extended canvases, the sky area is proportionally larger,
+        // so we need more cloud groups to maintain density.
+        val skyAreaRatio = (extendedWidth / width) * (height / 1920f)  // Normalize to reference 1080×1920
+        val areaScale = skyAreaRatio.coerceIn(1.0f, 3.0f)
         val baseCount = state.getCloudCount()
-        val targetCount = (baseCount * aspectScale).toInt().coerceIn(0, MAX_GROUPS)
+        val targetCount = (baseCount * areaScale).toInt().coerceIn(0, MAX_GROUPS)
         
         // Regenerate groups if count changed significantly
         if (kotlin.math.abs(targetCount - cloudCount) > 3 || 
@@ -477,7 +479,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
                 
                 val groupWidthPx = (group.groupWidth * minDim).toInt()
                     .coerceIn(50, MAX_BITMAP_DIMENSION)
-                val groupHeightPx = (group.groupHeight * minDim).toInt()
+                // Scale cloud height with screen height so they fill tall sky areas
+                val heightRef = maxOf(minDim, height * 0.5f)
+                val groupHeightPx = (group.groupHeight * heightRef).toInt()
                     .coerceIn(30, MAX_BITMAP_DIMENSION)
                 
                 // Padding scales with cloudStretch to accommodate wider puffs

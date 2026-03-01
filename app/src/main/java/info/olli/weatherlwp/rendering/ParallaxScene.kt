@@ -53,6 +53,7 @@ class ParallaxScene(
     private val cloudLayer = CloudLayer(context)
     private val terrainLayer = TerrainLayer(context)
     private val riverLayer = RiverLayer(context)
+    private val lakeLayer = LakeLayer(context)
     private val randomEventLayer = RandomEventLayer(context)
     private val vignetteLayer = VignetteLayer(context)
     private val debugOverlayLayer = DebugOverlayLayer(context)
@@ -87,7 +88,8 @@ class ParallaxScene(
         layers.add(randomEventLayer)  // Ground animals and sky events (behind trees)
         layers.add(seasonalEvents)    // Seasonal effects (rendered at specific z-depths)
         layers.add(terrainLayer) // Hills and Trees (foreground)
-        layers.add(riverLayer)   // River on top of terrain
+        layers.add(riverLayer)   // River on top of terrain (draw via callback)
+        layers.add(lakeLayer)    // Lake on terrain (draw via callback)
         
         // Set up ground event drawer for proper depth integration
         // This allows animals to appear behind/in front of trees based on their Y position
@@ -125,6 +127,32 @@ class ParallaxScene(
         riverLayer.hillDepthProvider = {
             terrainLayer.getHillDepthFactors()
         }
+        
+        // Integrate river drawing into terrain for correct z-ordering:
+        // River is drawn after each hill fill but before trees, so trees appear in front of water
+        terrainLayer.riverDrawer = TerrainLayer.RiverAtDepthDrawer { canvas, depthFactor, layerIndex, totalLayers ->
+            riverLayer.drawAtDepthLayer(
+                canvas, lastState ?: return@RiverAtDepthDrawer, parallaxCalculator,
+                depthFactor, layerIndex, totalLayers
+            )
+        }
+        riverLayer.drawViaCallback = true
+        
+        // Wire lake layer to terrain data
+        lakeLayer.terrainYProvider = { xRatio, depthFactor ->
+            terrainLayer.getHillYAtPosition(xRatio, depthFactor)
+        }
+        lakeLayer.hillDepthProvider = {
+            terrainLayer.getHillDepthFactors()
+        }
+        // Integrate lake drawing into terrain for correct z-ordering
+        terrainLayer.lakeDrawer = TerrainLayer.RiverAtDepthDrawer { canvas, depthFactor, layerIndex, totalLayers ->
+            lakeLayer.drawAtDepthLayer(
+                canvas, lastState ?: return@RiverAtDepthDrawer, parallaxCalculator,
+                depthFactor, layerIndex, totalLayers
+            )
+        }
+        lakeLayer.drawViaCallback = true
         
         // Load settings BEFORE enabling sensor to ensure correct initial strength
         loadPrefs()

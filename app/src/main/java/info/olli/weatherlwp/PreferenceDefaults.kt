@@ -97,6 +97,13 @@ object PreferenceDefaults {
     const val RIVER_OPACITY = 70     // 0-100
     const val RIVER_SPEED = 50       // 0-100 flow animation speed
     
+    // === Lake Settings ===
+    const val LAKE_ENABLED = false   // Off by default (opt-in)
+    const val LAKE_POSITION = 50     // 0-100 horizontal placement
+    const val LAKE_SIZE = 40         // 10-100 width percentage
+    const val LAKE_DEPTH_LAYER = 40  // 0-100 which terrain layer
+    const val LAKE_OPACITY = 75      // 0-100
+    
     // === Seasonal Decoration Settings ===
     const val PINECONES_ENABLED = true
     const val PINECONE_DENSITY = 30  // 0-100

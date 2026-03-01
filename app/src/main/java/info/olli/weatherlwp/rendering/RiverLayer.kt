@@ -43,6 +43,9 @@ class RiverLayer(private val context: Context) : SceneLayer {
     /** Callback to get the sorted list of hill depth factors. */
     var hillDepthProvider: (() -> List<Float>)? = null
 
+    /** When true, draw() is skipped; TerrainLayer calls drawAtDepthLayer() instead for correct z-ordering. */
+    var drawViaCallback = false
+
     /** River visual style. */
     enum class RiverStyle {
         FLAT, WAVY, REFLECTIVE;
@@ -119,6 +122,10 @@ class RiverLayer(private val context: Context) : SceneLayer {
 
         val waterLevel = state.riverLevel
         if (waterLevel < 0.01f) return  // River is dry
+
+        // When integrated with terrain layer for correct z-ordering,
+        // per-depth drawing is handled via drawAtDepthLayer() callback
+        if (drawViaCallback) return
 
         // Determine if river should be frozen
         val isFrozen = state.snowLevel > FROZEN_THRESHOLD && state.temperatureCelsius.let {
@@ -224,6 +231,98 @@ class RiverLayer(private val context: Context) : SceneLayer {
 
             canvas.restore()
         }
+    }
+
+    /**
+     * Draw water at a single depth layer. Called by TerrainLayer via callback
+     * for correct z-ordering (river behind trees but on top of hills).
+     */
+    fun drawAtDepthLayer(
+        canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator,
+        depthFactor: Float, layerIndex: Int, totalLayers: Int
+    ) {
+        if (!enabled || width <= 0 || height <= 0) return
+        val waterLevel = state.riverLevel
+        if (waterLevel < 0.01f) return
+
+        val provider = terrainYProvider ?: return
+
+        val isFrozen = state.snowLevel > FROZEN_THRESHOLD && state.temperatureCelsius.let {
+            !it.isNaN() && it < 0f
+        }
+        val waterColor = getWaterColor(state, isFrozen)
+
+        val layerProgress = layerIndex.toFloat() / totalLayers.coerceAtLeast(1)
+        val layerWidthFactor = 0.3f + layerProgress * 0.7f
+        val maxRiverDepthPx = height * 0.04f * riverWidthPercent * layerWidthFactor * waterLevel
+        if (maxRiverDepthPx < 1f) return
+
+        val layerAlpha = (0.4f + layerProgress * 0.6f) * opacity
+
+        val px = parallaxCalculator.getOffsetXForDepth(depthFactor)
+        val py = parallaxCalculator.getOffsetYForDepth(depthFactor)
+
+        canvas.save()
+        canvas.translate(px, py)
+
+        val left = -extendedOffset - width * 0.05f
+        val right = width + extendedOffset + width * 0.05f
+        val totalW = right - left
+        val numSamples = 50
+
+        var minTerrainY = Float.MAX_VALUE
+        var maxTerrainY = Float.MIN_VALUE
+        val terrainYs = FloatArray(numSamples + 1)
+        for (i in 0..numSamples) {
+            val xRatio = i.toFloat() / numSamples
+            val terrainY = provider(xRatio, depthFactor) * height
+            terrainYs[i] = terrainY
+            if (terrainY < minTerrainY) minTerrainY = terrainY
+            if (terrainY > maxTerrainY) maxTerrainY = terrainY
+        }
+
+        val valleyRange = maxTerrainY - minTerrainY
+        if (valleyRange < 2f) {
+            canvas.restore()
+            return
+        }
+
+        val waterSurfaceY = maxTerrainY - valleyRange * (1f - waterLevel * 0.6f)
+
+        riverPath.reset()
+        var hasContent = false
+
+        for (i in 0..numSamples) {
+            val screenX = left + (i.toFloat() / numSamples) * totalW
+            val terrainY = terrainYs[i]
+
+            if (terrainY > waterSurfaceY) {
+                val waveAmp = if (isFrozen) 0f else (2f + waterLevel * 3f) * layerWidthFactor
+                val wave = if (isFrozen) 0f
+                           else sin((screenX * 0.02f + flowPhase * 1.5f).toDouble()).toFloat() * waveAmp +
+                                sin((screenX * 0.045f + flowPhase * 0.7f).toDouble()).toFloat() * waveAmp * 0.3f
+
+                if (!hasContent) {
+                    riverPath.moveTo(screenX, terrainY + maxRiverDepthPx)
+                    hasContent = true
+                }
+                riverPath.lineTo(screenX, waterSurfaceY + wave)
+            } else if (hasContent) {
+                riverPath.lineTo(screenX, terrainYs[(i - 1).coerceAtLeast(0)] + maxRiverDepthPx)
+                riverPath.close()
+                drawRiverSegment(canvas, state, waterColor, layerAlpha, isFrozen, waterLevel, layerWidthFactor)
+                riverPath.reset()
+                hasContent = false
+            }
+        }
+
+        if (hasContent) {
+            riverPath.lineTo(right, terrainYs[numSamples] + maxRiverDepthPx)
+            riverPath.close()
+            drawRiverSegment(canvas, state, waterColor, layerAlpha, isFrozen, waterLevel, layerWidthFactor)
+        }
+
+        canvas.restore()
     }
 
     /**

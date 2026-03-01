@@ -70,6 +70,20 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         fun getEventsInRange(minDepth: Float, maxDepth: Float): List<Pair<Float, () -> Unit>> = emptyList()
     }
     
+    /**
+     * Callback for drawing river/water at a specific depth layer.
+     * Called after each hill fill but BEFORE trees, so trees appear in front of water.
+     */
+    fun interface RiverAtDepthDrawer {
+        fun drawAtDepth(canvas: Canvas, depthFactor: Float, layerIndex: Int, totalLayers: Int)
+    }
+    
+    /** River drawer, set by ParallaxScene to draw river segments between terrain layers. */
+    var riverDrawer: RiverAtDepthDrawer? = null
+    
+    /** Lake drawer, set by ParallaxScene to draw lake at its target terrain layer. */
+    var lakeDrawer: RiverAtDepthDrawer? = null
+    
     // Data structures (immutable after creation)
     private data class HillData(
         val controlPoints: List<Float>,
@@ -611,6 +625,13 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             
             canvas.restore()
             
+            // Draw river/water at this depth layer (after hill fill, before trees)
+            // This ensures river water sits on top of hills but behind trees
+            riverDrawer?.drawAtDepth(canvas, hill.depthFactor, index, currentHills.size)
+            
+            // Draw lake at its target depth layer (same z-ordering as river)
+            lakeDrawer?.drawAtDepth(canvas, hill.depthFactor, index, currentHills.size)
+            
             // Get trees and animals for this depth range
             val nextDepth = currentHills.getOrNull(index + 1)?.depthFactor ?: Float.MAX_VALUE
             val hillTrees = currentTreesByDepth[hill.depthFactor] ?: emptyList()
@@ -723,10 +744,15 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         hillPath.close()
         
         // Check if we should apply snow cap effect
-        // Uses weather-driven snow level when available, otherwise calendar season
-        val effectiveSnowCoverage = if (useWeatherSnow && dynamicSnowLevel > 0.01f) {
-            // Weather-driven snow: coverage scales with accumulated snow depth
-            (dynamicSnowLevel * 100).toInt().coerceIn(5, 100)
+        // When useWeatherSnow is true, use ONLY weather snow level to avoid
+        // falling back to calendar-based snow (which causes visible jumps at thresholds)
+        val effectiveSnowCoverage = if (useWeatherSnow) {
+            // Weather-driven snow: smooth linear scale from snow level
+            if (dynamicSnowLevel > 0.005f) {
+                (dynamicSnowLevel * 100).toInt().coerceIn(1, 100)
+            } else {
+                0
+            }
         } else if (winterSnowEnabled && cachedSeason == "winter") {
             // Calendar-based winter snow with transition blending
             val seasonWeight = if (cachedPrevSeason != "winter" && cachedSeason == "winter") {
@@ -739,8 +765,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 0f
             }
             (winterSnowCoverage * seasonWeight).toInt()
-        } else if (cachedPrevSeason == "winter" && cachedSeason != "winter" && cachedSeasonBlend < 1f) {
-            // Transitioning OUT of winter - fade snow
+        } else if (!useWeatherSnow && cachedPrevSeason == "winter" && cachedSeason != "winter" && cachedSeasonBlend < 1f) {
+            // Transitioning OUT of winter - fade snow (only when not using weather snow)
             (winterSnowCoverage * (1f - cachedSeasonBlend)).toInt()
         } else {
             0
@@ -750,7 +776,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // Apply linear gradient from top to bottom
         val gradient = if (applySnow) {
             // Snow coverage: use effectiveSnowCoverage for dynamic depth
-            val snowDepth = (effectiveSnowCoverage / 100f).coerceIn(0.1f, 0.6f)  // 10-60% of hill
+            // Allow very thin snow at low levels (0.01) for gradual appearance
+            val snowDepth = (effectiveSnowCoverage / 100f).coerceIn(0.01f, 0.6f)
             val snowColor = Color.rgb(255, 255, 255)  // Fully opaque white
             val snowTransition = Color.rgb(
                 (Color.red(hillColor) + 255) / 2,

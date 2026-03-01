@@ -20,7 +20,9 @@ class EventPreviewView @JvmOverloads constructor(
         // Sky events
         AIRPLANE, BIRDS, EAGLE, OWL, BALLOON, SHOOTING_STAR, UFO,
         // Ground events
-        BUTTERFLY, DRAGONFLY, RABBIT, FOX, SQUIRREL, FIREFLIES, SNOWFLAKE, BAT, DEER
+        BUTTERFLY, DRAGONFLY, RABBIT, FOX, SQUIRREL, FIREFLIES, SNOWFLAKE, BAT, DEER,
+        // Water events
+        FISH, DUCK, FROG
     }
 
     var eventType: EventType = EventType.BAT
@@ -104,6 +106,10 @@ class EventPreviewView @JvmOverloads constructor(
             EventType.SNOWFLAKE -> drawSnowflake(canvas, centerX, centerY, unit)
             EventType.BAT -> drawBat(canvas, centerX, centerY, unit)
             EventType.DEER -> drawDeer(canvas, centerX, centerY, unit)
+            // Water events
+            EventType.FISH -> drawFish(canvas, centerX, centerY, unit)
+            EventType.DUCK -> drawDuck(canvas, centerX, centerY, unit)
+            EventType.FROG -> drawFrog(canvas, centerX, centerY, unit)
         }
     }
 
@@ -869,6 +875,152 @@ class EventPreviewView @JvmOverloads constructor(
         path.quadTo(unit * 0.5f, unit * 1.2f, 0f, unit * 0.8f)
         canvas.drawPath(path, paint)
         canvas.restore()
+
+        canvas.restore()
+    }
+
+    // ===== WATER EVENTS =====
+
+    private fun drawFish(canvas: Canvas, cx: Float, cy: Float, unit: Float) {
+        val jumpY = sin(animationTime * 3f).coerceAtLeast(0f) * unit * 3f
+        val rotation = sin(animationTime * 3f) * 30f
+
+        canvas.save()
+        canvas.translate(cx, cy - jumpY)
+        canvas.rotate(rotation)
+
+        // Body
+        paint.color = Color.argb(220, 140, 160, 190)
+        paint.style = Paint.Style.FILL
+        canvas.drawOval(-unit * 2f, -unit * 0.7f, unit * 2f, unit * 0.7f, paint)
+
+        // Tail
+        path.reset()
+        path.moveTo(-unit * 1.8f, 0f)
+        path.lineTo(-unit * 3f, -unit * 1f)
+        path.lineTo(-unit * 3f, unit * 1f)
+        path.close()
+        canvas.drawPath(path, paint)
+
+        // Dorsal fin
+        path.reset()
+        path.moveTo(-unit * 0.3f, -unit * 0.6f)
+        path.lineTo(unit * 0.2f, -unit * 1.3f)
+        path.lineTo(unit * 1f, -unit * 0.6f)
+        path.close()
+        canvas.drawPath(path, paint)
+
+        // Eye
+        paint.color = Color.argb(255, 20, 20, 20)
+        canvas.drawCircle(unit * 1.2f, -unit * 0.1f, unit * 0.15f, paint)
+
+        // Splash droplets
+        if (jumpY > unit * 0.5f) {
+            paint.color = Color.argb(100, 180, 210, 240)
+            canvas.drawCircle(-unit * 1f, unit * 2f, unit * 0.2f, paint)
+            canvas.drawCircle(unit * 0.5f, unit * 2.5f, unit * 0.15f, paint)
+        }
+
+        canvas.restore()
+    }
+
+    private fun drawDuck(canvas: Canvas, cx: Float, cy: Float, unit: Float) {
+        val waddle = sin(animationTime * 4f) * 3f
+        val walkX = sin(animationTime * 1.5f) * unit * 2f
+
+        canvas.save()
+        canvas.translate(cx + walkX, cy + unit * 0.5f)
+        canvas.rotate(waddle)
+
+        // Body
+        paint.color = Color.argb(220, 100, 120, 70)
+        paint.style = Paint.Style.FILL
+        canvas.drawOval(-unit * 2f, -unit * 0.8f, unit * 1.5f, unit * 0.8f, paint)
+
+        // Neck
+        paint.color = Color.argb(220, 40, 100, 50)
+        canvas.drawRoundRect(unit * 0.8f, -unit * 1.5f, unit * 1.5f, -unit * 0.3f,
+            unit * 0.3f, unit * 0.3f, paint)
+
+        // Head
+        canvas.drawOval(unit * 0.7f, -unit * 2.2f, unit * 1.8f, -unit * 1.3f, paint)
+
+        // Bill
+        paint.color = Color.argb(230, 220, 160, 40)
+        path.reset()
+        path.moveTo(unit * 1.6f, -unit * 1.8f)
+        path.lineTo(unit * 2.5f, -unit * 1.6f)
+        path.lineTo(unit * 1.6f, -unit * 1.5f)
+        path.close()
+        canvas.drawPath(path, paint)
+
+        // Eye
+        paint.color = Color.argb(255, 15, 15, 15)
+        canvas.drawCircle(unit * 1.3f, -unit * 1.8f, unit * 0.1f, paint)
+
+        // Legs
+        paint.color = Color.argb(220, 210, 140, 30)
+        val legPhase = sin(animationTime * 4f) * unit * 0.3f
+        canvas.drawRoundRect(-unit * 0.3f, unit * 0.5f, 0f, unit * 1.3f + legPhase,
+            unit * 0.05f, unit * 0.05f, paint)
+        canvas.drawRoundRect(-unit * 0.9f, unit * 0.5f, -unit * 0.6f, unit * 1.3f - legPhase,
+            unit * 0.05f, unit * 0.05f, paint)
+
+        // Tail
+        paint.color = Color.argb(200, 100, 120, 70)
+        path.reset()
+        path.moveTo(-unit * 1.8f, -unit * 0.3f)
+        path.lineTo(-unit * 2.5f, -unit * 0.9f)
+        path.lineTo(-unit * 2.1f, 0f)
+        path.close()
+        canvas.drawPath(path, paint)
+
+        canvas.restore()
+    }
+
+    private fun drawFrog(canvas: Canvas, cx: Float, cy: Float, unit: Float) {
+        val breathe = sin(animationTime * 2f) * unit * 0.15f
+
+        canvas.save()
+        canvas.translate(cx, cy + unit * 0.5f)
+
+        // Body (green)
+        paint.color = Color.argb(220, 60, 120, 50)
+        paint.style = Paint.Style.FILL
+        canvas.drawOval(-unit * 1.5f, -unit * 0.6f, unit * 1.2f, unit * 0.6f, paint)
+
+        // Belly (lighter)
+        paint.color = Color.argb(180, 180, 200, 160)
+        canvas.drawOval(-unit * 1f, -unit * 0.1f + breathe, unit * 0.8f, unit * 0.5f + breathe, paint)
+
+        // Head
+        paint.color = Color.argb(220, 60, 120, 50)
+        canvas.drawOval(unit * 0.5f, -unit * 0.8f, unit * 1.8f, unit * 0.2f, paint)
+
+        // Eyes (large, protruding)
+        paint.color = Color.argb(230, 200, 180, 40)
+        canvas.drawCircle(unit * 1.1f, -unit * 1f, unit * 0.25f, paint)
+        canvas.drawCircle(unit * 1.5f, -unit * 1f, unit * 0.25f, paint)
+
+        // Pupils
+        paint.color = Color.argb(255, 10, 10, 10)
+        canvas.drawOval(unit * 1f, -unit * 1.05f, unit * 1.2f, -unit * 0.95f, paint)
+        canvas.drawOval(unit * 1.4f, -unit * 1.05f, unit * 1.6f, -unit * 0.95f, paint)
+
+        // Back legs (folded)
+        paint.color = Color.argb(200, 50, 100, 40)
+        path.reset()
+        path.moveTo(-unit * 1.2f, unit * 0.1f)
+        path.lineTo(-unit * 2f, -unit * 0.5f)
+        path.lineTo(-unit * 1.7f, unit * 0.5f)
+        path.close()
+        canvas.drawPath(path, paint)
+
+        // Front legs
+        canvas.drawRoundRect(unit * 0.4f, unit * 0.2f, unit * 0.65f, unit * 0.7f,
+            unit * 0.05f, unit * 0.05f, paint)
+        canvas.drawRoundRect(unit * 0.7f, unit * 0.2f, unit * 0.95f, unit * 0.7f,
+            unit * 0.05f, unit * 0.05f, paint)
 
         canvas.restore()
     }

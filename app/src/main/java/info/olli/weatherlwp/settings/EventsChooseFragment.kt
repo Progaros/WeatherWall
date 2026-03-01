@@ -33,6 +33,9 @@ class EventsChooseFragment : PreferenceFragmentCompat() {
         setupSpawnButton("pref_event_snowflake", "snowflake", "Snowflake")
         setupSpawnButton("pref_event_bat", "bat", "Bat Colony")
         setupSpawnButton("pref_event_deer", "deer", "Deer")
+        setupSpawnButton("pref_event_fish", "fish", "Fish")
+        setupSpawnButton("pref_event_duck", "duck", "Duck")
+        setupSpawnButton("pref_event_frog", "frog", "Frog")
     }
     
     private fun setupSpawnButton(prefKey: String, eventType: String, eventName: String) {

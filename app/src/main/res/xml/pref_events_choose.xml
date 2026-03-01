@@ -102,6 +102,24 @@
             android:title="Deer"
             android:summary="Autumn/Winter - grazing and walking"
             android:defaultValue="true" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_fish"
+            android:title="Fish"
+            android:summary="Fish jumping out of water"
+            android:defaultValue="true" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_duck"
+            android:title="Ducks"
+            android:summary="Ducks waddling across terrain"
+            android:defaultValue="true" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_frog"
+            android:title="Frogs"
+            android:summary="Spring/Summer - sitting and hopping at dusk"
+            android:defaultValue="true" />
     </PreferenceCategory>
 
 </PreferenceScreen>

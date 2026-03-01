@@ -72,6 +72,9 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     private var snowflakeEnabled = true
     private var batEnabled = true
     private var deerEnabled = true
+    private var fishEnabled = true
+    private var duckEnabled = true
+    private var frogEnabled = true
     
     // Current season for seasonal event restrictions
     private var currentSeason = SeasonHelper.getCurrentCalendarSeasonKey()
@@ -223,6 +226,21 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         // Rare alien event - night only, very low chance
         if (alienEnabled && state.isNight && random.nextFloat() < 0.05f) {
             availableEvents.add { t -> AlienEvent(Random(t + 10), t) }
+        }
+        
+        // Fish: Day or dusk, non-winter (jump in warm/mild weather)
+        if (fishEnabled && !state.isNight && !isWinter && !isRaining) {
+            availableEvents.add { t -> FishJumpEvent(Random(t + 16), t) }
+        }
+        
+        // Ducks: Day, year-round (avoid storms)
+        if (duckEnabled && !state.isNight && !isRaining) {
+            availableEvents.add { t -> DuckEvent(Random(t + 17), t) }
+        }
+        
+        // Frogs: Evening/dusk/warm nights, spring/summer
+        if (frogEnabled && !isWinter && !isAutumn && (state.isDusk || state.isNight)) {
+            availableEvents.add { t -> FrogEvent(Random(t + 18), t) }
         }
         
         if (availableEvents.isEmpty()) return
@@ -445,7 +463,10 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
             { DragonflyEvent(random, seed) },
             { SnowflakeEvent(random, seed) },
             { BatEvent(random, seed) },
-            { DeerEvent(random, seed) }
+            { DeerEvent(random, seed) },
+            { FishJumpEvent(random, seed) },
+            { DuckEvent(random, seed) },
+            { FrogEvent(random, seed) }
         )
         
         val event = eventTypes[random.nextInt(eventTypes.size)]()
@@ -481,6 +502,9 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
             "snowflake" -> SnowflakeEvent(random, seed)
             "bat" -> BatEvent(random, seed)
             "deer" -> DeerEvent(random, seed)
+            "fish" -> FishJumpEvent(random, seed)
+            "duck" -> DuckEvent(random, seed)
+            "frog" -> FrogEvent(random, seed)
             else -> null
         }
         
@@ -529,6 +553,9 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         snowflakeEnabled = prefs.getBoolean("pref_event_snowflake", true)
         batEnabled = prefs.getBoolean("pref_event_bat", true)
         deerEnabled = prefs.getBoolean("pref_event_deer", true)
+        fishEnabled = prefs.getBoolean("pref_event_fish", true)
+        duckEnabled = prefs.getBoolean("pref_event_duck", true)
+        frogEnabled = prefs.getBoolean("pref_event_frog", true)
     }
     
     override fun destroy() {
