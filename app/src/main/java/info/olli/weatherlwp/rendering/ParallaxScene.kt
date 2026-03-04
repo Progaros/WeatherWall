@@ -74,9 +74,23 @@ class ParallaxScene(
     private var weatherEnabled = true
     private var seasonalEnabled = true
     
-    // Battery optimization: throttle SharedPreferences access for spawn triggers
-    private var lastSpawnTriggerCheckMs = 0L
-    private val SPAWN_TRIGGER_CHECK_INTERVAL_MS = 100L  // Only check every 100ms instead of every frame
+    // Event-driven spawn trigger detection via SharedPreferences listener
+    // Replaces 100ms polling — zero cost when no trigger fires
+    @Volatile private var pendingSpawnTrigger = false
+    @Volatile private var pendingSpecificTrigger = false
+    
+    private val spawnTriggerListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key != null) {
+            when {
+                key.startsWith("trigger_spawn_event_time") && key.endsWith(triggerSuffix) -> {
+                    pendingSpawnTrigger = true
+                }
+                key.startsWith("trigger_spawn_specific_event") && key.endsWith(triggerSuffix) -> {
+                    pendingSpecificTrigger = true
+                }
+            }
+        }
+    }
     
     init {
         // Add layers in draw order (Background -> Foreground)
@@ -158,6 +172,9 @@ class ParallaxScene(
         loadPrefs()
         sensor.setListener(this)
         sensor.setShakeListener(this)
+        
+        // Register listener for spawn trigger events (replaces 100ms polling)
+        prefs.registerOnSharedPreferenceChangeListener(spawnTriggerListener)
     }
     
     // Temporary references for ground event drawer callback
@@ -253,26 +270,24 @@ class ParallaxScene(
             lastCanvas = canvas
             lastState = state
             
-            // Check for manual spawn trigger from settings
-            // Battery optimization: Only check SharedPreferences every 100ms instead of every frame
-            val currentTimeMs = System.currentTimeMillis()
-            if (currentTimeMs - lastSpawnTriggerCheckMs >= SPAWN_TRIGGER_CHECK_INTERVAL_MS) {
-                lastSpawnTriggerCheckMs = currentTimeMs
-                
-                // Use context-specific keys (preview vs wallpaper) to avoid race conditions
-                // Each context reads and clears only its own key, but uses same seed for deterministic events
+            // Check for manual spawn trigger from settings (event-driven via listener)
+            // Only reads SharedPreferences when the listener detected a relevant key change
+            if (pendingSpawnTrigger) {
+                pendingSpawnTrigger = false
+                val currentTimeMs = System.currentTimeMillis()
                 val spawnTriggerKey = "trigger_spawn_event_time$triggerSuffix"
                 val spawnTriggerTime = prefs.getLong(spawnTriggerKey, 0L)
                 val timeSinceSpawnTrigger = currentTimeMs - spawnTriggerTime
                 if (spawnTriggerTime > 0 && timeSinceSpawnTrigger < 10000) {
-                    // Clear only our own key to prevent duplicate spawns
                     prefs.edit().putLong(spawnTriggerKey, 0L).apply()
-                    // Use trigger time as seed for deterministic event spawning
                     randomEventLayer.debugSpawnEvent(spawnTriggerTime)
                     Log.d(TAG, "Manual spawn trigger received [${if (isPreview) "preview" else "wallpaper"}] (delay: ${timeSinceSpawnTrigger}ms)")
                 }
-                
-                // Check for specific event spawn trigger from individual toggles
+            }
+            
+            if (pendingSpecificTrigger) {
+                pendingSpecificTrigger = false
+                val currentTimeMs = System.currentTimeMillis()
                 val specificEventKey = "trigger_spawn_specific_event$triggerSuffix"
                 val specificEventTimeKey = "trigger_spawn_specific_event_time$triggerSuffix"
                 val specificEventTime = prefs.getLong(specificEventTimeKey, 0L)
@@ -282,8 +297,7 @@ class ParallaxScene(
                     prefs.edit()
                         .remove(specificEventKey)
                         .putLong(specificEventTimeKey, 0L)
-                        .apply()  // Use apply() to avoid blocking render thread
-                    // Use trigger time as seed for deterministic event spawning
+                        .apply()
                     randomEventLayer.spawnSpecificEvent(specificEvent, specificEventTime)
                     Log.d(TAG, "Specific spawn trigger received [${if (isPreview) "preview" else "wallpaper"}]: $specificEvent (delay: ${timeSinceSpecificTrigger}ms)")
                 }
@@ -544,6 +558,8 @@ class ParallaxScene(
     }
     
     fun destroy() {
+        // Unregister spawn trigger listener to prevent leaks
+        prefs.unregisterOnSharedPreferenceChangeListener(spawnTriggerListener)
         for (layer in layers) {
             layer.destroy()
         }

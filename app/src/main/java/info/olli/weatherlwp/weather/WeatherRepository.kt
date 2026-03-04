@@ -1,12 +1,14 @@
 package info.olli.weatherlwp.weather
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.util.Log
 import androidx.preference.PreferenceManager
 
 /**
  * Repository for weather data from Breezy Weather via Gadgetbridge intent.
- * Stores weather data in SharedPreferences for access by the wallpaper.
+ * Stores weather data in SharedPreferences for persistence and uses an
+ * in-memory cache for zero-allocation per-frame reads.
  */
 object WeatherRepository {
     private const val TAG = "WeatherRepository"
@@ -31,6 +33,35 @@ object WeatherRepository {
     private const val KEY_TEMPERATURE = "weather_temperature"  // Celsius * 10 (for 0.1° precision)
     private const val KEY_TEMPERATURE_FEELS = "weather_temperature_feels"  // Celsius * 10
     private const val KEY_DEW_POINT = "weather_dew_point"  // Celsius * 10
+    
+    // All weather-related keys for cache invalidation
+    private val WEATHER_KEYS = setOf(
+        KEY_WEATHER_TYPE, KEY_SUNRISE, KEY_SUNSET, KEY_LAST_UPDATE,
+        KEY_WIND_SPEED, KEY_PRECIP_PROBABILITY, KEY_CLOUD_COVER, KEY_HUMIDITY,
+        KEY_VISIBILITY, KEY_PRESSURE, KEY_MOON_PHASE, KEY_MOON_RISE,
+        KEY_MOON_SET, KEY_WIND_DIRECTION, KEY_TEMPERATURE, KEY_TEMPERATURE_FEELS,
+        KEY_DEW_POINT
+    )
+    
+    // ============== In-Memory Cache ==============
+    // Populated on first access, invalidated by SP listener on weather key changes.
+    // Render thread reads cache (zero allocation), receiver thread writes SP + invalidates.
+    
+    @Volatile private var cachedWeatherType: WeatherType? = null
+    @Volatile private var cachedSunrise: Long = -1L
+    @Volatile private var cachedSunset: Long = -1L
+    @Volatile private var cachedLastUpdate: Long = 0L
+    @Volatile private var cachedWindSpeed: Float = 0f
+    @Volatile private var cachedExtended: ExtendedWeatherData? = null
+    @Volatile private var cacheInitialized = false
+    
+    // SharedPreferences listener to invalidate cache when weather data changes
+    private val cacheInvalidationListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key != null && key in WEATHER_KEYS) {
+            cacheInitialized = false  // Force re-read on next access
+        }
+    }
+    @Volatile private var listenerRegistered = false
     
     /**
      * Extended weather data from Breezy Weather.
@@ -59,6 +90,7 @@ object WeatherRepository {
         rawJson: String? = null,
         extendedData: ExtendedWeatherData? = null
     ) {
+        ensureListenerRegistered(context)
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val editor = prefs.edit()
             .putString(KEY_WEATHER_TYPE, type.name)
@@ -96,28 +128,86 @@ object WeatherRepository {
         
         editor.apply()
         
+        // Directly populate cache from the values we just wrote (avoid re-reading SP)
+        cachedWeatherType = type
+        cachedSunrise = sunrise
+        cachedSunset = sunset
+        cachedWindSpeed = windSpeed
+        cachedLastUpdate = System.currentTimeMillis()
+        if (extendedData != null) {
+            cachedExtended = extendedData
+        }
+        cacheInitialized = true
+        
         Log.d(TAG, "Weather updated: type=$type, sunrise=$sunrise, sunset=$sunset, wind=$windSpeed m/s" +
             (extendedData?.let { ", precip=${it.precipProbability}%, clouds=${it.cloudCover}%" } ?: ""))
     }
     
-    fun getWeatherType(context: Context): WeatherType {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        val typeName = prefs.getString(KEY_WEATHER_TYPE, WeatherType.CLEAR.name) ?: WeatherType.CLEAR.name
-        return try {
-            WeatherType.valueOf(typeName)
-        } catch (e: Exception) {
-            WeatherType.CLEAR
+    /**
+     * Ensure the cache invalidation listener is registered.
+     * Called lazily on first access to avoid lifecycle issues.
+     */
+    private fun ensureListenerRegistered(context: Context) {
+        if (!listenerRegistered) {
+            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+            prefs.registerOnSharedPreferenceChangeListener(cacheInvalidationListener)
+            listenerRegistered = true
         }
     }
     
-    fun getSunrise(context: Context): Long {
+    /**
+     * Populate cache from SharedPreferences if not already valid.
+     */
+    private fun ensureCachePopulated(context: Context) {
+        if (cacheInitialized) return
+        ensureListenerRegistered(context)
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        return prefs.getLong(KEY_SUNRISE, -1L)
+        
+        val typeName = prefs.getString(KEY_WEATHER_TYPE, WeatherType.CLEAR.name) ?: WeatherType.CLEAR.name
+        cachedWeatherType = try { WeatherType.valueOf(typeName) } catch (_: Exception) { WeatherType.CLEAR }
+        cachedSunrise = prefs.getLong(KEY_SUNRISE, -1L)
+        cachedSunset = prefs.getLong(KEY_SUNSET, -1L)
+        cachedLastUpdate = prefs.getLong(KEY_LAST_UPDATE, 0L)
+        cachedWindSpeed = prefs.getFloat(KEY_WIND_SPEED, 0f)
+        
+        // Build extended data from SP
+        val storedDirection = prefs.getInt(KEY_WIND_DIRECTION, -1)
+        val windDirection = if (storedDirection >= 0) storedDirection else getDailyWindDirection()
+        val tempRaw = prefs.getInt(KEY_TEMPERATURE, Int.MIN_VALUE)
+        val feelsRaw = prefs.getInt(KEY_TEMPERATURE_FEELS, Int.MIN_VALUE)
+        val dewRaw = prefs.getInt(KEY_DEW_POINT, Int.MIN_VALUE)
+        
+        cachedExtended = ExtendedWeatherData(
+            precipProbability = prefs.getInt(KEY_PRECIP_PROBABILITY, 0),
+            cloudCover = prefs.getInt(KEY_CLOUD_COVER, 0),
+            humidity = prefs.getInt(KEY_HUMIDITY, 0),
+            visibility = prefs.getInt(KEY_VISIBILITY, 10000),
+            pressure = prefs.getInt(KEY_PRESSURE, 1013),
+            moonPhase = prefs.getInt(KEY_MOON_PHASE, 180),
+            moonRise = prefs.getLong(KEY_MOON_RISE, -1L),
+            moonSet = prefs.getLong(KEY_MOON_SET, -1L),
+            windDirection = windDirection,
+            temperatureCelsius = if (tempRaw != Int.MIN_VALUE) tempRaw / 10f else Float.NaN,
+            feelsLikeCelsius = if (feelsRaw != Int.MIN_VALUE) feelsRaw / 10f else Float.NaN,
+            dewPointCelsius = if (dewRaw != Int.MIN_VALUE) dewRaw / 10f else Float.NaN
+        )
+        
+        cacheInitialized = true
+    }
+    
+    fun getWeatherType(context: Context): WeatherType {
+        ensureCachePopulated(context)
+        return cachedWeatherType ?: WeatherType.CLEAR
+    }
+    
+    fun getSunrise(context: Context): Long {
+        ensureCachePopulated(context)
+        return cachedSunrise
     }
     
     fun getSunset(context: Context): Long {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        return prefs.getLong(KEY_SUNSET, -1L)
+        ensureCachePopulated(context)
+        return cachedSunset
     }
     
     /**
@@ -125,8 +215,8 @@ object WeatherRepository {
      * Returns 0 if no wind data available.
      */
     fun getWindSpeed(context: Context): Float {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        return prefs.getFloat(KEY_WIND_SPEED, 0f)
+        ensureCachePopulated(context)
+        return cachedWindSpeed
     }
     
     /**
@@ -139,8 +229,8 @@ object WeatherRepository {
     }
     
     fun getLastUpdate(context: Context): Long {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        return prefs.getLong(KEY_LAST_UPDATE, 0L)
+        ensureCachePopulated(context)
+        return cachedLastUpdate
     }
     
     fun isDataFresh(context: Context, maxAgeMs: Long = 3600000L): Boolean {
@@ -158,14 +248,15 @@ object WeatherRepository {
     }
     
     // ============== Extended Weather Data Getters ==============
+    // These all read from the in-memory cache for zero-allocation per-frame access.
     
     /**
      * Get precipitation probability (0-100%).
      * Used to determine rain/snow intensity.
      */
     fun getPrecipProbability(context: Context): Int {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        return prefs.getInt(KEY_PRECIP_PROBABILITY, 0)
+        ensureCachePopulated(context)
+        return cachedExtended?.precipProbability ?: 0
     }
     
     /**
@@ -181,24 +272,24 @@ object WeatherRepository {
      * Get cloud cover percentage (0-100%).
      */
     fun getCloudCover(context: Context): Int {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        return prefs.getInt(KEY_CLOUD_COVER, 0)
+        ensureCachePopulated(context)
+        return cachedExtended?.cloudCover ?: 0
     }
     
     /**
      * Get humidity percentage (0-100%).
      */
     fun getHumidity(context: Context): Int {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        return prefs.getInt(KEY_HUMIDITY, 0)
+        ensureCachePopulated(context)
+        return cachedExtended?.humidity ?: 0
     }
     
     /**
      * Get visibility in meters.
      */
     fun getVisibility(context: Context): Int {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        return prefs.getInt(KEY_VISIBILITY, 10000)
+        ensureCachePopulated(context)
+        return cachedExtended?.visibility ?: 10000
     }
     
     /**
@@ -214,8 +305,8 @@ object WeatherRepository {
      * Get atmospheric pressure in hPa.
      */
     fun getPressure(context: Context): Int {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        return prefs.getInt(KEY_PRESSURE, 1013)
+        ensureCachePopulated(context)
+        return cachedExtended?.pressure ?: 1013
     }
     
     /**
@@ -223,8 +314,8 @@ object WeatherRepository {
      * 0 = new moon, 90 = first quarter, 180 = full moon, 270 = last quarter
      */
     fun getMoonPhase(context: Context): Int {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        return prefs.getInt(KEY_MOON_PHASE, 180)
+        ensureCachePopulated(context)
+        return cachedExtended?.moonPhase ?: 180
     }
     
     /**
@@ -241,16 +332,16 @@ object WeatherRepository {
      * Get moon rise time (Unix timestamp in seconds).
      */
     fun getMoonRise(context: Context): Long {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        return prefs.getLong(KEY_MOON_RISE, -1L)
+        ensureCachePopulated(context)
+        return cachedExtended?.moonRise ?: -1L
     }
     
     /**
      * Get moon set time (Unix timestamp in seconds).
      */
     fun getMoonSet(context: Context): Long {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        return prefs.getLong(KEY_MOON_SET, -1L)
+        ensureCachePopulated(context)
+        return cachedExtended?.moonSet ?: -1L
     }
     
     /**
@@ -258,14 +349,8 @@ object WeatherRepository {
      * If no weather data, returns a deterministic "random" direction based on day.
      */
     fun getWindDirection(context: Context): Int {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        val storedDirection = prefs.getInt(KEY_WIND_DIRECTION, -1)  // -1 means not set
-        if (storedDirection >= 0) {
-            return storedDirection
-        }
-        // Generate deterministic wind direction based on current day
-        // Changes once per day, consistent across all instances
-        return getDailyWindDirection()
+        ensureCachePopulated(context)
+        return cachedExtended?.windDirection ?: getDailyWindDirection()
     }
     
     /**
@@ -281,32 +366,10 @@ object WeatherRepository {
     
     /**
      * Get all extended weather data as a data class.
+     * Returns cached data for zero-allocation per-frame access.
      */
     fun getExtendedData(context: Context): ExtendedWeatherData {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        
-        // Use daily wind direction if not set in weather data
-        val storedDirection = prefs.getInt(KEY_WIND_DIRECTION, -1)
-        val windDirection = if (storedDirection >= 0) storedDirection else getDailyWindDirection()
-        
-        // Temperature: stored as Celsius * 10, sentinel Int.MIN_VALUE means unknown
-        val tempRaw = prefs.getInt(KEY_TEMPERATURE, Int.MIN_VALUE)
-        val feelsRaw = prefs.getInt(KEY_TEMPERATURE_FEELS, Int.MIN_VALUE)
-        val dewRaw = prefs.getInt(KEY_DEW_POINT, Int.MIN_VALUE)
-        
-        return ExtendedWeatherData(
-            precipProbability = prefs.getInt(KEY_PRECIP_PROBABILITY, 0),
-            cloudCover = prefs.getInt(KEY_CLOUD_COVER, 0),
-            humidity = prefs.getInt(KEY_HUMIDITY, 0),
-            visibility = prefs.getInt(KEY_VISIBILITY, 10000),
-            pressure = prefs.getInt(KEY_PRESSURE, 1013),
-            moonPhase = prefs.getInt(KEY_MOON_PHASE, 180),
-            moonRise = prefs.getLong(KEY_MOON_RISE, -1L),
-            moonSet = prefs.getLong(KEY_MOON_SET, -1L),
-            windDirection = windDirection,
-            temperatureCelsius = if (tempRaw != Int.MIN_VALUE) tempRaw / 10f else Float.NaN,
-            feelsLikeCelsius = if (feelsRaw != Int.MIN_VALUE) feelsRaw / 10f else Float.NaN,
-            dewPointCelsius = if (dewRaw != Int.MIN_VALUE) dewRaw / 10f else Float.NaN
-        )
+        ensureCachePopulated(context)
+        return cachedExtended ?: ExtendedWeatherData()
     }
 }

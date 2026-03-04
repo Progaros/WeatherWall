@@ -8,6 +8,7 @@ import android.content.Context
 import android.os.Build
 import android.os.PersistableBundle
 import android.util.Log
+import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
 
@@ -15,6 +16,8 @@ class WeatherWallApp : Application() {
     
     companion object {
         private const val TAG = "WeatherWallApp"
+        private const val CRASH_LOG_FILE = "crash_log.txt"
+        
         @Volatile
         private var instance: WeatherWallApp? = null
         
@@ -22,6 +25,32 @@ class WeatherWallApp : Application() {
         private var lastCrashLog: String? = null
         
         fun getLastCrashLog(): String? = lastCrashLog
+        
+        /**
+         * Load last crash log from file (survives process death).
+         * Call from Activity.onCreate() to retrieve crash info after restart.
+         */
+        fun loadCrashLogFromFile(context: Context): String? {
+            return try {
+                val file = File(context.filesDir, CRASH_LOG_FILE)
+                if (file.exists()) file.readText() else null
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to read crash log file", e)
+                null
+            }
+        }
+        
+        /**
+         * Clear persisted crash log after it has been shown/handled.
+         */
+        fun clearCrashLogFile(context: Context) {
+            try {
+                val file = File(context.filesDir, CRASH_LOG_FILE)
+                if (file.exists()) file.delete()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to delete crash log file", e)
+            }
+        }
         
         fun copyToClipboard(context: Context, text: String, label: String = "Crash Log") {
             try {
@@ -48,6 +77,9 @@ class WeatherWallApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        
+        // Load any crash log from previous session
+        lastCrashLog = loadCrashLogFromFile(this)
         
         // Install crash handler
         defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
@@ -82,7 +114,15 @@ class WeatherWallApp : Application() {
             lastCrashLog = crashLog
             Log.e(TAG, crashLog)
             
-            // Try to copy to clipboard
+            // Write crash log to file (reliable — no Binder IPC, survives process death)
+            try {
+                val file = File(filesDir, CRASH_LOG_FILE)
+                file.writeText(crashLog)
+            } catch (e: Exception) {
+                Log.e(TAG, "Could not write crash log to file", e)
+            }
+            
+            // Best-effort clipboard copy (may fail during crash due to Binder)
             try {
                 copyToClipboard(this, crashLog, "WeatherWall Crash")
             } catch (e: Exception) {
