@@ -293,6 +293,7 @@ class ParallaxSensorManagerTest {
         val AXIS_X = 1
         val AXIS_Y = 2
         val AXIS_MINUS_X = 129  // SensorManager.AXIS_MINUS_X
+        @Suppress("UNUSED_VARIABLE")
         val AXIS_MINUS_Y = 130  // SensorManager.AXIS_MINUS_Y
         
         // ROTATION_0
@@ -731,16 +732,14 @@ class ParallaxSensorManagerTest {
     @Test
     fun `roll wiggle resets on timeout`() {
         val timeWindow = 800L
-        var startTime = 0L
         var directionChanges = 2
         
         // Simulate timeout after first wiggle
-        startTime = 100L
+        val startTime = 100L
         val now = 1000L  // 900ms later, exceeds 800ms window
         
         if (now - startTime > timeWindow) {
             directionChanges = 0
-            startTime = 0L
         }
         
         assertEquals("Direction changes should reset on timeout", 0, directionChanges)
@@ -846,10 +845,7 @@ class ParallaxSensorManagerTest {
     fun `gyro wiggle requires stable sign before counting direction change`() {
         // Single sample of new sign should not count as direction change
         // Need GYRO_SIGN_STABLE_SAMPLES (2) consecutive samples
-        var gyroCandidateCount = 0
-        
-        // First sample of new sign
-        gyroCandidateCount = 1
+        var gyroCandidateCount = 1  // First sample of new sign
         val shouldCount = gyroCandidateCount >= GYRO_SIGN_STABLE_SAMPLES
         
         assertFalse("Single sample should not count as direction change", shouldCount)

@@ -57,6 +57,7 @@ class TerrainSwayTest {
     
     @Test
     fun `sway wave produces oscillation`() {
+        @Suppress("UNUSED_VARIABLE")
         val time = 0f
         val frequency = RenderConstants.TREE_SWAY_FREQUENCY
         val spatialPhase = 0f  // Tree at left edge

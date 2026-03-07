@@ -55,6 +55,15 @@ class LakeLayer(private val context: Context) : SceneLayer {
     }
     private val lakePath = Path()
 
+    // Pre-allocated terrain sampling array (numSamples=30 is constant)
+    private val terrainYsArray = FloatArray(31)
+
+    // Cached gradients to avoid per-frame allocation
+    private var cachedSimpleGradient: LinearGradient? = null
+    private var cachedSimpleGradientKey = 0L
+    private var cachedSegmentGradient: LinearGradient? = null
+    private var cachedSegmentGradientKey = 0L
+
     // Dimensions
     private var width = 0f
     private var height = 0f
@@ -147,11 +156,10 @@ class LakeLayer(private val context: Context) : SceneLayer {
         val numSamples = 30
         var minTerrainY = Float.MAX_VALUE
         var maxTerrainY = Float.MIN_VALUE
-        val terrainYs = FloatArray(numSamples + 1)
         for (i in 0..numSamples) {
             val xRatio = ((lakeLeft + (lakeRight - lakeLeft) * i.toFloat() / numSamples) + extendedOffset) / extendedWidth
             val terrainY = provider(xRatio.coerceIn(0f, 1f), depthFactor) * height
-            terrainYs[i] = terrainY
+            terrainYsArray[i] = terrainY
             if (terrainY < minTerrainY) minTerrainY = terrainY
             if (terrainY > maxTerrainY) maxTerrainY = terrainY
         }
@@ -176,7 +184,7 @@ class LakeLayer(private val context: Context) : SceneLayer {
 
         for (i in 0..numSamples) {
             val screenX = lakeLeft + (lakeRight - lakeLeft) * i.toFloat() / numSamples
-            val terrainY = terrainYs[i]
+            val terrainY = terrainYsArray[i]
 
             if (terrainY > waterSurfaceY) {
                 val waveAmp = if (isFrozen) 0f else 1.5f * effectiveLevel
@@ -189,7 +197,7 @@ class LakeLayer(private val context: Context) : SceneLayer {
                 }
                 lakePath.lineTo(screenX, waterSurfaceY + wave)
             } else if (hasContent) {
-                lakePath.lineTo(screenX, terrainYs[(i - 1).coerceAtLeast(0)] + maxLakeDepthPx)
+                lakePath.lineTo(screenX, terrainYsArray[(i - 1).coerceAtLeast(0)] + maxLakeDepthPx)
                 lakePath.close()
                 drawLakeSegment(canvas, state, waterColor, isFrozen, waterSurfaceY, maxTerrainY + maxLakeDepthPx)
                 lakePath.reset()
@@ -198,7 +206,7 @@ class LakeLayer(private val context: Context) : SceneLayer {
         }
 
         if (hasContent) {
-            lakePath.lineTo(lakeRight, terrainYs[numSamples] + maxLakeDepthPx)
+            lakePath.lineTo(lakeRight, terrainYsArray[numSamples] + maxLakeDepthPx)
             lakePath.close()
             drawLakeSegment(canvas, state, waterColor, isFrozen, waterSurfaceY, maxTerrainY + maxLakeDepthPx)
         }
@@ -214,6 +222,7 @@ class LakeLayer(private val context: Context) : SceneLayer {
     /**
      * Simple oval lake for flat terrain.
      */
+    @Suppress("UNUSED_PARAMETER")
     private fun drawSimpleLake(
         canvas: Canvas, state: SimulationState,
         cx: Float, cy: Float, w: Float, h: Float,
@@ -221,13 +230,20 @@ class LakeLayer(private val context: Context) : SceneLayer {
     ) {
         val alphaInt = (opacity * 255).toInt().coerceIn(0, 255)
 
-        // Gradient from surface to depth
-        lakePaint.shader = LinearGradient(
-            0f, cy - h, 0f, cy + h,
-            Color.argb(alphaInt, Color.red(color), Color.green(color), Color.blue(color)),
-            Color.argb(alphaInt, Color.red(WATER_DEEP), Color.green(WATER_DEEP), Color.blue(WATER_DEEP)),
-            Shader.TileMode.CLAMP
-        )
+        // Gradient from surface to depth — cache by bucketed position + color
+        val yBucket = ((cy - h).toInt() / 4).toLong()
+        val hBucket = ((cy + h).toInt() / 4).toLong()
+        val key = yBucket * 100003L + hBucket * 31L + color.toLong() + alphaInt
+        if (cachedSimpleGradient == null || cachedSimpleGradientKey != key) {
+            cachedSimpleGradient = LinearGradient(
+                0f, cy - h, 0f, cy + h,
+                Color.argb(alphaInt, Color.red(color), Color.green(color), Color.blue(color)),
+                Color.argb(alphaInt, Color.red(WATER_DEEP), Color.green(WATER_DEEP), Color.blue(WATER_DEEP)),
+                Shader.TileMode.CLAMP
+            )
+            cachedSimpleGradientKey = key
+        }
+        lakePaint.shader = cachedSimpleGradient
 
         canvas.drawOval(cx - w / 2f, cy - h * 0.3f, cx + w / 2f, cy + h, lakePaint)
         lakePaint.shader = null
@@ -248,6 +264,7 @@ class LakeLayer(private val context: Context) : SceneLayer {
     /**
      * Draw a filled lake segment (valley).
      */
+    @Suppress("UNUSED_PARAMETER")
     private fun drawLakeSegment(
         canvas: Canvas, state: SimulationState,
         color: Int, isFrozen: Boolean,
@@ -255,12 +272,20 @@ class LakeLayer(private val context: Context) : SceneLayer {
     ) {
         val alphaInt = (opacity * 255).toInt().coerceIn(0, 255)
 
-        lakePaint.shader = LinearGradient(
-            0f, surfaceY, 0f, bottomY,
-            Color.argb(alphaInt, Color.red(color), Color.green(color), Color.blue(color)),
-            Color.argb(alphaInt, Color.red(WATER_DEEP), Color.green(WATER_DEEP), Color.blue(WATER_DEEP)),
-            Shader.TileMode.CLAMP
-        )
+        // Cache gradient by bucketed Y positions + color
+        val sBucket = (surfaceY.toInt() / 4).toLong()
+        val bBucket = (bottomY.toInt() / 4).toLong()
+        val key = sBucket * 100003L + bBucket * 31L + color.toLong() + alphaInt
+        if (cachedSegmentGradient == null || cachedSegmentGradientKey != key) {
+            cachedSegmentGradient = LinearGradient(
+                0f, surfaceY, 0f, bottomY,
+                Color.argb(alphaInt, Color.red(color), Color.green(color), Color.blue(color)),
+                Color.argb(alphaInt, Color.red(WATER_DEEP), Color.green(WATER_DEEP), Color.blue(WATER_DEEP)),
+                Shader.TileMode.CLAMP
+            )
+            cachedSegmentGradientKey = key
+        }
+        lakePaint.shader = cachedSegmentGradient
         canvas.drawPath(lakePath, lakePaint)
         lakePaint.shader = null
 

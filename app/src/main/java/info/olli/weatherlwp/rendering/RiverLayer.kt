@@ -78,6 +78,15 @@ class RiverLayer(private val context: Context) : SceneLayer {
     private val riverPath = Path()
     private val foamPath = Path()
 
+    // Pre-allocated terrain sampling array (numSamples=50 is constant)
+    private val terrainYsArray = FloatArray(51)
+
+    // Cached gradients to avoid per-frame allocation
+    private var cachedWavyGradient: LinearGradient? = null
+    private var cachedWavyGradientKey = 0L
+    private var cachedReflectiveGradient: LinearGradient? = null
+    private var cachedReflectiveGradientKey = 0L
+
     // Dimensions
     private var width = 0f
     private var height = 0f
@@ -173,11 +182,10 @@ class RiverLayer(private val context: Context) : SceneLayer {
             // Find the valley floor (lowest Y = highest screen position, so we want MAX Y for valleys)
             var minTerrainY = Float.MAX_VALUE
             var maxTerrainY = Float.MIN_VALUE
-            val terrainYs = FloatArray(numSamples + 1)
             for (i in 0..numSamples) {
                 val xRatio = i.toFloat() / numSamples
                 val terrainY = provider(xRatio, depth) * height
-                terrainYs[i] = terrainY
+                terrainYsArray[i] = terrainY
                 if (terrainY < minTerrainY) minTerrainY = terrainY
                 if (terrainY > maxTerrainY) maxTerrainY = terrainY
             }
@@ -198,7 +206,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
 
             for (i in 0..numSamples) {
                 val screenX = left + (i.toFloat() / numSamples) * totalW
-                val terrainY = terrainYs[i]
+                val terrainY = terrainYsArray[i]
 
                 if (terrainY > waterSurfaceY) {
                     // This point is in a valley below water surface
@@ -214,7 +222,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
                     riverPath.lineTo(screenX, waterSurfaceY + wave)
                 } else if (hasContent) {
                     // Leaving valley — close this segment and draw it
-                    riverPath.lineTo(screenX, terrainYs[(i - 1).coerceAtLeast(0)] + maxRiverDepthPx)
+                    riverPath.lineTo(screenX, terrainYsArray[(i - 1).coerceAtLeast(0)] + maxRiverDepthPx)
                     riverPath.close()
                     drawRiverSegment(canvas, state, waterColor, layerAlpha, isFrozen, waterLevel, layerWidthFactor)
                     riverPath.reset()
@@ -224,7 +232,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
 
             // Close any remaining path
             if (hasContent) {
-                riverPath.lineTo(right, terrainYs[numSamples] + maxRiverDepthPx)
+                riverPath.lineTo(right, terrainYsArray[numSamples] + maxRiverDepthPx)
                 riverPath.close()
                 drawRiverSegment(canvas, state, waterColor, layerAlpha, isFrozen, waterLevel, layerWidthFactor)
             }
@@ -272,11 +280,10 @@ class RiverLayer(private val context: Context) : SceneLayer {
 
         var minTerrainY = Float.MAX_VALUE
         var maxTerrainY = Float.MIN_VALUE
-        val terrainYs = FloatArray(numSamples + 1)
         for (i in 0..numSamples) {
             val xRatio = i.toFloat() / numSamples
             val terrainY = provider(xRatio, depthFactor) * height
-            terrainYs[i] = terrainY
+            terrainYsArray[i] = terrainY
             if (terrainY < minTerrainY) minTerrainY = terrainY
             if (terrainY > maxTerrainY) maxTerrainY = terrainY
         }
@@ -294,7 +301,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
 
         for (i in 0..numSamples) {
             val screenX = left + (i.toFloat() / numSamples) * totalW
-            val terrainY = terrainYs[i]
+            val terrainY = terrainYsArray[i]
 
             if (terrainY > waterSurfaceY) {
                 val waveAmp = if (isFrozen) 0f else (2f + waterLevel * 3f) * layerWidthFactor
@@ -308,7 +315,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
                 }
                 riverPath.lineTo(screenX, waterSurfaceY + wave)
             } else if (hasContent) {
-                riverPath.lineTo(screenX, terrainYs[(i - 1).coerceAtLeast(0)] + maxRiverDepthPx)
+                riverPath.lineTo(screenX, terrainYsArray[(i - 1).coerceAtLeast(0)] + maxRiverDepthPx)
                 riverPath.close()
                 drawRiverSegment(canvas, state, waterColor, layerAlpha, isFrozen, waterLevel, layerWidthFactor)
                 riverPath.reset()
@@ -317,7 +324,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
         }
 
         if (hasContent) {
-            riverPath.lineTo(right, terrainYs[numSamples] + maxRiverDepthPx)
+            riverPath.lineTo(right, terrainYsArray[numSamples] + maxRiverDepthPx)
             riverPath.close()
             drawRiverSegment(canvas, state, waterColor, layerAlpha, isFrozen, waterLevel, layerWidthFactor)
         }
@@ -328,6 +335,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
     /**
      * Draw a single river segment (a contiguous valley filled with water).
      */
+    @Suppress("UNUSED_PARAMETER")
     private fun drawRiverSegment(
         canvas: Canvas, state: SimulationState,
         color: Int, alphaFactor: Float, isFrozen: Boolean,
@@ -380,6 +388,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
 
     // ========================= Flat Style =========================
 
+    @Suppress("UNUSED_PARAMETER")
     private fun drawFlat(
         canvas: Canvas, state: SimulationState,
         top: Float, bottom: Float, color: Int, isFrozen: Boolean
@@ -407,6 +416,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
 
     // ========================= Wavy Style =========================
 
+    @Suppress("UNUSED_PARAMETER")
     private fun drawWavy(
         canvas: Canvas, state: SimulationState,
         top: Float, bottom: Float, color: Int, waterLevel: Float, isFrozen: Boolean
@@ -441,14 +451,21 @@ class RiverLayer(private val context: Context) : SceneLayer {
         riverPath.lineTo(right, bottom)
         riverPath.close()
 
-        // Gradient from surface to depth
+        // Gradient from surface to depth — cache by bucketed positions + color
         val alphaMultiplier = (opacity * 255).toInt().coerceIn(0, 255)
-        riverPaint.shader = LinearGradient(
-            0f, top, 0f, bottom,
-            Color.argb(alphaMultiplier, Color.red(color), Color.green(color), Color.blue(color)),
-            Color.argb(alphaMultiplier, Color.red(WATER_DEEP), Color.green(WATER_DEEP), Color.blue(WATER_DEEP)),
-            Shader.TileMode.CLAMP
-        )
+        val tBucket = (top.toInt() / 4).toLong()
+        val bBucket = (bottom.toInt() / 4).toLong()
+        val wavyKey = tBucket * 100003L + bBucket * 31L + color.toLong() + alphaMultiplier
+        if (cachedWavyGradient == null || cachedWavyGradientKey != wavyKey) {
+            cachedWavyGradient = LinearGradient(
+                0f, top, 0f, bottom,
+                Color.argb(alphaMultiplier, Color.red(color), Color.green(color), Color.blue(color)),
+                Color.argb(alphaMultiplier, Color.red(WATER_DEEP), Color.green(WATER_DEEP), Color.blue(WATER_DEEP)),
+                Shader.TileMode.CLAMP
+            )
+            cachedWavyGradientKey = wavyKey
+        }
+        riverPaint.shader = cachedWavyGradient
         canvas.drawPath(riverPath, riverPaint)
         riverPaint.shader = null
 
@@ -477,20 +494,27 @@ class RiverLayer(private val context: Context) : SceneLayer {
 
         val alphaMultiplier = (opacity * 255).toInt().coerceIn(0, 255)
 
-        // Three-stop gradient: reflection at top, water color in middle, dark at bottom
-        riverPaint.shader = LinearGradient(
-            0f, top, 0f, bottom,
-            intArrayOf(
-                Color.argb(alphaMultiplier,
-                    Color.red(reflectionColor), Color.green(reflectionColor), Color.blue(reflectionColor)),
-                Color.argb(alphaMultiplier,
-                    Color.red(color), Color.green(color), Color.blue(color)),
-                Color.argb(alphaMultiplier,
-                    Color.red(WATER_DEEP), Color.green(WATER_DEEP), Color.blue(WATER_DEEP))
-            ),
-            floatArrayOf(0f, 0.4f, 1f),
-            Shader.TileMode.CLAMP
-        )
+        // Three-stop gradient: reflection at top, water color in middle, dark at bottom — cache
+        val tBucket = (top.toInt() / 4).toLong()
+        val bBucket = (bottom.toInt() / 4).toLong()
+        val refKey = tBucket * 100003L + bBucket * 31L + color.toLong() + reflectionColor.toLong() * 7L + alphaMultiplier
+        if (cachedReflectiveGradient == null || cachedReflectiveGradientKey != refKey) {
+            cachedReflectiveGradient = LinearGradient(
+                0f, top, 0f, bottom,
+                intArrayOf(
+                    Color.argb(alphaMultiplier,
+                        Color.red(reflectionColor), Color.green(reflectionColor), Color.blue(reflectionColor)),
+                    Color.argb(alphaMultiplier,
+                        Color.red(color), Color.green(color), Color.blue(color)),
+                    Color.argb(alphaMultiplier,
+                        Color.red(WATER_DEEP), Color.green(WATER_DEEP), Color.blue(WATER_DEEP))
+                ),
+                floatArrayOf(0f, 0.4f, 1f),
+                Shader.TileMode.CLAMP
+            )
+            cachedReflectiveGradientKey = refKey
+        }
+        riverPaint.shader = cachedReflectiveGradient
 
         // Slight wave on surface
         riverPath.reset()

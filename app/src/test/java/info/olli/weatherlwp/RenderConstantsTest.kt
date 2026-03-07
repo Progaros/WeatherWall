@@ -72,6 +72,7 @@ class RenderConstantsTest {
         val mountainMin = 0.20f
         val mountainMax = 0.35f
         val hillsMin = 0.50f
+        @Suppress("UNUSED_VARIABLE")
         val hillsMax = 0.80f
         
         assertTrue("Sky is farthest", sky < stars)

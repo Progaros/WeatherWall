@@ -323,6 +323,7 @@ class ParallaxCalculatorTest {
     @Test
     fun testReturnSpeedLogScale() {
         // Test that logarithmic scale gives natural progression
+        @Suppress("UNUSED_VARIABLE")
         val calculator = ParallaxCalculator()
         
         // At returnSpeed=0.5 (50%), should have noticeable but moderate return

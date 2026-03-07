@@ -232,8 +232,8 @@ class PreferenceDefaultsTest {
         PREFERENCE_TO_CONSTANT.forEach { (key, expectedDefault) ->
             val xmlDefs = xmlPrefs[key] ?: return@forEach
             
-            xmlDefs.forEach { xmlDef ->
-                val xmlDefault = xmlDef.defaultValue ?: return@forEach
+            xmlDefs.forEach xmlDef@{ xmlDef ->
+                val xmlDefault = xmlDef.defaultValue ?: return@xmlDef
                 val expectedString = expectedDefault.toString()
                 
                 if (xmlDefault != expectedString) {
@@ -278,22 +278,10 @@ class PreferenceDefaultsTest {
     
     @Test
     fun `PreferenceDefaults is the single source of truth`() {
-        // Document the architectural decision
-        val explanation = """
-            PreferenceDefaults.kt is the Single Source of Truth (SSOT) for preference defaults.
-            
-            Why:
-            - Android SeekBarPreference can't reliably use @integer references (see ai.md)
-            - Hardcoded defaults in multiple XML files leads to drift
-            - Kotlin code defaults must match XML defaults
-            
-            Usage:
-            1. Define new defaults in PreferenceDefaults.kt FIRST
-            2. Use the constant in Kotlin: prefs.getInt("key", PreferenceDefaults.MY_VALUE)
-            3. Copy the value to XML files: android:defaultValue="..."
-            4. Add the key mapping to PREFERENCE_TO_CONSTANT in this test
-            5. The test will catch any future drift
-        """.trimIndent()
+        // PreferenceDefaults.kt is the Single Source of Truth (SSOT) for preference defaults.
+        // Android SeekBarPreference can't reliably use @integer references.
+        // Define new defaults in PreferenceDefaults.kt FIRST, then copy to XML.
+        // The PREFERENCE_TO_CONSTANT test above catches any drift.
         
         assertTrue("PreferenceDefaults should have constants", 
             PreferenceDefaults.CLOUD_SPEED >= 0)

@@ -70,9 +70,11 @@ class CloudLayerTest {
     
     @Test
     fun `back layer depth should be shallower (less parallax)`() {
+        @Suppress("UNUSED_VARIABLE")
         val backDepthMin = 0.15f
         val backDepthMax = 0.22f
         val frontDepthMin = 0.28f
+        @Suppress("UNUSED_VARIABLE")
         val frontDepthMax = 0.35f
         
         assertTrue("Back layer depth range below front min", backDepthMax < frontDepthMin)
@@ -103,6 +105,7 @@ class CloudLayerTest {
     
     @Test
     fun `group height should be proportional to cloud Y range`() {
+        @Suppress("UNUSED_VARIABLE")
         val groupHeightMin = 0.10f
         val groupHeightMax = 0.18f
         val cloudYRange = 0.35f  // RenderConstants.CLOUD_Y_RANGE

@@ -143,18 +143,20 @@ class PreferenceSyncTest {
     fun `all synced preferences have valid constraints`() {
         for (pref in SYNCED_PREFERENCES) {
             // If min and max are specified, ensure they're valid
-            if (pref.min != null && pref.max != null) {
+            val min = pref.min
+            val max = pref.max
+            if (min != null && max != null) {
                 assertTrue(
                     "${pref.key} min should be less than max",
-                    pref.min!! < pref.max!!
+                    min < max
                 )
                 
                 // If default is numeric, it should be in range
                 val defaultInt = pref.defaultValue.toIntOrNull()
                 if (defaultInt != null) {
                     assertTrue(
-                        "${pref.key} default ${pref.defaultValue} should be in range [${pref.min}, ${pref.max}]",
-                        defaultInt >= pref.min!! && defaultInt <= pref.max!!
+                        "${pref.key} default ${pref.defaultValue} should be in range [$min, $max]",
+                        defaultInt >= min && defaultInt <= max
                     )
                 }
             }

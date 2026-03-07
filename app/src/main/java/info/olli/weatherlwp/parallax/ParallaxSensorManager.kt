@@ -65,7 +65,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         
         // Sensor warmup: ignore first N sensor events after start() to prevent stale queued events
         // from triggering shakes immediately after unlock (in addition to time-based delay)
-        private const val SHAKE_WARMUP_SAMPLES = 30
+        private const val SHAKE_WARMUP_SAMPLES = 50
     }
     
     interface Listener {
@@ -191,6 +191,14 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     // Sensor warmup: counts down sensor samples to ignore after start()
     // Prevents stale queued sensor events from triggering shakes immediately after unlock
     private var shakeWarmupSamplesRemaining = 0
+    
+    // Acceleration stability tracking: reject single-direction forces (pocket/desk)
+    // A real shake oscillates, so we track recent high-g direction signs
+    private var lastShakeSignX = 0
+    private var lastShakeSignY = 0
+    private var lastShakeSignZ = 0
+    private var shakeDirectionChanges = 0
+    private var lastHighGTime = 0L
 
     fun setListener(l: Listener) { listener = l }
     
@@ -574,6 +582,45 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         // Check cooldown after a successful shake trigger
         if (now - lastShakeTime < SHAKE_COOLDOWN_MS) return
         
+        // Oscillation check: real shakes alternate direction, pocket pulls / desk
+        // vibrations tend to push in one direction. Track the sign of the dominant axis
+        // and count reversals. Only allow shake counting after at least one reversal.
+        val absX = kotlin.math.abs(gX)
+        val absY = kotlin.math.abs(gY)
+        val absZ = kotlin.math.abs(gZ)
+        val signX = if (gX > 0) 1 else -1
+        val signY = if (gY > 0) 1 else -1
+        val signZ = if (gZ > 0) 1 else -1
+
+        // Reset direction tracking if too much time between high-g events
+        if (now - lastHighGTime > SHAKE_COUNT_RESET_TIME_MS) {
+            shakeDirectionChanges = 0
+            lastShakeSignX = 0
+            lastShakeSignY = 0
+            lastShakeSignZ = 0
+            shakeCount = 0
+        }
+        lastHighGTime = now
+
+        if (lastShakeSignX != 0) {
+            // Count direction reversals on axes with significant force (> 0.5g)
+            var reversals = 0
+            if (absX > 0.5f && signX != lastShakeSignX) reversals++
+            if (absY > 0.5f && signY != lastShakeSignY) reversals++
+            if (absZ > 0.5f && signZ != lastShakeSignZ) reversals++
+            if (reversals > 0) shakeDirectionChanges++
+        }
+        lastShakeSignX = signX
+        lastShakeSignY = signY
+        lastShakeSignZ = signZ
+
+        // Require at least one direction reversal before counting toward trigger.
+        // This filters single-push forces from pockets and desk vibrations.
+        if (shakeDirectionChanges < 1) {
+            Log.d(TAG, "Shake high-g but no oscillation yet (changes=$shakeDirectionChanges)")
+            return
+        }
+        
         // Ignore shakes too close to each other (debounce)
         if (shakeTimestamp + shakeSlopTimeMs > now) return
         
@@ -585,10 +632,11 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         shakeTimestamp = now
         shakeCount++
         
-        Log.d(TAG, "Shake count=$shakeCount gForce=${"%.2f".format(gForce)}")
+        Log.d(TAG, "Shake count=$shakeCount gForce=${"%.2f".format(gForce)} dirChanges=$shakeDirectionChanges")
         
         if (shakeCount >= shakeTriggerCount) {
             shakeCount = 0
+            shakeDirectionChanges = 0
             lastShakeTime = now
             Log.d(TAG, "Shake gesture detected! Triggering listener")
             shakeListener?.onShake()

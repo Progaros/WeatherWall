@@ -55,6 +55,9 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
      */
     var hillHeightProvider: HillHeightProvider? = null
     
+    // Pre-allocated result lists to avoid per-frame allocation
+    private val groundEventResults = mutableListOf<Pair<Float, () -> Unit>>()
+    
     // Individual event toggles
     private var airplaneEnabled = true
     private var birdsEnabled = true
@@ -359,7 +362,8 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
             state.nightShadeStrength, state.sunriseHours, state.sunsetHours
         )
         
-        val result = mutableListOf<Pair<Float, () -> Unit>>()
+        val result = groundEventResults
+        result.clear()
         
         for (event in currentEvents) {
             if (event.layer == EventLayer.GROUND && 

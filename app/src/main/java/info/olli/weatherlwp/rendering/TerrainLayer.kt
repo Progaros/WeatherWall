@@ -43,6 +43,11 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private var extendedWidth = 0f
     private var extendedOffset = 0f  // Offset to center extended content
     
+    // Cached hill gradients to avoid per-frame LinearGradient allocation
+    private var cachedHillGradientAmbient = 0
+    private var cachedHillGradientSnow = -1
+    private val cachedHillGradients = HashMap<Int, LinearGradient>()
+    
     // Delegated renderers for decomposition
     private val treeRenderer = TreeRenderer()
     private val bushRenderer = BushRenderer()
@@ -594,6 +599,14 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             state.nightShadeStrength, state.sunriseHours, state.sunsetHours
         )
         
+        // Invalidate cached hill gradients when ambient color or snow level changes significantly
+        val snowBucket = (dynamicSnowLevel * 20).toInt()  // ~5% granularity
+        if (ambientColor != cachedHillGradientAmbient || snowBucket != cachedHillGradientSnow) {
+            cachedHillGradientAmbient = ambientColor
+            cachedHillGradientSnow = snowBucket
+            cachedHillGradients.clear()
+        }
+        
         // Draw Hills AND their Trees together, sorted by depth
         // This ensures trees on background hills are drawn before foreground hills
         // Within each hill layer: sort trees and animals by Y position (top to bottom = far to near)
@@ -618,7 +631,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             // Blend with ambient color based on depth (distant hills blend more)
             val blendAmount = RenderConstants.applyAmbientTint(effectiveDayColor, ambientColor, hill.depthFactor)
             val hillColor = RenderConstants.blendWithAmbient(effectiveDayColor, ambientColor, blendAmount)
-            drawHill(canvas, hill, hillColor)
+            drawHill(canvas, index, hill, hillColor)
             
             // Draw seasonal decorations on top of hill
             drawSeasonalDecorations(canvas, index, hill, ambientColor)
@@ -715,7 +728,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         }
     }
     
-    private fun drawHill(canvas: Canvas, hill: HillData, hillColor: Int) {
+    private fun drawHill(canvas: Canvas, hillIndex: Int, hill: HillData, hillColor: Int) {
         hillPath.reset()
         
         // Use extended width for hill drawing
@@ -773,39 +786,41 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         }
         val applySnow = effectiveSnowCoverage > 0
         
-        // Apply linear gradient from top to bottom
-        val gradient = if (applySnow) {
-            // Snow coverage: use effectiveSnowCoverage for dynamic depth
-            // Allow very thin snow at low levels (0.01) for gradual appearance
-            val snowDepth = (effectiveSnowCoverage / 100f).coerceIn(0.01f, 0.6f)
-            val snowColor = Color.rgb(255, 255, 255)  // Fully opaque white
-            val snowTransition = Color.rgb(
-                (Color.red(hillColor) + 255) / 2,
-                (Color.green(hillColor) + 255) / 2, 
-                (Color.blue(hillColor) + 255) / 2
-            )  // Blend of white and hill color (fully opaque)
-            
-            LinearGradient(
-                0f, minY,           // Start: top of hill
-                0f, bottomY,        // End: bottom
-                intArrayOf(
-                    snowColor,                      // Snow white at very top
-                    snowTransition,                 // Transition zone
-                    hillColor,                      // Original hill color
-                    darkenColor(hillColor, 0.7f)    // Darker at bottom
-                ),
-                floatArrayOf(0f, snowDepth * 0.4f, snowDepth, 1f),  // Stop positions
-                Shader.TileMode.CLAMP
-            )
-        } else {
-            // Non-winter: standard gradient
-            LinearGradient(
-                0f, minY,           // Start: top of hill (lighter)
-                0f, bottomY,        // End: bottom (darker)
-                hillColor,          // Top color (original)
-                darkenColor(hillColor, 0.7f),  // Bottom color (darkened)
-                Shader.TileMode.CLAMP
-            )
+        // Apply linear gradient from top to bottom (cached to avoid per-frame allocation)
+        val gradientKey = hillIndex * 2 + (if (applySnow) 1 else 0)
+        val gradient = cachedHillGradients.getOrPut(gradientKey) {
+            if (applySnow) {
+                // Snow coverage: use effectiveSnowCoverage for dynamic depth
+                // Allow very thin snow at low levels (0.01) for gradual appearance
+                val snowDepth = (effectiveSnowCoverage / 100f).coerceIn(0.01f, 0.6f)
+                val snowColor = Color.rgb(255, 255, 255)
+                val snowTransition = Color.rgb(
+                    (Color.red(hillColor) + 255) / 2,
+                    (Color.green(hillColor) + 255) / 2, 
+                    (Color.blue(hillColor) + 255) / 2
+                )
+                
+                LinearGradient(
+                    0f, minY,
+                    0f, bottomY,
+                    intArrayOf(
+                        snowColor,
+                        snowTransition,
+                        hillColor,
+                        darkenColor(hillColor, 0.7f)
+                    ),
+                    floatArrayOf(0f, snowDepth * 0.4f, snowDepth, 1f),
+                    Shader.TileMode.CLAMP
+                )
+            } else {
+                LinearGradient(
+                    0f, minY,
+                    0f, bottomY,
+                    hillColor,
+                    darkenColor(hillColor, 0.7f),
+                    Shader.TileMode.CLAMP
+                )
+            }
         }
         hillPaint.shader = gradient
         

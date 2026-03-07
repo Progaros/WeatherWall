@@ -239,6 +239,7 @@ class RandomEventTest {
         val bucketSize = 500L
         
         // Spawn time is aligned to bucket start
+        @Suppress("UNUSED_VARIABLE")
         val spawnTime = bucket * bucketSize
         
         // Both preview and wallpaper compute same spawn time
@@ -487,6 +488,7 @@ class RandomEventTest {
         
         // Not in winter nights
         val isWinter = true
+        @Suppress("UNUSED_VARIABLE")
         val winterFireflies = !isWinter || (isSummer && isNight && !isRaining)
         // Winter would make isSummer false, so:
         val firefliesInWinter = false && isNight && !isRaining
@@ -515,6 +517,7 @@ class RandomEventTest {
         assertTrue("Snowflakes in winter day", snowflakeAvailable)
         
         // Not at night
+        @Suppress("UNUSED_VARIABLE")
         val nightSnowflake = isWinter && true && !isSnowing
         // Note: the condition is !isNight, so night = true means not available
         val snowflakeAtNight = isWinter && !true && !isSnowing

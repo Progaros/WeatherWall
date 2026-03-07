@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM ghcr.io/cirruslabs/android-sdk:35
 
 LABEL maintainer="WeatherWall Project"
@@ -30,6 +31,9 @@ RUN chmod +x gradlew
 
 # 6. Download and cache dependencies
 #    This runs as user 1000, storing files in /home/builder/.gradle
+#    This layer is cached unless build config files change.
+#    For code-only changes, run tests with:
+#      docker run --rm -v "$PWD:/workspace" weatherwall-build ./gradlew test --no-daemon
 RUN ./gradlew dependencies --no-daemon && \
     ./gradlew :app:dependencies --no-daemon
 

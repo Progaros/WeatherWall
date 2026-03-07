@@ -114,10 +114,8 @@ class SimulationControllerTest {
     @Test
     fun `reset timing produces zero delta`() {
         // After reset, first delta should be 0 or minimal
-        var lastTimeMs = System.currentTimeMillis()
-        
         // Simulate reset
-        lastTimeMs = System.currentTimeMillis()
+        val lastTimeMs = System.currentTimeMillis()
         val currentTimeMs = lastTimeMs
         val deltaMs = currentTimeMs - lastTimeMs
         

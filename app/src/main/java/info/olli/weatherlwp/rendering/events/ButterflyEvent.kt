@@ -23,7 +23,7 @@ class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
     private val sizeScale = 1.0f - distance * 0.4f  // 0.68-1.0 based on distance
     
     private val startX = random.nextFloat()
-    private val startY = 0.55f + random.nextFloat() * 0.15f
+    private val startY = 0.30f + random.nextFloat() * 0.18f  // 0.30-0.48: above terrain, visible in MID_SKY layer
     override val durationMs = 8000L + random.nextLong(5000)
     
     private val path = Path()
@@ -77,6 +77,7 @@ class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
             (0.8f + sin(timeSeconds * 3f) * 0.2f)
         
         paint.color = RenderConstants.blendWithAmbient(color, ambientColor, 0.25f)
+        paint.style = Paint.Style.FILL
         
         fun drawWing(dir: Float) {
             path.reset()

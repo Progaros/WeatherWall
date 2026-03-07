@@ -62,6 +62,15 @@ class MountainLayer(private val context: Context) : SceneLayer {
     private var cachedHazeAmbient = 0
     private var cachedHazeHeight = 0f
     
+    // Cached mountain gradient key to avoid per-frame gradient allocation
+    // Key: quantized ambient color + quantized light angle → only rebuild when visibly different
+    private var cachedMtnAmbient = 0
+    private var cachedMtnLightAngleBucket = -1
+    private var cachedMtnShadowEnabled = false
+    private var cachedLeftGradients = HashMap<Int, LinearGradient>()
+    private var cachedRightGradients = HashMap<Int, LinearGradient>()
+    private var cachedSnowGradients = HashMap<Int, LinearGradient>()
+    
     private data class MountainData(
         val peakX: Float,      // 0.0 to 1.0 (relative to extended width)
         val height: Float,     // 0.0 to 1.0 (relative to screen height)
@@ -178,6 +187,19 @@ class MountainLayer(private val context: Context) : SceneLayer {
             state.nightShadeStrength, state.sunriseHours, state.sunsetHours
         )
         
+        // Invalidate cached gradients when lighting changes significantly
+        // Quantize light angle to ~5° buckets to avoid rebuilding every frame
+        val lightAngleBucket = (state.getLightSourceAngle() * 10f).toInt()
+        val shadowEnabled = state.mountainShadowsEnabled
+        if (ambientColor != cachedMtnAmbient || lightAngleBucket != cachedMtnLightAngleBucket || shadowEnabled != cachedMtnShadowEnabled) {
+            cachedMtnAmbient = ambientColor
+            cachedMtnLightAngleBucket = lightAngleBucket
+            cachedMtnShadowEnabled = shadowEnabled
+            cachedLeftGradients.clear()
+            cachedRightGradients.clear()
+            cachedSnowGradients.clear()
+        }
+        
         for (mountain in currentMountains) {
             val px = parallaxCalculator.getOffsetXForDepth(mountain.depthFactor)
             val py = parallaxCalculator.getOffsetYForDepth(mountain.depthFactor)
@@ -231,6 +253,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
     
     @Suppress("UNUSED_PARAMETER")
     private fun drawMountain(canvas: Canvas, mountain: MountainData, state: SimulationState, ambientColor: Int) {
+        val mountainIdx = mountains.indexOf(mountain)
         pathLeft.reset()
         pathRight.reset()
         
@@ -388,13 +411,15 @@ class MountainLayer(private val context: Context) : SceneLayer {
         )
         
         // Four-point vertical gradient for left side: peak (light) -> mid -> base (darker) -> transparent
-        val gradient = LinearGradient(
-            actualPeakX, peakY,
-            actualPeakX, baseY,
-            intArrayOf(leftPeakColor, leftMidColor, leftBaseColor, Color.TRANSPARENT),
-            floatArrayOf(0f, 0.4f, 0.75f, 1f),
-            Shader.TileMode.CLAMP
-        )
+        val gradient = cachedLeftGradients.getOrPut(mountainIdx) {
+            LinearGradient(
+                actualPeakX, peakY,
+                actualPeakX, baseY,
+                intArrayOf(leftPeakColor, leftMidColor, leftBaseColor, Color.TRANSPARENT),
+                floatArrayOf(0f, 0.4f, 0.75f, 1f),
+                Shader.TileMode.CLAMP
+            )
+        }
         
         // Draw left side with gradient
         paint.shader = gradient
@@ -417,13 +442,15 @@ class MountainLayer(private val context: Context) : SceneLayer {
             (Color.blue(baseAtmoColor) * (1f - rightShadow * 0.5f)).toInt().coerceIn(0, 255)
         )
         
-        val rightGradient = LinearGradient(
-            actualPeakX, peakY,
-            actualPeakX, baseY,
-            intArrayOf(rightPeakColor, rightMidColor, rightBaseColor, Color.TRANSPARENT),
-            floatArrayOf(0f, 0.4f, 0.75f, 1f),
-            Shader.TileMode.CLAMP
-        )
+        val rightGradient = cachedRightGradients.getOrPut(mountainIdx) {
+            LinearGradient(
+                actualPeakX, peakY,
+                actualPeakX, baseY,
+                intArrayOf(rightPeakColor, rightMidColor, rightBaseColor, Color.TRANSPARENT),
+                floatArrayOf(0f, 0.4f, 0.75f, 1f),
+                Shader.TileMode.CLAMP
+            )
+        }
         paint.shader = rightGradient
         canvas.drawPath(pathRight, paint)
         
@@ -480,18 +507,20 @@ class MountainLayer(private val context: Context) : SceneLayer {
             // This blends naturally with the mountain color underneath
             val snowTopY = ridgePoints[0].second
             val snowBottomY = lastLeftPoint.second + height * 0.01f
-            val snowGradient = LinearGradient(
-                actualPeakX, snowTopY,
-                actualPeakX, snowBottomY,
-                intArrayOf(
-                    Color.WHITE,
-                    Color.WHITE,
-                    Color.argb(180, 255, 255, 255),
-                    Color.argb(40, 255, 255, 255)
-                ),
-                floatArrayOf(0f, 0.4f, 0.75f, 1f),
-                Shader.TileMode.CLAMP
-            )
+            val snowGradient = cachedSnowGradients.getOrPut(mountainIdx) {
+                LinearGradient(
+                    actualPeakX, snowTopY,
+                    actualPeakX, snowBottomY,
+                    intArrayOf(
+                        Color.WHITE,
+                        Color.WHITE,
+                        Color.argb(180, 255, 255, 255),
+                        Color.argb(40, 255, 255, 255)
+                    ),
+                    floatArrayOf(0f, 0.4f, 0.75f, 1f),
+                    Shader.TileMode.CLAMP
+                )
+            }
             snowCapPaint.shader = snowGradient
             canvas.drawPath(snowCapPath, snowCapPaint)
             snowCapPaint.shader = null

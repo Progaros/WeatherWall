@@ -340,10 +340,16 @@ object RenderConstants {
     /**
      * Interpolate between two colors in HSV space for smoother sky transitions.
      * HSV avoids the "gray murky transition" problem that RGB has.
+     * Uses thread-local cached arrays to avoid per-call allocations.
      */
+    private val tlStartHsv = ThreadLocal.withInitial { FloatArray(3) }
+    private val tlEndHsv = ThreadLocal.withInitial { FloatArray(3) }
+    private val tlResultHsv = ThreadLocal.withInitial { FloatArray(3) }
+
     fun lerpColorHSV(start: Int, end: Int, ratio: Float): Int {
-        val startHsv = FloatArray(3)
-        val endHsv = FloatArray(3)
+        val startHsv = tlStartHsv.get()!!
+        val endHsv = tlEndHsv.get()!!
+        val resultHsv = tlResultHsv.get()!!
         Color.colorToHSV(start, startHsv)
         Color.colorToHSV(end, endHsv)
         
@@ -352,11 +358,11 @@ object RenderConstants {
         if (hueDiff > 180f) hueDiff -= 360f
         if (hueDiff < -180f) hueDiff += 360f
         
-        val h = (startHsv[0] + hueDiff * ratio + 360f) % 360f
-        val s = startHsv[1] + (endHsv[1] - startHsv[1]) * ratio
-        val v = startHsv[2] + (endHsv[2] - startHsv[2]) * ratio
+        resultHsv[0] = (startHsv[0] + hueDiff * ratio + 360f) % 360f
+        resultHsv[1] = startHsv[1] + (endHsv[1] - startHsv[1]) * ratio
+        resultHsv[2] = startHsv[2] + (endHsv[2] - startHsv[2]) * ratio
         
-        return Color.HSVToColor(floatArrayOf(h, s, v))
+        return Color.HSVToColor(resultHsv)
     }
     
     /**
