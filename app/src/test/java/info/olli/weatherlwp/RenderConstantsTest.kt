@@ -20,26 +20,30 @@ class RenderConstantsTest {
     // ============== Extended Canvas Tests ==============
     
     @Test
-    fun `extended width uses height multiplier concept`() {
+    fun `extended width uses screen width with side margins`() {
         val screenWidth = 1080f
         val screenHeight = 1920f
-        val multiplier = 2.0f  // EXTENDED_WIDTH_MULTIPLIER
+        val ratioMargin = 0.18f
+        val heightMargin = 0.12f
+        val sideMargin = maxOf(screenWidth * ratioMargin, screenHeight * heightMargin)
         
-        val extended = maxOf(screenWidth, screenHeight * multiplier)
-        val expected = screenHeight * multiplier
+        val extended = screenWidth + sideMargin * 2f
+        val expected = 1540.8f
         
-        assertEquals("Extended width = height * multiplier", expected, extended, 0.01f)
+        assertEquals("Extended width = width + side margins", expected, extended, 0.01f)
     }
     
     @Test
-    fun `extended width at least screen width`() {
+    fun `extended width adds safety margin`() {
         val screenWidth = 3000f  // Very wide screen
         val screenHeight = 1000f
-        val multiplier = 2.0f
+        val ratioMargin = 0.18f
+        val heightMargin = 0.12f
+        val sideMargin = maxOf(screenWidth * ratioMargin, screenHeight * heightMargin)
         
-        val extended = maxOf(screenWidth, screenHeight * multiplier)
+        val extended = screenWidth + sideMargin * 2f
         
-        assertTrue("Extended at least screen width", extended >= screenWidth)
+        assertTrue("Extended exceeds screen width", extended > screenWidth)
     }
     
     @Test
@@ -54,11 +58,11 @@ class RenderConstantsTest {
     }
     
     @Test
-    fun `extended multiplier is reasonable`() {
-        val multiplier = 2.0f  // EXTENDED_WIDTH_MULTIPLIER
+    fun `extended margin ratio is reasonable`() {
+        val marginRatio = 0.18f  // EXTENDED_WIDTH_MARGIN_RATIO
         
-        assertTrue("Multiplier > 1 for parallax content", multiplier > 1f)
-        assertTrue("Multiplier not too large for performance", multiplier <= 4f)
+        assertTrue("Margin ratio > 0 for parallax content", marginRatio > 0f)
+        assertTrue("Margin ratio stays performance-friendly", marginRatio <= 0.30f)
     }
     
     // ============== Parallax Depth Factor Tests ==============

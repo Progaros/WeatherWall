@@ -36,6 +36,9 @@ class ParallaxCalculator {
         
         /** Precomputed 1/tan(MAX_TILT_ANGLE) for normalizing tan() output */
         private val TAN_NORMALIZER = 1f / tan(MAX_TILT_ANGLE)
+
+        /** Ignore tiny tilt noise so return-to-center can engage when device is effectively still. */
+        private const val TILT_NOISE_DEADZONE = 0.06f
     }
     
     // Tilt holder for atomic operations (lock-free)
@@ -190,7 +193,9 @@ class ParallaxCalculator {
         
         // Get latest tilt from sensor
         val tilt = pendingTilt.get()
-        val tiltMagnitude = kotlin.math.sqrt(tilt.x * tilt.x + tilt.y * tilt.y)
+        val filteredTiltX = if (kotlin.math.abs(tilt.x) < TILT_NOISE_DEADZONE) 0f else tilt.x
+        val filteredTiltY = if (kotlin.math.abs(tilt.y) < TILT_NOISE_DEADZONE) 0f else tilt.y
+        val tiltMagnitude = kotlin.math.sqrt(filteredTiltX * filteredTiltX + filteredTiltY * filteredTiltY)
         
         // Calculate effective max offset based on canvas height percentage
         // This ensures movement is proportional to screen size (e.g., 10% = 192px on 1920p screen)
@@ -202,8 +207,8 @@ class ParallaxCalculator {
         }
         
         // Calculate target position from tilt (where tilt alone would put us)
-        val tiltTargetX = tilt.x * effectiveMaxOffset * strength * aspectRatioCompensation
-        val tiltTargetY = tilt.y * effectiveMaxOffset * strength
+        val tiltTargetX = filteredTiltX * effectiveMaxOffset * strength * aspectRatioCompensation
+        val tiltTargetY = filteredTiltY * effectiveMaxOffset * strength
         
         // Clamp to circular bounds instead of square (prevents corner stretching)
         // This gives consistent maximum movement in all directions

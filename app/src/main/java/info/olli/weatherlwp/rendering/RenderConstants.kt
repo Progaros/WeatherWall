@@ -36,18 +36,14 @@ object RenderConstants {
     /** Reference aspect ratio for world-space calculations (9:16 portrait) */
     const val REFERENCE_ASPECT_RATIO = 0.5625f
     
-    /** 
-     * Extended canvas width multiplier.
-     * Content is generated for a virtual canvas that is wider than the visible screen.
-     * This allows parallax to reveal content beyond the visible edges.
-     * 
-     * Extended width = max(screen width, screen height * EXTENDED_WIDTH_MULTIPLIER)
-     * In portrait: 2x height gives sufficient horizontal content for parallax
-     * In landscape: Uses actual width since it's already wide
-     * 
-     * Note: Reduced from 4.0 to 2.0 for battery efficiency - fewer trees/hills to generate and draw.
+    /**
+     * Safe off-screen margin for parallax reveal/spawn-in.
+     * World width stays close to visible width to reduce overdraw and CPU work.
      */
-    const val EXTENDED_WIDTH_MULTIPLIER = 2.0f
+    const val EXTENDED_WIDTH_MARGIN_RATIO = 0.18f
+
+    /** Minimum per-side margin as fraction of screen height (portrait safety net). */
+    const val EXTENDED_WIDTH_MIN_HEIGHT_MARGIN_RATIO = 0.12f
     
     /**
      * Calculate the extended canvas width.
@@ -58,8 +54,13 @@ object RenderConstants {
      * @return The extended width for content generation
      */
     fun getExtendedWidth(screenWidth: Float, screenHeight: Float): Float {
-        // Extended width = height * multiplier, but at least actual screen width
-        return maxOf(screenWidth, screenHeight * EXTENDED_WIDTH_MULTIPLIER)
+        // Keep render width near visible width, with just enough margin so parallax
+        // and spawn-at-edge behavior still look continuous.
+        val sideMargin = maxOf(
+            screenWidth * EXTENDED_WIDTH_MARGIN_RATIO,
+            screenHeight * EXTENDED_WIDTH_MIN_HEIGHT_MARGIN_RATIO
+        )
+        return screenWidth + sideMargin * 2f
     }
     
     /**
