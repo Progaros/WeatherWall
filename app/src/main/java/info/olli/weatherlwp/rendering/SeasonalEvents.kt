@@ -115,7 +115,7 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
 
     // Pre-allocated pools
     private val stars = Array(30) { Star() }
-    private val fireworks = Array(800) { Firework() }  // Large pool for shake fireworks (50 rockets × ~15 particles each)
+    private val fireworks = Array(2000) { Firework() }  // Large pool for shake fireworks (prevents late-exploding rockets from disappearing)
     private val rockets = Array(50) { Rocket() }  // Up to 50 rockets in flight for shake fireworks
     private val trailParticles = Array(20) { TrailParticle() }
     private var christmasStar: ChristmasStar? = null
@@ -763,9 +763,8 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
                 rocketPaint.color = Color.WHITE
                 canvas.drawCircle(r.x, r.y, 3f * trailScale, rocketPaint)
                 
-                // Simple time-based explosion: explode when scheduled frame is reached
-                // This prevents slow-motion lingering at apex
-                if (frameCounter >= r.explodeAfterFrame) {
+                // Explode at target apex or fallback frame timeout.
+                if (r.y <= r.targetY || frameCounter >= r.explodeAfterFrame) {
                     explodeRocket(r)
                     r.active = false
                 }
@@ -857,7 +856,7 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
     
     private fun explodeRocket(rocket: Rocket) {
         val cx = rocket.x
-        val cy = rocket.y
+        val cy = rocket.y.coerceIn(0f, screenHeight.toFloat())
         val colors = rocket.colors
         
         // Spawn explosion particles based on fireworkAmount setting
@@ -930,7 +929,10 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
         val centerX = screenWidth * (rainbowPositionX / 100f)
         val baseY = screenHeight * (rainbowPositionY / 100f)
         val sizeMultiplier = rainbowSize / 100f
-        val arcRadius = screenWidth * 0.45f * sizeMultiplier
+        // Keep rainbow size stable across portrait/landscape by anchoring to height.
+        // Width cap prevents clipping on very narrow canvases.
+        val arcRadius = (screenHeight * 0.36f * sizeMultiplier)
+            .coerceAtMost(screenWidth * 0.48f)
         
         // Full semi-circle: 180° to 360° (or equivalently 180° sweep starting at 180°)
         val startAngle = 180f

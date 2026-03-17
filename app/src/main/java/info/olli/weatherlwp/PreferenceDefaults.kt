@@ -81,8 +81,8 @@ object PreferenceDefaults {
     const val FIREWORK_FREQUENCY = 45  // 0-100
     const val FIREWORK_AMOUNT = 100  // 10-200, particles per explosion
     const val SHAKE_FIREWORKS_ENABLED = true
-    const val SHAKE_SENSITIVITY = 10  // 0-100 (harder shake needed, avoids accidental)
-    const val SHAKE_DELAY_MS = 2500  // 0-5000ms, delay after screen on to prevent pocket triggers
+    const val SHAKE_SENSITIVITY = 5  // 0-100 (harder shake needed, avoids accidental)
+    const val SHAKE_DELAY_MS = 3500  // 0-5000ms, delay after screen on to prevent pocket triggers
     
     // === Visual Settings ===
     const val NIGHT_SHADE_STRENGTH = 35  // 0-100

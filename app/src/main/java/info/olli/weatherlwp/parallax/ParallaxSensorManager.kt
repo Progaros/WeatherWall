@@ -65,7 +65,7 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         
         // Sensor warmup: ignore first N sensor events after start() to prevent stale queued events
         // from triggering shakes immediately after unlock (in addition to time-based delay)
-        private const val SHAKE_WARMUP_SAMPLES = 50
+        private const val SHAKE_WARMUP_SAMPLES = 120
     }
     
     interface Listener {
@@ -232,17 +232,15 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
         // Map sensitivity to thresholds: higher sensitivity = lower thresholds, fewer required changes
         val s = sensitivity.coerceIn(0f, 1f)
         
-        // Accelerometer: high sensitivity => lower g-force threshold, fewer shakes needed
-        shakeThresholdGravity = lerp(2.9f, 1.8f, s)
-        shakeTriggerCount = if (s > 0.7f) 2 else 3
-        shakeSlopTimeMs = if (s > 0.7f) 250L else 400L
+        // Accelerometer: keep low sensitivity meaningfully strict for pocket/hand movement.
+        shakeThresholdGravity = lerp(4.6f, 2.4f, s)
+        shakeTriggerCount = if (s > 0.75f) 3 else if (s > 0.35f) 4 else 5
+        shakeSlopTimeMs = if (s > 0.75f) 300L else if (s > 0.35f) 450L else 600L
         
-        // Gyroscope wiggle: high sensitivity => lower angular velocity threshold
-        // At default 0.5: threshold = 0.55 rad/s (~31 deg/s), 4 direction changes in 1000ms
-        // Range: 0.8 rad/s (46 deg/s) at low sensitivity to 0.3 rad/s (17 deg/s) at high
-        gyroAxisThreshold = lerp(0.8f, 0.3f, s)
-        gyroWindowMs = if (s > 0.5f) 1200L else 1000L
-        gyroTriggerChanges = if (s > 0.7f) 3 else 4
+        // Gyroscope wiggle: require stronger/faster alternation at low sensitivity.
+        gyroAxisThreshold = lerp(2.6f, 0.8f, s)
+        gyroWindowMs = if (s > 0.7f) 1200L else if (s > 0.35f) 1500L else 1800L
+        gyroTriggerChanges = if (s > 0.75f) 4 else if (s > 0.35f) 6 else 8
         
         Log.d(TAG, "Shake settings: enabled=$enabled sens=$s gThresh=$shakeThresholdGravity gyroThresh=$gyroAxisThreshold")
         

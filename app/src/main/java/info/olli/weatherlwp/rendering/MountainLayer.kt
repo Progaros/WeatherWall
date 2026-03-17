@@ -202,7 +202,8 @@ class MountainLayer(private val context: Context) : SceneLayer {
         
         for (mountain in currentMountains) {
             val px = parallaxCalculator.getOffsetXForDepth(mountain.depthFactor)
-            val py = parallaxCalculator.getOffsetYForDepth(mountain.depthFactor)
+            // Prevent upward Y parallax from exposing mountain bottoms as floating tops.
+            val py = parallaxCalculator.getOffsetYForDepth(mountain.depthFactor).coerceAtLeast(0f)
             
             canvas.save()
             canvas.translate(px, py)
@@ -323,6 +324,11 @@ class MountainLayer(private val context: Context) : SceneLayer {
         }
         pathLeft.lineTo(actualPeakX - halfWidthPx, baseY)
         
+        // Extend to bottom to prevent floating mountains when offset is applied
+        pathLeft.lineTo(actualPeakX - halfWidthPx, height)
+        pathLeft.lineTo(peakCenterX + overlapPx, height)
+        pathLeft.lineTo(peakCenterX + overlapPx, baseY)
+        
         // Close back along ridge (in reverse) - with overlap into right side
         for (i in ridgePoints.size - 1 downTo 0) {
             pathLeft.lineTo(ridgePoints[i].first + overlapPx, ridgePoints[i].second)
@@ -343,6 +349,11 @@ class MountainLayer(private val context: Context) : SceneLayer {
             pathRight.lineTo(targetX, pointY)
         }
         pathRight.lineTo(actualPeakX + halfWidthPx, baseY)
+        
+        // Extend to bottom to prevent floating mountains when offset is applied
+        pathRight.lineTo(actualPeakX + halfWidthPx, height)
+        pathRight.lineTo(peakCenterX, height)
+        pathRight.lineTo(peakCenterX, baseY)
         
         // Close back along ridge (in reverse)
         for (i in ridgePoints.size - 1 downTo 0) {
@@ -410,12 +421,12 @@ class MountainLayer(private val context: Context) : SceneLayer {
             (Color.blue(baseAtmoColor) * (1f - leftShadow * 0.5f)).toInt().coerceIn(0, 255)
         )
         
-        // Four-point vertical gradient for left side: peak (light) -> mid -> base (darker) -> transparent
+        // Four-point vertical gradient for left side: peak (light) -> mid -> base (darker)
         val gradient = cachedLeftGradients.getOrPut(mountainIdx) {
             LinearGradient(
                 actualPeakX, peakY,
-                actualPeakX, baseY,
-                intArrayOf(leftPeakColor, leftMidColor, leftBaseColor, Color.TRANSPARENT),
+                actualPeakX, Math.max(baseY, height),
+                intArrayOf(leftPeakColor, leftMidColor, leftBaseColor, leftBaseColor),
                 floatArrayOf(0f, 0.4f, 0.75f, 1f),
                 Shader.TileMode.CLAMP
             )
@@ -445,8 +456,8 @@ class MountainLayer(private val context: Context) : SceneLayer {
         val rightGradient = cachedRightGradients.getOrPut(mountainIdx) {
             LinearGradient(
                 actualPeakX, peakY,
-                actualPeakX, baseY,
-                intArrayOf(rightPeakColor, rightMidColor, rightBaseColor, Color.TRANSPARENT),
+                actualPeakX, Math.max(baseY, height),
+                intArrayOf(rightPeakColor, rightMidColor, rightBaseColor, rightBaseColor),
                 floatArrayOf(0f, 0.4f, 0.75f, 1f),
                 Shader.TileMode.CLAMP
             )
