@@ -37,13 +37,11 @@ object RenderConstants {
     const val REFERENCE_ASPECT_RATIO = 0.5625f
     
     /**
-     * Safe off-screen margin for parallax reveal/spawn-in.
-     * World width stays close to visible width to reduce overdraw and CPU work.
+     * Off-screen side margin ratio relative to visible width.
+     * Keeps coordinates centered on screen while still providing enough room
+     * for parallax reveal and object spawn just outside the viewport.
      */
-    const val EXTENDED_WIDTH_MARGIN_RATIO = 0.18f
-
-    /** Minimum per-side margin as fraction of screen height (portrait safety net). */
-    const val EXTENDED_WIDTH_MIN_HEIGHT_MARGIN_RATIO = 0.12f
+    const val EXTENDED_SIDE_MARGIN_RATIO = 0.38f
     
     /**
      * Calculate the extended canvas width.
@@ -54,12 +52,9 @@ object RenderConstants {
      * @return The extended width for content generation
      */
     fun getExtendedWidth(screenWidth: Float, screenHeight: Float): Float {
-        // Keep render width near visible width, with just enough margin so parallax
-        // and spawn-at-edge behavior still look continuous.
-        val sideMargin = maxOf(
-            screenWidth * EXTENDED_WIDTH_MARGIN_RATIO,
-            screenHeight * EXTENDED_WIDTH_MIN_HEIGHT_MARGIN_RATIO
-        )
+        // Width-based expansion keeps scaling consistent around screen center
+        // across orientation changes while preserving off-screen spawn space.
+        val sideMargin = screenWidth * EXTENDED_SIDE_MARGIN_RATIO
         return screenWidth + sideMargin * 2f
     }
     

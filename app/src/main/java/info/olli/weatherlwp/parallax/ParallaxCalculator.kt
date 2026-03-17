@@ -96,6 +96,7 @@ class ParallaxCalculator {
     /**
      * Current canvas height for scaling. Set via setCanvasSize().
      */
+    private var canvasWidth = referenceHeight * 0.5625f
     private var canvasHeight = referenceHeight
     
     /**
@@ -111,7 +112,7 @@ class ParallaxCalculator {
      */
     @Suppress("UNUSED_PARAMETER")
     fun setCanvasSize(width: Float, height: Float) {
-        // width kept for API consistency, height used for scaling
+        canvasWidth = width.coerceAtLeast(1f)
         canvasHeight = height.coerceAtLeast(1f)
     }
     
@@ -207,13 +208,20 @@ class ParallaxCalculator {
         }
         
         // Calculate target position from tilt (where tilt alone would put us)
-        val tiltTargetX = filteredTiltX * effectiveMaxOffset * strength * aspectRatioCompensation
-        val tiltTargetY = filteredTiltY * effectiveMaxOffset * strength
+        // Rotate H/V compensation with orientation so ratio behavior follows wallpaper rotation.
+        val (horizontalComp, verticalComp) = if (canvasWidth >= canvasHeight) {
+            1f to aspectRatioCompensation
+        } else {
+            aspectRatioCompensation to 1f
+        }
+
+        val tiltTargetX = filteredTiltX * effectiveMaxOffset * strength * horizontalComp
+        val tiltTargetY = filteredTiltY * effectiveMaxOffset * strength * verticalComp
         
         // Clamp to circular bounds instead of square (prevents corner stretching)
         // This gives consistent maximum movement in all directions
-        val xLimit = effectiveMaxOffset * aspectRatioCompensation
-        val yLimit = effectiveMaxOffset
+        val xLimit = effectiveMaxOffset * horizontalComp
+        val yLimit = effectiveMaxOffset * verticalComp
         
         // Normalize to unit circle bounds then scale back
         val targetMagnitude = kotlin.math.sqrt(

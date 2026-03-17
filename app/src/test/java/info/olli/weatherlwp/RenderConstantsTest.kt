@@ -20,26 +20,21 @@ class RenderConstantsTest {
     // ============== Extended Canvas Tests ==============
     
     @Test
-    fun `extended width uses screen width with side margins`() {
+    fun `extended width stays centered around visible width`() {
         val screenWidth = 1080f
-        val screenHeight = 1920f
-        val ratioMargin = 0.18f
-        val heightMargin = 0.12f
-        val sideMargin = maxOf(screenWidth * ratioMargin, screenHeight * heightMargin)
+        val sideMarginRatio = 0.38f
+        val sideMargin = screenWidth * sideMarginRatio
         
         val extended = screenWidth + sideMargin * 2f
-        val expected = 1540.8f
+        val expected = 1900.8f
         
-        assertEquals("Extended width = width + side margins", expected, extended, 0.01f)
+        assertEquals("Extended width = width + centered side margins", expected, extended, 0.01f)
     }
     
     @Test
     fun `extended width adds safety margin`() {
         val screenWidth = 3000f  // Very wide screen
-        val screenHeight = 1000f
-        val ratioMargin = 0.18f
-        val heightMargin = 0.12f
-        val sideMargin = maxOf(screenWidth * ratioMargin, screenHeight * heightMargin)
+        val sideMargin = screenWidth * 0.38f
         
         val extended = screenWidth + sideMargin * 2f
         
@@ -59,10 +54,10 @@ class RenderConstantsTest {
     
     @Test
     fun `extended margin ratio is reasonable`() {
-        val marginRatio = 0.18f  // EXTENDED_WIDTH_MARGIN_RATIO
+        val marginRatio = 0.38f  // EXTENDED_SIDE_MARGIN_RATIO
         
         assertTrue("Margin ratio > 0 for parallax content", marginRatio > 0f)
-        assertTrue("Margin ratio stays performance-friendly", marginRatio <= 0.30f)
+        assertTrue("Margin ratio stays performance-friendly", marginRatio <= 0.50f)
     }
     
     // ============== Parallax Depth Factor Tests ==============

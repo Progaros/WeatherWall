@@ -8,6 +8,9 @@ import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.util.Log
 import android.view.MotionEvent
 import android.view.SurfaceHolder
@@ -33,6 +36,7 @@ import info.olli.weatherlwp.settings.SystemSettingsFragment
 import android.os.Handler
 import android.os.Looper
 import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
@@ -145,6 +149,11 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
         
         // Setup resize handle for dragging preview height
         setupResizeHandle(previewContainer)
+
+        previewContainer.setOnLongClickListener {
+            toggleDebugModeWithFeedback()
+            true
+        }
         
         // Register preference change listener for live updates
         prefs.registerOnSharedPreferenceChangeListener(prefListener)
@@ -283,6 +292,30 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
         
         supportActionBar?.title = getString(R.string.app_name)
         supportActionBar?.setDisplayHomeAsUpEnabled(false)
+    }
+
+    private fun toggleDebugModeWithFeedback() {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val enabled = !prefs.getBoolean("pref_debug_enabled", false)
+        prefs.edit().putBoolean("pref_debug_enabled", enabled).apply()
+        doPreferenceReload()
+
+        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            getSystemService(VibratorManager::class.java)?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(Vibrator::class.java)
+        }
+        vibrator?.let {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                it.vibrate(VibrationEffect.createOneShot(35, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                it.vibrate(35)
+            }
+        }
+
+        Toast.makeText(this, if (enabled) "Debug mode enabled" else "Debug mode disabled", Toast.LENGTH_SHORT).show()
     }
     
     override fun onSupportNavigateUp(): Boolean {
