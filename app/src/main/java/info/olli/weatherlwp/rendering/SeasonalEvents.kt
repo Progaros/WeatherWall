@@ -449,7 +449,7 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
                 initialized = true
             }
             when (season) {
-                Season.ST_PATRICKS -> renderStPatricksDay(canvas)
+                Season.ST_PATRICKS -> renderStPatricksDay(canvas, parallaxOffsetX, parallaxOffsetY)
                 Season.CHRISTMAS -> renderChristmasStars(canvas, parallaxOffsetX, parallaxOffsetY)
                 else -> {}
             }
@@ -922,12 +922,12 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
     private var cachedRainbowFadeTop = 0f
     private var cachedRainbowFadeBottom = 0f
     
-    private fun renderStPatricksDay(canvas: Canvas) {
+    private fun renderStPatricksDay(canvas: Canvas, parallaxOffsetX: Float = 0f, parallaxOffsetY: Float = 0f) {
         rainbowPhase += 0.02f
         
         // Position and size based on settings
-        val centerX = screenWidth * (rainbowPositionX / 100f)
-        val baseY = screenHeight * (rainbowPositionY / 100f)
+        val centerX = screenWidth * (rainbowPositionX / 100f) + parallaxOffsetX
+        val baseY = screenHeight * (rainbowPositionY / 100f) + parallaxOffsetY
         val sizeMultiplier = rainbowSize / 100f
         // Keep rainbow size stable across portrait/landscape by anchoring to height.
         // Width cap prevents clipping on very narrow canvases.
