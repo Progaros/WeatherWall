@@ -42,6 +42,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     // Extended canvas dimensions for parallax content
     private var extendedWidth = 0f
     private var extendedOffset = 0f  // Offset to center extended content
+    private var lastGeneratedWidth = 0f
+    private var lastGeneratedHeight = 0f
     
     // Cached hill gradients to avoid per-frame LinearGradient allocation
     private var cachedHillGradientAmbient = 0
@@ -532,13 +534,25 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     }
 
     override fun resize(w: Float, h: Float) {
+        val oldW = width
+        val oldH = height
         width = w
         height = h
         // Calculate extended width for parallax content
         extendedWidth = RenderConstants.getExtendedWidth(w, h)
         extendedOffset = RenderConstants.getExtendedOffset(w, extendedWidth)
-        // Regenerate terrain for new dimensions
-        generateTerrain()
+
+        val firstGenerate = lastGeneratedWidth <= 0f || lastGeneratedHeight <= 0f
+        val orientationChanged = (oldW > oldH) != (w > h)
+        val widthDelta = if (oldW > 0f) kotlin.math.abs(w - oldW) / oldW else 1f
+        val heightDelta = if (oldH > 0f) kotlin.math.abs(h - oldH) / oldH else 1f
+        val majorResize = widthDelta > 0.15f || heightDelta > 0.15f
+
+        if (firstGenerate || orientationChanged || majorResize) {
+            generateTerrain()
+            lastGeneratedWidth = w
+            lastGeneratedHeight = h
+        }
     }
 
     override fun update(state: SimulationState, deltaTimeMs: Long) {

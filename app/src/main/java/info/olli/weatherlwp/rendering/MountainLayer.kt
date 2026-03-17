@@ -53,6 +53,8 @@ class MountainLayer(private val context: Context) : SceneLayer {
     
     private var width = 0f
     private var height = 0f
+    private var lastGeneratedWidth = 0f
+    private var lastGeneratedHeight = 0f
     
     // Extended canvas dimensions for parallax content
     private var extendedWidth = 0f
@@ -162,13 +164,25 @@ class MountainLayer(private val context: Context) : SceneLayer {
     }
 
     override fun resize(w: Float, h: Float) {
+        val oldW = width
+        val oldH = height
         width = w
         height = h
         // Calculate extended width for parallax content
         extendedWidth = RenderConstants.getExtendedWidth(w, h)
         extendedOffset = RenderConstants.getExtendedOffset(w, extendedWidth)
-        // Regenerate mountains for new dimensions
-        generateMountains()
+
+        val firstGenerate = lastGeneratedWidth <= 0f || lastGeneratedHeight <= 0f
+        val orientationChanged = (oldW > oldH) != (w > h)
+        val widthDelta = if (oldW > 0f) kotlin.math.abs(w - oldW) / oldW else 1f
+        val heightDelta = if (oldH > 0f) kotlin.math.abs(h - oldH) / oldH else 1f
+        val majorResize = widthDelta > 0.15f || heightDelta > 0.15f
+
+        if (firstGenerate || orientationChanged || majorResize) {
+            generateMountains()
+            lastGeneratedWidth = w
+            lastGeneratedHeight = h
+        }
     }
 
     override fun update(state: SimulationState, deltaTimeMs: Long) {

@@ -254,11 +254,15 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
                 val twinkle = sin((time * RenderConstants.STAR_TWINKLE_SPEED + star[0] * 10).toDouble())
                 val alpha = (starAlphaBase + 50 * twinkle).toInt().coerceIn(5, 220)
                 starPaint.alpha = alpha
-                
-                val x = star[0] * width + starPx
-                val y = star[1] * height + starPy
-                
-                canvas.drawCircle(x, y, star[2], starPaint)
+
+                // Center-preserving zoom: stars scale uniformly by min dimension,
+                // avoiding horizontal-only stretch during resize/orientation changes.
+                val zoomBase = minOf(width, height)
+                val zoomScale = (zoomBase / 1080f).coerceAtLeast(0.5f)
+                val x = width * 0.5f + (star[0] - 0.5f) * zoomBase + starPx
+                val y = height * 0.3f + (star[1] - 0.3f) * zoomBase + starPy
+
+                canvas.drawCircle(x, y, star[2] * zoomScale, starPaint)
             }
         }
         

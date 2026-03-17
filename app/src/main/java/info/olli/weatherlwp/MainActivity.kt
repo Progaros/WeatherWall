@@ -296,8 +296,8 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
 
     private fun toggleDebugModeWithFeedback() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        val enabled = !prefs.getBoolean("pref_debug_enabled", false)
-        prefs.edit().putBoolean("pref_debug_enabled", enabled).apply()
+        val enabled = !prefs.getBoolean("pref_debug_overlay_enabled", false)
+        prefs.edit().putBoolean("pref_debug_overlay_enabled", enabled).apply()
         doPreferenceReload()
 
         val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -315,7 +315,7 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
             }
         }
 
-        Toast.makeText(this, if (enabled) "Debug mode enabled" else "Debug mode disabled", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, if (enabled) "Debug overlay enabled" else "Debug overlay disabled", Toast.LENGTH_SHORT).show()
     }
     
     override fun onSupportNavigateUp(): Boolean {
