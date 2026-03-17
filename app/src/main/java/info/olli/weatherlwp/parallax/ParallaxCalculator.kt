@@ -2,6 +2,7 @@ package info.olli.weatherlwp.parallax
 
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.atan
+import kotlin.math.pow
 import kotlin.math.tan
 
 /**
@@ -375,14 +376,13 @@ class ParallaxCalculator {
         val normalizedDistance = kotlin.math.sqrt(normalizedX * normalizedX + normalizedY * normalizedY)
             .coerceIn(0f, 1f)
         
-        // Apply power curve: near center (0) = full speed, near edge (1) = slow
-        // exponent ranges from 1 (linear) to 4 (very steep at edges)
-        val exponent = 1f + edgeEasing * 3f
-        val base = (1f - normalizedDistance).toDouble()
-        val multiplier = Math.pow(base, exponent.toDouble()).toFloat()
-        
-        // Clamp to reasonable minimum to prevent complete freeze
-        return multiplier.coerceIn(0.05f, 1f)
+        // Smoothstep-style deceleration near edges avoids abrupt stop/jump feeling.
+        val shapedDistance = normalizedDistance.pow(1f + edgeEasing * 1.5f)
+        val smoothstep = shapedDistance * shapedDistance * (3f - 2f * shapedDistance)
+        val multiplier = 1f - smoothstep
+
+        // Keep some minimum movement even at very high tilt to avoid visual "sticking".
+        return multiplier.coerceIn(0.15f, 1f)
     }
     
     /**

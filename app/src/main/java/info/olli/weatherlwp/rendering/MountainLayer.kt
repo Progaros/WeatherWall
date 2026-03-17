@@ -202,8 +202,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
         
         for (mountain in currentMountains) {
             val px = parallaxCalculator.getOffsetXForDepth(mountain.depthFactor)
-            // Prevent upward Y parallax from exposing mountain bottoms as floating tops.
-            val py = parallaxCalculator.getOffsetYForDepth(mountain.depthFactor).coerceAtLeast(0f)
+            val py = parallaxCalculator.getOffsetYForDepth(mountain.depthFactor)
             
             canvas.save()
             canvas.translate(px, py)
