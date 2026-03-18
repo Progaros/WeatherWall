@@ -544,11 +544,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
 
         val firstGenerate = lastGeneratedWidth <= 0f || lastGeneratedHeight <= 0f
         val orientationChanged = (oldW > oldH) != (w > h)
-        val widthDelta = if (oldW > 0f) kotlin.math.abs(w - oldW) / oldW else 1f
-        val heightDelta = if (oldH > 0f) kotlin.math.abs(h - oldH) / oldH else 1f
-        val majorResize = widthDelta > 0.15f || heightDelta > 0.15f
-
-        if (firstGenerate || orientationChanged || majorResize) {
+        if (firstGenerate || orientationChanged) {
             generateTerrain()
             lastGeneratedWidth = w
             lastGeneratedHeight = h

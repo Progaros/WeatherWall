@@ -110,7 +110,7 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         for (i in 0 until RenderConstants.STAR_COUNT) {
             stars.add(floatArrayOf(
                 random.nextFloat(), // x (0-1)
-                random.nextFloat() * 0.6f, // y (0-0.6, top 60%)
+                random.nextFloat() * 0.9f, // y (0-0.9, broad sky coverage)
                 random.nextFloat() * 3f + 1f // radius
             ))
         }
@@ -260,7 +260,7 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
                 val zoomBase = minOf(width, height)
                 val zoomScale = (zoomBase / 1080f).coerceAtLeast(0.5f)
                 val x = width * 0.5f + (star[0] - 0.5f) * zoomBase + starPx
-                val y = height * 0.3f + (star[1] - 0.3f) * zoomBase + starPy
+                val y = height * 0.5f + (star[1] - 0.5f) * zoomBase + starPy
 
                 canvas.drawCircle(x, y, star[2] * zoomScale, starPaint)
             }
