@@ -57,6 +57,16 @@ object RenderConstants {
         val sideMargin = screenWidth * EXTENDED_SIDE_MARGIN_RATIO
         return screenWidth + sideMargin * 2f
     }
+
+    /**
+     * Scale factor for count-based object density using horizontal span only.
+     * This keeps tree/mountain/bush counts stable when only height changes.
+     */
+    fun getHorizontalDensityScale(extendedWidth: Float): Float {
+        val referenceWidth = REFERENCE_HEIGHT * REFERENCE_ASPECT_RATIO
+        val referenceExtendedWidth = referenceWidth * (1f + 2f * EXTENDED_SIDE_MARGIN_RATIO)
+        return (extendedWidth / referenceExtendedWidth).coerceAtLeast(0.25f)
+    }
     
     /**
      * Get the horizontal offset to center the extended canvas.

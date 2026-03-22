@@ -119,10 +119,10 @@ class MountainLayer(private val context: Context) : SceneLayer {
     private fun generateMountains() {
         // Calculate mountain count from density and extended width
         // More width = more mountains to maintain visual density
-        val widthRatio = if (extendedWidth > 0 && height > 0) {
-            extendedWidth / (height * RenderConstants.REFERENCE_ASPECT_RATIO)
+        val widthRatio = if (extendedWidth > 0f) {
+            RenderConstants.getHorizontalDensityScale(extendedWidth)
         } else {
-            4f  // Default for 4x extended width
+            1f
         }
         val baseMountains = 8  // Base number at 100% density
         val mountainCount = ((mountainDensity / 100f) * baseMountains * widthRatio).toInt().coerceIn(0, 50)

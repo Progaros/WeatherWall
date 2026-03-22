@@ -57,4 +57,23 @@ class LayoutStabilityTest {
 
         assertFalse(farAway)
     }
+
+    @Test
+    fun `horizontal density scale is height independent`() {
+        val extendedA = RenderConstants.getExtendedWidth(1080f, 2400f)
+        val extendedB = RenderConstants.getExtendedWidth(1080f, 1200f)
+
+        val scaleA = RenderConstants.getHorizontalDensityScale(extendedA)
+        val scaleB = RenderConstants.getHorizontalDensityScale(extendedB)
+
+        assertEquals(scaleA, scaleB, 0.0001f)
+    }
+
+    @Test
+    fun `horizontal density scale grows with width`() {
+        val small = RenderConstants.getHorizontalDensityScale(RenderConstants.getExtendedWidth(720f, 1600f))
+        val large = RenderConstants.getHorizontalDensityScale(RenderConstants.getExtendedWidth(1440f, 1600f))
+
+        assertTrue(large > small)
+    }
 }
