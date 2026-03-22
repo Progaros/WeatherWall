@@ -252,7 +252,6 @@ class TreeRenderer {
 
         // Build new list (thread-safe: atomic swap at end)
         val newTrees = ArrayList<TreeData>(treeCount)
-        val random = Random(randomSeed.toLong() + 2000)  // Offset from hills
 
         // Calculate number of trees per hill (more on foreground hills)
         val treesPerHill = (treeCount.toFloat() / hills.size).toInt().coerceAtLeast(3)
@@ -260,6 +259,7 @@ class TreeRenderer {
         for (hillIndex in hills.indices) {
             val hill = hills[hillIndex]
             val depthFactor = hill.depthFactor
+            val hillRandom = DeterministicLayout.random(randomSeed + 2000, section = 300, index = hillIndex)
 
             // More trees on foreground hills
             val extraTrees = if (hillIndex >= hills.size - 2) 5 else 0
@@ -284,22 +284,24 @@ class TreeRenderer {
 
             // Generate clearings (Lichtungen) for this hill layer
             // Higher sparsity = more and larger clearings
-            val numClearings = ((treeSparsity * 5).toInt() + if (random.nextFloat() < treeSparsity) 1 else 0)
+            val numClearings = ((treeSparsity * 5).toInt() + if (hillRandom.nextFloat() < treeSparsity) 1 else 0)
                 .coerceIn(0, 6)
             val clearings = mutableListOf<Pair<Float, Float>>()  // List of (start, end) x-positions
             for (c in 0 until numClearings) {
+                val clearingRandom = DeterministicLayout.random(randomSeed + 2000 + hillIndex, section = 301, index = c)
                 // Clearing width: 5% to 20% of the width depending on sparsity
-                val clearingWidth = 0.05f + random.nextFloat() * 0.15f * treeSparsity
-                val clearingStart = random.nextFloat() * (1f - clearingWidth)
+                val clearingWidth = 0.05f + clearingRandom.nextFloat() * 0.15f * treeSparsity
+                val clearingStart = clearingRandom.nextFloat() * (1f - clearingWidth)
                 val clearingEnd = clearingStart + clearingWidth
                 clearings.add(clearingStart to clearingEnd)
             }
 
             // Place trees along the extended width
             for (t in 0 until hillTreeCount) {
-                // xRatio is 0-1 across the extended width - distributed evenly with some randomness
-                val baseSpacing = 1.0f / hillTreeCount
-                val xRatio = (t * baseSpacing + random.nextFloat() * baseSpacing).coerceIn(0f, 1f)
+                val treeRandom = DeterministicLayout.random(randomSeed + 2000 + hillIndex, section = 310, index = t)
+
+                // Pure seeded placement keeps the first N trees stable when density changes.
+                val xRatio = treeRandom.nextFloat()
 
                 // Skip tree if it falls within a clearing (Lichtung)
                 val inClearing = clearings.any { (start, end) -> xRatio in start..end }
@@ -308,7 +310,7 @@ class TreeRenderer {
                 }
 
                 // Additional random skip for some extra variation (but less than before)
-                if (random.nextFloat() < treeSparsity * 0.3f) {
+                if (treeRandom.nextFloat() < treeSparsity * 0.3f) {
                     continue  // Occasional extra skip for natural variation
                 }
 
@@ -317,7 +319,7 @@ class TreeRenderer {
 
                 // Tree spread controls vertical distribution DOWN from the hill line
                 val maxVerticalOffset = treeSpread * 0.15f  // Max 15% of height below hill line
-                val verticalOffset = random.nextFloat() * maxVerticalOffset
+                val verticalOffset = treeRandom.nextFloat() * maxVerticalOffset
                 val yRatio = groundY + verticalOffset  // Move tree down (higher Y = lower on screen)
 
                 // Normalize depth to 0-1 range for scale using RenderConstants
@@ -326,12 +328,12 @@ class TreeRenderer {
 
                 // Tree scale: foreground trees (normalizedDepth near 1) are larger
                 val baseScale = RenderConstants.TREE_SCALE_MIN + normalizedDepth * RenderConstants.TREE_SCALE_RANGE
-                val sizeVariation = 1f + (random.nextFloat() - 0.5f) * 2f * treeSizeRandomness
+                val sizeVariation = 1f + (treeRandom.nextFloat() - 0.5f) * 2f * treeSizeRandomness
                 val scale = baseScale * sizeVariation.coerceIn(0.3f, 2.0f)
 
                 val variationAmount = (20 * treeColorVariation).toInt()
-                val varR = if (variationAmount > 0) random.nextInt(variationAmount * 2 + 1) - variationAmount else 0
-                val varG = if (variationAmount > 0) random.nextInt(variationAmount * 2 + 1) - variationAmount else 0
+                val varR = if (variationAmount > 0) treeRandom.nextInt(variationAmount * 2 + 1) - variationAmount else 0
+                val varG = if (variationAmount > 0) treeRandom.nextInt(variationAmount * 2 + 1) - variationAmount else 0
                 val dayColor = Color.rgb(
                     (Color.red(RenderConstants.TREE_BASE_COLOR) + varR).coerceIn(0, 255),
                     (Color.green(RenderConstants.TREE_BASE_COLOR) + varG).coerceIn(0, 255),
@@ -339,12 +341,12 @@ class TreeRenderer {
                 )
 
                 // Determine tree type based on ratio setting
-                val isLeaf = (random.nextInt(100) < leafTreeRatio)
+                val isLeaf = (treeRandom.nextInt(100) < leafTreeRatio)
                 val type = if (isLeaf) TreeType.LEAF else TreeType.NEEDLE
 
                 // Generate crown circles for leaf trees, branches for winter bare look
-                val crown = if (isLeaf) generateCrownCircles(random) else emptyList()
-                val branches = if (isLeaf) generateBranches(random) else emptyList()
+                val crown = if (isLeaf) generateCrownCircles(treeRandom) else emptyList()
+                val branches = if (isLeaf) generateBranches(treeRandom) else emptyList()
 
                 newTrees.add(TreeData(xRatio, yRatio, scale, depthFactor, dayColor, newTrees.size,
                     type, crown, branches))
@@ -369,7 +371,6 @@ class TreeRenderer {
      */
     fun generateTreeDecorations(randomSeed: Int) {
         val currentTrees = trees
-        val random = Random(randomSeed.toLong() + 7000)
 
         // Always pre-generate all tree decorations.
         // Visibility/opacity controlled at draw time using season blend.
@@ -380,14 +381,15 @@ class TreeRenderer {
             val pineconeProbability = pineconeDensity / 100f
 
             for ((index, _) in currentTrees.withIndex()) {
-                if (random.nextFloat() > pineconeProbability) continue
+                val treeRandom = DeterministicLayout.random(randomSeed + 7000, section = 320, index = index)
+                if (treeRandom.nextFloat() > pineconeProbability) continue
                 val cones = mutableListOf<PineconeData>()
-                val numCones = 1 + random.nextInt(3)  // 1-3 pinecones per tree
+                val numCones = 1 + treeRandom.nextInt(3)  // 1-3 pinecones per tree
                 for (c in 0 until numCones) {
                     cones.add(PineconeData(
-                        xOffset = (random.nextFloat() - 0.5f) * 0.6f,  // -0.3 to 0.3 of tree width
-                        yRatio = 0.3f + random.nextFloat() * 0.5f,     // mid to lower portion
-                        size = 0.003f + random.nextFloat() * 0.003f
+                        xOffset = (treeRandom.nextFloat() - 0.5f) * 0.6f,  // -0.3 to 0.3 of tree width
+                        yRatio = 0.3f + treeRandom.nextFloat() * 0.5f,     // mid to lower portion
+                        size = 0.003f + treeRandom.nextFloat() * 0.003f
                     ))
                 }
                 newPinecones[index] = cones
@@ -517,6 +519,18 @@ class TreeRenderer {
         // Base width is calculated from total height, not segment height,
         // so it stays consistent regardless of segment count
         val baseTreeWidth = totalHeight * 0.25f * treeWidthScale
+
+        val screenWidth = ViewportCulling.screenWidth(extendedWidth, extendedOffset)
+        val objectHalfWidth = baseTreeWidth * 1.6f
+        if (!ViewportCulling.isVisibleHorizontally(
+                x = x,
+                objectHalfWidth = objectHalfWidth,
+                screenWidth = screenWidth,
+                height = height,
+                extraMargin = totalHeight * 0.2f
+            )) {
+            return
+        }
 
         // Wind system: base wind + gusts + multiplier
         val baseWindStrength = state.windStrength.coerceIn(0f, 1f)
@@ -731,6 +745,18 @@ class TreeRenderer {
         val trunkWidth = totalHeight * 0.06f * treeWidthScale
         val crownRadius = totalHeight * 0.32f
         val crownCenterY = groundY - totalHeight * 0.65f
+
+        val screenWidth = ViewportCulling.screenWidth(extendedWidth, extendedOffset)
+        val objectHalfWidth = crownRadius * 1.8f
+        if (!ViewportCulling.isVisibleHorizontally(
+                x = x,
+                objectHalfWidth = objectHalfWidth,
+                screenWidth = screenWidth,
+                height = height,
+                extraMargin = totalHeight * 0.2f
+            )) {
+            return
+        }
 
         // Wind sway (shared with needle trees)
         val baseWindStrength = state.windStrength.coerceIn(0f, 1f)

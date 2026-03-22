@@ -255,9 +255,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private fun generateHills() {
         // Build new list (thread-safe: atomic swap at end)
         val newHills = ArrayList<HillData>(hillCount)
-        val random = Random(randomSeed.toLong() + 1000)  // Offset from mountains
         
         for (i in 0 until hillCount) {
+            val hillRandom = DeterministicLayout.random(randomSeed + 1000, section = 200, index = i)
             // Base depth from 0 (background) to 1 (foreground)
             val baseDepth = i.toFloat() / hillCount.coerceAtLeast(1)
             
@@ -287,7 +287,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             val depthAmplitudeScale = 0.4f + depth.coerceIn(0f, 1f) * 0.6f
             
             // More points for smoother curves
-            val numPoints = RenderConstants.HILL_CURVE_POINTS_MIN + random.nextInt(RenderConstants.HILL_CURVE_POINTS_RANGE)
+            val numPoints = RenderConstants.HILL_CURVE_POINTS_MIN + hillRandom.nextInt(RenderConstants.HILL_CURVE_POINTS_RANGE)
             val points = ArrayList<Float>()
             
             // Use Fractal Brownian Motion (fBm) for natural terrain

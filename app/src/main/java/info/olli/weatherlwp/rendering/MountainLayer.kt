@@ -129,9 +129,9 @@ class MountainLayer(private val context: Context) : SceneLayer {
         
         // Build new list (thread-safe: atomic swap at end)
         val newMountains = ArrayList<MountainData>(mountainCount)
-        val random = Random(randomSeed.toLong())
         
         for (i in 0 until mountainCount) {
+            val itemRandom = DeterministicLayout.random(randomSeed, section = 100, index = i)
             // Depth: 0 is far, 1 is near
             val depth = i.toFloat() / mountainCount.coerceAtLeast(1)
             
@@ -140,20 +140,21 @@ class MountainLayer(private val context: Context) : SceneLayer {
                 depth * (RenderConstants.PARALLAX_MOUNTAIN_MAX - RenderConstants.PARALLAX_MOUNTAIN_MIN)
             
             // Position: spread across extended width (0-1 range)
-            val peakX = random.nextFloat()
+            val peakX = itemRandom.nextFloat()
             
             // Height: varies by scale setting
-            val h = (RenderConstants.MOUNTAIN_HEIGHT_MIN + random.nextFloat() * RenderConstants.MOUNTAIN_HEIGHT_RANGE) * mountainHeightScale
+            val h = (RenderConstants.MOUNTAIN_HEIGHT_MIN + itemRandom.nextFloat() * RenderConstants.MOUNTAIN_HEIGHT_RANGE) * mountainHeightScale
             
             // Width: Random variation
-            val w = (RenderConstants.MOUNTAIN_WIDTH_MIN + random.nextFloat() * RenderConstants.MOUNTAIN_WIDTH_RANGE) * mountainWidthScale
+            val w = (RenderConstants.MOUNTAIN_WIDTH_MIN + itemRandom.nextFloat() * RenderConstants.MOUNTAIN_WIDTH_RANGE) * mountainWidthScale
             
             // Color: Darker/bluer for far mountains (atmospheric perspective)
             val baseGray = RenderConstants.MOUNTAIN_GRAY_MIN + 
                 (depth * (RenderConstants.MOUNTAIN_GRAY_MAX - RenderConstants.MOUNTAIN_GRAY_MIN)).toInt()
             val dayColor = Color.rgb(baseGray, baseGray + 5, baseGray + 15)
             
-            newMountains.add(MountainData(peakX, h, w, dayColor, depthFactor, random.nextLong()))
+            val shapeSeed = DeterministicLayout.mix(randomSeed, section = 101, index = i)
+            newMountains.add(MountainData(peakX, h, w, dayColor, depthFactor, shapeSeed))
         }
         
         // Sort: Far mountains first (drawn behind)
@@ -211,6 +212,19 @@ class MountainLayer(private val context: Context) : SceneLayer {
         }
         
         for (mountain in currentMountains) {
+            val peakCenterX = mountain.peakX * extendedWidth - extendedOffset
+            val halfWidthPx = height * mountain.width * 0.25f
+            val screenWidth = ViewportCulling.screenWidth(extendedWidth, extendedOffset)
+            if (!ViewportCulling.isVisibleHorizontally(
+                    x = peakCenterX,
+                    objectHalfWidth = halfWidthPx,
+                    screenWidth = screenWidth,
+                    height = height,
+                    extraMargin = width * 0.05f
+                )) {
+                continue
+            }
+
             val px = parallaxCalculator.getOffsetXForDepth(mountain.depthFactor)
             val py = parallaxCalculator.getOffsetYForDepth(mountain.depthFactor)
             
