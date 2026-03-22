@@ -25,15 +25,15 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
     private val sizeScale = 1.0f - depthValue * 0.3f
     
     // Direction: left or right
-    private val direction = if (random.nextBoolean()) 1f else -1f
-    private val startX = if (direction > 0) -0.05f else 1.05f
+    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.05f)
+    private val direction = traversal.direction
+    private val startX = traversal.startX
     
     // Baseline Y - will be adjusted by hill height
     private val baseY = 0.78f + random.nextFloat() * 0.08f
     
     // Movement speed (squirrels are quick but not unrealistic)
     private val speed = 0.00004f + random.nextFloat() * 0.00002f
-    override val durationMs: Long = (1.2f / speed).toLong()
     
     // Animation phases
     private val animPhase = random.nextFloat() * 6.28f
@@ -50,10 +50,31 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
     // Stop and look behavior - squirrels pause periodically
     private val stopIntervalMs = 2000L + random.nextLong(1500)
     private val stopDurationMs = 400L + random.nextLong(300)
+
+    // Include expected stop pauses so event never expires while still visible.
+    override val durationMs: Long = EventTraversal.durationMsForPath(
+        path = traversal,
+        speed = speed,
+        pauseIntervalMs = stopIntervalMs,
+        pauseDurationMs = stopDurationMs,
+        minDurationMs = 5000L
+    )
+
+    private fun getEffectiveElapsedMs(elapsedMs: Long): Long {
+        val cycleLength = stopIntervalMs + stopDurationMs
+        val cyclePos = elapsedMs % cycleLength
+        val fullCycles = elapsedMs / cycleLength
+        return if (cyclePos > stopIntervalMs) {
+            fullCycles * stopIntervalMs + stopIntervalMs
+        } else {
+            elapsedMs - fullCycles * stopDurationMs
+        }
+    }
     
     override fun getCurrentYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
-        val x = startX + direction * speed * elapsedMs
+        val effectiveElapsedMs = getEffectiveElapsedMs(elapsedMs)
+        val x = startX + direction * speed * effectiveElapsedMs
         return hillHeightProvider?.invoke(x, depthValue) ?: baseY
     }
     
@@ -70,12 +91,7 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
         val isStopped = cyclePos > stopIntervalMs
         
         // Calculate position
-        val effectiveElapsed = if (isStopped) {
-            // During stop, freeze position at the moment it stopped
-            (elapsedMs / (stopIntervalMs + stopDurationMs)) * stopIntervalMs + stopIntervalMs
-        } else {
-            elapsedMs - (elapsedMs / (stopIntervalMs + stopDurationMs)) * stopDurationMs
-        }
+        val effectiveElapsed = getEffectiveElapsedMs(elapsedMs)
         
         val x = startX + direction * speed * effectiveElapsed
         val y = hillHeightProvider?.invoke(x, depthValue) ?: baseY

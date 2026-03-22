@@ -21,9 +21,15 @@ class DragonflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
     private val distance = 0.3f + random.nextFloat() * 0.4f
     private val sizeScale = 1.0f - distance * 0.4f
     
-    private val startX = random.nextFloat()
+    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.10f)
+    private val direction = traversal.direction
     private val startY = 0.50f + random.nextFloat() * 0.20f  // Lower in the sky, near plants
-    override val durationMs = 6000L + random.nextLong(4000)
+    private val travelSpeed = 0.000035f + random.nextFloat() * 0.000018f
+    override val durationMs = EventTraversal.durationMsForPath(
+        path = traversal,
+        speed = travelSpeed,
+        minDurationMs = 6000L
+    )
     
     private val path = Path()
     
@@ -43,8 +49,7 @@ class DragonflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
     private val hoverFreqY = 2.0f + random.nextFloat() * 1.0f
     private val hoverAmpX = 0.02f + random.nextFloat() * 0.02f
     private val hoverAmpY = 0.015f + random.nextFloat() * 0.015f
-    private val driftX = 0.002f + random.nextFloat() * 0.002f
-    private val direction = if (random.nextBoolean()) 1f else -1f
+    private val driftX = 0.0015f + random.nextFloat() * 0.0015f
     
     // Wing beat is very fast
     private val wingPhase = random.nextFloat() * 6.28f
@@ -60,12 +65,14 @@ class DragonflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
         
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val t = elapsedMs / 1000f
+        val progress = (elapsedMs / durationMs.toFloat()).coerceIn(0f, 1f)
         
         // Hovering movement with occasional darts
         val dartPhase = sin(t * 0.3f)
-        val dartBoost = if (dartPhase > 0.9f) 3f else 1f  // Occasional quick dart
+        val dartBoost = if (dartPhase > 0.9f) 0.012f else 0f
         
-        val x = startX + direction * t * driftX * dartBoost + 
+        val x = EventTraversal.xAtProgress(traversal, progress) +
+            direction * t * driftX * dartBoost +
             sin(t * hoverFreqX + wingPhase) * hoverAmpX
         val y = startY + sin(t * hoverFreqY) * hoverAmpY
         

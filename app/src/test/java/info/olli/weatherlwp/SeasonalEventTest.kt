@@ -63,8 +63,8 @@ class SeasonalEventTest {
         val event = DragonflyEvent(Random(12345), 0L)
         
         assertTrue("Duration is positive", event.durationMs > 0)
-        assertTrue("Duration is reasonable", event.durationMs >= 6000L)
-        assertTrue("Duration not too long", event.durationMs <= 15000L)
+        assertTrue("Duration is long enough for full traversal", event.durationMs >= 20000L)
+        assertTrue("Duration not too long", event.durationMs <= 50000L)
     }
     
     @Test
@@ -251,7 +251,9 @@ class SeasonalEventTest {
     fun `deer has long duration for grazing`() {
         val event = DeerEvent(Random(12345), 0L)
         
-        assertEquals("Deer duration is 15 seconds", 15000L, event.durationMs)
+        assertTrue("Deer duration is positive", event.durationMs > 0L)
+        assertTrue("Deer duration allows full crossing with grazing pauses", event.durationMs >= 90000L)
+        assertTrue("Deer duration remains bounded", event.durationMs <= 320000L)
     }
     
     @Test
@@ -272,8 +274,8 @@ class SeasonalEventTest {
         
         // All deer are ground events
         assertTrue("All deer are ground events", layers.all { it == EventLayer.GROUND })
-        // All have same fixed duration
-        assertTrue("All deer have fixed duration", durations.all { it == 15000L })
+        // Duration depends on randomized speed + grazing cadence
+        assertTrue("Deer durations vary by seed", durations.toSet().size >= 2)
     }
     
     // ============== Full Coverage Tests ==============

@@ -23,8 +23,9 @@ import kotlin.random.Random
 class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
     override val layer = EventLayer.GROUND
     
-    private val startX = if (random.nextBoolean()) -0.1f else 1.1f
-    private val direction = if (startX < 0.5f) 1f else -1f
+    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.1f)
+    private val startX = traversal.startX
+    private val direction = traversal.direction
     private val size = 0.7f + random.nextFloat() * 0.3f
     private val path = Path()
     // Random vertical offset from hill surface (-2% to +1% of screen height)
@@ -41,7 +42,11 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
     
     // Reduced speed: was 0.00008, now 0.000025 (~3x slower)
     private val speed = 0.000025f
-    override val durationMs: Long = (1.25f / speed).toLong()
+    override val durationMs: Long = EventTraversal.durationMsForPath(
+        path = traversal,
+        speed = speed,
+        minDurationMs = 5000L
+    )
     
     /**
      * Get current Y position for Y-based draw ordering with trees.

@@ -18,8 +18,9 @@ import kotlin.random.Random
 class DuckEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
     override val layer = EventLayer.GROUND
 
-    private val startX = if (random.nextBoolean()) -0.08f else 1.08f
-    private val direction = if (startX < 0.5f) 1f else -1f
+    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.08f)
+    private val startX = traversal.startX
+    private val direction = traversal.direction
 
     // Choose mid-foreground depth
     private val normalizedDepth = 0.5f + random.nextFloat() * 0.4f
@@ -30,7 +31,11 @@ class DuckEvent(random: Random, override val spawnTimeMs: Long = System.currentT
 
     // Duck walks slowly
     private val speed = 0.000025f + random.nextFloat() * 0.00001f
-    override val durationMs: Long = (1.16f / speed).toLong()
+    override val durationMs: Long = EventTraversal.durationMsForPath(
+        path = traversal,
+        speed = speed,
+        minDurationMs = 5000L
+    )
 
     private val duckSize = 0.5f + random.nextFloat() * 0.3f
     private val isDuckling = random.nextFloat() < 0.3f  // 30% chance of duckling (smaller)

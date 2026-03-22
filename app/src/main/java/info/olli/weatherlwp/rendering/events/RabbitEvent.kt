@@ -22,8 +22,9 @@ import kotlin.random.Random
 class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
     override val layer = EventLayer.GROUND
     
-    private val startX = if (random.nextBoolean()) -0.05f else 1.05f
-    private val direction = if (startX < 0.5f) 1f else -1f
+    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.05f)
+    private val startX = traversal.startX
+    private val direction = traversal.direction
     private val size = 0.5f + random.nextFloat() * 0.2f
     // Random vertical offset from hill surface (-2% to +1% of screen height)
     private val groundOffset = -0.02f + random.nextFloat() * 0.03f
@@ -39,7 +40,11 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
     
     // Reduced speed: was 0.0001, now 0.00003 (~3x slower)
     private val avgSpeed = 0.00003f
-    override val durationMs: Long = (1.15f / avgSpeed).toLong()
+    override val durationMs: Long = EventTraversal.durationMsForPath(
+        path = traversal,
+        speed = avgSpeed,
+        minDurationMs = 5000L
+    )
     
     /**
      * Get current Y position for Y-based draw ordering with trees.

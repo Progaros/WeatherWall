@@ -7,7 +7,6 @@ import android.graphics.Path
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.RenderConstants
 import info.olli.weatherlwp.simulation.SimulationState
-import kotlin.math.abs
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -24,16 +23,23 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
     private val sizeScale = 1.0f - (depthValue - RenderConstants.PARALLAX_HILLS_MIN) * 0.3f
     
     // Starting position and movement
-    private val startX = if (random.nextBoolean()) -0.15f else 1.15f
-    private val direction = if (startX < 0f) 1f else -1f
+    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.15f)
+    private val startX = traversal.startX
+    private val direction = traversal.direction
     
     // Very slow, graceful movement
     private val speed = 0.000008f + random.nextFloat() * 0.000005f
-    override val durationMs: Long = 15000L  // 15 seconds
     
     // Behavioral state
     private val grazeInterval = 3000L + random.nextLong(2500L)  // How often deer stops to graze
     private val grazeDuration = 1500L + random.nextLong(1000L)  // How long deer grazes
+    override val durationMs: Long = EventTraversal.durationMsForPath(
+        path = traversal,
+        speed = speed,
+        pauseIntervalMs = grazeInterval,
+        pauseDurationMs = grazeDuration,
+        minDurationMs = 15000L
+    )
     private val legPhaseOffset = random.nextFloat() * 6.28f
     
     private val path = Path()

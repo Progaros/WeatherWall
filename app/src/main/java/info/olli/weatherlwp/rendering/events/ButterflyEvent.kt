@@ -22,9 +22,15 @@ class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
     private val distance = 0.3f + random.nextFloat() * 0.5f
     private val sizeScale = 1.0f - distance * 0.4f  // 0.68-1.0 based on distance
     
-    private val startX = random.nextFloat()
+    // Spawn fully off-screen and cross the full viewport before expiring.
+    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.12f)
     private val startY = 0.30f + random.nextFloat() * 0.18f  // 0.30-0.48: above terrain, visible in MID_SKY layer
-    override val durationMs = 8000L + random.nextLong(5000)
+    private val travelSpeed = 0.000028f + random.nextFloat() * 0.000016f
+    override val durationMs = EventTraversal.durationMsForPath(
+        path = traversal,
+        speed = travelSpeed,
+        minDurationMs = 8000L
+    )
     
     private val path = Path()
     private val flutterPhase = random.nextFloat() * 6.28f
@@ -35,14 +41,11 @@ class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
         else -> Color.rgb(255, 180, 200) // Pink
     }
     // Reduced movement values for more natural, gentle flight
-    private val driftSpeedX = 0.003f + random.nextFloat() * 0.004f  // Slower horizontal drift
     private val driftSpeedY = 0.002f + random.nextFloat() * 0.003f  // Slower vertical drift
     private val wobbleFreqX = 0.3f + random.nextFloat() * 0.2f     // Slower wobble frequency
     private val wobbleFreqY = 0.2f + random.nextFloat() * 0.15f    // Slower vertical wobble
     private val wobbleAmpX = 0.015f + random.nextFloat() * 0.02f   // Reduced horizontal amplitude
     private val wobbleAmpY = 0.01f + random.nextFloat() * 0.015f   // Reduced vertical amplitude
-    private val direction = if (random.nextBoolean()) 1f else -1f
-    
     // Parallax based on distance
     private val parallaxDepth = 0.55f + distance * 0.25f
     
@@ -56,13 +59,14 @@ class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
         
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val t = elapsedMs / 1000f
+        val progress = (elapsedMs / durationMs.toFloat()).coerceIn(0f, 1f)
         
-        // Calculate position from elapsed time - gentler, more natural movement
-        val x = startX + direction * t * driftSpeedX * 0.15f + 
+        // Horizontal movement is guaranteed to traverse from off-screen to off-screen.
+        val x = EventTraversal.xAtProgress(traversal, progress) +
             sin(t * wobbleFreqX + flutterPhase) * wobbleAmpX
         
         val y = startY + 
-            sin(t * wobbleFreqY + flutterPhase * 0.7f) * wobbleAmpY +
+            sin(t * wobbleFreqY + flutterPhase * 0.7f + t * driftSpeedY) * wobbleAmpY +
             cos(t * wobbleFreqY * 0.5f) * wobbleAmpY * 0.3f
         
         val px = parallaxCalculator.getOffsetXForDepth(parallaxDepth)
