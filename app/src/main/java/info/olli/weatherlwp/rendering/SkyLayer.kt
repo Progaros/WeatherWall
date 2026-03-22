@@ -110,7 +110,7 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         for (i in 0 until RenderConstants.STAR_COUNT) {
             stars.add(floatArrayOf(
                 random.nextFloat(), // x (0-1)
-                random.nextFloat() * 0.9f, // y (0-0.9, broad sky coverage)
+                random.nextFloat() * 0.98f, // y (0-0.98, almost full visible sky)
                 random.nextFloat() * 3f + 1f // radius
             ))
         }
@@ -255,14 +255,12 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
                 val alpha = (starAlphaBase + 50 * twinkle).toInt().coerceIn(5, 220)
                 starPaint.alpha = alpha
 
-                // Center-preserving zoom: stars scale uniformly by min dimension,
-                // avoiding horizontal-only stretch during resize/orientation changes.
-                val zoomBase = minOf(width, height)
-                val zoomScale = (zoomBase / 1080f).coerceAtLeast(0.5f)
-                val x = width * 0.5f + (star[0] - 0.5f) * zoomBase + starPx
-                val y = height * 0.5f + (star[1] - 0.5f) * zoomBase + starPy
+                // Map normalized coordinates directly to viewport for full-sky coverage.
+                val x = SkyViewportMapper.toScreenX(star[0], width, starPx)
+                val y = SkyViewportMapper.toScreenY(star[1], height, starPy)
+                val radiusScale = SkyViewportMapper.starRadiusScale(width, height)
 
-                canvas.drawCircle(x, y, star[2] * zoomScale, starPaint)
+                canvas.drawCircle(x, y, star[2] * radiusScale, starPaint)
             }
         }
         
