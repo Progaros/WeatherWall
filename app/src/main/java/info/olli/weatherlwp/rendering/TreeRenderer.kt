@@ -1,11 +1,11 @@
 package info.olli.weatherlwp.rendering
 
-import android.content.SharedPreferences
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import info.olli.weatherlwp.PreferenceDefaults
+import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
 import kotlin.math.sin
 import kotlin.random.Random
@@ -897,41 +897,41 @@ class TreeRenderer {
     // ========================================================================
 
     /**
-     * Reload tree-related settings from SharedPreferences.
+     * Reload tree-related settings from immutable settings snapshot.
      * Must be called whenever preferences change (and on init).
      */
-    fun reloadSettings(prefs: SharedPreferences) {
+    fun reloadSettings(settings: SimulationSettings) {
         // Tree density: 0-200 percentage (50 = normal, 200 = dense forest)
-        treeDensity = prefs.getInt("pref_tree_density", 50)
+        treeDensity = settings.getInt("pref_tree_density", 50)
 
         // Leaf tree ratio: percentage of deciduous vs needle/conifer trees
-        leafTreeRatio = prefs.getInt("pref_leaf_tree_ratio", PreferenceDefaults.LEAF_TREE_RATIO)
+        leafTreeRatio = settings.getInt("pref_leaf_tree_ratio", PreferenceDefaults.LEAF_TREE_RATIO)
 
         // Tree spread: how far along hills trees spread (0=peaks only, 100=full hillside)
-        treeSpread = prefs.getInt("pref_tree_spread", 80) / 100f
+        treeSpread = settings.getInt("pref_tree_spread", 80) / 100f
 
         // Tree sparsity: gap probability between trees (0=dense, 100=sparse)
-        treeSparsity = prefs.getInt("pref_tree_sparsity", 30) / 100f
+        treeSparsity = settings.getInt("pref_tree_sparsity", 30) / 100f
 
         // Tree size randomness: variation in tree sizes (0=uniform, 100=very varied)
-        treeSizeRandomness = prefs.getInt("pref_tree_size_randomness", PreferenceDefaults.TREE_SIZE_RANDOMNESS) / 100f
+        treeSizeRandomness = settings.getInt("pref_tree_size_randomness", PreferenceDefaults.TREE_SIZE_RANDOMNESS) / 100f
 
-        val sizeVal = prefs.getInt("pref_tree_size", 200)
+        val sizeVal = settings.getInt("pref_tree_size", 200)
         treeSizeScale = sizeVal / 200f
 
-        val widthVal = prefs.getInt("pref_tree_width", 100)
+        val widthVal = settings.getInt("pref_tree_width", 100)
         treeWidthScale = widthVal / 100f
 
-        treeColorVariation = prefs.getInt("pref_tree_color_variation", PreferenceDefaults.TREE_COLOR_VARIATION) / 100f
-        treeSegments = prefs.getInt("pref_tree_segments", 1).coerceIn(1, 5)
+        treeColorVariation = settings.getInt("pref_tree_color_variation", PreferenceDefaults.TREE_COLOR_VARIATION) / 100f
+        treeSegments = settings.getInt("pref_tree_segments", 1).coerceIn(1, 5)
 
         // Pinecone settings
-        pineconesEnabled = prefs.getBoolean("pref_pinecones_enabled", PreferenceDefaults.PINECONES_ENABLED)
-        pineconeDensity = prefs.getInt("pref_pinecone_density", PreferenceDefaults.PINECONE_DENSITY)
+        pineconesEnabled = settings.getBoolean("pref_pinecones_enabled", PreferenceDefaults.PINECONES_ENABLED)
+        pineconeDensity = settings.getInt("pref_pinecone_density", PreferenceDefaults.PINECONE_DENSITY)
 
         // Snow settings (also read by TerrainLayer for hills, both need them)
-        winterSnowEnabled = prefs.getBoolean("pref_winter_snow_hills", true)
-        winterSnowCoverage = prefs.getInt("pref_winter_snow_coverage", 50)
-        useWeatherSnow = prefs.getBoolean("pref_weather_snow_enabled", true)
+        winterSnowEnabled = settings.getBoolean("pref_winter_snow_hills", true)
+        winterSnowCoverage = settings.getInt("pref_winter_snow_coverage", 50)
+        useWeatherSnow = settings.getBoolean("pref_weather_snow_enabled", true)
     }
 }

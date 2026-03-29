@@ -1,236 +1,73 @@
 package info.olli.weatherlwp.simulation
 
-import android.content.Context
-import android.content.SharedPreferences
-import androidx.preference.PreferenceManager
+import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.weather.WeatherType
 
 /**
- * Manages simulation settings from SharedPreferences.
- * 
- * This class reads user preferences and debug overrides,
- * providing a clean API for the SimulationController.
+ * Immutable settings snapshot used by the render/simulation pipeline.
+ *
+ * A full preference snapshot is embedded so layers can read additional
+ * keys without reaching back into SharedPreferences.
  */
-class SimulationSettings(context: Context) {
-    
-    private val prefs: SharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
-    
+data class SimulationSettings(
     // Time settings
-    var useRealTime: Boolean = true
-        private set
-    var manualTimeMinutes: Int = 720
-        private set
-    
+    val useRealTime: Boolean = true,
+    val manualTimeMinutes: Int = 720,
+
     // Weather settings
-    var useRealWeather: Boolean = true
-        private set
-    var manualWeather: WeatherType = WeatherType.CLEAR
-        private set
-    
+    val useRealWeather: Boolean = true,
+    val manualWeather: WeatherType = WeatherType.CLEAR,
+
     // Wind settings
-    var windStrength: Float = 0.5f
-        private set
-    var useWeatherWind: Boolean = true
-        private set
-    var windMultiplier: Float = 1.0f
-        private set
-    var treeSwaySpeed: Float = 1.0f
-        private set
-    
+    val windStrength: Float = 0.5f,
+    val useWeatherWind: Boolean = true,
+    val windMultiplier: Float = 1.0f,
+    val treeSwaySpeed: Float = 1.0f,
+
     // Cloud settings
-    var cloudsEnabled: Boolean = true
-        private set
-    var cloudDensity: CloudDensity = CloudDensity.AUTO
-        private set
-    
-    // Shadow settings - separate for mountains and trees
-    var mountainShadowsEnabled: Boolean = true
-        private set
-    var treeShadowsEnabled: Boolean = true
-        private set
-    var shadowStrength: Float = 0.5f
-        private set
-    
-    // Night shade strength (0-1: 0=bright, 0.35=default, 1=very dark)
-    var nightShadeStrength: Float = 0.35f
-        private set
-    
-    // Legacy - kept for compatibility but mapped to both settings
+    val cloudsEnabled: Boolean = true,
+    val cloudDensity: CloudDensity = CloudDensity.AUTO,
+
+    // Shadow settings
+    val mountainShadowsEnabled: Boolean = true,
+    val treeShadowsEnabled: Boolean = true,
+    val shadowStrength: Float = 0.5f,
+
+    // Night shading
+    val nightShadeStrength: Float = 0.35f,
+
+    // Moon phase (simulation mode)
+    val moonPhase: Float = 0.5f,
+
+    // Season transition
+    val seasonTransitionDays: Int = PreferenceDefaults.SEASON_TRANSITION_DAYS,
+    val terrainSeasonOverride: String = "auto",
+    val seasonDayOfYearOverride: Int = 0,
+
+    // Weather history overrides
+    val useSimulatedWeatherHistory: Boolean = false,
+    val simulatedSnowLevel: Float = 0f,
+    val simulatedRiverLevel: Float = 0f,
+
+    // Debug
+    val debugEnabled: Boolean = false,
+    val debugWeatherOverride: String? = null,
+
+    // Raw immutable preference snapshot for rendering-layer settings
+    val snapshot: Map<String, Any?> = emptyMap()
+) {
+    // Legacy compatibility
     val shadowsEnabled: Boolean
         get() = mountainShadowsEnabled || treeShadowsEnabled
-    
-    // Moon phase (for simulation mode)
-    var moonPhase: Float = 0.5f  // 0-1: 0=new, 0.5=full, 1=new (cycle end)
-        private set
-    
-    // Season transition
-    var seasonTransitionDays: Int = 14  // 0=instant, 30=very gradual
-        private set
-    var terrainSeasonOverride: String = "auto"
-        private set
-    var seasonDayOfYearOverride: Int = 0  // 0=auto, 1-365=override day
-        private set
-    
-    // Weather history simulation overrides
-    var useSimulatedWeatherHistory: Boolean = false
-        private set
-    var simulatedSnowLevel: Float = 0f   // 0-1 override for snow depth
-        private set
-    var simulatedRiverLevel: Float = 0f  // 0-1 override for river level
-        private set
-    
-    // Debug
-    var debugEnabled: Boolean = false
-        private set
-    var debugWeatherOverride: String? = null
-        private set
-    
-    init {
-        reload()
-    }
-    
-    /**
-     * Reload all settings from SharedPreferences.
-     * Uses prefs.all snapshot for atomic reads — all values come from one consistent point in time.
-     */
-    fun reload() {
-        // Take a single atomic snapshot of all preferences to avoid inconsistent reads
-        // if the UI thread writes between individual pref reads
-        val snapshot = prefs.all
-        
-        // Helper functions to read from snapshot with type-safe defaults
-        fun snapBoolean(key: String, default: Boolean): Boolean =
-            (snapshot[key] as? Boolean) ?: default
-        fun snapInt(key: String, default: Int): Int =
-            (snapshot[key] as? Int) ?: default
-        fun snapString(key: String, default: String): String =
-            (snapshot[key] as? String) ?: default
-        
-        // Debug mode toggle
-        debugEnabled = snapBoolean("pref_debug_enabled", false)
-        
-        // Time - in debug mode, use manual time; otherwise check auto day/night
-        if (debugEnabled) {
-            useRealTime = false  // Debug mode always uses manual time
-        } else {
-            useRealTime = snapBoolean("pref_daynight_enabled", true)
-        }
-        manualTimeMinutes = snapInt("pref_manual_time", 720)
-        
-        // Weather - for now we always use real weather from Breezy
-        useRealWeather = true
-        
-        // Wind - in debug/simulation mode, use manual setting; otherwise use real weather data
-        if (debugEnabled) {
-            val windVal = snapInt("pref_wind_strength", 50)
-            windStrength = windVal / 100f
-            useWeatherWind = false  // Simulation mode uses manual wind
-        } else {
-            // Use real weather wind data when available
-            windStrength = 0.05f  // Default fallback if no weather data (5% reduces illusion of 50% speed)
-            useWeatherWind = true  // Enable weather-based wind
-        }
-        
-        // Wind multiplier for increasing/decreasing wind effect (0-300% range)
-        val windMultVal = snapInt("pref_wind_multiplier", info.olli.weatherlwp.PreferenceDefaults.WIND_MULTIPLIER)
-        windMultiplier = windMultVal / 100f
-        
-        // Tree sway speed (0-200% range, default 100%)
-        val swaySpeedVal = snapInt("pref_tree_sway_speed", 100)
-        treeSwaySpeed = swaySpeedVal / 100f
-        
-        // Cloud settings
-        // Note: pref_cloud_density is now an Int (0-50) handled directly by CloudLayer.
-        // We keep cloudDensity as AUTO here since CloudLayer reads the actual count.
-        cloudsEnabled = snapBoolean("pref_clouds_enabled", true)
-        cloudDensity = if (!cloudsEnabled) {
-            CloudDensity.NONE
-        } else {
-            CloudDensity.AUTO
-        }
-        
-        // Shadow settings - separate for mountains and trees
-        mountainShadowsEnabled = snapBoolean("pref_mountain_shadows_enabled", true)
-        treeShadowsEnabled = snapBoolean("pref_tree_shadows_enabled", true)
-        val shadowVal = snapInt("pref_shadow_strength", 50)
-        shadowStrength = shadowVal / 100f
-        
-        // Night shade strength (0-100 -> 0.0-1.0, default 35 = 0.35)
-        val nightShadeVal = snapInt("pref_night_shade_strength", 35)
-        nightShadeStrength = nightShadeVal / 100f
-        
-        // Moon phase - only used in simulation mode (0-100 -> 0.0-1.0)
-        val moonPhaseVal = snapInt("pref_moon_phase", 50)
-        moonPhase = moonPhaseVal / 100f
-        
-        // Season transition speed (0-30 days, default 14)
-        seasonTransitionDays = snapInt("pref_season_transition_days", 
-            info.olli.weatherlwp.PreferenceDefaults.SEASON_TRANSITION_DAYS)
-        
-        // Terrain season override
-        terrainSeasonOverride = if (debugEnabled) {
-            snapString("pref_terrain_season", "auto")
-        } else {
-            "auto"
-        }
-        
-        // Day-of-year override (only in debug mode, 0=auto)
-        seasonDayOfYearOverride = if (debugEnabled) {
-            snapInt("pref_season_day_override", 0)
-        } else {
-            0
-        }
-        
-        // Weather history simulation overrides (only in debug mode)
-        if (debugEnabled) {
-            useSimulatedWeatherHistory = snapBoolean("pref_sim_weather_history", false)
-            val snowVal = snapInt("pref_sim_snow_level", 0)
-            simulatedSnowLevel = snowVal / 100f
-            val riverVal = snapInt("pref_sim_river_level", 0)
-            simulatedRiverLevel = riverVal / 100f
-        } else {
-            useSimulatedWeatherHistory = false
-            simulatedSnowLevel = 0f
-            simulatedRiverLevel = 0f
-        }
-        
-        // Debug - also handle cloud and weather overrides from simulation mode
-        if (debugEnabled) {
-            // Weather override - pref_weather_type is the actual key
-            debugWeatherOverride = snapString("pref_weather_type", "auto")
-            if (debugWeatherOverride == "auto") debugWeatherOverride = null
-            
-            // Cloud override - pref_debug_cloud_override is the actual key
-            val debugCloudStr = snapString("pref_debug_cloud_override", "auto")
-            if (debugCloudStr != "auto") {
-                cloudDensity = when (debugCloudStr.lowercase()) {
-                    "none" -> CloudDensity.NONE
-                    "light" -> CloudDensity.LIGHT
-                    "medium" -> CloudDensity.MEDIUM
-                    "heavy" -> CloudDensity.HEAVY
-                    "overcast" -> CloudDensity.OVERCAST
-                    else -> cloudDensity
-                }
-            }
-        } else {
-            debugWeatherOverride = null
-        }
-    }
-    
-    /**
-     * Get effective time in minutes.
-     */
-    fun getEffectiveTimeMinutes(): Int {
-        return manualTimeMinutes
-    }
-    
+
+    fun getEffectiveTimeMinutes(): Int = manualTimeMinutes
+
     /**
      * Get effective weather, considering debug overrides.
      */
     fun getEffectiveWeather(realWeather: WeatherType): WeatherType {
         val override = debugWeatherOverride
         if (debugEnabled && override != null) {
-            // Handle special cases for UI-friendly names
             return when (override.lowercase()) {
                 "none", "clear" -> WeatherType.CLEAR
                 "rain" -> WeatherType.RAIN
@@ -242,15 +79,183 @@ class SimulationSettings(context: Context) {
                 "overcast" -> WeatherType.OVERCAST
                 "partly_cloudy" -> WeatherType.PARTLY_CLOUDY
                 else -> {
-                    // Try direct enum match as fallback
                     try {
                         WeatherType.valueOf(override.uppercase())
-                    } catch (e: Exception) {
+                    } catch (_: Exception) {
                         realWeather
                     }
                 }
             }
         }
         return if (useRealWeather) realWeather else manualWeather
+    }
+
+    fun getBoolean(key: String, default: Boolean): Boolean {
+        val value = snapshot[key]
+        return when (value) {
+            is Boolean -> value
+            is String -> value.equals("true", ignoreCase = true)
+            else -> default
+        }
+    }
+
+    fun getInt(key: String, default: Int): Int {
+        val value = snapshot[key]
+        return when (value) {
+            is Int -> value
+            is Long -> value.toInt()
+            is Float -> value.toInt()
+            is Double -> value.toInt()
+            is String -> value.toIntOrNull() ?: default
+            else -> default
+        }
+    }
+
+    fun getLong(key: String, default: Long): Long {
+        val value = snapshot[key]
+        return when (value) {
+            is Long -> value
+            is Int -> value.toLong()
+            is Float -> value.toLong()
+            is Double -> value.toLong()
+            is String -> value.toLongOrNull() ?: default
+            else -> default
+        }
+    }
+
+    fun getString(key: String, default: String): String {
+        val value = snapshot[key]
+        return when (value) {
+            is String -> value
+            else -> default
+        }
+    }
+
+    fun getNullableString(key: String): String? {
+        val value = snapshot[key]
+        return value as? String
+    }
+
+    companion object {
+        fun fromSnapshot(sourceSnapshot: Map<String, *>): SimulationSettings {
+            val snapshot = HashMap<String, Any?>(sourceSnapshot.size)
+            for ((key, value) in sourceSnapshot) {
+                snapshot[key] = value
+            }
+
+            fun snapBoolean(key: String, default: Boolean): Boolean =
+                when (val value = snapshot[key]) {
+                    is Boolean -> value
+                    is String -> value.equals("true", ignoreCase = true)
+                    else -> default
+                }
+
+            fun snapInt(key: String, default: Int): Int =
+                when (val value = snapshot[key]) {
+                    is Int -> value
+                    is Long -> value.toInt()
+                    is Float -> value.toInt()
+                    is Double -> value.toInt()
+                    is String -> value.toIntOrNull() ?: default
+                    else -> default
+                }
+
+            fun snapString(key: String, default: String): String =
+                (snapshot[key] as? String) ?: default
+
+            val debugEnabled = snapBoolean("pref_debug_enabled", false)
+            val useRealTime = if (debugEnabled) false else snapBoolean("pref_daynight_enabled", true)
+            val manualTimeMinutes = snapInt("pref_manual_time", 720)
+
+            val useRealWeather = true
+            val manualWeather = WeatherType.CLEAR
+
+            val windStrength: Float
+            val useWeatherWind: Boolean
+            if (debugEnabled) {
+                windStrength = snapInt("pref_wind_strength", 50) / 100f
+                useWeatherWind = false
+            } else {
+                windStrength = 0.05f
+                useWeatherWind = true
+            }
+
+            val windMultiplier = snapInt("pref_wind_multiplier", PreferenceDefaults.WIND_MULTIPLIER) / 100f
+            val treeSwaySpeed = snapInt("pref_tree_sway_speed", 100) / 100f
+
+            val cloudsEnabled = snapBoolean("pref_clouds_enabled", true)
+            var cloudDensity = if (!cloudsEnabled) CloudDensity.NONE else CloudDensity.AUTO
+
+            val mountainShadowsEnabled = snapBoolean("pref_mountain_shadows_enabled", true)
+            val treeShadowsEnabled = snapBoolean("pref_tree_shadows_enabled", true)
+            val shadowStrength = snapInt("pref_shadow_strength", 50) / 100f
+
+            val nightShadeStrength = snapInt("pref_night_shade_strength", 35) / 100f
+            val moonPhase = snapInt("pref_moon_phase", 50) / 100f
+
+            val seasonTransitionDays = snapInt("pref_season_transition_days", PreferenceDefaults.SEASON_TRANSITION_DAYS)
+            val terrainSeasonOverride = if (debugEnabled) snapString("pref_terrain_season", "auto") else "auto"
+            val seasonDayOfYearOverride = if (debugEnabled) snapInt("pref_season_day_override", 0) else 0
+
+            val useSimulatedWeatherHistory: Boolean
+            val simulatedSnowLevel: Float
+            val simulatedRiverLevel: Float
+            if (debugEnabled) {
+                useSimulatedWeatherHistory = snapBoolean("pref_sim_weather_history", false)
+                simulatedSnowLevel = snapInt("pref_sim_snow_level", 0) / 100f
+                simulatedRiverLevel = snapInt("pref_sim_river_level", 0) / 100f
+            } else {
+                useSimulatedWeatherHistory = false
+                simulatedSnowLevel = 0f
+                simulatedRiverLevel = 0f
+            }
+
+            val debugWeatherOverride = if (debugEnabled) {
+                snapString("pref_weather_type", "auto").takeUnless { it == "auto" }
+            } else {
+                null
+            }
+
+            if (debugEnabled) {
+                val debugCloudStr = snapString("pref_debug_cloud_override", "auto")
+                if (debugCloudStr != "auto") {
+                    cloudDensity = when (debugCloudStr.lowercase()) {
+                        "none" -> CloudDensity.NONE
+                        "light" -> CloudDensity.LIGHT
+                        "medium" -> CloudDensity.MEDIUM
+                        "heavy" -> CloudDensity.HEAVY
+                        "overcast" -> CloudDensity.OVERCAST
+                        else -> cloudDensity
+                    }
+                }
+            }
+
+            return SimulationSettings(
+                useRealTime = useRealTime,
+                manualTimeMinutes = manualTimeMinutes,
+                useRealWeather = useRealWeather,
+                manualWeather = manualWeather,
+                windStrength = windStrength,
+                useWeatherWind = useWeatherWind,
+                windMultiplier = windMultiplier,
+                treeSwaySpeed = treeSwaySpeed,
+                cloudsEnabled = cloudsEnabled,
+                cloudDensity = cloudDensity,
+                mountainShadowsEnabled = mountainShadowsEnabled,
+                treeShadowsEnabled = treeShadowsEnabled,
+                shadowStrength = shadowStrength,
+                nightShadeStrength = nightShadeStrength,
+                moonPhase = moonPhase,
+                seasonTransitionDays = seasonTransitionDays,
+                terrainSeasonOverride = terrainSeasonOverride,
+                seasonDayOfYearOverride = seasonDayOfYearOverride,
+                useSimulatedWeatherHistory = useSimulatedWeatherHistory,
+                simulatedSnowLevel = simulatedSnowLevel,
+                simulatedRiverLevel = simulatedRiverLevel,
+                debugEnabled = debugEnabled,
+                debugWeatherOverride = debugWeatherOverride,
+                snapshot = snapshot
+            )
+        }
     }
 }

@@ -10,6 +10,7 @@ import android.graphics.Shader
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
+import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
 import kotlin.math.sin
 
@@ -627,14 +628,18 @@ class RiverLayer(private val context: Context) : SceneLayer {
     // ========================= Settings =========================
 
     override fun reloadSettings() {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        enabled = prefs.getBoolean("pref_river_enabled", PreferenceDefaults.RIVER_ENABLED)
+        val snapshot = PreferenceManager.getDefaultSharedPreferences(context).all
+        reloadSettings(SimulationSettings.fromSnapshot(snapshot))
+    }
+
+    override fun reloadSettings(settings: SimulationSettings) {
+        enabled = settings.getBoolean("pref_river_enabled", PreferenceDefaults.RIVER_ENABLED)
         style = RiverStyle.fromString(
-            prefs.getString("pref_river_style", PreferenceDefaults.RIVER_STYLE) ?: PreferenceDefaults.RIVER_STYLE
+            settings.getString("pref_river_style", PreferenceDefaults.RIVER_STYLE)
         )
-        riverWidthPercent = prefs.getInt("pref_river_width", PreferenceDefaults.RIVER_WIDTH) / 100f
-        opacity = prefs.getInt("pref_river_opacity", PreferenceDefaults.RIVER_OPACITY) / 100f
-        flowSpeed = prefs.getInt("pref_river_speed", PreferenceDefaults.RIVER_SPEED) / 100f
+        riverWidthPercent = settings.getInt("pref_river_width", PreferenceDefaults.RIVER_WIDTH) / 100f
+        opacity = settings.getInt("pref_river_opacity", PreferenceDefaults.RIVER_OPACITY) / 100f
+        flowSpeed = settings.getInt("pref_river_speed", PreferenceDefaults.RIVER_SPEED) / 100f
     }
 
     override fun destroy() {

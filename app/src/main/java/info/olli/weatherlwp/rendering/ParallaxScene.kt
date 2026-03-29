@@ -1,8 +1,8 @@
 package info.olli.weatherlwp.rendering
 
 import android.content.Context
-import android.content.SharedPreferences
 import android.graphics.Canvas
+import android.os.Trace
 import android.util.Log
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.DebugTracer
@@ -10,6 +10,7 @@ import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.parallax.ParallaxSensorManager
 import info.olli.weatherlwp.simulation.SimulationController
+import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
 import info.olli.weatherlwp.weather.WeatherRepository
 import kotlin.math.pow
@@ -31,11 +32,21 @@ class ParallaxScene(
     private val isPreview: Boolean = false  // True for MainActivity preview, false for live wallpaper
 ) : ParallaxSensorManager.Listener, ParallaxSensorManager.ShakeListener {
 
+    private inline fun traceSection(sectionName: String, block: () -> Unit) {
+        Trace.beginSection(sectionName)
+        try {
+            block()
+        } finally {
+            Trace.endSection()
+        }
+    }
+
     companion object {
         private const val TAG = "ParallaxScene"
     }
 
-    private val prefs: SharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
+    @Volatile
+    private var currentSettings: SimulationSettings = SimulationSettings.fromSnapshot(emptyMap<String, Any?>())
     
     // Trigger key suffixes based on context (preview vs wallpaper)
     private val triggerSuffix = if (isPreview) "_preview" else "_wallpaper"
@@ -74,23 +85,9 @@ class ParallaxScene(
     private var weatherEnabled = true
     private var seasonalEnabled = true
     
-    // Event-driven spawn trigger detection via SharedPreferences listener
-    // Replaces 100ms polling — zero cost when no trigger fires
-    @Volatile private var pendingSpawnTrigger = false
-    @Volatile private var pendingSpecificTrigger = false
-    
-    private val spawnTriggerListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        if (key != null) {
-            when {
-                key.startsWith("trigger_spawn_event_time") && key.endsWith(triggerSuffix) -> {
-                    pendingSpawnTrigger = true
-                }
-                key.startsWith("trigger_spawn_specific_event") && key.endsWith(triggerSuffix) -> {
-                    pendingSpecificTrigger = true
-                }
-            }
-        }
-    }
+    // Trigger dedupe to avoid respawning the same manual event each frame.
+    private var lastHandledSpawnTriggerTime = 0L
+    private var lastHandledSpecificTriggerTime = 0L
     
     init {
         // Add layers in draw order (Background -> Foreground)
@@ -118,7 +115,7 @@ class ParallaxScene(
                 )
             }
             
-            override fun getEventsInRange(minDepth: Float, maxDepth: Float): List<Pair<Float, () -> Unit>> {
+            override fun getEventsInRange(minDepth: Float, maxDepth: Float): List<TerrainLayer.GroundEventDrawEntry> {
                 return randomEventLayer.getGroundEventsInRangeWithY(
                     lastCanvas ?: return emptyList(),
                     lastState ?: return emptyList(),
@@ -168,13 +165,11 @@ class ParallaxScene(
         }
         lakeLayer.drawViaCallback = true
         
-        // Load settings BEFORE enabling sensor to ensure correct initial strength
-        loadPrefs()
+        // Load settings BEFORE enabling sensor to ensure correct initial strength.
+        // WeatherWallpaper pushes flow snapshots; preview path can still call loadPrefs().
+        reloadSettings(currentSettings)
         sensor.setListener(this)
         sensor.setShakeListener(this)
-        
-        // Register listener for spawn trigger events (replaces 100ms polling)
-        prefs.registerOnSharedPreferenceChangeListener(spawnTriggerListener)
     }
     
     // Temporary references for ground event drawer callback
@@ -270,38 +265,8 @@ class ParallaxScene(
             lastCanvas = canvas
             lastState = state
             
-            // Check for manual spawn trigger from settings (event-driven via listener)
-            // Only reads SharedPreferences when the listener detected a relevant key change
-            if (pendingSpawnTrigger) {
-                pendingSpawnTrigger = false
-                val currentTimeMs = System.currentTimeMillis()
-                val spawnTriggerKey = "trigger_spawn_event_time$triggerSuffix"
-                val spawnTriggerTime = prefs.getLong(spawnTriggerKey, 0L)
-                val timeSinceSpawnTrigger = currentTimeMs - spawnTriggerTime
-                if (spawnTriggerTime > 0 && timeSinceSpawnTrigger < 10000) {
-                    prefs.edit().putLong(spawnTriggerKey, 0L).apply()
-                    randomEventLayer.debugSpawnEvent(spawnTriggerTime)
-                    Log.d(TAG, "Manual spawn trigger received [${if (isPreview) "preview" else "wallpaper"}] (delay: ${timeSinceSpawnTrigger}ms)")
-                }
-            }
-            
-            if (pendingSpecificTrigger) {
-                pendingSpecificTrigger = false
-                val currentTimeMs = System.currentTimeMillis()
-                val specificEventKey = "trigger_spawn_specific_event$triggerSuffix"
-                val specificEventTimeKey = "trigger_spawn_specific_event_time$triggerSuffix"
-                val specificEventTime = prefs.getLong(specificEventTimeKey, 0L)
-                val specificEvent = prefs.getString(specificEventKey, null)
-                val timeSinceSpecificTrigger = currentTimeMs - specificEventTime
-                if (specificEvent != null && specificEventTime > 0 && timeSinceSpecificTrigger < 10000) {
-                    prefs.edit()
-                        .remove(specificEventKey)
-                        .putLong(specificEventTimeKey, 0L)
-                        .apply()
-                    randomEventLayer.spawnSpecificEvent(specificEvent, specificEventTime)
-                    Log.d(TAG, "Specific spawn trigger received [${if (isPreview) "preview" else "wallpaper"}]: $specificEvent (delay: ${timeSinceSpecificTrigger}ms)")
-                }
-            }
+            // Process manual spawn triggers from the latest settings snapshot.
+            processManualSpawnTriggers()
             
             // Update parallax physics with real frame delta for accurate smoothing
             parallaxCalculator.update(deltaTimeMs)
@@ -343,7 +308,17 @@ class ParallaxScene(
                     }
                     
                     // Terrain layer draws hills, trees, and ground animals interleaved by depth
-                    layer.draw(canvas, state, parallaxCalculator)
+                    when (layer.layerType) {
+                        LayerType.CLOUDS -> traceSection("Draw_CloudLayer") {
+                            layer.draw(canvas, state, parallaxCalculator)
+                        }
+
+                        LayerType.TERRAIN -> traceSection("Draw_TerrainLayer") {
+                            layer.draw(canvas, state, parallaxCalculator)
+                        }
+
+                        else -> layer.draw(canvas, state, parallaxCalculator)
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error drawing layer ${layer.javaClass.simpleName}", e)
                 }
@@ -352,7 +327,9 @@ class ParallaxScene(
             // Draw Weather Overlay (only if enabled)
             if (weatherEnabled) {
                 try {
-                    weatherLayer.draw(canvas, state, parallaxCalculator)
+                    traceSection("Draw_WeatherLayer") {
+                        weatherLayer.draw(canvas, state, parallaxCalculator)
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error drawing weather", e)
                 }
@@ -405,6 +382,38 @@ class ParallaxScene(
             Log.e(TAG, "Error rendering scene", e)
         }
     }
+
+    private fun processManualSpawnTriggers() {
+        val settings = currentSettings
+        val currentTimeMs = System.currentTimeMillis()
+
+        val spawnTriggerKey = "trigger_spawn_event_time$triggerSuffix"
+        val spawnTriggerTime = settings.getLong(spawnTriggerKey, 0L)
+        if (spawnTriggerTime > 0L && spawnTriggerTime != lastHandledSpawnTriggerTime) {
+            lastHandledSpawnTriggerTime = spawnTriggerTime
+            val timeSinceTrigger = currentTimeMs - spawnTriggerTime
+            if (timeSinceTrigger < 10000L) {
+                randomEventLayer.debugSpawnEvent(spawnTriggerTime)
+                Log.d(TAG, "Manual spawn trigger received [${if (isPreview) "preview" else "wallpaper"}] (delay: ${timeSinceTrigger}ms)")
+            }
+        }
+
+        val specificEventKey = "trigger_spawn_specific_event$triggerSuffix"
+        val specificEventTimeKey = "trigger_spawn_specific_event_time$triggerSuffix"
+        val specificEventTime = settings.getLong(specificEventTimeKey, 0L)
+        val specificEvent = settings.getNullableString(specificEventKey)
+        if (!specificEvent.isNullOrBlank() &&
+            specificEventTime > 0L &&
+            specificEventTime != lastHandledSpecificTriggerTime
+        ) {
+            lastHandledSpecificTriggerTime = specificEventTime
+            val timeSinceTrigger = currentTimeMs - specificEventTime
+            if (timeSinceTrigger < 10000L) {
+                randomEventLayer.spawnSpecificEvent(specificEvent, specificEventTime)
+                Log.d(TAG, "Specific spawn trigger received [${if (isPreview) "preview" else "wallpaper"}]: $specificEvent (delay: ${timeSinceTrigger}ms)")
+            }
+        }
+    }
     
     private fun resizeLayers(w: Float, h: Float) {
         for (layer in layers) {
@@ -416,19 +425,25 @@ class ParallaxScene(
     }
 
     fun loadPrefs() {
+        val snapshot = PreferenceManager.getDefaultSharedPreferences(context).all
+        reloadSettings(SimulationSettings.fromSnapshot(snapshot))
+    }
+
+    fun reloadSettings(settings: SimulationSettings) {
+        currentSettings = settings
+
         try {
-            val parallaxEnabled = prefs.getBoolean("pref_parallax_enabled", PreferenceDefaults.PARALLAX_ENABLED)
-            
+            val parallaxEnabled = settings.getBoolean("pref_parallax_enabled", PreferenceDefaults.PARALLAX_ENABLED)
+
             // Sensor mode: rotation_vector (our robust implementation) or gyroscope
-            val sensorMode = prefs.getString("pref_parallax_sensor_mode", PreferenceDefaults.PARALLAX_SENSOR_MODE) ?: PreferenceDefaults.PARALLAX_SENSOR_MODE
+            val sensorMode = settings.getString("pref_parallax_sensor_mode", PreferenceDefaults.PARALLAX_SENSOR_MODE)
             val parallaxMode = when (sensorMode) {
                 "gyroscope" -> info.olli.weatherlwp.parallax.ParallaxSensorManager.ParallaxMode.GYROSCOPE
                 else -> info.olli.weatherlwp.parallax.ParallaxSensorManager.ParallaxMode.ROTATION_VECTOR
             }
             sensor.setParallaxMode(parallaxMode)
-            
+
             // Start/stop sensor based on parallax enabled state
-            // This saves significant battery/CPU when parallax is disabled
             if (parallaxEnabled) {
                 if (!sensor.isRunning()) {
                     sensor.start()
@@ -439,65 +454,54 @@ class ParallaxScene(
                     parallaxCalculator.reset()  // Reset to center when disabled
                 }
             }
-            
+
             // Input sensitivity: slider 1-100% with LOGARITHMIC curve
-            // Fine control at low values (~1 old scale), high values reach ~5 old scale
-            // Log formula: min * (max/min)^((slider-1)/99)
-            // At 1% → 0.01, at 25% → ~0.075, at 50% → ~0.22, at 100% → 5.0
-            val sensitivityVal = prefs.getInt("pref_parallax_strength", PreferenceDefaults.PARALLAX_STRENGTH).coerceIn(1, 100)
+            val sensitivityVal = settings.getInt("pref_parallax_strength", PreferenceDefaults.PARALLAX_STRENGTH).coerceIn(1, 100)
             val minStrength = 0.01f
             val maxStrength = 5.0f
-            val logBase = maxStrength / minStrength  // 500
-            val exponent = (sensitivityVal - 1) / 99f  // 0..1
+            val logBase = maxStrength / minStrength
+            val exponent = (sensitivityVal - 1) / 99f
             val rawStrength = minStrength * logBase.toDouble().pow(exponent.toDouble()).toFloat()
             parallaxStrength = if (parallaxEnabled) rawStrength else 0f
-            
+
             // Max offset as percentage of screen height: 2..40% (default 20%)
-            // This ensures movement scales proportionally with screen size
-            val maxOffsetPercentVal = prefs.getInt("pref_parallax_max_offset", PreferenceDefaults.PARALLAX_MAX_OFFSET).coerceIn(2, 40)
+            val maxOffsetPercentVal = settings.getInt("pref_parallax_max_offset", PreferenceDefaults.PARALLAX_MAX_OFFSET).coerceIn(2, 40)
             val maxOffsetPercent = maxOffsetPercentVal.toFloat()
-            
+
             // Legacy pixel offset (not used when percentage is set, but kept for compatibility)
             parallaxMaxOffsetPx = 130f
-            
+
             // Smoothing slider: map 0..100 -> 0f..0.40f
-            // 0 = instant/direct (no smoothing), 50 = moderate smoothing, 100 = floaty
-            val smoothingVal = prefs.getInt("pref_parallax_smoothing", PreferenceDefaults.PARALLAX_SMOOTHING).coerceIn(0, 100)
+            val smoothingVal = settings.getInt("pref_parallax_smoothing", PreferenceDefaults.PARALLAX_SMOOTHING).coerceIn(0, 100)
             val smoothingFactor = if (smoothingVal <= 0) 0f else 0.02f + (smoothingVal / 100f) * 0.38f
-            
+
             // Edge easing slider: map 0..100 -> 0f..1f
-            // 0 = linear (no easing), 50 = moderate easing, 100 = extreme (center-only movement)
-            val edgeEasingVal = prefs.getInt("pref_parallax_edge_easing", PreferenceDefaults.PARALLAX_EDGE_EASING).coerceIn(0, 100)
+            val edgeEasingVal = settings.getInt("pref_parallax_edge_easing", PreferenceDefaults.PARALLAX_EDGE_EASING).coerceIn(0, 100)
             val edgeEasing = edgeEasingVal / 100f
-            
+
             // Return speed unlocked: when true, return to center is always fast
-            val returnSpeedUnlocked = prefs.getBoolean("pref_parallax_return_unlocked", PreferenceDefaults.PARALLAX_RETURN_UNLOCKED)
-            
-            // Depth separation slider: map 0..100 -> 0f..4.0f (default 33 = ~1.3x effect)
-            val depthVal = prefs.getInt("pref_parallax_depth", PreferenceDefaults.PARALLAX_DEPTH).coerceIn(0, 100)
+            val returnSpeedUnlocked = settings.getBoolean("pref_parallax_return_unlocked", PreferenceDefaults.PARALLAX_RETURN_UNLOCKED)
+
+            // Depth separation slider: map 0..100 -> 0f..4.0f
+            val depthVal = settings.getInt("pref_parallax_depth", PreferenceDefaults.PARALLAX_DEPTH).coerceIn(0, 100)
             val depthSeparation = (depthVal / 100f) * 4.0f
-            
-            // Perspective slider: map 0..100 -> 0f..1f (default 100 = background moves)
-            // 0 = foreground moves most (head tilts, window stays)
-            // 100 = background moves most (window shifts, head stays)
-            val perspectiveVal = prefs.getInt("pref_parallax_perspective", PreferenceDefaults.PARALLAX_PERSPECTIVE).coerceIn(0, 100)
+
+            // Perspective slider: map 0..100 -> 0f..1f
+            val perspectiveVal = settings.getInt("pref_parallax_perspective", PreferenceDefaults.PARALLAX_PERSPECTIVE).coerceIn(0, 100)
             val perspective = perspectiveVal / 100f
-            
-            // Return speed slider: map 0..100 -> 0f..1f (default 15 = slow return)
-            // 0 = no return (scene stays offset), 50 = medium, 100 = fast return to center
-            val returnSpeedVal = prefs.getInt("pref_parallax_return_speed", PreferenceDefaults.PARALLAX_RETURN_SPEED).coerceIn(0, 100)
-            val returnSpeed = returnSpeedVal / 100f  // 0->0, 100->1
-            
-            // Axis inversion settings (for correcting inverted movement direction)
-            val invertX = prefs.getBoolean("pref_parallax_invert_x", PreferenceDefaults.PARALLAX_INVERT_X)
-            val invertY = prefs.getBoolean("pref_parallax_invert_y", PreferenceDefaults.PARALLAX_INVERT_Y)
-            
-            // Aspect ratio compensation: map 50..150 -> 0.5..1.5 (default 100 = 1:1 ratio)
-            // Adjusts horizontal movement relative to vertical
-            // At 100: horizontal uses same % of height as vertical (equal pixel movement)
-            val aspectRatioVal = prefs.getInt("pref_parallax_aspect_ratio", PreferenceDefaults.PARALLAX_ASPECT_RATIO).coerceIn(50, 150)
+
+            // Return speed slider: map 0..100 -> 0f..1f
+            val returnSpeedVal = settings.getInt("pref_parallax_return_speed", PreferenceDefaults.PARALLAX_RETURN_SPEED).coerceIn(0, 100)
+            val returnSpeed = returnSpeedVal / 100f
+
+            // Axis inversion settings
+            val invertX = settings.getBoolean("pref_parallax_invert_x", PreferenceDefaults.PARALLAX_INVERT_X)
+            val invertY = settings.getBoolean("pref_parallax_invert_y", PreferenceDefaults.PARALLAX_INVERT_Y)
+
+            // Aspect ratio compensation
+            val aspectRatioVal = settings.getInt("pref_parallax_aspect_ratio", PreferenceDefaults.PARALLAX_ASPECT_RATIO).coerceIn(50, 150)
             val aspectRatioCompensation = aspectRatioVal / 100f
-            
+
             // Apply to parallax calculator
             parallaxCalculator.strength = parallaxStrength
             parallaxCalculator.maxOffsetPx = parallaxMaxOffsetPx
@@ -511,61 +515,76 @@ class ParallaxScene(
             parallaxCalculator.aspectRatioCompensation = aspectRatioCompensation
             parallaxCalculator.edgeEasing = edgeEasing
             parallaxCalculator.returnSpeedUnlocked = returnSpeedUnlocked
-            
+
             // Sensor auto-return: gentle return-to-center only when device is still
             sensor.setAutoReturnRate(returnSpeed)
-            
+
             // Weather and seasonal toggles
-            weatherEnabled = prefs.getBoolean("pref_weather_enabled", true)
-            seasonalEnabled = prefs.getBoolean("pref_seasonal_enabled", true)
+            weatherEnabled = settings.getBoolean("pref_weather_enabled", true)
+            seasonalEnabled = settings.getBoolean("pref_seasonal_enabled", true)
             seasonalEvents.enabled = seasonalEnabled
-            
+
             // Weather particle layer settings (depth effect for rain/snow/lightning)
-            val weatherLayers = prefs.getInt("pref_weather_layers", 3).coerceIn(1, 5)
-            val weatherSeparation = prefs.getInt("pref_weather_layer_separation", 30) / 100f
-            val weatherDepth = prefs.getInt("pref_weather_layer_depth", 20) / 100f
+            val weatherLayers = settings.getInt("pref_weather_layers", 3).coerceIn(1, 5)
+            val weatherSeparation = settings.getInt("pref_weather_layer_separation", 30) / 100f
+            val weatherDepth = settings.getInt("pref_weather_layer_depth", 20) / 100f
             weatherLayer.setLayerSettings(weatherLayers, weatherSeparation, weatherDepth)
-            
-            // Reload simulation controller settings
-            simulationController.reloadSettings()
-            
-            // Reload layer settings
+
+            // Push settings into simulation and layers
+            simulationController.applySettings(settings)
             for (layer in layers) {
-                layer.reloadSettings()
+                layer.reloadSettings(settings)
             }
-            weatherLayer.reloadSettings()
-            vignetteLayer.reloadSettings()
-            debugOverlayLayer.reloadSettings()
-            
+            weatherLayer.reloadSettings(settings)
+            vignetteLayer.reloadSettings(settings)
+            debugOverlayLayer.reloadSettings(settings)
+
             // Configure shake detection based on settings
-            val shakeEnabled = prefs.getBoolean("pref_shake_fireworks_enabled", true)
-            val shakeSensitivity = prefs.getInt("pref_shake_sensitivity", PreferenceDefaults.SHAKE_SENSITIVITY) / 100f
-            val shakeDelayMs = prefs.getInt("pref_shake_delay", PreferenceDefaults.SHAKE_DELAY_MS).coerceIn(0, 5000)
+            val shakeEnabled = settings.getBoolean("pref_shake_fireworks_enabled", true)
+            val shakeSensitivity = settings.getInt("pref_shake_sensitivity", PreferenceDefaults.SHAKE_SENSITIVITY) / 100f
+            val shakeDelayMs = settings.getInt("pref_shake_delay", PreferenceDefaults.SHAKE_DELAY_MS).coerceIn(0, 5000)
             sensor.setShakeSettings(shakeEnabled, shakeSensitivity, shakeDelayMs)
-            
+
             // Frame time logging (debug feature for performance analysis)
-            frameTimeLoggingEnabled = prefs.getBoolean("pref_debug_frame_timing", false)
+            frameTimeLoggingEnabled = settings.getBoolean("pref_debug_frame_timing", false)
             if (frameTimeLoggingEnabled) {
-                // Reset counters when enabled
                 slowFrameCount = 0
                 totalFrameCount = 0
                 Log.d(TAG, "Frame timing logging enabled")
             }
-            
         } catch (e: Exception) {
             Log.e(TAG, "Error loading prefs", e)
         }
     }
     
     fun destroy() {
-        // Unregister spawn trigger listener to prevent leaks
-        prefs.unregisterOnSharedPreferenceChangeListener(spawnTriggerListener)
+        // Stop sensor flow and detach callbacks first to avoid late events during teardown.
+        sensor.stop()
+        sensor.clearCallbacks()
+
+        // Break callback chains between layers so destroyed objects are not retained.
+        terrainLayer.groundEventDrawer = null
+        terrainLayer.riverDrawer = null
+        terrainLayer.lakeDrawer = null
+        randomEventLayer.hillHeightProvider = null
+        riverLayer.terrainYProvider = null
+        riverLayer.hillDepthProvider = null
+        lakeLayer.terrainYProvider = null
+        lakeLayer.hillDepthProvider = null
+
+        // Drop frame-scoped references to avoid retaining canvas/state snapshots.
+        lastCanvas = null
+        lastState = null
+
         for (layer in layers) {
             layer.destroy()
         }
         weatherLayer.destroy()
         vignetteLayer.destroy()
         debugOverlayLayer.destroy()
+
+        // Release strong references held by the draw-order list.
+        layers.clear()
     }
     
     /**

@@ -27,6 +27,12 @@ import kotlin.random.Random
 class WeatherLayer : SceneLayer {
     override val layerType = LayerType.WEATHER
 
+    private companion object {
+        private const val SNOW_DEPTH_SMALL = 0
+        private const val SNOW_DEPTH_MEDIUM = 1
+        private const val SNOW_DEPTH_LARGE = 2
+    }
+
     /**
      * Effect type for weather rendering.
      * @deprecated Use EffectType instead. This typealias is kept for backwards compatibility.
@@ -57,9 +63,19 @@ class WeatherLayer : SceneLayer {
 
     // Pre-allocated particle pools (no runtime allocations)
     // Max pool sizes - actual active count depends on intensity
-    private val rainParticles = Array(300) { Particle() }
-    private val snowParticles = Array(200) { Particle() }
+    private val rainParticles = Array(RenderConstants.RAIN_PARTICLE_POOL_SIZE) { Particle() }
+    private val snowParticles = Array(RenderConstants.SNOW_PARTICLE_POOL_SIZE) { Particle() }
     private val hailParticles = Array(150) { Particle() }  // Hail is larger, needs fewer
+
+    // Batched draw buffers - reused every frame (no per-frame allocation)
+    private val rainCoords = FloatArray(RenderConstants.RAIN_PARTICLE_POOL_SIZE * 4)
+    private val snowCoordsSmall = FloatArray(RenderConstants.SNOW_PARTICLE_POOL_SIZE * 2)
+    private val snowCoordsMedium = FloatArray(RenderConstants.SNOW_PARTICLE_POOL_SIZE * 2)
+    private val snowCoordsLarge = FloatArray(RenderConstants.SNOW_PARTICLE_POOL_SIZE * 2)
+    private var rainCoordCount = 0
+    private var snowSmallCoordCount = 0
+    private var snowMediumCoordCount = 0
+    private var snowLargeCoordCount = 0
     
     // Intensity (0.0-1.0): controls how many particles are active
     private var intensity = 0.5f  // Default medium intensity
@@ -68,11 +84,28 @@ class WeatherLayer : SceneLayer {
     private val rainPaint = Paint().apply {
         color = Color.argb(180, 150, 180, 220)
         strokeWidth = 2f
+        strokeCap = Paint.Cap.ROUND
         isAntiAlias = true
     }
 
-    private val snowPaint = Paint().apply {
-        color = Color.WHITE
+    private val snowPaintSmall = Paint().apply {
+        color = Color.argb(150, 245, 245, 255)
+        strokeCap = Paint.Cap.ROUND
+        strokeWidth = 1.5f
+        isAntiAlias = true
+    }
+
+    private val snowPaintMedium = Paint().apply {
+        color = Color.argb(185, 248, 248, 255)
+        strokeCap = Paint.Cap.ROUND
+        strokeWidth = 2.2f
+        isAntiAlias = true
+    }
+
+    private val snowPaintLarge = Paint().apply {
+        color = Color.argb(220, 255, 255, 255)
+        strokeCap = Paint.Cap.ROUND
+        strokeWidth = 3.0f
         isAntiAlias = true
     }
     
@@ -207,7 +240,7 @@ class WeatherLayer : SceneLayer {
         }
 
         when (currentEffect) {
-            EffectType.RAIN -> renderRain(canvas, state)
+            EffectType.RAIN -> renderRain(canvas)
             EffectType.SNOW -> renderSnow(canvas, state)
             EffectType.HAIL -> renderHail(canvas, state)
             EffectType.LIGHTNING -> renderLightning(canvas, state)
@@ -217,6 +250,8 @@ class WeatherLayer : SceneLayer {
     }
 
     private fun initParticles() {
+        configureSnowPointPaints()
+
         // Initialize rain particles
         for (p in rainParticles) {
             resetRainParticle(p)
@@ -251,6 +286,11 @@ class WeatherLayer : SceneLayer {
         p.alpha = ((120 + Random.nextInt(80)) * layerScale).toInt().coerceIn(60, 255)
     }
 
+    private fun recycleRainParticle(p: Particle) {
+        p.x = Random.nextFloat() * screenWidth
+        p.y = -20f
+    }
+
     private fun resetSnowParticle(p: Particle) {
         // Assign to a random layer
         p.layer = Random.nextInt(weatherLayers.coerceAtLeast(1))
@@ -266,6 +306,11 @@ class WeatherLayer : SceneLayer {
         // Alpha reduced for back layers
         p.alpha = ((180 + Random.nextInt(75)) * layerScale).toInt().coerceIn(60, 255)
     }
+
+    private fun recycleSnowParticle(p: Particle) {
+        p.x = Random.nextFloat() * screenWidth
+        p.y = -10f
+    }
     
     private fun resetHailParticle(p: Particle) {
         // Assign to a random layer
@@ -280,6 +325,28 @@ class WeatherLayer : SceneLayer {
         p.size = (5f + Random.nextFloat() * 8f) * layerScale
         // Alpha reduced for back layers
         p.alpha = ((200 + Random.nextInt(55)) * layerScale).toInt().coerceIn(80, 255)
+    }
+
+    private fun recycleHailParticle(p: Particle) {
+        p.x = Random.nextFloat() * screenWidth
+        p.y = -15f
+    }
+
+    private fun configureSnowPointPaints() {
+        val heightScale = RenderConstants.getHeightScale(screenHeight.toFloat()).coerceAtLeast(0.35f)
+        snowPaintSmall.strokeWidth = (1.2f * heightScale).coerceAtLeast(0.8f)
+        snowPaintMedium.strokeWidth = (1.8f * heightScale).coerceAtLeast(1.1f)
+        snowPaintLarge.strokeWidth = (2.5f * heightScale).coerceAtLeast(1.5f)
+    }
+
+    private fun getSnowDepthBucket(layer: Int): Int {
+        if (weatherLayers <= 1) return SNOW_DEPTH_MEDIUM
+        val normalizedLayer = layer.toFloat() / (weatherLayers - 1)
+        return when {
+            normalizedLayer >= 0.66f -> SNOW_DEPTH_SMALL
+            normalizedLayer >= 0.33f -> SNOW_DEPTH_MEDIUM
+            else -> SNOW_DEPTH_LARGE
+        }
     }
     
     /**
@@ -307,38 +374,31 @@ class WeatherLayer : SceneLayer {
         return 0.3f + normalizedLayer * layerDepthOffset * 2f
     }
 
-    private fun renderRain(canvas: Canvas, state: SimulationState) {
+    private fun renderRain(canvas: Canvas) {
         // Dim the world during rain (atmospheric effect)
         // Intensity affects dimming: light rain = subtle, heavy = more dim
         val dimAlpha = (20 + intensity * 40).toInt()
         rainDimPaint.color = Color.argb(dimAlpha, 100, 105, 115)
         canvas.drawRect(0f, 0f, screenWidth.toFloat(), screenHeight.toFloat(), rainDimPaint)
-        
-        // Active particle count based on intensity (30% to 100% of pool)
-        val activeCount = (rainParticles.size * (0.3f + intensity * 0.7f)).toInt()
-        
-        // Wind affects visual angle
-        val windDrift = state.windStrength * 3f
-        
-        // Draw only - physics moved to update()
-        for (i in 0 until activeCount) {
-            val p = rainParticles[i]
-            rainPaint.alpha = p.alpha
-            canvas.drawLine(p.x, p.y, p.x - 2f - windDrift, p.y + p.size, rainPaint)
+
+        // Batched rain streak draw: one GPU call instead of per-particle drawLine calls
+        if (rainCoordCount > 0) {
+            canvas.drawLines(rainCoords, 0, rainCoordCount, rainPaint)
         }
     }
 
     @Suppress("UNUSED_PARAMETER")
     private fun renderSnow(canvas: Canvas, state: SimulationState) {
         // state kept for API consistency with other render methods
-        // Active particle count based on intensity (20% to 100% of pool)
-        val activeCount = (snowParticles.size * (0.2f + intensity * 0.8f)).toInt()
-        
-        // Draw only - physics moved to update()
-        for (i in 0 until activeCount) {
-            val p = snowParticles[i]
-            snowPaint.alpha = p.alpha
-            canvas.drawCircle(p.x, p.y, p.size, snowPaint)
+        // Draw pre-bucketed snow points with fixed paints (small/mid/large depth)
+        if (snowSmallCoordCount > 0) {
+            canvas.drawPoints(snowCoordsSmall, 0, snowSmallCoordCount, snowPaintSmall)
+        }
+        if (snowMediumCoordCount > 0) {
+            canvas.drawPoints(snowCoordsMedium, 0, snowMediumCoordCount, snowPaintMedium)
+        }
+        if (snowLargeCoordCount > 0) {
+            canvas.drawPoints(snowCoordsLarge, 0, snowLargeCoordCount, snowPaintLarge)
         }
     }
     
@@ -383,7 +443,7 @@ class WeatherLayer : SceneLayer {
         drawStormClouds(canvas, state.timeSeconds)
         
         // Also render rain during thunderstorm
-        renderRain(canvas, state)
+        renderRain(canvas)
         
         // Lightning flash state is managed in update() - draw only here
         if (lightningFlash) {
@@ -544,6 +604,11 @@ class WeatherLayer : SceneLayer {
         setEffect(effect)
         
         if (currentEffect == EffectType.NONE || screenWidth <= 0) return
+
+        if (!initialized) {
+            initParticles()
+            initialized = true
+        }
         
         val deltaSec = deltaTimeMs / 1000f
         
@@ -566,13 +631,25 @@ class WeatherLayer : SceneLayer {
         val speedMult = 0.7f + intensity * 0.6f
         // Scale to ~60fps equivalent (base speed assumed at 60fps)
         val frameScale = deltaSec * 60f
+        var coordIndex = 0
         
         for (i in 0 until activeCount) {
             val p = rainParticles[i]
             p.y += p.speed * speedMult * frameScale
             p.x -= (1f + windDrift) * speedMult * frameScale
-            if (p.y > screenHeight) resetRainParticle(p)
+
+            if (p.y > screenHeight) {
+                recycleRainParticle(p)
+            }
+
+            rainCoords[coordIndex] = p.x
+            rainCoords[coordIndex + 1] = p.y
+            rainCoords[coordIndex + 2] = p.x - 2f - windDrift
+            rainCoords[coordIndex + 3] = p.y + p.size
+            coordIndex += 4
         }
+
+        rainCoordCount = coordIndex
     }
     
     private fun updateSnowParticles(deltaSec: Float) {
@@ -580,13 +657,42 @@ class WeatherLayer : SceneLayer {
         val windDrift = cachedWindStrength * 2f
         val speedMult = 0.6f + intensity * 0.8f
         val frameScale = deltaSec * 60f
+
+        var smallIndex = 0
+        var mediumIndex = 0
+        var largeIndex = 0
         
         for (i in 0 until activeCount) {
             val p = snowParticles[i]
             p.y += p.speed * speedMult * frameScale
             p.x += kotlin.math.sin((p.y * 0.02f).toDouble()).toFloat() * 0.8f * frameScale + windDrift * 0.5f * frameScale
-            if (p.y > screenHeight) resetSnowParticle(p)
+
+            if (p.y > screenHeight) {
+                recycleSnowParticle(p)
+            }
+
+            when (getSnowDepthBucket(p.layer)) {
+                SNOW_DEPTH_SMALL -> {
+                    snowCoordsSmall[smallIndex] = p.x
+                    snowCoordsSmall[smallIndex + 1] = p.y
+                    smallIndex += 2
+                }
+                SNOW_DEPTH_MEDIUM -> {
+                    snowCoordsMedium[mediumIndex] = p.x
+                    snowCoordsMedium[mediumIndex + 1] = p.y
+                    mediumIndex += 2
+                }
+                else -> {
+                    snowCoordsLarge[largeIndex] = p.x
+                    snowCoordsLarge[largeIndex + 1] = p.y
+                    largeIndex += 2
+                }
+            }
         }
+
+        snowSmallCoordCount = smallIndex
+        snowMediumCoordCount = mediumIndex
+        snowLargeCoordCount = largeIndex
     }
     
     private fun updateHailParticles(deltaSec: Float) {
@@ -599,7 +705,7 @@ class WeatherLayer : SceneLayer {
             val p = hailParticles[i]
             p.y += p.speed * speedMult * frameScale
             p.x += kotlin.math.sin((p.y * 0.05f).toDouble()).toFloat() * 0.5f * frameScale + windDrift * 0.3f * frameScale
-            if (p.y > screenHeight) resetHailParticle(p)
+            if (p.y > screenHeight) recycleHailParticle(p)
         }
     }
     

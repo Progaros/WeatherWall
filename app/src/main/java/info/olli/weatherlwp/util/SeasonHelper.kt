@@ -1,6 +1,7 @@
 package info.olli.weatherlwp.util
 
 import android.content.SharedPreferences
+import info.olli.weatherlwp.simulation.SimulationSettings
 import java.util.Calendar
 
 /**
@@ -133,6 +134,15 @@ object SeasonHelper {
     fun getEffectiveTerrainSeasonKey(prefs: SharedPreferences): String {
         val debugEnabled = prefs.getBoolean("pref_debug_enabled", false)
         val seasonOverride = prefs.getString("pref_terrain_season", "auto") ?: "auto"
+        return getEffectiveTerrainSeasonKey(debugEnabled, seasonOverride)
+    }
+
+    /**
+     * Get the effective terrain season from immutable settings snapshot.
+     */
+    fun getEffectiveTerrainSeasonKey(settings: SimulationSettings): String {
+        val debugEnabled = settings.getBoolean("pref_debug_enabled", false)
+        val seasonOverride = settings.getString("pref_terrain_season", "auto")
         return getEffectiveTerrainSeasonKey(debugEnabled, seasonOverride)
     }
     

@@ -10,6 +10,7 @@ import android.graphics.RectF
 import android.graphics.Shader
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.parallax.ParallaxCalculator
+import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
 import info.olli.weatherlwp.util.ColorMath
 import kotlin.math.abs
@@ -35,7 +36,10 @@ import kotlin.random.Random
  */
 class SkyLayer(private val context: Context? = null) : SceneLayer {
     override val layerType = LayerType.SKY
-    private val skyPaint = Paint()
+    private val skyPaint = Paint().apply {
+        // Dithering reduces visible banding in quantized gradients, especially on OLED panels.
+        isDither = true
+    }
     private val starPaint = Paint().apply { 
         color = Color.WHITE 
         isAntiAlias = true 
@@ -99,6 +103,22 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
     private var celestialSize = 1.0f
     private var celestialArcHeight = 1.0f  // 1.0 = full arc, 0.0 = near horizon
 
+    private var lastSkyBucketId = Int.MIN_VALUE
+
+    private data class SkyGradientBucket(
+        val id: Int,
+        val hour: Float,
+        val sunrise: Float,
+        val sunset: Float,
+        val nightShade: Float
+    )
+
+    private companion object {
+        private const val SKY_TIME_BUCKETS = 256
+        private const val SKY_SUN_EVENT_BUCKETS = 64
+        private const val SKY_SHADE_BUCKETS = 32
+    }
+
     init {
         generateStars()
         reloadSettings()
@@ -119,6 +139,8 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
     override fun resize(w: Float, h: Float) {
         width = w
         height = h
+        // Force one gradient rebuild for the new viewport dimensions.
+        lastSkyBucketId = Int.MIN_VALUE
         updateGradient()
         // Invalidate cached vignette gradient on resize
         cachedVignetteGradient = null
@@ -127,20 +149,52 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
 
     override fun update(state: SimulationState, deltaTimeMs: Long) {
         // Track night shade strength for darker nights
-        val newShadeStrength = if (state.isNight) state.nightShadeStrength else 0f
-        val shadeChanged = newShadeStrength != nightShadeStrength
-        nightShadeStrength = newShadeStrength
+        nightShadeStrength = if (state.isNight) state.nightShadeStrength else 0f
         
-        updateColorsForTime(state, shadeChanged)
+        updateColorsForTime(state)
     }
     
-    private fun updateColorsForTime(state: SimulationState, forceUpdate: Boolean = false) {
-        // Use smoothed time for eased color transitions
-        val hour = state.smoothedTimeOfDayHours
-        
-        // Dynamic time thresholds based on weather data sunrise/sunset
-        val sunrise = state.sunriseHours     // e.g., 7.05 in winter, 5.5 in summer
-        val sunset = state.sunsetHours       // e.g., 17.5 in winter, 21.0 in summer
+    private fun toBucket(value: Float, min: Float, max: Float, steps: Int): Int {
+        if (steps <= 1 || max <= min) return 0
+        val t = ((value - min) / (max - min)).coerceIn(0f, 1f)
+        return (t * (steps - 1)).toInt()
+    }
+
+    private fun fromBucket(bucket: Int, min: Float, max: Float, steps: Int): Float {
+        if (steps <= 1 || max <= min) return min
+        val t = bucket.coerceIn(0, steps - 1).toFloat() / (steps - 1).toFloat()
+        return min + t * (max - min)
+    }
+
+    private fun buildSkyGradientBucket(state: SimulationState): SkyGradientBucket {
+        val hourBucket = toBucket(state.smoothedTimeOfDayHours, 0f, 24f, SKY_TIME_BUCKETS)
+        val sunriseBucket = toBucket(state.sunriseHours, 0f, 24f, SKY_SUN_EVENT_BUCKETS)
+        val sunsetBucket = toBucket(state.sunsetHours, 0f, 24f, SKY_SUN_EVENT_BUCKETS)
+        val shadeBucket = toBucket(nightShadeStrength, 0f, 1f, SKY_SHADE_BUCKETS)
+
+        val id = hourBucket or
+            (sunriseBucket shl 8) or
+            (sunsetBucket shl 14) or
+            (shadeBucket shl 20)
+
+        return SkyGradientBucket(
+            id = id,
+            hour = fromBucket(hourBucket, 0f, 24f, SKY_TIME_BUCKETS),
+            sunrise = fromBucket(sunriseBucket, 0f, 24f, SKY_SUN_EVENT_BUCKETS),
+            sunset = fromBucket(sunsetBucket, 0f, 24f, SKY_SUN_EVENT_BUCKETS),
+            nightShade = fromBucket(shadeBucket, 0f, 1f, SKY_SHADE_BUCKETS)
+        )
+    }
+
+    private fun updateColorsForTime(state: SimulationState) {
+        val bucket = buildSkyGradientBucket(state)
+        if (bucket.id == lastSkyBucketId) return
+        lastSkyBucketId = bucket.id
+
+        // Use bucketized time/solar inputs to avoid per-frame shader churn.
+        val hour = bucket.hour
+        val sunrise = bucket.sunrise
+        val sunset = bucket.sunset
         val dawnStart = (sunrise - 1.0f).coerceAtLeast(3.0f)   // 1h before sunrise
         val dawnEnd = sunrise + 0.5f                            // 30min after sunrise
         val duskStart = sunset - 0.5f                           // 30min before sunset
@@ -197,22 +251,20 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         }
         
         // Apply night shade darkening if at night
-        val (shadedTop, shadedMid, shadedHorizon) = if (nightShadeStrength > 0f) {
+        val (shadedTop, shadedMid, shadedHorizon) = if (bucket.nightShade > 0f) {
             Triple(
-                ColorMath.shadeRgb(newTop, nightShadeStrength),
-                ColorMath.shadeRgb(newMid, nightShadeStrength),
-                ColorMath.shadeRgb(newHorizon, nightShadeStrength)
+                ColorMath.shadeRgb(newTop, bucket.nightShade),
+                ColorMath.shadeRgb(newMid, bucket.nightShade),
+                ColorMath.shadeRgb(newHorizon, bucket.nightShade)
             )
         } else {
             Triple(newTop, newMid, newHorizon)
         }
-        
-        if (forceUpdate || shadedTop != skyTop || shadedMid != skyMid || shadedHorizon != skyHorizon) {
-            skyTop = shadedTop
-            skyMid = shadedMid
-            skyHorizon = shadedHorizon
-            updateGradient()
-        }
+
+        skyTop = shadedTop
+        skyMid = shadedMid
+        skyHorizon = shadedHorizon
+        updateGradient()
     }
 
     private fun updateGradient() {
@@ -587,11 +639,15 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
             android.util.Log.w("SkyLayer", "reloadSettings() skipped: context is null")
             return
         }
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        sunEnabled = prefs.getBoolean("pref_sun_enabled", true)
-        moonEnabled = prefs.getBoolean("pref_moon_enabled", true)
-        celestialSize = prefs.getInt("pref_celestial_size", 100) / 100f
-        celestialArcHeight = prefs.getInt("pref_celestial_arc_height", 100) / 100f
+        val snapshot = PreferenceManager.getDefaultSharedPreferences(context).all
+        reloadSettings(SimulationSettings.fromSnapshot(snapshot))
+    }
+
+    override fun reloadSettings(settings: SimulationSettings) {
+        sunEnabled = settings.getBoolean("pref_sun_enabled", true)
+        moonEnabled = settings.getBoolean("pref_moon_enabled", true)
+        celestialSize = settings.getInt("pref_celestial_size", 100) / 100f
+        celestialArcHeight = settings.getInt("pref_celestial_arc_height", 100) / 100f
     }
 
     override fun destroy() {

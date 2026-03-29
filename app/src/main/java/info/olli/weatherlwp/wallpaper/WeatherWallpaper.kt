@@ -1,20 +1,28 @@
 package info.olli.weatherlwp.wallpaper
 
 import android.app.WallpaperColors
-import android.content.SharedPreferences
 import android.graphics.Canvas
 import android.graphics.Color
 import android.os.Build
 import android.os.SystemClock
+import android.os.Trace
 import android.service.wallpaper.WallpaperService
 import android.util.Log
+import android.view.Choreographer
 import android.view.SurfaceHolder
-import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.PreferenceDefaults
+import info.olli.weatherlwp.simulation.SimulationSettings
+import info.olli.weatherlwp.simulation.SimulationSettingsRepository
 import info.olli.weatherlwp.rendering.ParallaxScene
 import info.olli.weatherlwp.rendering.RenderConstants
 import info.olli.weatherlwp.weather.WeatherRepository
 import info.olli.weatherlwp.parallax.ParallaxSensorManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 class WeatherWallpaper : WallpaperService() {
     companion object {
@@ -23,35 +31,36 @@ class WeatherWallpaper : WallpaperService() {
 
     override fun onCreateEngine(): Engine = WeatherEngine()
 
-    inner class WeatherEngine : Engine() {
-        private var renderThread: Thread? = null
+    inner class WeatherEngine : Engine(), Choreographer.FrameCallback {
+        private var choreographer: Choreographer? = null
+        @Volatile private var frameCallbackPosted: Boolean = false
         @Volatile private var isVisible: Boolean = false
+        private var lastDrawFrameNanos = 0L
+        private var preferHardwareCanvas = true
 
         private lateinit var scene: ParallaxScene
         private val sensorManager = ParallaxSensorManager(this@WeatherWallpaper)
         private val weatherRepo = WeatherRepository
+        private lateinit var settingsRepository: SimulationSettingsRepository
+        private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        private var settingsCollectionJob: Job? = null
+        @Volatile private var currentSettings: SimulationSettings = SimulationSettings.fromSnapshot(emptyMap<String, Any?>())
         
         // Track atmosphere phase for notifyColorsChanged()
         private var lastAtmospherePhase = -1
 
         // Preferences
         private var targetFps = 30
-        
-        // Preference change listener - responds to ALL setting changes
-        private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            // Reload all preferences and update scene when any setting changes
-            Log.d(TAG, "Preference changed: $key")
-            loadPrefs()
-        }
 
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             super.onCreate(surfaceHolder)
             try {
+                choreographer = Choreographer.getInstance()
+                settingsRepository = SimulationSettingsRepository(this@WeatherWallpaper)
+                currentSettings = settingsRepository.settingsFlow.value
                 scene = ParallaxScene(this@WeatherWallpaper, sensorManager, weatherRepo)
-                loadPrefs()
-                // Register for live weather updates from Breezy Weather
-                val prefs = PreferenceManager.getDefaultSharedPreferences(this@WeatherWallpaper)
-                prefs.registerOnSharedPreferenceChangeListener(prefsListener)
+                applySettings(currentSettings)
+                startSettingsCollection()
             } catch (e: Exception) {
                 Log.e(TAG, "Error in onCreate", e)
             }
@@ -63,11 +72,11 @@ class WeatherWallpaper : WallpaperService() {
                 // Some wallpaper preview flows create a surface without reliably calling
                 // onVisibilityChanged(true) first. Treat a created surface as visible.
                 isVisible = true
-                loadPrefs()
+                preferHardwareCanvas = true
                 scene.start()  // Start sensors
                 startRender()
                 // Paint at least one frame immediately so previews don't stay black.
-                drawFrame()
+                drawFrame(System.nanoTime())
             } catch (e: Exception) {
                 Log.e(TAG, "Error in onSurfaceCreated", e)
             }
@@ -84,6 +93,23 @@ class WeatherWallpaper : WallpaperService() {
             super.onSurfaceDestroyed(holder)
         }
 
+        override fun onSurfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+            super.onSurfaceChanged(holder, format, width, height)
+            try {
+                // Reset frame timing when surface geometry changes to avoid delta spikes.
+                lastFrameTimeMs = 0L
+                lastDrawFrameNanos = 0L
+                preferHardwareCanvas = true
+
+                // Render one frame immediately so resized surfaces don't show stale buffers.
+                if (isVisible && width > 0 && height > 0) {
+                    drawFrame(System.nanoTime())
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in onSurfaceChanged", e)
+            }
+        }
+
         override fun onVisibilityChanged(visible: Boolean) {
             this.isVisible = visible
             try {
@@ -91,7 +117,7 @@ class WeatherWallpaper : WallpaperService() {
                     Log.d(TAG, "Wallpaper visible - starting render loop and sensors")
                     // Reset frame timing to avoid large delta on first frame after resume
                     lastFrameTimeMs = 0L
-                    loadPrefs()
+                    preferHardwareCanvas = true
                     scene.start()  // Start sensors
                     startRender()
                 } else {
@@ -105,16 +131,40 @@ class WeatherWallpaper : WallpaperService() {
         }
 
         override fun onDestroy() {
-            try {
-                // Unregister weather update listener
-                val prefs = PreferenceManager.getDefaultSharedPreferences(this@WeatherWallpaper)
-                prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
-                stopRender()
-                scene.stop()
-                scene.destroy()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error in onDestroy", e)
+            isVisible = false
+
+            // Always stop frame callbacks first.
+            runCatching { stopRender() }
+                .onFailure { Log.e(TAG, "Error stopping render loop in onDestroy", it) }
+
+            // Stop settings collection before closing repository/scope.
+            runCatching {
+                settingsCollectionJob?.cancel()
+                settingsCollectionJob = null
+            }.onFailure { Log.e(TAG, "Error cancelling settings collection", it) }
+
+            if (::settingsRepository.isInitialized) {
+                runCatching { settingsRepository.close() }
+                    .onFailure { Log.e(TAG, "Error closing settings repository", it) }
             }
+
+            runCatching { engineScope.cancel() }
+                .onFailure { Log.e(TAG, "Error cancelling engine scope", it) }
+
+            if (::scene.isInitialized) {
+                runCatching {
+                    scene.stop()
+                    scene.destroy()
+                }.onFailure { Log.e(TAG, "Error destroying scene", it) }
+            }
+
+            // Clear references so no frame callback or collector can re-post work.
+            choreographer = null
+            lastDrawFrameNanos = 0L
+            lastFrameTimeMs = 0L
+            frameCallbackPosted = false
+            preferHardwareCanvas = true
+            currentSettings = SimulationSettings.fromSnapshot(emptyMap<String, Any?>())
             super.onDestroy()
         }
 
@@ -167,21 +217,33 @@ class WeatherWallpaper : WallpaperService() {
             }
         }
 
-        private fun loadPrefs() {
+        private fun startSettingsCollection() {
+            if (settingsCollectionJob != null) return
+
+            settingsCollectionJob = engineScope.launch {
+                settingsRepository.settingsFlow.collect { settings ->
+                    applySettings(settings)
+                }
+            }
+        }
+
+        private fun applySettings(settings: SimulationSettings) {
+            currentSettings = settings
+
             try {
-                val prefs = PreferenceManager.getDefaultSharedPreferences(this@WeatherWallpaper)
-                targetFps = prefs.getString("pref_max_fps", PreferenceDefaults.MAX_FPS)?.toIntOrNull() ?: 30
+                targetFps = settings.getString("pref_max_fps", PreferenceDefaults.MAX_FPS).toIntOrNull() ?: 30
                 targetFps = targetFps.coerceIn(10, 60)
                 
                 // Idle mode for battery optimization
-                idleModeEnabled = prefs.getBoolean("pref_idle_mode_enabled", PreferenceDefaults.IDLE_ENABLED)
-                idleFps = prefs.getInt("pref_idle_fps", PreferenceDefaults.IDLE_FPS).coerceIn(5, 20)
+                idleModeEnabled = settings.getBoolean("pref_idle_mode_enabled", PreferenceDefaults.IDLE_ENABLED)
+                idleFps = settings.getInt("pref_idle_fps", PreferenceDefaults.IDLE_FPS).coerceIn(5, 20)
                 // Idle timeout is now a ListPreference (String) with values in seconds
-                idleTimeoutMs = (prefs.getString("pref_idle_timeout", PreferenceDefaults.IDLE_TIMEOUT)?.toLongOrNull() ?: 5L) * 1000L
+                idleTimeoutMs = (settings.getString("pref_idle_timeout", PreferenceDefaults.IDLE_TIMEOUT).toLongOrNull() ?: 5L) * 1000L
                 
-                // Reload scene settings (handles parallax, clouds, day/night, terrain, weather, seasonal)
-                // ParallaxScene internally manages WeatherLayer and SeasonalEvents
-                scene.loadPrefs()
+                // Push full immutable settings snapshot into the scene graph.
+                if (::scene.isInitialized) {
+                    scene.reloadSettings(settings)
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading prefs", e)
             }
@@ -214,93 +276,103 @@ class WeatherWallpaper : WallpaperService() {
         }
         
         private fun startRender() {
-            if (renderThread != null) return
+            if (!isVisible) return
+
             frameCount = 0L
             totalDrawTimeMs = 0L
             lastLogTime = SystemClock.uptimeMillis()
             maxFrameTimeMs = 0L
-            
-            renderThread = Thread {
-                // Elevate thread priority for smoother rendering
-                android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_DISPLAY)
-                try {
-                    while (!Thread.currentThread().isInterrupted) {
-                        if (!isVisible) {
-                            SystemClock.sleep(250)
-                            continue
-                        }
-                        
-                        // Idle mode: check for scene activity and adjust FPS
-                        val now = SystemClock.uptimeMillis()
-                        if (idleModeEnabled) {
-                            if (checkSceneActivity()) {
-                                lastActivityTimeMs = now
-                                isIdle = false
-                            } else if (now - lastActivityTimeMs > idleTimeoutMs) {
-                                isIdle = true
-                            }
-                        } else {
-                            isIdle = false
-                        }
-                        
-                        // Use idle FPS when scene is static, otherwise use target FPS
-                        val effectiveFps = if (isIdle) idleFps else targetFps
-                        val frameTimeMs = (1000L / effectiveFps.toLong()).coerceAtLeast(16L)
-
-                        val start = SystemClock.uptimeMillis()
-                        drawFrame()
-                        val dt = SystemClock.uptimeMillis() - start
-                        
-                        // Track performance
-                        frameCount++
-                        totalDrawTimeMs += dt
-                        if (dt > maxFrameTimeMs) maxFrameTimeMs = dt
-                        
-                        // Log performance stats every 5 seconds
-                        if (start - lastLogTime > 5000) {
-                            val avgFrameMs = if (frameCount > 0) totalDrawTimeMs / frameCount else 0
-                            val actualFps = if (avgFrameMs > 0) 1000 / avgFrameMs else 0
-                            val idleInfo = if (isIdle) " (IDLE)" else ""
-                            Log.d(TAG, "Perf: ${frameCount} frames, avg=${avgFrameMs}ms, max=${maxFrameTimeMs}ms, ~${actualFps}fps$idleInfo")
-                            frameCount = 0L
-                            totalDrawTimeMs = 0L
-                            maxFrameTimeMs = 0L
-                            lastLogTime = start
-                        }
-                        
-                        val sleep = frameTimeMs - dt
-                        // Always sleep at least 1ms to prevent 100% CPU when frame exceeds budget
-                        SystemClock.sleep(sleep.coerceAtLeast(1L))
-                    }
-                } catch (e: InterruptedException) {
-                    // Normal exit
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error in render thread", e)
-                }
-            }.also { it.isDaemon = true; it.start() }
+            lastActivityTimeMs = lastLogTime
+            isIdle = false
+            lastDrawFrameNanos = 0L
+            postNextFrameCallback()
         }
 
         private fun stopRender() {
-            val thread = renderThread
-            renderThread = null
-            thread?.interrupt()
-            // Wait for thread to actually stop to prevent race conditions
+            choreographer?.removeFrameCallback(this)
+            frameCallbackPosted = false
+            lastDrawFrameNanos = 0L
+            lastFrameTimeMs = 0L
+        }
+
+        private fun postNextFrameCallback() {
+            if (frameCallbackPosted || !isVisible) return
+            val choreographerInstance = choreographer ?: Choreographer.getInstance().also { choreographer = it }
+            choreographerInstance.postFrameCallback(this)
+            frameCallbackPosted = true
+        }
+
+        override fun doFrame(frameTimeNanos: Long) {
+            frameCallbackPosted = false
+            if (!isVisible) return
+
             try {
-                thread?.join(500)  // Wait up to 500ms
-            } catch (e: InterruptedException) {
-                // Ignore
+                // Idle mode: check for scene activity and adjust effective FPS.
+                val nowMs = SystemClock.uptimeMillis()
+                if (idleModeEnabled) {
+                    if (checkSceneActivity()) {
+                        lastActivityTimeMs = nowMs
+                        isIdle = false
+                    } else if (nowMs - lastActivityTimeMs > idleTimeoutMs) {
+                        isIdle = true
+                    }
+                } else {
+                    isIdle = false
+                }
+
+                // Cap rendering frequency while staying synced to display vsync callbacks.
+                val effectiveFps = (if (isIdle) idleFps else targetFps).coerceAtLeast(1)
+                val minFrameIntervalNanos = 1_000_000_000L / effectiveFps.toLong()
+                val shouldRender =
+                    lastDrawFrameNanos == 0L || (frameTimeNanos - lastDrawFrameNanos) >= minFrameIntervalNanos
+
+                if (shouldRender) {
+                    val start = SystemClock.uptimeMillis()
+                    Trace.beginSection("Wallpaper_Frame")
+                    try {
+                        drawFrame(frameTimeNanos)
+                    } finally {
+                        Trace.endSection()
+                    }
+                    val dt = SystemClock.uptimeMillis() - start
+
+                    // Track performance
+                    frameCount++
+                    totalDrawTimeMs += dt
+                    if (dt > maxFrameTimeMs) maxFrameTimeMs = dt
+
+                    // Log performance stats every 5 seconds
+                    if (start - lastLogTime > 5000) {
+                        val avgFrameMs = if (frameCount > 0) totalDrawTimeMs / frameCount else 0
+                        val actualFps = if (avgFrameMs > 0) 1000 / avgFrameMs else 0
+                        val idleInfo = if (isIdle) " (IDLE)" else ""
+                        Log.d(TAG, "Perf: ${frameCount} frames, avg=${avgFrameMs}ms, max=${maxFrameTimeMs}ms, ~${actualFps}fps$idleInfo")
+                        frameCount = 0L
+                        totalDrawTimeMs = 0L
+                        maxFrameTimeMs = 0L
+                        lastLogTime = start
+                    }
+
+                    lastDrawFrameNanos = frameTimeNanos
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in frame callback", e)
+            } finally {
+                if (isVisible) {
+                    postNextFrameCallback()
+                }
             }
         }
         
         // Track frame timing for proper delta calculation
         private var lastFrameTimeMs = 0L
 
-        private fun drawFrame() {
+        private fun drawFrame(frameTimeNanos: Long) {
             val holder = surfaceHolder
             if (holder == null) return
             
             // Calculate real frame delta for accurate physics
-            val now = SystemClock.uptimeMillis()
+            val now = frameTimeNanos / 1_000_000L
             val deltaTimeMs = if (lastFrameTimeMs > 0) {
                 (now - lastFrameTimeMs).coerceIn(1L, 200L)  // Clamp to avoid huge jumps
             } else {
@@ -310,12 +382,7 @@ class WeatherWallpaper : WallpaperService() {
             
             var canvas: Canvas? = null
             try {
-                // Use hardware-accelerated canvas for better GPU performance
-                canvas = holder.lockHardwareCanvas()
-                if (canvas == null) {
-                    // Fall back to software canvas if hardware canvas fails
-                    canvas = holder.lockCanvas()
-                }
+                canvas = acquireCanvas(holder)
                 if (canvas == null) {
                     Log.w(TAG, "lockCanvas() returned null")
                     return
@@ -364,6 +431,29 @@ class WeatherWallpaper : WallpaperService() {
                         Log.e(TAG, "Error posting canvas", e)
                     }
                 }
+            }
+        }
+
+        /**
+         * Acquire the best available canvas for this frame.
+         * Tries hardware canvas first, then safely falls back to software canvas.
+         */
+        private fun acquireCanvas(holder: SurfaceHolder): Canvas? {
+            if (preferHardwareCanvas) {
+                try {
+                    return holder.lockHardwareCanvas()
+                } catch (e: Throwable) {
+                    // Hardware path can fail on some surfaces/devices; fall back safely.
+                    preferHardwareCanvas = false
+                    Log.w(TAG, "lockHardwareCanvas failed, falling back to lockCanvas", e)
+                }
+            }
+
+            return try {
+                holder.lockCanvas()
+            } catch (e: Throwable) {
+                Log.e(TAG, "lockCanvas failed", e)
+                null
             }
         }
 

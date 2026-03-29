@@ -2,11 +2,13 @@ package info.olli.weatherlwp.rendering
 
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.events.*
 import info.olli.weatherlwp.simulation.CloudDensity
+import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
 import info.olli.weatherlwp.util.SeasonHelper
 import info.olli.weatherlwp.weather.WeatherType
@@ -55,8 +57,17 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
      */
     var hillHeightProvider: HillHeightProvider? = null
     
-    // Pre-allocated result lists to avoid per-frame allocation
-    private val groundEventResults = mutableListOf<Pair<Float, () -> Unit>>()
+    // Reusable ground-event entries to avoid per-frame Pair/lambda allocation.
+    private val groundEventResults = ArrayList<TerrainLayer.GroundEventDrawEntry>(32)
+    private val groundEventEntryPool = ArrayList<GroundEventDrawEntryImpl>(32)
+    private var lastGroundEntryCount = 0
+
+    // Frame draw context consumed by pooled GroundEventDrawEntryImpl.draw().
+    private var groundDrawCanvas: Canvas? = null
+    private var groundDrawState: SimulationState? = null
+    private var groundDrawParallaxCalculator: ParallaxCalculator? = null
+    private var groundDrawAmbientColor = Color.WHITE
+    private var groundDrawAbsoluteTimeMs = 0L
     
     // Individual event toggles
     private var airplaneEnabled = true
@@ -81,6 +92,50 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     
     // Current season for seasonal event restrictions
     private var currentSeason = SeasonHelper.getCurrentCalendarSeasonKey()
+
+    private inner class GroundEventDrawEntryImpl : TerrainLayer.GroundEventDrawEntry {
+        var event: RandomEvent? = null
+        private var eventYRatio = 0f
+
+        override val yRatio: Float
+            get() = eventYRatio
+
+        fun bind(boundEvent: RandomEvent, yRatioValue: Float) {
+            event = boundEvent
+            eventYRatio = yRatioValue
+        }
+
+        override fun draw() {
+            val currentEvent = event ?: return
+            val canvas = groundDrawCanvas ?: return
+            val state = groundDrawState ?: return
+            val parallaxCalculator = groundDrawParallaxCalculator ?: return
+
+            try {
+                currentEvent.draw(
+                    canvas,
+                    paint,
+                    strokePaint,
+                    parallaxCalculator,
+                    extendedWidth,
+                    height,
+                    state.timeSeconds,
+                    groundDrawAmbientColor,
+                    extendedOffset,
+                    groundDrawAbsoluteTimeMs,
+                    hillHeightProvider
+                )
+            } catch (e: Exception) {
+                android.util.Log.e("RandomEventLayer", "Error drawing event ${currentEvent.javaClass.simpleName}", e)
+            }
+        }
+    }
+
+    private fun ensureGroundEntryPoolSize(required: Int) {
+        while (groundEventEntryPool.size < required) {
+            groundEventEntryPool.add(GroundEventDrawEntryImpl())
+        }
+    }
     
     init {
         reloadSettings()
@@ -108,6 +163,22 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         // Calculate extended width for parallax content
         extendedWidth = RenderConstants.getExtendedWidth(w, h)
         extendedOffset = RenderConstants.getExtendedOffset(w, extendedWidth)
+
+        // Clear frame-scoped draw context and pooled entry references on geometry changes.
+        // This prevents stale canvas/state/event references from surviving rotations.
+        groundDrawCanvas = null
+        groundDrawState = null
+        groundDrawParallaxCalculator = null
+        groundDrawAmbientColor = Color.WHITE
+        groundDrawAbsoluteTimeMs = 0L
+        groundEventResults.clear()
+
+        var i = 0
+        while (i < lastGroundEntryCount && i < groundEventEntryPool.size) {
+            groundEventEntryPool[i].event = null
+            i++
+        }
+        lastGroundEntryCount = 0
     }
     
     override fun update(state: SimulationState, deltaTimeMs: Long) {
@@ -347,11 +418,11 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     
     /**
      * Get ground events in range with their Y positions for Y-based sorting with trees.
-     * Returns list of (yRatio, drawLambda) pairs.
+      * Returns reusable draw entries to keep the hot path allocation-free.
      */
     fun getGroundEventsInRangeWithY(canvas: Canvas, state: SimulationState, 
                                       parallaxCalculator: ParallaxCalculator,
-                                      minDepth: Float, maxDepth: Float): List<Pair<Float, () -> Unit>> {
+                                   minDepth: Float, maxDepth: Float): List<TerrainLayer.GroundEventDrawEntry> {
         if (width <= 0 || height <= 0 || !eventsEnabled) return emptyList()
         
         val currentEvents = events
@@ -364,24 +435,37 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         
         val result = groundEventResults
         result.clear()
+
+        // Bind frame context once for pooled draw entries.
+        groundDrawCanvas = canvas
+        groundDrawState = state
+        groundDrawParallaxCalculator = parallaxCalculator
+        groundDrawAmbientColor = ambientColor
+        groundDrawAbsoluteTimeMs = state.absoluteTimeMs
+
+        ensureGroundEntryPoolSize(currentEvents.size)
+        result.ensureCapacity(currentEvents.size)
+        var resultCount = 0
         
         for (event in currentEvents) {
             if (event.layer == EventLayer.GROUND && 
                 event.depthFactor >= minDepth && event.depthFactor < maxDepth) {
                 // Get the event's current Y position for depth sorting
-                val eventY = event.getCurrentYRatio(state.absoluteTimeMs, hillHeightProvider)
-                
-                result.add(Pair(eventY) {
-                    try {
-                        event.draw(canvas, paint, strokePaint, parallaxCalculator, extendedWidth, height, 
-                            state.timeSeconds, ambientColor, extendedOffset, state.absoluteTimeMs,
-                            hillHeightProvider)
-                    } catch (e: Exception) {
-                        android.util.Log.e("RandomEventLayer", "Error drawing event ${event.javaClass.simpleName}", e)
-                    }
-                })
+                val eventY = event.getCurrentYRatio(groundDrawAbsoluteTimeMs, hillHeightProvider)
+                val entry = groundEventEntryPool[resultCount]
+                entry.bind(event, eventY)
+                result.add(entry)
+                resultCount++
             }
         }
+
+        // Clear stale references in pooled entries from prior calls.
+        var staleIndex = resultCount
+        while (staleIndex < lastGroundEntryCount) {
+            groundEventEntryPool[staleIndex].event = null
+            staleIndex++
+        }
+        lastGroundEntryCount = resultCount
         
         return result
     }
@@ -520,9 +604,13 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     }
     
     override fun reloadSettings() {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        eventsEnabled = prefs.getBoolean("pref_events_enabled", true)
-        val chance = prefs.getInt("pref_event_frequency", 50)
+        val snapshot = PreferenceManager.getDefaultSharedPreferences(context).all
+        reloadSettings(SimulationSettings.fromSnapshot(snapshot))
+    }
+
+    override fun reloadSettings(settings: SimulationSettings) {
+        eventsEnabled = settings.getBoolean("pref_events_enabled", true)
+        val chance = settings.getInt("pref_event_frequency", 50)
         // Use steep logarithmic-exponential scale for spawn chance per 500ms bucket
         // At 0: effectively 0 (disabled)
         // At 10: 0.0001 (extremely rare - one event per ~80 minutes)
@@ -537,29 +625,29 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
                 0.0001f * (8000.0.pow(normalized.toDouble())).toFloat()
             }
         }.coerceAtMost(0.9f)
-        
+
         // Update season for seasonal event restrictions
-        currentSeason = SeasonHelper.getEffectiveTerrainSeasonKey(prefs)
-        
-        airplaneEnabled = prefs.getBoolean("pref_event_airplane", true)
-        birdsEnabled = prefs.getBoolean("pref_event_birds", true)
-        eagleEnabled = prefs.getBoolean("pref_event_eagle", true)
-        butterflyEnabled = prefs.getBoolean("pref_event_butterfly", true)
-        rabbitEnabled = prefs.getBoolean("pref_event_rabbit", true)
-        foxEnabled = prefs.getBoolean("pref_event_fox", true)
-        shootingStarEnabled = prefs.getBoolean("pref_event_shootingstar", true)
-        firefliesEnabled = prefs.getBoolean("pref_event_fireflies", true)
-        owlEnabled = prefs.getBoolean("pref_event_owl", true)
-        balloonEnabled = prefs.getBoolean("pref_event_balloon", true)
-        alienEnabled = prefs.getBoolean("pref_event_alien", true)
-        squirrelEnabled = prefs.getBoolean("pref_event_squirrel", true)
-        dragonflyEnabled = prefs.getBoolean("pref_event_dragonfly", true)
-        snowflakeEnabled = prefs.getBoolean("pref_event_snowflake", true)
-        batEnabled = prefs.getBoolean("pref_event_bat", true)
-        deerEnabled = prefs.getBoolean("pref_event_deer", true)
-        fishEnabled = prefs.getBoolean("pref_event_fish", true)
-        duckEnabled = prefs.getBoolean("pref_event_duck", true)
-        frogEnabled = prefs.getBoolean("pref_event_frog", true)
+        currentSeason = SeasonHelper.getEffectiveTerrainSeasonKey(settings)
+
+        airplaneEnabled = settings.getBoolean("pref_event_airplane", true)
+        birdsEnabled = settings.getBoolean("pref_event_birds", true)
+        eagleEnabled = settings.getBoolean("pref_event_eagle", true)
+        butterflyEnabled = settings.getBoolean("pref_event_butterfly", true)
+        rabbitEnabled = settings.getBoolean("pref_event_rabbit", true)
+        foxEnabled = settings.getBoolean("pref_event_fox", true)
+        shootingStarEnabled = settings.getBoolean("pref_event_shootingstar", true)
+        firefliesEnabled = settings.getBoolean("pref_event_fireflies", true)
+        owlEnabled = settings.getBoolean("pref_event_owl", true)
+        balloonEnabled = settings.getBoolean("pref_event_balloon", true)
+        alienEnabled = settings.getBoolean("pref_event_alien", true)
+        squirrelEnabled = settings.getBoolean("pref_event_squirrel", true)
+        dragonflyEnabled = settings.getBoolean("pref_event_dragonfly", true)
+        snowflakeEnabled = settings.getBoolean("pref_event_snowflake", true)
+        batEnabled = settings.getBoolean("pref_event_bat", true)
+        deerEnabled = settings.getBoolean("pref_event_deer", true)
+        fishEnabled = settings.getBoolean("pref_event_fish", true)
+        duckEnabled = settings.getBoolean("pref_event_duck", true)
+        frogEnabled = settings.getBoolean("pref_event_frog", true)
     }
     
     override fun destroy() {

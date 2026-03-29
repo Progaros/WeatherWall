@@ -7,6 +7,7 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.parallax.ParallaxCalculator
+import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
 
 /**
@@ -249,14 +250,20 @@ class DebugOverlayLayer(private val context: Context) : SceneLayer {
     }
     
     override fun reloadSettings() {
-        enabled = prefs.getBoolean("pref_debug_overlay_enabled", false)
-        
-        // Load enabled items from preferences
+        reloadSettings(SimulationSettings.fromSnapshot(prefs.all))
+    }
+
+    override fun reloadSettings(settings: SimulationSettings) {
+        enabled = settings.getBoolean("pref_debug_overlay_enabled", false)
+
+        // Load enabled items from settings snapshot
         enabledItems.clear()
-        val itemsSet = prefs.getStringSet("pref_debug_overlay_items", null)
+        val raw = settings.snapshot["pref_debug_overlay_items"]
+        val itemsSet = raw as? Set<*>
         if (itemsSet != null) {
             for (key in itemsSet) {
-                DebugItem.entries.find { it.key == key }?.let { enabledItems.add(it) }
+                val keyString = key as? String ?: continue
+                DebugItem.entries.find { it.key == keyString }?.let { enabledItems.add(it) }
             }
         } else {
             // Default: show FPS and Frame Time

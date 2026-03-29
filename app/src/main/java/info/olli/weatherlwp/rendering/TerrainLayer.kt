@@ -10,6 +10,7 @@ import android.graphics.Shader
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
+import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
 import info.olli.weatherlwp.util.SeasonHelper
 import kotlin.math.sin
@@ -46,9 +47,24 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private var lastGeneratedHeight = 0f
     
     // Cached hill gradients to avoid per-frame LinearGradient allocation
-    private var cachedHillGradientAmbient = 0
+    private var cachedHillGradientAmbientBucket = -1
     private var cachedHillGradientSnow = -1
     private val cachedHillGradients = HashMap<Int, LinearGradient>()
+
+    // Reused draw buffer for Y-sorted terrain interleaving (trees, bushes, animals)
+    private class DrawEntry {
+        var y = 0f
+        var kind = DRAW_KIND_TREE
+        var index = 0
+    }
+
+    companion object {
+        private const val DRAW_KIND_TREE = 0
+        private const val DRAW_KIND_BUSH = 1
+        private const val DRAW_KIND_ANIMAL = 2
+    }
+
+    private var drawEntryBuffer = Array(128) { DrawEntry() }
     
     // Delegated renderers for decomposition
     private val treeRenderer = TreeRenderer()
@@ -61,6 +77,11 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     /**
      * Callback interface for drawing ground events at specific depth levels.
      */
+    interface GroundEventDrawEntry {
+        val yRatio: Float
+        fun draw()
+    }
+
     interface GroundEventDrawer {
         /**
          * Draw ground events in the depth range [minDepth, maxDepth).
@@ -72,9 +93,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         /**
          * Get ground events in the depth range [minDepth, maxDepth) with their current Y positions.
          * Used for Y-based sorting with trees.
-         * @return List of pairs (event Y ratio, draw lambda)
+         * Returns reusable entry objects to avoid per-frame lambda/Pair allocations.
          */
-        fun getEventsInRange(minDepth: Float, maxDepth: Float): List<Pair<Float, () -> Unit>> = emptyList()
+        fun getEventsInRange(minDepth: Float, maxDepth: Float): List<GroundEventDrawEntry> = emptyList()
     }
     
     /**
@@ -536,15 +557,26 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     override fun resize(w: Float, h: Float) {
         val oldW = width
         val oldH = height
+        val sizeChanged = oldW != w || oldH != h
         width = w
         height = h
         // Calculate extended width for parallax content
         extendedWidth = RenderConstants.getExtendedWidth(w, h)
         extendedOffset = RenderConstants.getExtendedOffset(w, extendedWidth)
 
+        if (!sizeChanged) return
+
+        // Any geometry change invalidates cached gradients that embed old coordinates.
+        cachedHillGradients.clear()
+        cachedHillGradientAmbientBucket = -1
+        cachedHillGradientSnow = -1
+
         val firstGenerate = lastGeneratedWidth <= 0f || lastGeneratedHeight <= 0f
-        val orientationChanged = (oldW > oldH) != (w > h)
-        if (firstGenerate || orientationChanged) {
+        val sizeChangedSignificantly =
+            kotlin.math.abs(lastGeneratedWidth - w) > 1f ||
+            kotlin.math.abs(lastGeneratedHeight - h) > 1f
+
+        if (firstGenerate || sizeChangedSignificantly) {
             generateTerrain()
             lastGeneratedWidth = w
             lastGeneratedHeight = h
@@ -573,6 +605,91 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             cachedPrevSeason == season -> 1f - cachedSeasonBlend  // Transitioning OUT of this season
             else -> 0f
         }
+    }
+
+    /**
+     * Bucket ambient color so gradient cache only refreshes on visible color steps,
+     * not every frame during tiny time-of-day transitions.
+     */
+    private fun ambientColorBucket(color: Int): Int {
+        val r = Color.red(color) shr 3
+        val g = Color.green(color) shr 3
+        val b = Color.blue(color) shr 3
+        return (r shl 10) or (g shl 5) or b
+    }
+
+    /** Ensure reusable draw-entry buffer can hold this hill's interleaved items. */
+    private fun ensureDrawEntryCapacity(required: Int) {
+        if (required <= drawEntryBuffer.size) return
+
+        var newSize = drawEntryBuffer.size
+        while (newSize < required) {
+            newSize = if (newSize < 512) newSize * 2 else newSize + 256
+        }
+
+        val old = drawEntryBuffer
+        drawEntryBuffer = Array(newSize) { idx ->
+            if (idx < old.size) old[idx] else DrawEntry()
+        }
+    }
+
+    /** In-place insertion sort on the reusable draw-entry buffer by ascending Y. */
+    private fun sortDrawEntriesByY(entryCount: Int) {
+        var i = 1
+        while (i < entryCount) {
+            val current = drawEntryBuffer[i]
+            var j = i - 1
+            while (j >= 0 && drawEntryBuffer[j].y > current.y) {
+                drawEntryBuffer[j + 1] = drawEntryBuffer[j]
+                j--
+            }
+            drawEntryBuffer[j + 1] = current
+            i++
+        }
+    }
+
+    private fun drawTreeInPlace(
+        canvas: Canvas,
+        tree: TreeRenderer.TreeData,
+        state: SimulationState,
+        parallaxCalculator: ParallaxCalculator,
+        ambientColor: Int,
+        treeAutumnWeight: Float
+    ) {
+        val treePx = parallaxCalculator.getOffsetXForDepth(tree.depthFactor)
+        val treePy = parallaxCalculator.getOffsetYForDepth(tree.depthFactor)
+        canvas.save()
+        canvas.translate(treePx, treePy)
+
+        // Needle trees stay green year-round; only leaf trees get autumn colours
+        val effectiveTreeColor = if (tree.treeType == TreeRenderer.TreeType.LEAF) {
+            treeRenderer.autumnTreeColor(tree.dayColor, treeAutumnWeight, tree.index)
+        } else {
+            tree.dayColor
+        }
+
+        val yBasedDepth = ((tree.yRatio - 0.6f) / 0.35f).coerceIn(0f, 1f)
+        val timeMultiplier = if (!state.isNight && !state.isDawn && !state.isDusk) 0.15f else 1.0f
+        val treeBlendAmount = RenderConstants.applyAmbientTint(effectiveTreeColor, ambientColor, yBasedDepth) * timeMultiplier
+        val treeColor = RenderConstants.blendWithAmbient(effectiveTreeColor, ambientColor, treeBlendAmount)
+        treeRenderer.drawTree(canvas, tree, state, tree.index, treeColor)
+
+        canvas.restore()
+    }
+
+    private fun drawBushInPlace(
+        canvas: Canvas,
+        bush: BushRenderer.BushData,
+        state: SimulationState,
+        parallaxCalculator: ParallaxCalculator,
+        ambientColor: Int
+    ) {
+        val bushPx = parallaxCalculator.getOffsetXForDepth(bush.depthFactor)
+        val bushPy = parallaxCalculator.getOffsetYForDepth(bush.depthFactor)
+        canvas.save()
+        canvas.translate(bushPx, bushPy)
+        bushRenderer.drawBush(canvas, bush, state, ambientColor)
+        canvas.restore()
     }
     
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
@@ -609,19 +726,26 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             state.nightShadeStrength, state.sunriseHours, state.sunsetHours
         )
         
-        // Invalidate cached hill gradients when ambient color or snow level changes significantly
+        // Invalidate cached hill gradients only when bucketed ambient or snow changes.
+        // This avoids rebuilding gradients on tiny per-frame color deltas.
+        val ambientBucket = ambientColorBucket(ambientColor)
         val snowBucket = (dynamicSnowLevel * 20).toInt()  // ~5% granularity
-        if (ambientColor != cachedHillGradientAmbient || snowBucket != cachedHillGradientSnow) {
-            cachedHillGradientAmbient = ambientColor
+        if (ambientBucket != cachedHillGradientAmbientBucket || snowBucket != cachedHillGradientSnow) {
+            cachedHillGradientAmbientBucket = ambientBucket
             cachedHillGradientSnow = snowBucket
             cachedHillGradients.clear()
         }
         
+        // Pre-compute autumn foliage weight once per frame (shared by all trees)
+        val treeAutumnWeight = getSeasonWeight("autumn")
+
         // Draw Hills AND their Trees together, sorted by depth
         // This ensures trees on background hills are drawn before foreground hills
         // Within each hill layer: sort trees and animals by Y position (top to bottom = far to near)
         // Elements lower on screen (higher Y) are drawn later (appear in front)
-        for ((index, hill) in currentHills.withIndex()) {
+        var index = 0
+        while (index < currentHills.size) {
+            val hill = currentHills[index]
             // Draw this hill layer
             val px = parallaxCalculator.getOffsetXForDepth(hill.depthFactor)
             val py = parallaxCalculator.getOffsetYForDepth(hill.depthFactor)
@@ -656,85 +780,100 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             lakeDrawer?.drawAtDepth(canvas, hill.depthFactor, index, currentHills.size)
             
             // Get trees and animals for this depth range
-            val nextDepth = currentHills.getOrNull(index + 1)?.depthFactor ?: Float.MAX_VALUE
+            val nextDepth = if (index + 1 < currentHills.size) {
+                currentHills[index + 1].depthFactor
+            } else {
+                Float.MAX_VALUE
+            }
             val hillTrees = currentTreesByDepth[hill.depthFactor] ?: emptyList()
             val hillBushes = bushRenderer.bushesByDepth[hill.depthFactor] ?: emptyList()
             
             // Get animals for this depth range (may be empty)
             val animals = groundEventDrawer?.getEventsInRange(hill.depthFactor, nextDepth) ?: emptyList()
-            
-            // Optimization: if no animals, just draw trees and bushes directly (already Y-sorted during generation)
-            // Pre-compute autumn foliage weight once per frame (shared by all trees)
-            val treeAutumnWeight = getSeasonWeight("autumn")
-            
+
+            // Fast path: trees only, already Y-sorted during generation.
             if (animals.isEmpty() && hillBushes.isEmpty()) {
-                for (tree in hillTrees) {
-                    val treePx = parallaxCalculator.getOffsetXForDepth(tree.depthFactor)
-                    val treePy = parallaxCalculator.getOffsetYForDepth(tree.depthFactor)
-                    canvas.save()
-                    canvas.translate(treePx, treePy)
-                    
-                    // Needle trees stay green year-round; only leaf trees get autumn colours
-                    val effectiveTreeColor = if (tree.treeType == TreeRenderer.TreeType.LEAF) {
-                        treeRenderer.autumnTreeColor(tree.dayColor, treeAutumnWeight, tree.index)
-                    } else tree.dayColor
-                    val yBasedDepth = ((tree.yRatio - 0.6f) / 0.35f).coerceIn(0f, 1f)
-                    val timeMultiplier = if (!state.isNight && !state.isDawn && !state.isDusk) 0.15f else 1.0f
-                    val treeBlendAmount = RenderConstants.applyAmbientTint(effectiveTreeColor, ambientColor, yBasedDepth) * timeMultiplier
-                    val treeColor = RenderConstants.blendWithAmbient(effectiveTreeColor, ambientColor, treeBlendAmount)
-                    treeRenderer.drawTree(canvas, tree, state, tree.index, treeColor)
-                    
-                    canvas.restore()
+                var treeIdx = 0
+                while (treeIdx < hillTrees.size) {
+                    drawTreeInPlace(
+                        canvas,
+                        hillTrees[treeIdx],
+                        state,
+                        parallaxCalculator,
+                        ambientColor,
+                        treeAutumnWeight
+                    )
+                    treeIdx++
                 }
             } else {
-                // Merge trees, bushes, and animals by Y position for correct draw order
-                val drawables = mutableListOf<Pair<Float, () -> Unit>>()
-                
-                // Add trees as drawables
-                for (tree in hillTrees) {
-                    drawables.add(Pair(tree.yRatio) {
-                        val treePx = parallaxCalculator.getOffsetXForDepth(tree.depthFactor)
-                        val treePy = parallaxCalculator.getOffsetYForDepth(tree.depthFactor)
-                        canvas.save()
-                        canvas.translate(treePx, treePy)
-                        
-                        // Needle trees stay green year-round; only leaf trees get autumn colours
-                        val effectiveTreeColor = if (tree.treeType == TreeRenderer.TreeType.LEAF) {
-                            treeRenderer.autumnTreeColor(tree.dayColor, treeAutumnWeight, tree.index)
-                        } else tree.dayColor
-                        val yBasedDepth = ((tree.yRatio - 0.6f) / 0.35f).coerceIn(0f, 1f)
-                        val timeMultiplier = if (!state.isNight && !state.isDawn && !state.isDusk) 0.15f else 1.0f
-                        val treeBlendAmount = RenderConstants.applyAmbientTint(effectiveTreeColor, ambientColor, yBasedDepth) * timeMultiplier
-                        val treeColor = RenderConstants.blendWithAmbient(effectiveTreeColor, ambientColor, treeBlendAmount)
-                        treeRenderer.drawTree(canvas, tree, state, tree.index, treeColor)
-                        
-                        canvas.restore()
-                    })
+                // Merge trees, bushes, and animals into reusable draw-entry buffer.
+                val totalItems = hillTrees.size + hillBushes.size + animals.size
+                ensureDrawEntryCapacity(totalItems)
+
+                var entryCount = 0
+
+                var treeIdx = 0
+                while (treeIdx < hillTrees.size) {
+                    val entry = drawEntryBuffer[entryCount]
+                    entry.y = hillTrees[treeIdx].yRatio
+                    entry.kind = DRAW_KIND_TREE
+                    entry.index = treeIdx
+                    entryCount++
+                    treeIdx++
                 }
-                
-                // Add bushes as drawables
-                for (bush in hillBushes) {
-                    drawables.add(Pair(bush.yRatio) {
-                        val bushPx = parallaxCalculator.getOffsetXForDepth(bush.depthFactor)
-                        val bushPy = parallaxCalculator.getOffsetYForDepth(bush.depthFactor)
-                        canvas.save()
-                        canvas.translate(bushPx, bushPy)
-                        bushRenderer.drawBush(canvas, bush, state, ambientColor)
-                        canvas.restore()
-                    })
+
+                var bushIdx = 0
+                while (bushIdx < hillBushes.size) {
+                    val entry = drawEntryBuffer[entryCount]
+                    entry.y = hillBushes[bushIdx].yRatio
+                    entry.kind = DRAW_KIND_BUSH
+                    entry.index = bushIdx
+                    entryCount++
+                    bushIdx++
                 }
-                
-                // Add animals
-                drawables.addAll(animals)
-                
+
+                var animalIdx = 0
+                while (animalIdx < animals.size) {
+                    val entry = drawEntryBuffer[entryCount]
+                    entry.y = animals[animalIdx].yRatio
+                    entry.kind = DRAW_KIND_ANIMAL
+                    entry.index = animalIdx
+                    entryCount++
+                    animalIdx++
+                }
+
                 // Sort by Y (lower Y = further away, drawn first; higher Y = closer, drawn last)
-                drawables.sortBy { it.first }
-                
-                // Draw all elements in Y-sorted order
-                for ((_, drawFunc) in drawables) {
-                    drawFunc()
+                sortDrawEntriesByY(entryCount)
+
+                // Draw in sorted order without allocating lambdas/temporary lists.
+                var drawIdx = 0
+                while (drawIdx < entryCount) {
+                    val entry = drawEntryBuffer[drawIdx]
+                    when (entry.kind) {
+                        DRAW_KIND_TREE -> drawTreeInPlace(
+                            canvas,
+                            hillTrees[entry.index],
+                            state,
+                            parallaxCalculator,
+                            ambientColor,
+                            treeAutumnWeight
+                        )
+
+                        DRAW_KIND_BUSH -> drawBushInPlace(
+                            canvas,
+                            hillBushes[entry.index],
+                            state,
+                            parallaxCalculator,
+                            ambientColor
+                        )
+
+                        else -> animals[entry.index].draw()
+                    }
+                    drawIdx++
                 }
             }
+
+            index++
         }
     }
     
@@ -968,67 +1107,71 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     }
 
     override fun reloadSettings() {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        val snapshot = PreferenceManager.getDefaultSharedPreferences(context).all
+        reloadSettings(SimulationSettings.fromSnapshot(snapshot))
+    }
+
+    override fun reloadSettings(settings: SimulationSettings) {
         
         // Random seed for consistent placement
-        randomSeed = prefs.getInt("pref_random_seed", 42)
+        randomSeed = settings.getInt("pref_random_seed", 42)
         
-        hillCount = prefs.getInt("pref_hill_count", 5)  // 5 hill layers default, range 0-20
+        hillCount = settings.getInt("pref_hill_count", 5)  // 5 hill layers default, range 0-20
         
-        hillStartY = prefs.getInt("pref_hill_lower_start", 60) / 100f  // 60% instead of 50%
+        hillStartY = settings.getInt("pref_hill_lower_start", 60) / 100f  // 60% instead of 50%
         // Hills extend below screen (1.0 = bottom edge, >1.0 = below screen)
         // This allows parallax movement to reveal more terrain
-        hillEndY = prefs.getInt("pref_hill_upper_end", 95) / 100f      // 95% - closer to bottom for parallax room
+        hillEndY = settings.getInt("pref_hill_upper_end", 95) / 100f      // 95% - closer to bottom for parallax room
         
         // Hill roughness: controls sine wave detail (0-200 -> 0.0-2.0)
-        val roughVal = prefs.getInt("pref_hill_roughness", 100)
+        val roughVal = settings.getInt("pref_hill_roughness", 100)
         hillRoughness = roughVal / 100f
         
         // Hill amplitude: controls hill vertical height (0-1000)
         // 0 = flat, 100 = normal (1.0), 1000 = extreme (10.0)
-        val ampVal = prefs.getInt("pref_hill_amplitude", PreferenceDefaults.HILL_AMPLITUDE)
+        val ampVal = settings.getInt("pref_hill_amplitude", PreferenceDefaults.HILL_AMPLITUDE)
         hillAmplitude = ampVal / 100f  // 0 -> 0.0, 100 -> 1.0, 1000 -> 10.0
         
         // Hill frequency: controls how many hills visible per layer (0-1000 -> 0.0-10.0)
-        val freqVal = prefs.getInt("pref_hill_frequency", PreferenceDefaults.HILL_FREQUENCY)
+        val freqVal = settings.getInt("pref_hill_frequency", PreferenceDefaults.HILL_FREQUENCY)
         hillFrequency = freqVal / 100f
         
         // Hill distance: pushes hills away from camera (0=at camera, 100=near mountains)
-        val distVal = prefs.getInt("pref_hill_distance", 0)
+        val distVal = settings.getInt("pref_hill_distance", 0)
         hillDistance = distVal / 100f
         
         // Hill depth spread: controls z-axis spread (0=flat layer, 100=deep range)
-        val spreadVal = prefs.getInt("pref_hill_depth_spread", 50)
+        val spreadVal = settings.getInt("pref_hill_depth_spread", 50)
         hillDepthSpread = spreadVal / 100f
         
         // Seasonal terrain settings
         // Only use terrain season override when debug/simulation mode is enabled
-        val debugEnabled = prefs.getBoolean("pref_debug_enabled", false)
+        val debugEnabled = settings.getBoolean("pref_debug_enabled", false)
         terrainSeasonOverride = if (debugEnabled) {
-            prefs.getString("pref_terrain_season", "auto") ?: "auto"
+            settings.getString("pref_terrain_season", "auto")
         } else {
             "auto"  // Always use real season when not in debug mode
         }
-        springFlowersEnabled = prefs.getBoolean("pref_spring_flowers", true)
-        springFlowerDensity = prefs.getInt("pref_spring_flower_density", 500)
-        springFlowerSpread = prefs.getInt("pref_spring_flower_spread", 50) / 100f
-        autumnGrassEnabled = prefs.getBoolean("pref_autumn_grass", true)
-        autumnGrassIntensity = prefs.getInt("pref_autumn_grass_intensity", 50)
-        winterSnowEnabled = prefs.getBoolean("pref_winter_snow_hills", true)
-        winterSnowCoverage = prefs.getInt("pref_winter_snow_coverage", 50)
-        useWeatherSnow = prefs.getBoolean("pref_weather_snow_enabled", true)
-        seasonTransitionDays = prefs.getInt("pref_season_transition_days", PreferenceDefaults.SEASON_TRANSITION_DAYS)
+        springFlowersEnabled = settings.getBoolean("pref_spring_flowers", true)
+        springFlowerDensity = settings.getInt("pref_spring_flower_density", 500)
+        springFlowerSpread = settings.getInt("pref_spring_flower_spread", 50) / 100f
+        autumnGrassEnabled = settings.getBoolean("pref_autumn_grass", true)
+        autumnGrassIntensity = settings.getInt("pref_autumn_grass_intensity", 50)
+        winterSnowEnabled = settings.getBoolean("pref_winter_snow_hills", true)
+        winterSnowCoverage = settings.getInt("pref_winter_snow_coverage", 50)
+        useWeatherSnow = settings.getBoolean("pref_weather_snow_enabled", true)
+        seasonTransitionDays = settings.getInt("pref_season_transition_days", PreferenceDefaults.SEASON_TRANSITION_DAYS)
         
         // Seasonal decoration settings
-        fallenLeavesEnabled = prefs.getBoolean("pref_fallen_leaves_enabled", PreferenceDefaults.FALLEN_LEAVES_ENABLED)
-        fallenLeavesDensity = prefs.getInt("pref_fallen_leaves_density", PreferenceDefaults.FALLEN_LEAVES_DENSITY)
-        mushroomsEnabled = prefs.getBoolean("pref_mushrooms_enabled", PreferenceDefaults.MUSHROOMS_ENABLED)
-        mushroomDensity = prefs.getInt("pref_mushroom_density", PreferenceDefaults.MUSHROOM_DENSITY)
-        frostEnabled = prefs.getBoolean("pref_frost_enabled", PreferenceDefaults.FROST_ENABLED)
+        fallenLeavesEnabled = settings.getBoolean("pref_fallen_leaves_enabled", PreferenceDefaults.FALLEN_LEAVES_ENABLED)
+        fallenLeavesDensity = settings.getInt("pref_fallen_leaves_density", PreferenceDefaults.FALLEN_LEAVES_DENSITY)
+        mushroomsEnabled = settings.getBoolean("pref_mushrooms_enabled", PreferenceDefaults.MUSHROOMS_ENABLED)
+        mushroomDensity = settings.getInt("pref_mushroom_density", PreferenceDefaults.MUSHROOM_DENSITY)
+        frostEnabled = settings.getBoolean("pref_frost_enabled", PreferenceDefaults.FROST_ENABLED)
         
         // Delegate tree and bush settings to their renderers
-        treeRenderer.reloadSettings(prefs)
-        bushRenderer.reloadSettings(prefs)
+        treeRenderer.reloadSettings(settings)
+        bushRenderer.reloadSettings(settings)
         
         android.util.Log.d("TerrainLayer", "Reloaded: hills=$hillCount, freq=$hillFrequency, amp=$hillAmplitude, dist=$hillDistance, spread=$hillDepthSpread")
         generateTerrain()

@@ -1,10 +1,10 @@
 package info.olli.weatherlwp.rendering
 
-import android.content.SharedPreferences
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import info.olli.weatherlwp.PreferenceDefaults
+import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
 import kotlin.math.sin
 import kotlin.random.Random
@@ -391,15 +391,15 @@ class BushRenderer {
     // ========================================================================
 
     /**
-     * Reload bush-related settings from SharedPreferences.
+     * Reload bush-related settings from immutable settings snapshot.
      * Must be called whenever preferences change (and on init).
      */
-    fun reloadSettings(prefs: SharedPreferences) {
-        bushesEnabled = prefs.getBoolean("pref_bushes_enabled", PreferenceDefaults.BUSHES_ENABLED)
-        bushDensity = prefs.getInt("pref_bush_density", PreferenceDefaults.BUSH_DENSITY)
-        bushSize = prefs.getInt("pref_bush_size", PreferenceDefaults.BUSH_SIZE) / 100f
+    fun reloadSettings(settings: SimulationSettings) {
+        bushesEnabled = settings.getBoolean("pref_bushes_enabled", PreferenceDefaults.BUSHES_ENABLED)
+        bushDensity = settings.getInt("pref_bush_density", PreferenceDefaults.BUSH_DENSITY)
+        bushSize = settings.getInt("pref_bush_size", PreferenceDefaults.BUSH_SIZE) / 100f
 
-        berriesEnabled = prefs.getBoolean("pref_berries_enabled", PreferenceDefaults.BERRIES_ENABLED)
-        berryDensity = prefs.getInt("pref_berry_density", PreferenceDefaults.BERRY_DENSITY)
+        berriesEnabled = settings.getBoolean("pref_berries_enabled", PreferenceDefaults.BERRIES_ENABLED)
+        berryDensity = settings.getInt("pref_berry_density", PreferenceDefaults.BERRY_DENSITY)
     }
 }

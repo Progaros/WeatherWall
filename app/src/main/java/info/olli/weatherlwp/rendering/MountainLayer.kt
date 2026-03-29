@@ -9,6 +9,7 @@ import android.graphics.Path
 import android.graphics.Shader
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.parallax.ParallaxCalculator
+import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
 import info.olli.weatherlwp.util.SeasonHelper
 import kotlin.random.Random
@@ -115,6 +116,21 @@ class MountainLayer(private val context: Context) : SceneLayer {
             SeasonHelper.getCurrentCalendarSeasonKey()
         }
     }
+
+    private fun ambientColorBucket(color: Int): Int {
+        val r = Color.red(color) shr 3
+        val g = Color.green(color) shr 3
+        val b = Color.blue(color) shr 3
+        return (r shl 10) or (g shl 5) or b
+    }
+
+    private fun quantizeAmbientColor(color: Int): Int {
+        val a = Color.alpha(color)
+        val r = Color.red(color) and 0xF8
+        val g = Color.green(color) and 0xF8
+        val b = Color.blue(color) and 0xF8
+        return Color.argb(a, r, g, b)
+    }
     
     private fun generateMountains() {
         // Calculate mountain count from density and extended width
@@ -197,13 +213,15 @@ class MountainLayer(private val context: Context) : SceneLayer {
             state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
             state.nightShadeStrength, state.sunriseHours, state.sunsetHours
         )
+        val ambientBucket = ambientColorBucket(ambientColor)
+        val bucketedAmbientColor = quantizeAmbientColor(ambientColor)
         
         // Invalidate cached gradients when lighting changes significantly
         // Quantize light angle to ~5° buckets to avoid rebuilding every frame
         val lightAngleBucket = (state.getLightSourceAngle() * 10f).toInt()
         val shadowEnabled = state.mountainShadowsEnabled
-        if (ambientColor != cachedMtnAmbient || lightAngleBucket != cachedMtnLightAngleBucket || shadowEnabled != cachedMtnShadowEnabled) {
-            cachedMtnAmbient = ambientColor
+        if (ambientBucket != cachedMtnAmbient || lightAngleBucket != cachedMtnLightAngleBucket || shadowEnabled != cachedMtnShadowEnabled) {
+            cachedMtnAmbient = ambientBucket
             cachedMtnLightAngleBucket = lightAngleBucket
             cachedMtnShadowEnabled = shadowEnabled
             cachedLeftGradients.clear()
@@ -231,14 +249,14 @@ class MountainLayer(private val context: Context) : SceneLayer {
             canvas.save()
             canvas.translate(px, py)
             
-            drawMountain(canvas, mountain, state, ambientColor)
+            drawMountain(canvas, mountain, state, bucketedAmbientColor)
             
             canvas.restore()
         }
         
         // Draw atmospheric haze at the base of mountains (fog overlay)
         // This blends the mountains into the terrain and adds depth
-        drawAtmosphericHaze(canvas, state.isNight, ambientColor)
+        drawAtmosphericHaze(canvas, state.isNight, bucketedAmbientColor)
     }
     
     /**
@@ -249,10 +267,11 @@ class MountainLayer(private val context: Context) : SceneLayer {
     private fun drawAtmosphericHaze(canvas: Canvas, isNight: Boolean, ambientColor: Int) {
         val hazeStartY = height * RenderConstants.HAZE_START_Y
         val hazeEndY = height * RenderConstants.HAZE_END_Y
+        val hazeBucket = ambientColorBucket(ambientColor)
         
         // Only recreate gradient if ambient color or height changed (avoids per-frame allocation)
-        if (ambientColor != cachedHazeAmbient || height != cachedHazeHeight) {
-            cachedHazeAmbient = ambientColor
+        if (hazeBucket != cachedHazeAmbient || height != cachedHazeHeight) {
+            cachedHazeAmbient = hazeBucket
             cachedHazeHeight = height
             
             // Haze color blends with ambient for consistent atmosphere
@@ -562,44 +581,48 @@ class MountainLayer(private val context: Context) : SceneLayer {
     }
 
     override fun reloadSettings() {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        val snapshot = PreferenceManager.getDefaultSharedPreferences(context).all
+        reloadSettings(SimulationSettings.fromSnapshot(snapshot))
+    }
+
+    override fun reloadSettings(settings: SimulationSettings) {
         
         // Random seed for consistent placement
-        randomSeed = prefs.getInt("pref_random_seed", 42)
+        randomSeed = settings.getInt("pref_random_seed", 42)
         
         // Mountain density: 0-100 percentage (scales with extended width)
-        mountainDensity = prefs.getInt("pref_mountain_density", 50)
+        mountainDensity = settings.getInt("pref_mountain_density", 50)
         
         // Height: 10-1000 -> 0.1 - 10.0
-        val heightVal = prefs.getInt("pref_mountain_height", 140)
+        val heightVal = settings.getInt("pref_mountain_height", 140)
         mountainHeightScale = heightVal / 100f
         
         // Width: 50-1000 -> 0.5 - 10.0 (default 175 = 1.75x for good visual size)
-        val widthVal = prefs.getInt("pref_mountain_width", 175)
+        val widthVal = settings.getInt("pref_mountain_width", 175)
         mountainWidthScale = widthVal / 100f
         
         // Roughness: 0-200 -> 0.0 - 2.0
-        val roughVal = prefs.getInt("pref_mountain_roughness", 80)
+        val roughVal = settings.getInt("pref_mountain_roughness", 80)
         mountainRoughness = roughVal / 100f
         
         // Ridge roughness: 0-200 -> 0.0 - 2.0
-        val ridgeVal = prefs.getInt("pref_mountain_ridge_roughness", 50)
+        val ridgeVal = settings.getInt("pref_mountain_ridge_roughness", 50)
         ridgeRoughness = ridgeVal / 100f
         
         // Bottom offset: 0-50 -> 0.0 - 0.5 (shift mountains up by % of screen height)
-        val bottomOffsetVal = prefs.getInt("pref_mountain_bottom_offset", 0)
+        val bottomOffsetVal = settings.getInt("pref_mountain_bottom_offset", 0)
         mountainBottomOffset = bottomOffsetVal / 100f
         
         // Seasonal settings (same preferences as TerrainLayer for consistency)
         // Only use terrain season override when debug/simulation mode is enabled
-        val debugEnabled = prefs.getBoolean("pref_debug_enabled", false)
+        val debugEnabled = settings.getBoolean("pref_debug_enabled", false)
         terrainSeasonOverride = if (debugEnabled) {
-            prefs.getString("pref_terrain_season", "auto") ?: "auto"
+            settings.getString("pref_terrain_season", "auto")
         } else {
             "auto"  // Always use real season when not in debug mode
         }
-        winterSnowEnabled = prefs.getBoolean("pref_winter_snow_hills", true)
-        winterSnowCoverage = prefs.getInt("pref_winter_snow_coverage", 50)
+        winterSnowEnabled = settings.getBoolean("pref_winter_snow_hills", true)
+        winterSnowCoverage = settings.getInt("pref_winter_snow_coverage", 50)
         
         generateMountains()
     }

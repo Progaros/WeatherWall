@@ -1,7 +1,6 @@
 package info.olli.weatherlwp.rendering
 
 import android.content.Context
-import android.content.SharedPreferences
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
@@ -13,6 +12,7 @@ import android.util.Log
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
+import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
 import java.util.Calendar
 import kotlin.random.Random
@@ -182,7 +182,7 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
         color = Color.WHITE
     }
 
-    private val prefs: SharedPreferences? = context?.let { PreferenceManager.getDefaultSharedPreferences(it) }
+    @Volatile private var currentSettings: SimulationSettings = SimulationSettings.fromSnapshot(emptyMap<String, Any?>())
     
     // Settings-controlled values
     private var starSizeMultiplier = 1.0f
@@ -211,48 +211,42 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
     private var shakeFireworksEnabled = true
     private var shakeFireworksCount = 12  // Number of fireworks to launch on shake (10-15)
     
-    // Track last settings load time to avoid polling SharedPreferences every frame
-    private var lastSettingsLoad = 0L
-    private val SETTINGS_RELOAD_INTERVAL_MS = 1000L  // Reload settings every 1 second
-    
     init {
-        // Load settings on initialization
-        loadSettings()
+        // Legacy fallback for callers that still use no-arg reload.
+        reloadSettings()
     }
     
     /**
-     * Reload settings from SharedPreferences.
-     * Called periodically to pick up changes without requiring a preference listener.
+     * Apply settings from immutable snapshot.
      */
-    fun loadSettings() {
-        prefs?.let {
-            starSizeMultiplier = (it.getInt("pref_christmas_star_size", 100) / 100f).coerceIn(0.5f, 2.0f)
-            trailLengthMultiplier = (it.getInt("pref_christmas_star_trail", 100) / 100f).coerceIn(0f, 2.0f)
-            fireworkFrequency = it.getInt("pref_firework_frequency", PreferenceDefaults.FIREWORK_FREQUENCY).coerceIn(0, 100)
-            fireworkAmount = it.getInt("pref_firework_amount", PreferenceDefaults.FIREWORK_AMOUNT).coerceIn(10, 200)
-            
-            // Rainbow settings
-            rainbowPositionX = it.getInt("pref_rainbow_position_x", 50).coerceIn(0, 100)
-            rainbowPositionY = it.getInt("pref_rainbow_position_y", 40).coerceIn(0, 100)
-            rainbowSize = it.getInt("pref_rainbow_size", 100).coerceIn(20, 200)
-            
-            // Per-event toggles
-            christmasEnabled = it.getBoolean("pref_christmas_enabled", PreferenceDefaults.CHRISTMAS_ENABLED)
-            newyearEnabled = it.getBoolean("pref_newyear_enabled", PreferenceDefaults.NEWYEAR_ENABLED)
-            cnNewyearEnabled = it.getBoolean("pref_cn_newyear_enabled", PreferenceDefaults.CN_NEWYEAR_ENABLED)
-            stPatricksEnabled = it.getBoolean("pref_st_patricks_enabled", PreferenceDefaults.ST_PATRICKS_ENABLED)
-            
-            // Per-event intervals (±days)
-            christmasInterval = it.getInt("pref_christmas_interval", PreferenceDefaults.CHRISTMAS_INTERVAL).coerceIn(0, 30)
-            newyearInterval = it.getInt("pref_newyear_interval", PreferenceDefaults.NEWYEAR_INTERVAL).coerceIn(0, 30)
-            cnNewyearInterval = it.getInt("pref_cn_newyear_interval", PreferenceDefaults.CN_NEWYEAR_INTERVAL).coerceIn(0, 30)
-            stPatricksInterval = it.getInt("pref_st_patricks_interval", PreferenceDefaults.ST_PATRICKS_INTERVAL).coerceIn(0, 30)
-            
-            // Shake-to-fireworks settings
-            shakeFireworksEnabled = it.getBoolean("pref_shake_fireworks_enabled", PreferenceDefaults.SHAKE_FIREWORKS_ENABLED)
-            shakeFireworksCount = it.getInt("pref_shake_fireworks_count", 15).coerceIn(5, 50)
-        }
-        lastSettingsLoad = System.currentTimeMillis()
+    private fun applySettings(settings: SimulationSettings) {
+        currentSettings = settings
+
+        starSizeMultiplier = (settings.getInt("pref_christmas_star_size", 100) / 100f).coerceIn(0.5f, 2.0f)
+        trailLengthMultiplier = (settings.getInt("pref_christmas_star_trail", 100) / 100f).coerceIn(0f, 2.0f)
+        fireworkFrequency = settings.getInt("pref_firework_frequency", PreferenceDefaults.FIREWORK_FREQUENCY).coerceIn(0, 100)
+        fireworkAmount = settings.getInt("pref_firework_amount", PreferenceDefaults.FIREWORK_AMOUNT).coerceIn(10, 200)
+
+        // Rainbow settings
+        rainbowPositionX = settings.getInt("pref_rainbow_position_x", 50).coerceIn(0, 100)
+        rainbowPositionY = settings.getInt("pref_rainbow_position_y", 40).coerceIn(0, 100)
+        rainbowSize = settings.getInt("pref_rainbow_size", 100).coerceIn(20, 200)
+
+        // Per-event toggles
+        christmasEnabled = settings.getBoolean("pref_christmas_enabled", PreferenceDefaults.CHRISTMAS_ENABLED)
+        newyearEnabled = settings.getBoolean("pref_newyear_enabled", PreferenceDefaults.NEWYEAR_ENABLED)
+        cnNewyearEnabled = settings.getBoolean("pref_cn_newyear_enabled", PreferenceDefaults.CN_NEWYEAR_ENABLED)
+        stPatricksEnabled = settings.getBoolean("pref_st_patricks_enabled", PreferenceDefaults.ST_PATRICKS_ENABLED)
+
+        // Per-event intervals (±days)
+        christmasInterval = settings.getInt("pref_christmas_interval", PreferenceDefaults.CHRISTMAS_INTERVAL).coerceIn(0, 30)
+        newyearInterval = settings.getInt("pref_newyear_interval", PreferenceDefaults.NEWYEAR_INTERVAL).coerceIn(0, 30)
+        cnNewyearInterval = settings.getInt("pref_cn_newyear_interval", PreferenceDefaults.CN_NEWYEAR_INTERVAL).coerceIn(0, 30)
+        stPatricksInterval = settings.getInt("pref_st_patricks_interval", PreferenceDefaults.ST_PATRICKS_INTERVAL).coerceIn(0, 30)
+
+        // Shake-to-fireworks settings
+        shakeFireworksEnabled = settings.getBoolean("pref_shake_fireworks_enabled", PreferenceDefaults.SHAKE_FIREWORKS_ENABLED)
+        shakeFireworksCount = settings.getInt("pref_shake_fireworks_count", 15).coerceIn(5, 50)
     }
     
     /**
@@ -315,24 +309,24 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
     }
 
     fun getCurrentSeason(): Season {
+        val settings = currentSettings
+
         // Check if seasonal events are enabled
         try {
-            if (prefs != null) {
-                val seasonalEnabled = prefs.getBoolean("pref_seasonal_enabled", true)
-                if (!seasonalEnabled) {
-                    return Season.NONE
-                }
-                
-                val debugEnabled = prefs.getBoolean("pref_debug_enabled", false)
-                if (debugEnabled) {
-                    val debugSeason = prefs.getString("pref_debug_season", "auto") ?: "auto"
-                    when (debugSeason) {
-                        "christmas" -> return Season.CHRISTMAS
-                        "newyear" -> return Season.NEW_YEAR
-                        "cn_newyear" -> return Season.CN_NEW_YEAR
-                        "st_patricks" -> return Season.ST_PATRICKS
-                        "none" -> return Season.NONE
-                    }
+            val seasonalEnabled = settings.getBoolean("pref_seasonal_enabled", true)
+            if (!seasonalEnabled) {
+                return Season.NONE
+            }
+
+            val debugEnabled = settings.getBoolean("pref_debug_enabled", false)
+            if (debugEnabled) {
+                val debugSeason = settings.getString("pref_debug_season", "auto")
+                when (debugSeason) {
+                    "christmas" -> return Season.CHRISTMAS
+                    "newyear" -> return Season.NEW_YEAR
+                    "cn_newyear" -> return Season.CN_NEW_YEAR
+                    "st_patricks" -> return Season.ST_PATRICKS
+                    "none" -> return Season.NONE
                 }
             }
         } catch (e: Exception) {
@@ -395,15 +389,10 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
     }
 
     /**
-     * Check if settings need reloading and reload if so.
-     * Call this once per frame from the scene renderer instead of
-     * reloading in every render entry point, which was wasteful.
+     * Legacy no-op retained for compatibility with older call sites.
      */
     fun updateSettingsIfNeeded() {
-        val now = System.currentTimeMillis()
-        if (now - lastSettingsLoad > SETTINGS_RELOAD_INTERVAL_MS) {
-            loadSettings()
-        }
+        // Settings now come from ParallaxScene.reloadSettings(settings).
     }
 
     fun render(canvas: Canvas, enabled: Boolean) {
@@ -1273,7 +1262,13 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
     }
     
     override fun reloadSettings() {
-        loadSettings()
+        val currentContext = context ?: return
+        val snapshot = PreferenceManager.getDefaultSharedPreferences(currentContext).all
+        reloadSettings(SimulationSettings.fromSnapshot(snapshot))
+    }
+
+    override fun reloadSettings(settings: SimulationSettings) {
+        applySettings(settings)
     }
     
     override fun destroy() {

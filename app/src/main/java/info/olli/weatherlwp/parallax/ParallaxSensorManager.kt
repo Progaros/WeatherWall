@@ -203,6 +203,14 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     fun setListener(l: Listener) { listener = l }
     
     fun setShakeListener(l: ShakeListener?) { shakeListener = l }
+
+    /**
+     * Clear external callbacks to avoid retaining scene/service references after teardown.
+     */
+    fun clearCallbacks() {
+        listener = null
+        shakeListener = null
+    }
     
     /**
      * Set the parallax sensor mode.

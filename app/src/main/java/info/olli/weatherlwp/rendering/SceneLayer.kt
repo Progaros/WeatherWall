@@ -2,6 +2,7 @@ package info.olli.weatherlwp.rendering
 
 import android.graphics.Canvas
 import info.olli.weatherlwp.parallax.ParallaxCalculator
+import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
 
 /**
@@ -49,6 +50,14 @@ interface SceneLayer {
      * Reload preferences/settings.
      */
     fun reloadSettings()
+
+    /**
+     * Reload settings from an immutable snapshot pushed by the engine.
+     * Default implementation delegates to the legacy no-arg reload.
+     */
+    fun reloadSettings(settings: SimulationSettings) {
+        reloadSettings()
+    }
     
     /**
      * Clean up resources.

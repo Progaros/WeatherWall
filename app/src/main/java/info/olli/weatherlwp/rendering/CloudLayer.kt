@@ -10,12 +10,15 @@ import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
+import android.graphics.RenderEffect
+import android.graphics.RenderNode
 import android.graphics.RectF
 import android.graphics.Shader
 import android.os.Build
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
+import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
 import info.olli.weatherlwp.util.ColorMath
 import java.util.concurrent.Executors
@@ -70,6 +73,13 @@ class CloudLayer(private val context: Context) : SceneLayer {
         isAntiAlias = true
         isFilterBitmap = true
     }
+
+    // API 31+: RenderNode recording paint; blur is applied via RenderEffect
+    private val renderNodePaint = Paint().apply {
+        color = Color.WHITE
+        style = Paint.Style.FILL
+        isAntiAlias = true
+    }
     
     private var width = 0f
     private var height = 0f
@@ -98,6 +108,11 @@ class CloudLayer(private val context: Context) : SceneLayer {
         @Volatile var cachedBitmap: Bitmap? = null
         var lastWidth: Int = 0
         var lastHeight: Int = 0
+
+        // API 31+: hardware-rendered cloud content
+        @Volatile var renderNode: RenderNode? = null
+        var renderNodeWidth: Int = 0
+        var renderNodeHeight: Int = 0
         
         // Current X position (accumulated via delta time, wraps 0-1)
         @Volatile var currentX: Float = initialX
@@ -124,8 +139,19 @@ class CloudLayer(private val context: Context) : SceneLayer {
     private var tiledShader: BitmapShader? = null
     private val tiledMatrix = Matrix()
     private val tiledPaint = Paint().apply { isAntiAlias = true }
+    // Reused path to avoid allocating a new Path every frame in tiled mode
+    private val tiledWavyPath = android.graphics.Path()
+    // Reused color filters: only recreated when cloud tint actually changes
+    private var cachedMultiplyFilterColor = Int.MIN_VALUE
+    private var cachedMultiplyFilter: PorterDuffColorFilter? = null
+    private var cachedSrcInFilterColor = Int.MIN_VALUE
+    private var cachedSrcInFilter: PorterDuffColorFilter? = null
     private var tiledOffsetX = 0f
     private var tiledOffsetY = 0f
+
+    // API 31+ cloud RenderEffect cache (blur + tint chain)
+    private var cachedNodeEffectColor = Int.MIN_VALUE
+    private var cachedNodeEffect: RenderEffect? = null
     
     // AGSL shader (Android 13+)
     @Suppress("DEPRECATION")
@@ -167,6 +193,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
         
         // Extra padding for blur effect to prevent edge cutoff (fraction of group size)
         const val BLUR_PADDING = 0.20f  // Reduced from 0.25 for smaller bitmaps
+
+        // API 31+ RenderNode blur radius (matches legacy BlurMaskFilter look)
+        const val RENDER_NODE_BLUR_RADIUS = 10f
         
         // Hard cap on bitmap dimensions to avoid GPU texture limits
         // REDUCED for performance: smaller max = less GPU work
@@ -348,18 +377,156 @@ class CloudLayer(private val context: Context) : SceneLayer {
         group.lastHeight = paddedHeight
     }
 
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.S)
+    private fun renderGroupToRenderNode(group: CloudGroup, contentWidth: Int, contentHeight: Int) {
+        // Match bitmap path padding so blur has off-edge room.
+        val stretchPaddingMult = (cloudStretch / 2f).coerceIn(1f, 3f)
+        val paddingX = (contentWidth * BLUR_PADDING * stretchPaddingMult).toInt()
+        val paddingY = (contentHeight * BLUR_PADDING).toInt()
+        val paddedWidth = contentWidth + paddingX * 2
+        val paddedHeight = contentHeight + paddingY * 2
+
+        val node = group.renderNode ?: RenderNode("CloudGroup_${group.seed}").also {
+            group.renderNode = it
+        }
+
+        if (group.renderNodeWidth != paddedWidth || group.renderNodeHeight != paddedHeight) {
+            node.setPosition(0, 0, paddedWidth, paddedHeight)
+            group.renderNodeWidth = paddedWidth
+            group.renderNodeHeight = paddedHeight
+        }
+
+        val recordingCanvas = node.beginRecording(paddedWidth, paddedHeight)
+        renderNodePaint.color = Color.WHITE
+        renderNodePaint.alpha = 255
+
+        val random = Random(group.seed)
+        val minPuffs = (CLOUDS_PER_GROUP_MIN_BASE * fluffinessMultiplier).toInt().coerceAtLeast(3)
+        val maxPuffs = (CLOUDS_PER_GROUP_MAX_BASE * fluffinessMultiplier).toInt().coerceAtLeast(minPuffs + 1)
+        val numPuffs = minPuffs + random.nextInt(maxPuffs - minPuffs + 1)
+
+        val centerX = paddedWidth / 2f
+        val centerY = paddedHeight / 2f
+        val fadeMarginX = contentWidth * 0.35f
+        val fadeMarginY = contentHeight * 0.35f
+
+        var i = 0
+        while (i < numPuffs) {
+            val offsetX = (random.nextFloat() - 0.5f) * contentWidth * 0.7f
+            val offsetY = (random.nextFloat() - 0.5f) * contentHeight * 0.5f
+
+            val puffCenterX = centerX + offsetX
+            val puffCenterY = centerY + offsetY
+
+            val contentLeft = paddingX.toFloat()
+            val contentRight = paddingX + contentWidth.toFloat()
+            val contentTop = paddingY.toFloat()
+            val contentBottom = paddingY + contentHeight.toFloat()
+
+            val distFromLeftEdge = puffCenterX - contentLeft
+            val distFromRightEdge = contentRight - puffCenterX
+            val distFromTopEdge = puffCenterY - contentTop
+            val distFromBottomEdge = contentBottom - puffCenterY
+
+            val xFade = (minOf(distFromLeftEdge, distFromRightEdge) / fadeMarginX).coerceIn(0f, 1f)
+            val yFade = (minOf(distFromTopEdge, distFromBottomEdge) / fadeMarginY).coerceIn(0f, 1f)
+            val edgeFade = kotlin.math.sqrt(xFade * yFade)
+
+            val puffAlpha = (group.alpha * edgeFade).toInt().coerceIn(0, 255)
+            renderNodePaint.alpha = puffAlpha
+
+            val radiusX = contentWidth * (0.18f + random.nextFloat() * 0.22f) * cloudStretch * 0.35f
+            val radiusY = contentHeight * (0.25f + random.nextFloat() * 0.30f)
+
+            recordingCanvas.drawOval(
+                puffCenterX - radiusX, puffCenterY - radiusY,
+                puffCenterX + radiusX, puffCenterY + radiusY,
+                renderNodePaint
+            )
+
+            i++
+        }
+
+        node.endRecording()
+    }
+
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.S)
+    private fun getCloudRenderNodeEffect(tintColor: Int): RenderEffect {
+        val bucketedColor = quantizeCloudTintColor(tintColor)
+        val existing = cachedNodeEffect
+        if (existing != null && cachedNodeEffectColor == bucketedColor) {
+            return existing
+        }
+
+        val blurEffect = RenderEffect.createBlurEffect(
+            RENDER_NODE_BLUR_RADIUS,
+            RENDER_NODE_BLUR_RADIUS,
+            Shader.TileMode.CLAMP
+        )
+        val tintFilter = PorterDuffColorFilter(bucketedColor, PorterDuff.Mode.MULTIPLY)
+        val effect = RenderEffect.createColorFilterEffect(tintFilter, blurEffect)
+
+        cachedNodeEffectColor = bucketedColor
+        cachedNodeEffect = effect
+        return effect
+    }
+
+    private fun quantizeCloudTintColor(color: Int): Int {
+        val a = Color.alpha(color)
+        val r = Color.red(color) and 0xF8
+        val g = Color.green(color) and 0xF8
+        val b = Color.blue(color) and 0xF8
+        return Color.argb(a, r, g, b)
+    }
+
+    private fun clearGroupBitmaps() {
+        for (group in cloudGroups) {
+            group.cachedBitmap?.recycle()
+            group.cachedBitmap = null
+            group.lastWidth = 0
+            group.lastHeight = 0
+        }
+    }
+
+    private fun clearGroupRenderNodes() {
+        for (group in cloudGroups) {
+            group.renderNode = null
+            group.renderNodeWidth = 0
+            group.renderNodeHeight = 0
+        }
+    }
+
+    private fun resetRenderNodeEffects() {
+        cachedNodeEffect = null
+        cachedNodeEffectColor = Int.MIN_VALUE
+    }
+
+    private fun clearTiledResources() {
+        tiledNoiseBitmap?.recycle()
+        tiledNoiseBitmap = null
+        tiledShader = null
+        tiledOffsetX = 0f
+        tiledOffsetY = 0f
+    }
+
     override fun resize(w: Float, h: Float) {
+        val sizeChanged = width != w || height != h
         width = w
         height = h
         minDim = minOf(w, h)  // Use smaller dimension to prevent gigantic bitmaps on portrait
         extendedWidth = RenderConstants.getExtendedWidth(w, h)
         extendedOffset = RenderConstants.getExtendedOffset(w, extendedWidth)
+
+        if (!sizeChanged) return
         
         // Invalidate cached bitmaps on resize
-        for (group in cloudGroups) {
-            group.cachedBitmap?.recycle()
-            group.cachedBitmap = null
-        }
+        clearGroupBitmaps()
+        clearGroupRenderNodes()
+        resetRenderNodeEffects()
+
+        // Tiled noise/shader resources are tied to previous rendering surface assumptions.
+        // Recreate lazily on the next frame at the new size.
+        clearTiledResources()
         
         generateCloudGroups()
     }
@@ -435,6 +602,32 @@ class CloudLayer(private val context: Context) : SceneLayer {
             CloudRenderMode.SHADER -> drawShaderMode(canvas, state, parallaxCalculator)
         }
     }
+
+    /**
+     * Return a cached MULTIPLY color filter for cloud bitmap tinting.
+     * Recreates only when tint color changes.
+     */
+    private fun getMultiplyFilter(color: Int): PorterDuffColorFilter {
+        val existing = cachedMultiplyFilter
+        if (existing != null && cachedMultiplyFilterColor == color) return existing
+        val filter = PorterDuffColorFilter(color, PorterDuff.Mode.MULTIPLY)
+        cachedMultiplyFilter = filter
+        cachedMultiplyFilterColor = color
+        return filter
+    }
+
+    /**
+     * Return a cached SRC_IN color filter for tiled cloud tinting.
+     * Recreates only when tint color changes.
+     */
+    private fun getSrcInFilter(color: Int): PorterDuffColorFilter {
+        val existing = cachedSrcInFilter
+        if (existing != null && cachedSrcInFilterColor == color) return existing
+        val filter = PorterDuffColorFilter(color, PorterDuff.Mode.SRC_IN)
+        cachedSrcInFilter = filter
+        cachedSrcInFilterColor = color
+        return filter
+    }
     
     /**
      * Cached bitmap mode - draws pre-rendered cloud bitmaps directly.
@@ -456,68 +649,150 @@ class CloudLayer(private val context: Context) : SceneLayer {
         if (kotlin.math.abs(targetCount - cloudCount) > 3 || 
             (targetCount == 0 && cloudCount > 0) || 
             (targetCount > 0 && cloudCount == 0)) {
+            clearGroupBitmaps()
+            clearGroupRenderNodes()
+            resetRenderNodeEffects()
             cloudCount = targetCount
             generateCloudGroups()
         }
         
         val currentGroups = cloudGroups
         if (currentGroups.isEmpty()) return
+
+        // API 31+: Use RenderNode + RenderEffect on hardware canvas for fully GPU blur/compositing.
+        // Fallback to legacy cached bitmaps on older devices or software canvas paths.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && canvas.isHardwareAccelerated) {
+            val effect = getCloudRenderNodeEffect(currentCloudColor)
+            drawGroupsRenderNode(canvas, currentGroups, isBackLayer = true, parallaxCalculator, effect)
+            drawGroupsRenderNode(canvas, currentGroups, isBackLayer = false, parallaxCalculator, effect)
+            return
+        }
         
         // Apply color tint to all clouds
-        drawPaint.colorFilter = PorterDuffColorFilter(currentCloudColor, PorterDuff.Mode.MULTIPLY)
+        drawPaint.colorFilter = getMultiplyFilter(currentCloudColor)
         
         // Draw all groups directly (back layer first, then front)
-        for (isBack in listOf(true, false)) {
-            for (group in currentGroups) {
-                if (group.isBackLayer != isBack) continue
-                
-                val px = parallaxCalculator.getOffsetXForDepth(group.depthFactor)
-                val py = parallaxCalculator.getOffsetYForDepth(group.depthFactor)
-                val groupX = group.currentX
-                val screenX = groupX * extendedWidth - extendedOffset + px
-                val screenY = group.y * height + py
-                
-                val groupWidthPx = (group.groupWidth * minDim).toInt()
-                    .coerceIn(50, MAX_BITMAP_DIMENSION)
-                // Scale cloud height with screen height so they fill tall sky areas
-                val heightRef = maxOf(minDim, height * 0.5f)
-                val groupHeightPx = (group.groupHeight * heightRef).toInt()
-                    .coerceIn(30, MAX_BITMAP_DIMENSION)
-                
-                // Padding scales with cloudStretch to accommodate wider puffs
-                val stretchPaddingMult = (cloudStretch / 2f).coerceIn(1f, 3f)
-                val paddingX = (groupWidthPx * BLUR_PADDING * stretchPaddingMult).toInt()
-                val paddingY = (groupHeightPx * BLUR_PADDING).toInt()
-                val paddedWidth = groupWidthPx + paddingX * 2
-                val paddedHeight = groupHeightPx + paddingY * 2
-                
-                // Queue async bitmap render if not ready and not already rendering
-                if (group.cachedBitmap == null) {
-                    if (group.isRendering.compareAndSet(false, true)) {
-                        // Capture values for background thread
-                        val w = groupWidthPx
-                        val h = groupHeightPx
-                        bitmapExecutor.execute {
-                            try {
-                                renderGroupToBitmap(group, w, h)
-                            } finally {
-                                group.isRendering.set(false)
-                            }
+        drawGroupsBitmap(canvas, currentGroups, isBackLayer = true, parallaxCalculator)
+        drawGroupsBitmap(canvas, currentGroups, isBackLayer = false, parallaxCalculator)
+    }
+
+    /**
+     * Legacy cached-bitmap draw path.
+     */
+    private fun drawGroupsBitmap(
+        canvas: Canvas,
+        groups: List<CloudGroup>,
+        isBackLayer: Boolean,
+        parallaxCalculator: ParallaxCalculator
+    ) {
+        var i = 0
+        while (i < groups.size) {
+            val group = groups[i]
+            i++
+            if (group.isBackLayer != isBackLayer) continue
+
+            val px = parallaxCalculator.getOffsetXForDepth(group.depthFactor)
+            val py = parallaxCalculator.getOffsetYForDepth(group.depthFactor)
+            val groupX = group.currentX
+            val screenX = groupX * extendedWidth - extendedOffset + px
+            val screenY = group.y * height + py
+
+            val groupWidthPx = (group.groupWidth * minDim).toInt()
+                .coerceIn(50, MAX_BITMAP_DIMENSION)
+            // Scale cloud height with screen height so they fill tall sky areas
+            val heightRef = maxOf(minDim, height * 0.5f)
+            val groupHeightPx = (group.groupHeight * heightRef).toInt()
+                .coerceIn(30, MAX_BITMAP_DIMENSION)
+
+            // Padding scales with cloudStretch to accommodate wider puffs
+            val stretchPaddingMult = (cloudStretch / 2f).coerceIn(1f, 3f)
+            val paddingX = (groupWidthPx * BLUR_PADDING * stretchPaddingMult).toInt()
+            val paddingY = (groupHeightPx * BLUR_PADDING).toInt()
+            val paddedWidth = groupWidthPx + paddingX * 2
+            val paddedHeight = groupHeightPx + paddingY * 2
+
+            // Queue async bitmap render if not ready and not already rendering
+            if (group.cachedBitmap == null) {
+                if (group.isRendering.compareAndSet(false, true)) {
+                    // Capture values for background thread
+                    val w = groupWidthPx
+                    val h = groupHeightPx
+                    bitmapExecutor.execute {
+                        try {
+                            renderGroupToBitmap(group, w, h)
+                        } finally {
+                            group.isRendering.set(false)
                         }
                     }
-                    // Skip drawing this group until bitmap is ready
-                    continue
                 }
-                
-                group.cachedBitmap?.let { bitmap ->
-                    canvas.drawBitmap(
-                        bitmap,
-                        screenX - paddedWidth / 2f,
-                        screenY - paddedHeight / 2f,
-                        drawPaint
-                    )
-                }
+                // Skip drawing this group until bitmap is ready
+                continue
             }
+
+            val bitmap = group.cachedBitmap
+            if (bitmap != null) {
+                canvas.drawBitmap(
+                    bitmap,
+                    screenX - paddedWidth / 2f,
+                    screenY - paddedHeight / 2f,
+                    drawPaint
+                )
+            }
+        }
+    }
+
+    /**
+     * API 31+ draw path: pre-recorded RenderNode cloud groups with GPU RenderEffect blur.
+     */
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.S)
+    private fun drawGroupsRenderNode(
+        canvas: Canvas,
+        groups: List<CloudGroup>,
+        isBackLayer: Boolean,
+        parallaxCalculator: ParallaxCalculator,
+        effect: RenderEffect
+    ) {
+        var i = 0
+        while (i < groups.size) {
+            val group = groups[i]
+            i++
+            if (group.isBackLayer != isBackLayer) continue
+
+            val px = parallaxCalculator.getOffsetXForDepth(group.depthFactor)
+            val py = parallaxCalculator.getOffsetYForDepth(group.depthFactor)
+            val groupX = group.currentX
+            val screenX = groupX * extendedWidth - extendedOffset + px
+            val screenY = group.y * height + py
+
+            val groupWidthPx = (group.groupWidth * minDim).toInt()
+                .coerceIn(50, MAX_BITMAP_DIMENSION)
+            val heightRef = maxOf(minDim, height * 0.5f)
+            val groupHeightPx = (group.groupHeight * heightRef).toInt()
+                .coerceIn(30, MAX_BITMAP_DIMENSION)
+
+            val stretchPaddingMult = (cloudStretch / 2f).coerceIn(1f, 3f)
+            val paddingX = (groupWidthPx * BLUR_PADDING * stretchPaddingMult).toInt()
+            val paddingY = (groupHeightPx * BLUR_PADDING).toInt()
+            val paddedWidth = groupWidthPx + paddingX * 2
+            val paddedHeight = groupHeightPx + paddingY * 2
+
+            val needsRecord = group.renderNode == null ||
+                group.renderNodeWidth != paddedWidth ||
+                group.renderNodeHeight != paddedHeight
+            if (needsRecord) {
+                renderGroupToRenderNode(group, groupWidthPx, groupHeightPx)
+            }
+
+            val node = group.renderNode ?: continue
+            node.setRenderEffect(effect)
+
+            canvas.save()
+            canvas.translate(
+                screenX - paddedWidth / 2f,
+                screenY - paddedHeight / 2f
+            )
+            canvas.drawRenderNode(node)
+            canvas.restore()
         }
     }
     
@@ -544,10 +819,10 @@ class CloudLayer(private val context: Context) : SceneLayer {
         
         // Apply cloud color as tint using SRC_IN mode (tints the white texture)
         tiledPaint.shader = shader
-        tiledPaint.colorFilter = PorterDuffColorFilter(currentCloudColor, PorterDuff.Mode.SRC_IN)
+        tiledPaint.colorFilter = getSrcInFilter(currentCloudColor)
         
         // Create wavy path for cloud bottom edge (more natural than hard rectangle)
-        val wavyPath = android.graphics.Path()
+        val wavyPath = tiledWavyPath
         
         // Draw two layers for depth - back layer and front layer
         // Back layer - higher, more transparent, gentler wave
@@ -784,15 +1059,19 @@ class CloudLayer(private val context: Context) : SceneLayer {
     internal fun getFrontLayerCount(): Int = cloudGroups.count { !it.isBackLayer }
 
     override fun reloadSettings() {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        val snapshot = PreferenceManager.getDefaultSharedPreferences(context).all
+        reloadSettings(SimulationSettings.fromSnapshot(snapshot))
+    }
+
+    override fun reloadSettings(settings: SimulationSettings) {
         
         // Cloud enable/disable switch
-        val newEnabled = prefs.getBoolean("pref_clouds_enabled", true)
+        val newEnabled = settings.getBoolean("pref_clouds_enabled", true)
         val enabledChanged = newEnabled != cloudsEnabled
         cloudsEnabled = newEnabled
         
         // Cloud render mode
-        val renderModeStr = prefs.getString("pref_cloud_render_mode", "cached") ?: "cached"
+        val renderModeStr = settings.getString("pref_cloud_render_mode", "cached")
         val newRenderMode = when (renderModeStr) {
             "tiled" -> CloudRenderMode.TILED
             "shader" -> CloudRenderMode.SHADER
@@ -802,26 +1081,26 @@ class CloudLayer(private val context: Context) : SceneLayer {
         renderMode = newRenderMode
         
         // Random seed for consistent placement
-        val newSeed = prefs.getInt("pref_random_seed", 42)
+        val newSeed = settings.getInt("pref_random_seed", 42)
         val seedChanged = newSeed != randomSeed
         randomSeed = newSeed
         
         // Cloud stretch setting: 50-500 -> 0.5-5.0
-        val stretchVal = prefs.getInt("pref_cloud_stretch", PreferenceDefaults.CLOUD_STRETCH)
+        val stretchVal = settings.getInt("pref_cloud_stretch", PreferenceDefaults.CLOUD_STRETCH)
         val newStretch = stretchVal / 100f
         
         // Cloud opacity setting: 10-100 -> 0.1-1.0
-        val opacityVal = prefs.getInt("pref_cloud_opacity", PreferenceDefaults.CLOUD_OPACITY)
+        val opacityVal = settings.getInt("pref_cloud_opacity", PreferenceDefaults.CLOUD_OPACITY)
         val newOpacity = opacityVal / 100f
         
         // Cloud speed setting: 0-100 -> 0.0-2.0 (50 = normal 1.0)
-        val speedVal = prefs.getInt("pref_cloud_speed", PreferenceDefaults.CLOUD_SPEED)
+        val speedVal = settings.getInt("pref_cloud_speed", PreferenceDefaults.CLOUD_SPEED)
         cloudSpeedMultiplier = speedVal / 50f  // 0=frozen, 50=normal, 100=2x speed
         
         // Fluffiness/density multiplier: 50-300 -> 0.5-3.0 (controls puffs per cloud)
         // Higher = more puffs per cloud = denser/fluffier individual clouds
         // Does NOT affect number of clouds (that comes from weather data)
-        val densityVal = prefs.getInt("pref_cloud_density", PreferenceDefaults.CLOUD_DENSITY)
+        val densityVal = settings.getInt("pref_cloud_density", PreferenceDefaults.CLOUD_DENSITY)
         val newFluffiness = densityVal / 100f
         val fluffinessChanged = kotlin.math.abs(newFluffiness - fluffinessMultiplier) > 0.01f
         fluffinessMultiplier = newFluffiness
@@ -834,17 +1113,16 @@ class CloudLayer(private val context: Context) : SceneLayer {
         
         if (!cloudsEnabled) {
             cloudCount = 0
-            // Cleanup cached bitmaps
-            for (group in cloudGroups) {
-                group.cachedBitmap?.recycle()
-            }
+            // Cleanup cached cloud resources
+            clearGroupBitmaps()
+            clearGroupRenderNodes()
+            resetRenderNodeEffects()
             cloudGroups = emptyList()
         } else if (enabledChanged || stretchChanged || seedChanged || opacityChanged || fluffinessChanged) {
-            // Invalidate cached bitmaps when settings change
-            for (group in cloudGroups) {
-                group.cachedBitmap?.recycle()
-                group.cachedBitmap = null
-            }
+            // Invalidate cached cloud resources when settings change
+            clearGroupBitmaps()
+            clearGroupRenderNodes()
+            resetRenderNodeEffects()
             // Regenerate cloud groups with new settings
             generateCloudGroups()
         }
@@ -863,15 +1141,12 @@ class CloudLayer(private val context: Context) : SceneLayer {
         }
         
         // Cleanup cached cloud group bitmaps to prevent memory leaks
-        for (group in cloudGroups) {
-            group.cachedBitmap?.recycle()
-            group.cachedBitmap = null
-        }
+        clearGroupBitmaps()
+        clearGroupRenderNodes()
+        resetRenderNodeEffects()
         cloudGroups = emptyList()
         
         // Cleanup tiled mode resources
-        tiledNoiseBitmap?.recycle()
-        tiledNoiseBitmap = null
-        tiledShader = null
+        clearTiledResources()
     }
 }

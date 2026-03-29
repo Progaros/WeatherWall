@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.graphics.Shader
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.parallax.ParallaxCalculator
+import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
 
 /**
@@ -220,27 +221,31 @@ class VignetteLayer(private val context: Context) : SceneLayer {
     }
 
     override fun reloadSettings() {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        val snapshot = PreferenceManager.getDefaultSharedPreferences(context).all
+        reloadSettings(SimulationSettings.fromSnapshot(snapshot))
+    }
+
+    override fun reloadSettings(settings: SimulationSettings) {
         
         // Top edge vignette
-        topDistance = prefs.getInt("pref_vignette_top_distance", 0).coerceIn(0, 50)
-        topFade = prefs.getInt("pref_vignette_top_fade", 20).coerceIn(5, 50)
-        topAlpha = prefs.getInt("pref_vignette_top_alpha", 60).coerceIn(0, 100)
+        topDistance = settings.getInt("pref_vignette_top_distance", 0).coerceIn(0, 50)
+        topFade = settings.getInt("pref_vignette_top_fade", 20).coerceIn(5, 50)
+        topAlpha = settings.getInt("pref_vignette_top_alpha", 60).coerceIn(0, 100)
         
         // Bottom edge vignette (default for app dock)
-        bottomDistance = prefs.getInt("pref_vignette_bottom_distance", 25).coerceIn(0, 50)
-        bottomFade = prefs.getInt("pref_vignette_bottom_fade", 15).coerceIn(5, 50)
-        bottomAlpha = prefs.getInt("pref_vignette_bottom_alpha", 70).coerceIn(0, 100)
+        bottomDistance = settings.getInt("pref_vignette_bottom_distance", 25).coerceIn(0, 50)
+        bottomFade = settings.getInt("pref_vignette_bottom_fade", 15).coerceIn(5, 50)
+        bottomAlpha = settings.getInt("pref_vignette_bottom_alpha", 70).coerceIn(0, 100)
         
         // Left edge vignette
-        leftDistance = prefs.getInt("pref_vignette_left_distance", 0).coerceIn(0, 50)
-        leftFade = prefs.getInt("pref_vignette_left_fade", 20).coerceIn(5, 50)
-        leftAlpha = prefs.getInt("pref_vignette_left_alpha", 50).coerceIn(0, 100)
+        leftDistance = settings.getInt("pref_vignette_left_distance", 0).coerceIn(0, 50)
+        leftFade = settings.getInt("pref_vignette_left_fade", 20).coerceIn(5, 50)
+        leftAlpha = settings.getInt("pref_vignette_left_alpha", 50).coerceIn(0, 100)
         
         // Right edge vignette
-        rightDistance = prefs.getInt("pref_vignette_right_distance", 0).coerceIn(0, 50)
-        rightFade = prefs.getInt("pref_vignette_right_fade", 20).coerceIn(5, 50)
-        rightAlpha = prefs.getInt("pref_vignette_right_alpha", 50).coerceIn(0, 100)
+        rightDistance = settings.getInt("pref_vignette_right_distance", 0).coerceIn(0, 50)
+        rightFade = settings.getInt("pref_vignette_right_fade", 20).coerceIn(5, 50)
+        rightAlpha = settings.getInt("pref_vignette_right_alpha", 50).coerceIn(0, 100)
         
         gradientsDirty = true
     }

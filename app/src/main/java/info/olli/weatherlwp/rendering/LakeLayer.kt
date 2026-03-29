@@ -10,6 +10,7 @@ import android.graphics.Shader
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
+import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
 import kotlin.math.sin
 
@@ -340,12 +341,16 @@ class LakeLayer(private val context: Context) : SceneLayer {
     // ========================= Settings =========================
 
     override fun reloadSettings() {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        enabled = prefs.getBoolean("pref_lake_enabled", PreferenceDefaults.LAKE_ENABLED)
-        positionPercent = prefs.getInt("pref_lake_position", PreferenceDefaults.LAKE_POSITION) / 100f
-        sizePercent = prefs.getInt("pref_lake_size", PreferenceDefaults.LAKE_SIZE) / 100f
-        depthLayerPercent = prefs.getInt("pref_lake_depth", PreferenceDefaults.LAKE_DEPTH_LAYER) / 100f
-        opacity = prefs.getInt("pref_lake_opacity", PreferenceDefaults.LAKE_OPACITY) / 100f
+        val snapshot = PreferenceManager.getDefaultSharedPreferences(context).all
+        reloadSettings(SimulationSettings.fromSnapshot(snapshot))
+    }
+
+    override fun reloadSettings(settings: SimulationSettings) {
+        enabled = settings.getBoolean("pref_lake_enabled", PreferenceDefaults.LAKE_ENABLED)
+        positionPercent = settings.getInt("pref_lake_position", PreferenceDefaults.LAKE_POSITION) / 100f
+        sizePercent = settings.getInt("pref_lake_size", PreferenceDefaults.LAKE_SIZE) / 100f
+        depthLayerPercent = settings.getInt("pref_lake_depth", PreferenceDefaults.LAKE_DEPTH_LAYER) / 100f
+        opacity = settings.getInt("pref_lake_opacity", PreferenceDefaults.LAKE_OPACITY) / 100f
     }
 
     override fun destroy() {

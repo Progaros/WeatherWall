@@ -1,6 +1,7 @@
 package info.olli.weatherlwp.simulation
 
 import android.content.Context
+import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.weather.WeatherRepository
 import info.olli.weatherlwp.weather.WeatherType
 import info.olli.weatherlwp.util.SeasonHelper
@@ -15,7 +16,7 @@ import kotlin.math.sin
 class SimulationController(private val context: Context) {
     
     private val clock = SimulationClock()
-    private val settings = SimulationSettings(context)
+    @Volatile private var settings = SimulationSettings.fromSnapshot(emptyMap<String, Any?>())
     private val weatherHistory = WeatherHistory(context)
     
     private var screenWidth = 1080f
@@ -37,21 +38,34 @@ class SimulationController(private val context: Context) {
     // Smooth wind transitions (prevent jumping when weather data changes)
     private var smoothedWindStrength = 0.5f
     private var smoothedWindDirection = 0f
+
+    init {
+        val snapshot = PreferenceManager.getDefaultSharedPreferences(context).all
+        applySettings(SimulationSettings.fromSnapshot(snapshot))
+    }
     
     /**
-     * Reload settings from preferences.
+     * Apply a new immutable settings snapshot.
      */
-    fun reloadSettings() {
-        settings.reload()
-        
+    fun applySettings(newSettings: SimulationSettings) {
+        settings = newSettings
+
         // Update clock with settings
-        clock.setUseRealTime(settings.useRealTime)
-        clock.setManualTime(settings.getEffectiveTimeMinutes())
-        
+        clock.setUseRealTime(newSettings.useRealTime)
+        clock.setManualTime(newSettings.getEffectiveTimeMinutes())
+
         // Update clock with actual sunrise/sunset times from weather data
         val sunrise = WeatherRepository.getSunrise(context)
         val sunset = WeatherRepository.getSunset(context)
         clock.updateSunTimes(sunrise, sunset)
+    }
+
+    /**
+     * Backward-compatible fallback for callers that still force a direct prefs reload.
+     */
+    fun reloadSettings() {
+        val snapshot = PreferenceManager.getDefaultSharedPreferences(context).all
+        applySettings(SimulationSettings.fromSnapshot(snapshot))
     }
     
     /**
@@ -77,17 +91,19 @@ class SimulationController(private val context: Context) {
      * This is called every frame to get the latest state.
      */
     fun getState(): SimulationState {
+        val currentSettings = settings
+
         // Get real weather from repository
         val realWeather = WeatherRepository.getWeatherType(context)
-        val effectiveWeather = settings.getEffectiveWeather(realWeather)
+        val effectiveWeather = currentSettings.getEffectiveWeather(realWeather)
         
         // Get wind - use weather data when available, settings when in debug mode
         val weatherWindStrength = WeatherRepository.getNormalizedWindStrength(context)
-        val effectiveWind = if (settings.useWeatherWind && WeatherRepository.isDataFresh(context)) {
+        val effectiveWind = if (currentSettings.useWeatherWind && WeatherRepository.isDataFresh(context)) {
             // Use weather wind directly (not blended) when weather data is fresh
             weatherWindStrength
         } else {
-            settings.windStrength
+            currentSettings.windStrength
         }
         
         // Calculate wind gust
@@ -106,8 +122,8 @@ class SimulationController(private val context: Context) {
         val visibility = WeatherRepository.getNormalizedVisibility(context)
         val moonIllumination = WeatherRepository.getMoonIllumination(context)
         // In debug/simulation mode, use manual moon phase; otherwise use weather data
-        val moonPhase = if (settings.debugEnabled) {
-            settings.moonPhase  // Already 0-1
+        val moonPhase = if (currentSettings.debugEnabled) {
+            currentSettings.moonPhase  // Already 0-1
         } else {
             extendedData.moonPhase / 360f  // Normalize to 0-1
         }
@@ -143,7 +159,7 @@ class SimulationController(private val context: Context) {
         
         // Record weather history (deduplicates internally to once per hour)
         // In debug mode, pass the effective (overridden) weather so history tracks simulated conditions
-        if (settings.debugEnabled) {
+        if (currentSettings.debugEnabled) {
             val overridePrecipProb = when (effectiveWeather) {
                 WeatherType.RAIN, WeatherType.THUNDERSTORM, WeatherType.SNOW, WeatherType.HAIL -> 0.85f
                 else -> 0f
@@ -158,18 +174,18 @@ class SimulationController(private val context: Context) {
         val historySnapshot = weatherHistory.getSnapshot()
         
         // Apply simulation overrides for snow/river levels when enabled
-        val effectiveSnowLevel = if (settings.useSimulatedWeatherHistory)
-            settings.simulatedSnowLevel else historySnapshot.snowDepth
-        val effectiveRiverLevel = if (settings.useSimulatedWeatherHistory)
-            settings.simulatedRiverLevel else historySnapshot.riverLevel
+        val effectiveSnowLevel = if (currentSettings.useSimulatedWeatherHistory)
+            currentSettings.simulatedSnowLevel else historySnapshot.snowDepth
+        val effectiveRiverLevel = if (currentSettings.useSimulatedWeatherHistory)
+            currentSettings.simulatedRiverLevel else historySnapshot.riverLevel
         
         // Season transition blend
-        val seasonTransitionDays = settings.seasonTransitionDays
+        val seasonTransitionDays = currentSettings.seasonTransitionDays
         val seasonBlend = SeasonHelper.getEffectiveSeasonBlend(
-            settings.debugEnabled,
-            settings.terrainSeasonOverride,
+            currentSettings.debugEnabled,
+            currentSettings.terrainSeasonOverride,
             seasonTransitionDays,
-            settings.seasonDayOfYearOverride
+            currentSettings.seasonDayOfYearOverride
         )
         
         return SimulationState(
@@ -187,7 +203,7 @@ class SimulationController(private val context: Context) {
             isGoldenHour = isGoldenHour,
             isBlueHour = isBlueHour,
             weather = effectiveWeather,
-            cloudDensity = settings.cloudDensity,
+            cloudDensity = currentSettings.cloudDensity,
             precipProbability = precipProbability.coerceIn(0f, 1f),
             precipIntensity = precipIntensity.coerceIn(0f, 1f),
             cloudCover = cloudCover.coerceIn(0f, 1f),
@@ -199,12 +215,12 @@ class SimulationController(private val context: Context) {
             windStrength = smoothedWind.coerceIn(0f, 1f),
             windDirection = smoothedDir,
             windGust = windGust.coerceIn(0f, 1f),  // Clamp to valid range
-            windMultiplier = settings.windMultiplier,
-            treeSwaySpeed = settings.treeSwaySpeed,
-            mountainShadowsEnabled = settings.mountainShadowsEnabled,
-            treeShadowsEnabled = settings.treeShadowsEnabled,
-            shadowStrength = settings.shadowStrength,
-            nightShadeStrength = settings.nightShadeStrength,
+            windMultiplier = currentSettings.windMultiplier,
+            treeSwaySpeed = currentSettings.treeSwaySpeed,
+            mountainShadowsEnabled = currentSettings.mountainShadowsEnabled,
+            treeShadowsEnabled = currentSettings.treeShadowsEnabled,
+            shadowStrength = currentSettings.shadowStrength,
+            nightShadeStrength = currentSettings.nightShadeStrength,
             screenWidth = screenWidth,
             screenHeight = screenHeight,
             snowLevel = effectiveSnowLevel,
@@ -215,7 +231,7 @@ class SimulationController(private val context: Context) {
             currentSeason = seasonBlend.primarySeason.toStringKey(),
             previousSeason = seasonBlend.previousSeason.toStringKey(),
             seasonTransitionDays = seasonTransitionDays,
-            isDebugMode = settings.debugEnabled
+            isDebugMode = currentSettings.debugEnabled
         )
     }
     
