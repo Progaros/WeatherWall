@@ -6,7 +6,6 @@ import android.graphics.Paint
 import android.graphics.Path
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.RenderConstants
-import info.olli.weatherlwp.simulation.SimulationState
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -80,6 +79,15 @@ class DuckEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         canvas.scale(flip, 1f)
         canvas.rotate(waddle)
 
+        // Legs are split into back/front layers around the body for depth readability.
+        val legOffset = sin(legPhase) * 0.3f * s
+        val legColor = RenderConstants.blendWithAmbient(Color.rgb(210, 140, 30), ambientColor, 0.2f)
+
+        // Back leg + foot (behind body)
+        paint.color = legColor
+        canvas.drawRoundRect(-0.8f * s, 0.4f * s, -0.5f * s, 1.0f * s - legOffset, 0.05f * s, 0.05f * s, paint)
+        canvas.drawOval(-1.0f * s, 0.9f * s - legOffset, -0.3f * s, 1.1f * s - legOffset, paint)
+
         // Body (oval)
         val bodyColor = if (isMale && !isDuckling) {
             RenderConstants.blendWithAmbient(Color.rgb(80, 100, 60), ambientColor, 0.3f)  // Green-brown
@@ -118,16 +126,10 @@ class DuckEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         paint.color = Color.argb(180, Color.red(bodyColor), Color.green(bodyColor), Color.blue(bodyColor))
         canvas.drawOval(-1.2f * s, -0.5f * s, 0.6f * s, 0.3f * s, paint)
 
-        // Legs (orange, alternating walk animation)
-        paint.color = RenderConstants.blendWithAmbient(Color.rgb(210, 140, 30), ambientColor, 0.2f)
-        val legOffset = sin(legPhase) * 0.3f * s
-        // Front leg
+        // Front leg + foot (in front of body)
+        paint.color = legColor
         canvas.drawRoundRect(-0.2f * s, 0.4f * s, 0.1f * s, 1.0f * s + legOffset, 0.05f * s, 0.05f * s, paint)
-        // Back leg
-        canvas.drawRoundRect(-0.8f * s, 0.4f * s, -0.5f * s, 1.0f * s - legOffset, 0.05f * s, 0.05f * s, paint)
-        // Feet
         canvas.drawOval(-0.4f * s, 0.9f * s + legOffset, 0.3f * s, 1.1f * s + legOffset, paint)
-        canvas.drawOval(-1.0f * s, 0.9f * s - legOffset, -0.3f * s, 1.1f * s - legOffset, paint)
 
         // Tail (small up-curve)
         paint.color = bodyColor

@@ -6,8 +6,6 @@ import android.graphics.Paint
 import android.graphics.Path
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.RenderConstants
-import info.olli.weatherlwp.simulation.SimulationState
-import kotlin.math.abs
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -104,11 +102,12 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
         val screenX = x * width - extendedOffset
         val screenY = y * height - unit * 3f  // Offset above ground
         
-        // Running animation - legs move when not stopped
-        val runPhase = if (isStopped) 0f else sin(timeSeconds * 20f + animPhase)
-        
-        // Tail bob
-        val tailBob = sin(timeSeconds * 3f + animPhase) * unit * 0.3f
+        // Running animation - elapsed-time based for stable movement across frame rates.
+        val runPhase = if (isStopped) 0f else sin(elapsedMs * 0.02f + animPhase)
+        val legOffset = runPhase * unit * 0.3f
+
+        // Tail bob with reduced amplitude to keep torso/tail seam tighter.
+        val tailBob = sin(elapsedMs * 0.003f + animPhase) * unit * 0.26f
         
         // Body color with ambient
         paint.color = RenderConstants.blendWithAmbient(bodyColor, ambientColor, 0.3f)
@@ -118,6 +117,18 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
         if (direction < 0) {
             canvas.scale(-1f, 1f, screenX, screenY)
         }
+
+        // Back legs (behind body)
+        canvas.drawRoundRect(
+            screenX - unit * 1.0f - legOffset, screenY + unit * 0.3f,
+            screenX - unit * 0.7f - legOffset, screenY + unit * 1.2f,
+            unit * 0.15f, unit * 0.15f, paint
+        )
+        canvas.drawRoundRect(
+            screenX - unit * 1.3f + legOffset, screenY + unit * 0.3f,
+            screenX - unit * 1.0f + legOffset, screenY + unit * 1.2f,
+            unit * 0.15f, unit * 0.15f, paint
+        )
         
         // Draw tail (large, fluffy, curved upward)
         path.reset()
@@ -176,11 +187,8 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
             paint
         )
         
-        // Legs (animated when running)
+        // Front legs (in front of body)
         paint.color = RenderConstants.blendWithAmbient(bodyColor, ambientColor, 0.3f)
-        val legOffset = runPhase * unit * 0.4f
-        
-        // Front legs
         canvas.drawRoundRect(
             screenX + unit * 0.3f + legOffset, screenY + unit * 0.3f,
             screenX + unit * 0.6f + legOffset, screenY + unit * 1.2f,
@@ -189,18 +197,6 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
         canvas.drawRoundRect(
             screenX + unit * 0.0f - legOffset, screenY + unit * 0.3f,
             screenX + unit * 0.3f - legOffset, screenY + unit * 1.2f,
-            unit * 0.15f, unit * 0.15f, paint
-        )
-        
-        // Back legs
-        canvas.drawRoundRect(
-            screenX - unit * 1.0f - legOffset, screenY + unit * 0.3f,
-            screenX - unit * 0.7f - legOffset, screenY + unit * 1.2f,
-            unit * 0.15f, unit * 0.15f, paint
-        )
-        canvas.drawRoundRect(
-            screenX - unit * 1.3f + legOffset, screenY + unit * 0.3f,
-            screenX - unit * 1.0f + legOffset, screenY + unit * 1.2f,
             unit * 0.15f, unit * 0.15f, paint
         )
         

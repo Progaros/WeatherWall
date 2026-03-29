@@ -6,7 +6,6 @@ import android.graphics.Paint
 import android.graphics.Path
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.RenderConstants
-import info.olli.weatherlwp.simulation.SimulationState
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -95,9 +94,17 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         path.cubicTo(-4.0f*s, 0.0f*s, -3.0f*s, 0.2f*s, -2.0f*s, 0.0f*s)
         path.close()
         canvas.drawPath(path, paint)
+
+        // Back legs (behind torso)
+        val step = sin(walkPhase) * 0.25f * s
+        canvas.drawRoundRect(-1.8f*s, 0.1f*s, -1.4f*s, 1.0f*s + step, 0.2f*s, 0.2f*s, paint)
+        canvas.drawRoundRect(-0.8f*s, 0.1f*s, -0.4f*s, 1.0f*s - step, 0.2f*s, 0.2f*s, paint)
         
         // Body
         canvas.drawOval(-2.4f*s, -1.2f*s, 2.0f*s, 0.2f*s, paint)
+
+        // Shoulder bridge keeps head connected to torso silhouette.
+        canvas.drawOval(1.2f*s, -1.25f*s, 2.1f*s, -0.35f*s, paint)
         
         // Belly (lighter underside)
         paint.color = RenderConstants.blendWithAmbient(Color.rgb(230, 190, 140), ambientColor, 0.3f)
@@ -109,11 +116,8 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         paint.color = Color.rgb(240, 200, 180)
         canvas.drawOval(2.7f*s, -1.4f*s, 3.7f*s, -0.9f*s, paint)
         
-        // Legs
+        // Front legs (in front of torso)
         paint.color = RenderConstants.blendWithAmbient(Color.rgb(200, 90, 30), ambientColor, 0.3f)
-        val step = sin(walkPhase) * 0.25f*s
-        canvas.drawRoundRect(-1.8f*s, 0.1f*s, -1.4f*s, 1.0f*s + step, 0.2f*s, 0.2f*s, paint)
-        canvas.drawRoundRect(-0.8f*s, 0.1f*s, -0.4f*s, 1.0f*s - step, 0.2f*s, 0.2f*s, paint)
         canvas.drawRoundRect(0.6f*s, 0.1f*s, 1.0f*s, 1.0f*s + step, 0.2f*s, 0.2f*s, paint)
         canvas.drawRoundRect(1.4f*s, 0.1f*s, 1.8f*s, 1.0f*s - step, 0.2f*s, 0.2f*s, paint)
         

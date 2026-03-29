@@ -1,14 +1,39 @@
 package info.olli.weatherlwp.settings
 
 import android.content.Context
-import android.graphics.*
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import android.util.AttributeSet
 import android.view.View
-import kotlin.math.sin
+import info.olli.weatherlwp.parallax.ParallaxCalculator
+import info.olli.weatherlwp.rendering.events.AirplaneEvent
+import info.olli.weatherlwp.rendering.events.AlienEvent
+import info.olli.weatherlwp.rendering.events.BatEvent
+import info.olli.weatherlwp.rendering.events.BirdFlockEvent
+import info.olli.weatherlwp.rendering.events.ButterflyEvent
+import info.olli.weatherlwp.rendering.events.DeerEvent
+import info.olli.weatherlwp.rendering.events.DragonflyEvent
+import info.olli.weatherlwp.rendering.events.DuckEvent
+import info.olli.weatherlwp.rendering.events.EagleEvent
+import info.olli.weatherlwp.rendering.events.EventLayer
+import info.olli.weatherlwp.rendering.events.FireflyEvent
+import info.olli.weatherlwp.rendering.events.FishJumpEvent
+import info.olli.weatherlwp.rendering.events.FoxEvent
+import info.olli.weatherlwp.rendering.events.FrogEvent
+import info.olli.weatherlwp.rendering.events.HillHeightProvider
+import info.olli.weatherlwp.rendering.events.HotAirBalloonEvent
+import info.olli.weatherlwp.rendering.events.OwlEvent
+import info.olli.weatherlwp.rendering.events.RabbitEvent
+import info.olli.weatherlwp.rendering.events.RandomEvent
+import info.olli.weatherlwp.rendering.events.ShootingStarEvent
+import info.olli.weatherlwp.rendering.events.SnowflakeEvent
+import info.olli.weatherlwp.rendering.events.SquirrelEvent
+import kotlin.random.Random
 
 /**
- * Custom view that renders an animated preview of an event type.
- * Used in event preference items to show what the event looks like.
+ * Event preview that renders with the same runtime event classes used by the wallpaper.
+ * This avoids drift between settings previews and live rendering logic.
  */
 class EventPreviewView @JvmOverloads constructor(
     context: Context,
@@ -27,1001 +52,137 @@ class EventPreviewView @JvmOverloads constructor(
 
     var eventType: EventType = EventType.BAT
         set(value) {
+            if (field == value) return
             field = value
+            rebuildPreviewEvent()
             invalidate()
         }
 
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val path = Path()
-    private var animationTime = 0f
-    private val frameDelay = 16L // ~60fps
-
-    private val animator = object : Runnable {
-        override fun run() {
-            animationTime += 0.016f
-            if (animationTime > 100f) animationTime = 0f  // Reset to prevent overflow
-            invalidate()
-            postDelayed(this, frameDelay)
-        }
+    private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
     }
-    
-    // Background color smoothly cycles between sky blue and dark (8 second full cycle)
-    private val backgroundColor: Int
-        get() {
-            // Use sin wave for smooth transition (0 to 1 to 0)
-            // Period: 8 seconds (0.125 * 2π = full cycle)
-            val phase = sin(animationTime * 0.785f).toFloat()  // 0.785 ≈ π/4, gives ~8s cycle
-            val t = (phase + 1f) / 2f  // Normalize from -1..1 to 0..1
-            
-            // Interpolate between bright sky blue and dark night
-            // Sky blue: (100, 180, 235), Dark: (15, 15, 35)
-            val r = (15 + (100 - 15) * t).toInt()
-            val g = (15 + (180 - 15) * t).toInt()
-            val b = (35 + (235 - 35) * t).toInt()
-            
-            return Color.argb(50, r, g, b)
-        }
-
-    override fun onAttachedToWindow() {
-        super.onAttachedToWindow()
-        post(animator)
+    private val eventPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+    }
+    private val eventStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+        strokeWidth = 2f
     }
 
-    override fun onDetachedFromWindow() {
-        super.onDetachedFromWindow()
-        removeCallbacks(animator)
+    private val previewParallax = ParallaxCalculator().apply {
+        reset()
+    }
+
+    private val previewAmbientColor = Color.rgb(220, 230, 235)
+    private val previewGroundColor = Color.argb(70, 85, 105, 80)
+
+    private val previewHillProvider: HillHeightProvider = { xRatio, depthFactor ->
+        val normalizedX = ((xRatio + 0.2f) / 1.4f).coerceIn(0f, 1f)
+        val centered = normalizedX * 2f - 1f
+        val arch = 1f - centered * centered
+        val depthShift = (depthFactor - 0.65f) * 0.06f
+        (0.80f - arch * 0.10f + depthShift).coerceIn(0.62f, 0.92f)
+    }
+
+    private var previewEvent: RandomEvent = createPreviewEvent(eventType)
+    private var previewAbsoluteTimeMs: Long = computePreviewTime(previewEvent)
+
+    init {
+        rebuildPreviewEvent()
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        previewParallax.setCanvasSize(w.toFloat(), h.toFloat())
+        previewParallax.reset()
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        
+
         val w = width.toFloat()
         val h = height.toFloat()
-        val centerX = w / 2f
-        val centerY = h / 2f
-        val size = minOf(w, h)
-        val unit = size * 0.15f  // Larger unit for bigger previews
+        if (w <= 0f || h <= 0f) return
 
-        // Draw background circle using nearly full height (cycles between sky blue and dark)
-        paint.color = backgroundColor
-        paint.style = Paint.Style.FILL
-        canvas.drawCircle(centerX, centerY, size * 0.48f, paint)
+        val cx = w * 0.5f
+        val cy = h * 0.5f
+        val radius = minOf(w, h) * 0.48f
 
-        when (eventType) {
-            // Sky events
-            EventType.AIRPLANE -> drawAirplane(canvas, centerX, centerY, unit)
-            EventType.BIRDS -> drawBirds(canvas, centerX, centerY, unit)
-            EventType.EAGLE -> drawEagle(canvas, centerX, centerY, unit)
-            EventType.OWL -> drawOwl(canvas, centerX, centerY, unit)
-            EventType.BALLOON -> drawBalloon(canvas, centerX, centerY, unit)
-            EventType.SHOOTING_STAR -> drawShootingStar(canvas, centerX, centerY, unit)
-            EventType.UFO -> drawUFO(canvas, centerX, centerY, unit)
-            // Ground events
-            EventType.BUTTERFLY -> drawButterfly(canvas, centerX, centerY, unit)
-            EventType.DRAGONFLY -> drawDragonfly(canvas, centerX, centerY, unit)
-            EventType.RABBIT -> drawRabbit(canvas, centerX, centerY, unit)
-            EventType.FOX -> drawFox(canvas, centerX, centerY, unit)
-            EventType.SQUIRREL -> drawSquirrel(canvas, centerX, centerY, unit)
-            EventType.FIREFLIES -> drawFireflies(canvas, centerX, centerY, unit)
-            EventType.SNOWFLAKE -> drawSnowflake(canvas, centerX, centerY, unit)
-            EventType.BAT -> drawBat(canvas, centerX, centerY, unit)
-            EventType.DEER -> drawDeer(canvas, centerX, centerY, unit)
-            // Water events
-            EventType.FISH -> drawFish(canvas, centerX, centerY, unit)
-            EventType.DUCK -> drawDuck(canvas, centerX, centerY, unit)
-            EventType.FROG -> drawFrog(canvas, centerX, centerY, unit)
+        backgroundPaint.color = Color.argb(55, 100, 165, 205)
+        canvas.drawCircle(cx, cy, radius, backgroundPaint)
+
+        if (previewEvent.layer == EventLayer.GROUND) {
+            backgroundPaint.color = previewGroundColor
+            canvas.drawOval(cx - radius * 0.8f, cy + radius * 0.15f, cx + radius * 0.8f, cy + radius * 0.55f, backgroundPaint)
+        }
+
+        // Normalize paint baseline before event-specific mutations.
+        eventPaint.style = Paint.Style.FILL
+        eventStrokePaint.style = Paint.Style.STROKE
+        eventStrokePaint.strokeCap = Paint.Cap.ROUND
+        eventStrokePaint.strokeJoin = Paint.Join.ROUND
+
+        try {
+            val timeSeconds = previewAbsoluteTimeMs / 1000f
+            previewEvent.draw(
+                canvas = canvas,
+                paint = eventPaint,
+                strokePaint = eventStrokePaint,
+                parallaxCalculator = previewParallax,
+                width = w,
+                height = h,
+                timeSeconds = timeSeconds,
+                ambientColor = previewAmbientColor,
+                extendedOffset = 0f,
+                absoluteTimeMs = previewAbsoluteTimeMs,
+                hillHeightProvider = previewHillProvider
+            )
+        } catch (_: Exception) {
+            // Preview should never crash settings UI due to a single event draw issue.
         }
     }
 
-    // ===== SKY EVENTS =====
-    
-    private fun drawAirplane(canvas: Canvas, cx: Float, cy: Float, unit: Float) {
-        val wobble = sin(animationTime * 2f) * unit * 0.1f
-        
-        paint.color = Color.argb(220, 200, 200, 200)
-        paint.style = Paint.Style.FILL
-        
-        canvas.save()
-        canvas.translate(cx, cy + wobble)
-        
-        // Fuselage
-        canvas.drawOval(-unit * 2f, -unit * 0.25f, unit * 2f, unit * 0.25f, paint)
-        
-        // Wings
-        path.reset()
-        path.moveTo(-unit * 0.5f, 0f)
-        path.lineTo(-unit * 0.8f, -unit * 1.5f)
-        path.lineTo(unit * 0.3f, -unit * 1.5f)
-        path.lineTo(unit * 0.5f, 0f)
-        canvas.drawPath(path, paint)
-        
-        path.reset()
-        path.moveTo(-unit * 0.5f, 0f)
-        path.lineTo(-unit * 0.8f, unit * 1.5f)
-        path.lineTo(unit * 0.3f, unit * 1.5f)
-        path.lineTo(unit * 0.5f, 0f)
-        canvas.drawPath(path, paint)
-        
-        // Tail
-        path.reset()
-        path.moveTo(-unit * 1.8f, 0f)
-        path.lineTo(-unit * 2.2f, -unit * 0.8f)
-        path.lineTo(-unit * 1.5f, -unit * 0.3f)
-        canvas.drawPath(path, paint)
-        
-        // Contrail
-        paint.color = Color.argb(80, 255, 255, 255)
-        canvas.drawOval(-unit * 4f, -unit * 0.15f, -unit * 2f, unit * 0.15f, paint)
-        canvas.drawOval(-unit * 5.5f, -unit * 0.1f, -unit * 3.5f, unit * 0.1f, paint)
-        
-        canvas.restore()
+    private fun rebuildPreviewEvent() {
+        previewEvent = createPreviewEvent(eventType)
+        previewAbsoluteTimeMs = computePreviewTime(previewEvent)
+        previewParallax.reset()
     }
-    
-    private fun drawBirds(canvas: Canvas, cx: Float, cy: Float, unit: Float) {
-        val wingBeat = sin(animationTime * 12f) * 0.3f
-        
-        paint.color = Color.argb(200, 40, 40, 40)
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = unit * 0.15f
-        paint.strokeCap = Paint.Cap.ROUND
-        
-        // Draw 5 birds in V-formation, centered on the preview
-        val birds = arrayOf(
-            Pair(0f, 0f),           // Leader at center
-            Pair(-unit * 0.8f, -unit * 0.6f),   // Upper left
-            Pair(-unit * 1.6f, -unit * 1.2f),   // Far upper left
-            Pair(-unit * 0.8f, unit * 0.6f),    // Lower left
-            Pair(-unit * 1.6f, unit * 1.2f)     // Far lower left
-        )
-        
-        for ((dx, dy) in birds) {
-            canvas.save()
-            canvas.translate(cx + dx, cy + dy)
-            
-            // Simple bird shape - two lines forming V wings
-            val wingUp = wingBeat * unit
-            canvas.drawLine(-unit * 0.5f, wingUp, 0f, 0f, paint)
-            canvas.drawLine(0f, 0f, unit * 0.5f, wingUp, paint)
-            
-            canvas.restore()
+
+    private fun computePreviewTime(event: RandomEvent): Long {
+        val ratio = when (event) {
+            is ShootingStarEvent -> 0.45f
+            else -> 0.5f
         }
+        return (event.durationMs * ratio).toLong().coerceAtLeast(1L)
     }
-    
-    private fun drawEagle(canvas: Canvas, cx: Float, cy: Float, unit: Float) {
-        val wingGlide = sin(animationTime * 1.5f) * 5f
-        val soar = sin(animationTime * 0.8f) * unit * 0.3f
-        
-        paint.color = Color.argb(220, 60, 40, 20)
-        paint.style = Paint.Style.FILL
-        
-        canvas.save()
-        canvas.translate(cx, cy + soar)
-        
-        // Body
-        canvas.drawOval(-unit * 0.8f, -unit * 0.25f, unit * 0.8f, unit * 0.25f, paint)
-        
-        // Head
-        canvas.drawCircle(unit * 0.9f, -unit * 0.1f, unit * 0.35f, paint)
-        
-        // Beak
-        paint.color = Color.argb(255, 220, 180, 50)
-        path.reset()
-        path.moveTo(unit * 1.2f, -unit * 0.1f)
-        path.lineTo(unit * 1.7f, 0f)
-        path.lineTo(unit * 1.2f, unit * 0.1f)
-        canvas.drawPath(path, paint)
-        
-        // Wings (soaring, slight movement)
-        paint.color = Color.argb(220, 60, 40, 20)
-        canvas.save()
-        canvas.rotate(wingGlide)
-        path.reset()
-        path.moveTo(0f, 0f)
-        path.quadTo(-unit * 1.5f, -unit * 0.5f, -unit * 3f, -unit * 0.3f)
-        path.lineTo(-unit * 2.5f, unit * 0.2f)
-        path.quadTo(-unit, unit * 0.3f, 0f, 0f)
-        canvas.drawPath(path, paint)
-        canvas.restore()
-        
-        canvas.save()
-        canvas.rotate(-wingGlide)
-        path.reset()
-        path.moveTo(0f, 0f)
-        path.quadTo(-unit * 1.5f, unit * 0.5f, -unit * 3f, unit * 0.3f)
-        path.lineTo(-unit * 2.5f, -unit * 0.2f)
-        path.quadTo(-unit, -unit * 0.3f, 0f, 0f)
-        canvas.drawPath(path, paint)
-        canvas.restore()
-        
-        // Tail feathers
-        path.reset()
-        path.moveTo(-unit * 0.8f, 0f)
-        path.lineTo(-unit * 1.5f, -unit * 0.3f)
-        path.lineTo(-unit * 1.5f, unit * 0.3f)
-        canvas.drawPath(path, paint)
-        
-        canvas.restore()
-    }
-    
-    private fun drawOwl(canvas: Canvas, cx: Float, cy: Float, unit: Float) {
-        val wingBeat = sin(animationTime * 6f) * 10f
-        val eyeBlink = if ((animationTime * 2f).toInt() % 6 == 0) 0.2f else 1f
-        
-        paint.color = Color.argb(220, 100, 80, 60)
-        paint.style = Paint.Style.FILL
-        
-        canvas.save()
-        canvas.translate(cx, cy)
-        
-        // Body
-        canvas.drawOval(-unit * 0.8f, -unit * 0.5f, unit * 0.8f, unit * 0.8f, paint)
-        
-        // Head
-        canvas.drawCircle(0f, -unit * 0.8f, unit * 0.9f, paint)
-        
-        // Ear tufts
-        path.reset()
-        path.moveTo(-unit * 0.5f, -unit * 1.2f)
-        path.lineTo(-unit * 0.7f, -unit * 1.8f)
-        path.lineTo(-unit * 0.2f, -unit * 1.3f)
-        canvas.drawPath(path, paint)
-        
-        path.reset()
-        path.moveTo(unit * 0.5f, -unit * 1.2f)
-        path.lineTo(unit * 0.7f, -unit * 1.8f)
-        path.lineTo(unit * 0.2f, -unit * 1.3f)
-        canvas.drawPath(path, paint)
-        
-        // Eyes (big owl eyes)
-        paint.color = Color.argb(255, 255, 200, 0)
-        canvas.drawOval(-unit * 0.55f, -unit - unit * 0.35f * eyeBlink, -unit * 0.15f, -unit * 0.5f + unit * 0.35f * eyeBlink, paint)
-        canvas.drawOval(unit * 0.15f, -unit - unit * 0.35f * eyeBlink, unit * 0.55f, -unit * 0.5f + unit * 0.35f * eyeBlink, paint)
-        
-        // Pupils
-        paint.color = Color.BLACK
-        canvas.drawCircle(-unit * 0.35f, -unit * 0.75f, unit * 0.12f * eyeBlink, paint)
-        canvas.drawCircle(unit * 0.35f, -unit * 0.75f, unit * 0.12f * eyeBlink, paint)
-        
-        // Beak
-        paint.color = Color.argb(255, 80, 60, 40)
-        path.reset()
-        path.moveTo(-unit * 0.15f, -unit * 0.5f)
-        path.lineTo(0f, -unit * 0.2f)
-        path.lineTo(unit * 0.15f, -unit * 0.5f)
-        canvas.drawPath(path, paint)
-        
-        // Wings
-        paint.color = Color.argb(220, 100, 80, 60)
-        canvas.save()
-        canvas.rotate(wingBeat)
-        canvas.drawOval(-unit * 2f, -unit * 0.3f, -unit * 0.6f, unit * 0.6f, paint)
-        canvas.restore()
-        
-        canvas.save()
-        canvas.rotate(-wingBeat)
-        canvas.drawOval(unit * 0.6f, -unit * 0.3f, unit * 2f, unit * 0.6f, paint)
-        canvas.restore()
-        
-        canvas.restore()
-    }
-    
-    private fun drawBalloon(canvas: Canvas, cx: Float, cy: Float, unit: Float) {
-        val sway = sin(animationTime * 1.2f) * unit * 0.3f
-        val bob = sin(animationTime * 0.8f) * unit * 0.2f
-        
-        canvas.save()
-        canvas.translate(cx + sway, cy + bob)
-        
-        // Balloon envelope
-        paint.color = Color.argb(220, 220, 60, 60)
-        paint.style = Paint.Style.FILL
-        canvas.drawOval(-unit * 1.5f, -unit * 2.5f, unit * 1.5f, unit * 0.5f, paint)
-        
-        // Stripes
-        paint.color = Color.argb(220, 255, 200, 50)
-        canvas.drawOval(-unit * 0.5f, -unit * 2.4f, unit * 0.5f, unit * 0.4f, paint)
-        
-        // Basket
-        paint.color = Color.argb(220, 139, 90, 43)
-        canvas.drawRect(-unit * 0.4f, unit * 0.8f, unit * 0.4f, unit * 1.4f, paint)
-        
-        // Ropes
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = unit * 0.05f
-        paint.color = Color.argb(180, 80, 60, 40)
-        canvas.drawLine(-unit * 0.4f, unit * 0.8f, -unit, unit * 0.5f, paint)
-        canvas.drawLine(unit * 0.4f, unit * 0.8f, unit, unit * 0.5f, paint)
-        
-        canvas.restore()
-    }
-    
-    private fun drawShootingStar(canvas: Canvas, cx: Float, cy: Float, unit: Float) {
-        // Shooting star oscillates within bounds
-        val offset = sin(animationTime * 3f) * unit * 0.4f
-        val twinkle = 0.7f + sin(animationTime * 15f) * 0.3f
-        
-        canvas.save()
-        canvas.translate(cx + offset, cy - offset)
-        
-        // Core star
-        paint.color = Color.argb((255 * twinkle).toInt(), 255, 255, 200)
-        paint.style = Paint.Style.FILL
-        canvas.drawCircle(0f, 0f, unit * 0.5f, paint)
-        
-        // Glow
-        paint.color = Color.argb((100 * twinkle).toInt(), 255, 255, 150)
-        canvas.drawCircle(0f, 0f, unit * 1.2f, paint)
-        
-        // Trail (short, stays in bounds)
-        val grad = LinearGradient(
-            0f, 0f,
-            -unit * 2.5f, unit * 2.5f,
-            intArrayOf(Color.argb((200 * twinkle).toInt(), 255, 255, 200), Color.argb(60, 255, 200, 100), Color.TRANSPARENT),
-            floatArrayOf(0f, 0.4f, 1f),
-            Shader.TileMode.CLAMP
-        )
-        paint.shader = grad
-        path.reset()
-        path.moveTo(0f, 0f)
-        path.lineTo(-unit * 2f, unit * 2f)
-        path.lineTo(-unit * 1.8f, unit * 2.2f)
-        path.close()
-        canvas.drawPath(path, paint)
-        paint.shader = null
-        
-        canvas.restore()
-    }
-    
-    private fun drawUFO(canvas: Canvas, cx: Float, cy: Float, unit: Float) {
-        val hover = sin(animationTime * 4f) * unit * 0.2f
-        val tilt = sin(animationTime * 2f) * 5f
-        val lightPhase = (animationTime * 8f).toInt() % 4
-        
-        canvas.save()
-        canvas.translate(cx, cy + hover)
-        canvas.rotate(tilt)
-        
-        // Main saucer body
-        paint.color = Color.argb(230, 150, 160, 170)
-        paint.style = Paint.Style.FILL
-        canvas.drawOval(-unit * 2f, -unit * 0.3f, unit * 2f, unit * 0.5f, paint)
-        
-        // Dome
-        paint.color = Color.argb(150, 180, 220, 255)
-        canvas.drawArc(-unit * 0.8f, -unit * 1f, unit * 0.8f, unit * 0.1f, 180f, 180f, true, paint)
-        
-        // Lights around edge
-        val lightColors = arrayOf(
-            Color.argb(255, 255, 100, 100),
-            Color.argb(255, 100, 255, 100),
-            Color.argb(255, 100, 100, 255),
-            Color.argb(255, 255, 255, 100)
-        )
-        for (i in 0 until 4) {
-            val angle = (i * 90f + animationTime * 60f) * Math.PI.toFloat() / 180f
-            val lx = kotlin.math.cos(angle) * unit * 1.5f
-            val ly = kotlin.math.sin(angle) * unit * 0.25f
-            paint.color = if (i == lightPhase) lightColors[i] else Color.argb(100, 150, 150, 150)
-            canvas.drawCircle(lx, ly, unit * 0.2f, paint)
+
+    private fun createPreviewEvent(type: EventType): RandomEvent {
+        val seed = 10_000L + type.ordinal.toLong() * 9_973L
+        val random = Random(seed)
+        val spawnTimeMs = 0L
+
+        return when (type) {
+            EventType.AIRPLANE -> AirplaneEvent(random, spawnTimeMs)
+            EventType.BIRDS -> BirdFlockEvent(random, spawnTimeMs)
+            EventType.EAGLE -> EagleEvent(random, spawnTimeMs)
+            EventType.OWL -> OwlEvent(random, spawnTimeMs)
+            EventType.BALLOON -> HotAirBalloonEvent(random, spawnTimeMs)
+            EventType.SHOOTING_STAR -> ShootingStarEvent(random, spawnTimeMs)
+            EventType.UFO -> AlienEvent(random, spawnTimeMs)
+            EventType.BUTTERFLY -> ButterflyEvent(random, spawnTimeMs)
+            EventType.DRAGONFLY -> DragonflyEvent(random, spawnTimeMs)
+            EventType.RABBIT -> RabbitEvent(random, spawnTimeMs)
+            EventType.FOX -> FoxEvent(random, spawnTimeMs)
+            EventType.SQUIRREL -> SquirrelEvent(random, spawnTimeMs)
+            EventType.FIREFLIES -> FireflyEvent(random, spawnTimeMs)
+            EventType.SNOWFLAKE -> SnowflakeEvent(random, spawnTimeMs)
+            EventType.BAT -> BatEvent(random, spawnTimeMs)
+            EventType.DEER -> DeerEvent(random, spawnTimeMs)
+            EventType.FISH -> FishJumpEvent(random, spawnTimeMs)
+            EventType.DUCK -> DuckEvent(random, spawnTimeMs)
+            EventType.FROG -> FrogEvent(random, spawnTimeMs)
         }
-        
-        canvas.restore()
-    }
-    
-    // ===== GROUND EVENTS =====
-    
-    private fun drawBat(canvas: Canvas, cx: Float, cy: Float, unit: Float) {
-        val wingBeat = sin(animationTime * 20f)
-        val wingAngle = wingBeat * 35f
-
-        paint.color = Color.argb(200, 30, 30, 35)
-        paint.style = Paint.Style.FILL
-
-        canvas.save()
-        canvas.translate(cx, cy)
-
-        // Body
-        canvas.drawOval(-unit * 0.6f, -unit * 0.3f, unit * 0.6f, unit * 0.3f, paint)
-
-        // Left wing
-        canvas.save()
-        canvas.rotate(-wingAngle)
-        path.reset()
-        path.moveTo(0f, 0f)
-        path.quadTo(-unit, -unit * 1.5f, -unit * 2.5f, -unit * 0.5f)
-        path.lineTo(-unit * 2f, unit * 0.2f)
-        path.quadTo(-unit * 0.8f, unit * 0.3f, 0f, 0f)
-        canvas.drawPath(path, paint)
-        canvas.restore()
-
-        // Right wing
-        canvas.save()
-        canvas.rotate(wingAngle)
-        path.reset()
-        path.moveTo(0f, 0f)
-        path.quadTo(unit, -unit * 1.5f, unit * 2.5f, -unit * 0.5f)
-        path.lineTo(unit * 2f, unit * 0.2f)
-        path.quadTo(unit * 0.8f, unit * 0.3f, 0f, 0f)
-        canvas.drawPath(path, paint)
-        canvas.restore()
-
-        // Ears
-        path.reset()
-        path.moveTo(-unit * 0.3f, -unit * 0.2f)
-        path.lineTo(-unit * 0.4f, -unit * 0.7f)
-        path.lineTo(-unit * 0.1f, -unit * 0.3f)
-        path.moveTo(unit * 0.3f, -unit * 0.2f)
-        path.lineTo(unit * 0.4f, -unit * 0.7f)
-        path.lineTo(unit * 0.1f, -unit * 0.3f)
-        canvas.drawPath(path, paint)
-
-        canvas.restore()
-    }
-
-    private fun drawDeer(canvas: Canvas, cx: Float, cy: Float, unit: Float) {
-        val legPhase = sin(animationTime * 4f) * 0.15f
-
-        paint.color = Color.argb(220, 139, 90, 43)  // Brown
-        paint.style = Paint.Style.FILL
-        
-        val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(255, 80, 50, 25)
-            style = Paint.Style.STROKE
-            strokeWidth = unit * 0.15f
-        }
-
-        canvas.save()
-        canvas.translate(cx - unit, cy + unit * 0.5f)
-
-        // Body (horizontal oval)
-        canvas.drawOval(-unit * 1.5f, -unit * 0.8f, unit * 1.5f, unit * 0.8f, paint)
-
-        // Head
-        canvas.drawOval(unit * 1.2f, -unit * 1.5f, unit * 2.2f, -unit * 0.5f, paint)
-
-        // Legs with walking animation
-        val frontLegOffset = legPhase * unit * 2f
-        val backLegOffset = -legPhase * unit * 2f
-        
-        // Front legs
-        canvas.drawLine(unit * 0.8f, unit * 0.5f, unit * 0.8f + frontLegOffset, unit * 2.2f, strokePaint)
-        canvas.drawLine(unit * 0.4f, unit * 0.5f, unit * 0.4f - frontLegOffset, unit * 2.2f, strokePaint)
-        
-        // Back legs
-        canvas.drawLine(-unit * 0.8f, unit * 0.5f, -unit * 0.8f + backLegOffset, unit * 2.2f, strokePaint)
-        canvas.drawLine(-unit * 1.2f, unit * 0.5f, -unit * 1.2f - backLegOffset, unit * 2.2f, strokePaint)
-
-        // Antlers
-        val antlerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(255, 100, 70, 40)
-            style = Paint.Style.STROKE
-            strokeWidth = unit * 0.1f
-        }
-        canvas.drawLine(unit * 1.5f, -unit * 1.4f, unit * 1.2f, -unit * 2.5f, antlerPaint)
-        canvas.drawLine(unit * 1.3f, -unit * 2f, unit * 1f, -unit * 2.2f, antlerPaint)
-        canvas.drawLine(unit * 1.8f, -unit * 1.4f, unit * 2.1f, -unit * 2.5f, antlerPaint)
-        canvas.drawLine(unit * 2f, -unit * 2f, unit * 2.3f, -unit * 2.2f, antlerPaint)
-
-        canvas.restore()
-    }
-
-    private fun drawDragonfly(canvas: Canvas, cx: Float, cy: Float, unit: Float) {
-        val wingBeat = sin(animationTime * 30f)
-        val bodyWobble = sin(animationTime * 5f) * unit * 0.2f
-
-        paint.style = Paint.Style.FILL
-
-        canvas.save()
-        canvas.translate(cx, cy + bodyWobble)
-
-        // Body colors - iridescent blue/green like actual event
-        val bodyColor = Color.argb(230, 30, 144, 255)  // Dodger blue
-        val wingColor = Color.argb(100, 200, 220, 255)
-
-        // Draw horizontally (matching actual DragonflyEvent)
-        // Thorax (main body)
-        paint.color = bodyColor
-        canvas.drawCircle(0f, 0f, unit * 0.8f, paint)
-
-        // Abdomen (long thin tail to the left)
-        path.reset()
-        path.moveTo(-unit * 0.5f, 0f)
-        path.lineTo(-unit * 3.5f, unit * 0.15f)
-        path.lineTo(-unit * 3.5f, -unit * 0.15f)
-        path.close()
-        canvas.drawPath(path, paint)
-
-        // Head (to the right)
-        canvas.drawCircle(unit * 1.0f, 0f, unit * 0.5f, paint)
-
-        // Compound eyes
-        paint.color = Color.rgb(60, 60, 60)
-        canvas.drawCircle(unit * 1.2f, -unit * 0.2f, unit * 0.25f, paint)
-        canvas.drawCircle(unit * 1.2f, unit * 0.2f, unit * 0.25f, paint)
-
-        // Wings (4 wings, translucent, oriented for horizontal body)
-        paint.color = wingColor
-        val wingAngle = wingBeat * 15f
-
-        // Top front wing
-        canvas.save()
-        canvas.rotate(wingAngle, 0f, 0f)
-        canvas.drawOval(-unit * 0.5f, -unit * 2.5f, unit * 1.5f, -unit * 0.3f, paint)
-        canvas.restore()
-
-        // Bottom front wing
-        canvas.save()
-        canvas.rotate(-wingAngle, 0f, 0f)
-        canvas.drawOval(-unit * 0.5f, unit * 0.3f, unit * 1.5f, unit * 2.5f, paint)
-        canvas.restore()
-
-        // Top rear wing (slightly smaller)
-        canvas.save()
-        canvas.rotate(-wingAngle * 0.8f, -unit * 0.8f, 0f)
-        canvas.drawOval(-unit * 1.5f, -unit * 2f, unit * 0.3f, -unit * 0.2f, paint)
-        canvas.restore()
-
-        // Bottom rear wing
-        canvas.save()
-        canvas.rotate(wingAngle * 0.8f, -unit * 0.8f, 0f)
-        canvas.drawOval(-unit * 1.5f, unit * 0.2f, unit * 0.3f, unit * 2f, paint)
-        canvas.restore()
-
-        canvas.restore()
-    }
-
-    private fun drawSquirrel(canvas: Canvas, cx: Float, cy: Float, unit: Float) {
-        val tailWag = sin(animationTime * 6f) * 10f
-
-        paint.color = Color.argb(230, 139, 90, 43)  // Brown
-        paint.style = Paint.Style.FILL
-
-        canvas.save()
-        canvas.translate(cx, cy + unit)
-
-        // Body
-        canvas.drawOval(-unit * 1.2f, -unit * 0.7f, unit * 0.8f, unit * 0.7f, paint)
-
-        // Head
-        canvas.drawCircle(unit * 1f, -unit * 0.2f, unit * 0.7f, paint)
-
-        // Ears
-        canvas.drawCircle(unit * 0.7f, -unit * 0.9f, unit * 0.25f, paint)
-        canvas.drawCircle(unit * 1.2f, -unit * 0.9f, unit * 0.25f, paint)
-
-        // Eye
-        paint.color = Color.BLACK
-        canvas.drawCircle(unit * 1.2f, -unit * 0.3f, unit * 0.1f, paint)
-
-        // Tail (bushy, animated)
-        paint.color = Color.argb(230, 139, 90, 43)
-        canvas.save()
-        canvas.translate(-unit * 1f, -unit * 0.3f)
-        canvas.rotate(tailWag - 45f)
-        canvas.drawOval(-unit * 0.5f, -unit * 2f, unit * 0.5f, unit * 0.3f, paint)
-        canvas.restore()
-
-        canvas.restore()
-    }
-    
-    private fun drawRabbit(canvas: Canvas, cx: Float, cy: Float, unit: Float) {
-        val hop = kotlin.math.abs(sin(animationTime * 6f)) * unit * 0.5f
-        val earWiggle = sin(animationTime * 8f) * 5f
-        
-        paint.color = Color.argb(220, 180, 160, 140)
-        paint.style = Paint.Style.FILL
-        
-        canvas.save()
-        canvas.translate(cx, cy + unit - hop)
-        
-        // Body
-        canvas.drawOval(-unit * 0.9f, -unit * 0.5f, unit * 0.7f, unit * 0.6f, paint)
-        
-        // Head
-        canvas.drawCircle(unit * 0.8f, -unit * 0.3f, unit * 0.6f, paint)
-        
-        // Ears (long bunny ears)
-        canvas.save()
-        canvas.translate(unit * 0.5f, -unit * 0.7f)
-        canvas.rotate(earWiggle - 10f)
-        canvas.drawOval(-unit * 0.15f, -unit * 1.5f, unit * 0.15f, 0f, paint)
-        canvas.restore()
-        
-        canvas.save()
-        canvas.translate(unit * 0.9f, -unit * 0.7f)
-        canvas.rotate(-earWiggle + 10f)
-        canvas.drawOval(-unit * 0.15f, -unit * 1.5f, unit * 0.15f, 0f, paint)
-        canvas.restore()
-        
-        // Eye
-        paint.color = Color.BLACK
-        canvas.drawCircle(unit * 1f, -unit * 0.35f, unit * 0.08f, paint)
-        
-        // Nose
-        paint.color = Color.argb(255, 255, 180, 180)
-        canvas.drawCircle(unit * 1.3f, -unit * 0.2f, unit * 0.1f, paint)
-        
-        // Fluffy tail
-        paint.color = Color.WHITE
-        canvas.drawCircle(-unit * 0.9f, unit * 0.2f, unit * 0.35f, paint)
-        
-        // Legs (when hopping)
-        if (hop > unit * 0.2f) {
-            paint.color = Color.argb(220, 180, 160, 140)
-            // Back leg extended
-            canvas.drawOval(-unit * 0.6f, unit * 0.3f, -unit * 0.2f, unit * 0.8f, paint)
-            // Front leg tucked
-            canvas.drawOval(unit * 0.2f, unit * 0.2f, unit * 0.5f, unit * 0.5f, paint)
-        }
-        
-        canvas.restore()
-    }
-    
-    private fun drawFox(canvas: Canvas, cx: Float, cy: Float, unit: Float) {
-        val walkPhase = sin(animationTime * 4f) * 0.12f
-        val tailSway = sin(animationTime * 3f) * 15f
-        
-        paint.color = Color.argb(230, 220, 100, 30)  // Orange
-        paint.style = Paint.Style.FILL
-        
-        val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(255, 80, 40, 15)
-            style = Paint.Style.STROKE
-            strokeWidth = unit * 0.12f
-        }
-        
-        canvas.save()
-        canvas.translate(cx - unit * 0.5f, cy + unit * 0.5f)
-        
-        // Body
-        canvas.drawOval(-unit * 1.3f, -unit * 0.6f, unit * 1.3f, unit * 0.6f, paint)
-        
-        // Head (pointed fox face)
-        path.reset()
-        path.moveTo(unit * 1.3f, 0f)
-        path.lineTo(unit * 2.5f, -unit * 0.3f)
-        path.lineTo(unit * 2.5f, unit * 0.3f)
-        path.close()
-        canvas.drawPath(path, paint)
-        canvas.drawCircle(unit * 1.3f, -unit * 0.2f, unit * 0.6f, paint)
-        
-        // Ears (triangular)
-        path.reset()
-        path.moveTo(unit * 1f, -unit * 0.6f)
-        path.lineTo(unit * 0.8f, -unit * 1.4f)
-        path.lineTo(unit * 1.4f, -unit * 0.7f)
-        canvas.drawPath(path, paint)
-        
-        path.reset()
-        path.moveTo(unit * 1.5f, -unit * 0.6f)
-        path.lineTo(unit * 1.6f, -unit * 1.3f)
-        path.lineTo(unit * 1.9f, -unit * 0.6f)
-        canvas.drawPath(path, paint)
-        
-        // White chest/muzzle
-        paint.color = Color.WHITE
-        path.reset()
-        path.moveTo(unit * 1.5f, -unit * 0.1f)
-        path.lineTo(unit * 2.4f, -unit * 0.15f)
-        path.lineTo(unit * 2.4f, unit * 0.15f)
-        path.lineTo(unit * 1.5f, unit * 0.3f)
-        path.close()
-        canvas.drawPath(path, paint)
-        
-        // Eye
-        paint.color = Color.BLACK
-        canvas.drawCircle(unit * 1.6f, -unit * 0.35f, unit * 0.08f, paint)
-        
-        // Nose
-        canvas.drawCircle(unit * 2.4f, 0f, unit * 0.1f, paint)
-        
-        // Legs
-        val frontLegOffset = walkPhase * unit * 2f
-        val backLegOffset = -walkPhase * unit * 2f
-        canvas.drawLine(unit * 0.7f, unit * 0.4f, unit * 0.7f + frontLegOffset, unit * 1.8f, strokePaint)
-        canvas.drawLine(unit * 0.3f, unit * 0.4f, unit * 0.3f - frontLegOffset, unit * 1.8f, strokePaint)
-        canvas.drawLine(-unit * 0.7f, unit * 0.4f, -unit * 0.7f + backLegOffset, unit * 1.8f, strokePaint)
-        canvas.drawLine(-unit * 1f, unit * 0.4f, -unit * 1f - backLegOffset, unit * 1.8f, strokePaint)
-        
-        // Bushy tail
-        paint.color = Color.argb(230, 220, 100, 30)
-        canvas.save()
-        canvas.translate(-unit * 1.2f, -unit * 0.2f)
-        canvas.rotate(tailSway - 30f)
-        canvas.drawOval(-unit * 1.8f, -unit * 0.4f, 0f, unit * 0.4f, paint)
-        // White tail tip
-        paint.color = Color.WHITE
-        canvas.drawOval(-unit * 1.8f, -unit * 0.25f, -unit * 1.2f, unit * 0.25f, paint)
-        canvas.restore()
-        
-        canvas.restore()
-    }
-    
-    private fun drawFireflies(canvas: Canvas, cx: Float, cy: Float, unit: Float) {
-        // Multiple fireflies with independent glow phases
-        val fireflies = arrayOf(
-            Triple(0.3f, 0.2f, 0f),
-            Triple(-0.5f, -0.3f, 1.5f),
-            Triple(0.6f, -0.5f, 3f),
-            Triple(-0.2f, 0.5f, 4.5f),
-            Triple(-0.7f, 0.1f, 2f)
-        )
-        
-        paint.style = Paint.Style.FILL
-        
-        for ((px, py, phase) in fireflies) {
-            val glowPhase = animationTime * 3f + phase
-            val glow = (sin(glowPhase) * 0.5f + 0.5f)
-            val drift = sin(animationTime * 2f + phase) * unit * 0.15f
-            
-            val fx = cx + px * unit * 2.5f + drift
-            val fy = cy + py * unit * 2f + drift * 0.5f
-            
-            if (glow > 0.3f) {
-                // Outer glow
-                paint.color = Color.argb((80 * glow).toInt(), 200, 255, 100)
-                canvas.drawCircle(fx, fy, unit * 0.6f * glow, paint)
-                
-                // Inner glow
-                paint.color = Color.argb((200 * glow).toInt(), 255, 255, 150)
-                canvas.drawCircle(fx, fy, unit * 0.25f * glow, paint)
-            }
-            
-            // Firefly body (tiny dark dot)
-            paint.color = Color.argb(150, 40, 40, 30)
-            canvas.drawCircle(fx, fy, unit * 0.12f, paint)
-        }
-    }
-
-    private fun drawSnowflake(canvas: Canvas, cx: Float, cy: Float, unit: Float) {
-        val rotation = animationTime * 30f
-        val pulse = 1f + sin(animationTime * 3f) * 0.1f
-
-        paint.color = Color.argb(220, 200, 220, 255)
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = unit * 0.15f
-        paint.strokeCap = Paint.Cap.ROUND
-
-        canvas.save()
-        canvas.translate(cx, cy)
-        canvas.rotate(rotation)
-        canvas.scale(pulse, pulse)
-
-        // 6 main branches
-        for (i in 0 until 6) {
-            canvas.save()
-            canvas.rotate(i * 60f)
-            
-            // Main branch
-            canvas.drawLine(0f, 0f, 0f, -unit * 2f, paint)
-            
-            // Side branches
-            canvas.drawLine(0f, -unit, -unit * 0.5f, -unit * 1.5f, paint)
-            canvas.drawLine(0f, -unit, unit * 0.5f, -unit * 1.5f, paint)
-            canvas.drawLine(0f, -unit * 1.5f, -unit * 0.3f, -unit * 1.8f, paint)
-            canvas.drawLine(0f, -unit * 1.5f, unit * 0.3f, -unit * 1.8f, paint)
-            
-            canvas.restore()
-        }
-
-        canvas.restore()
-    }
-
-    private fun drawButterfly(canvas: Canvas, cx: Float, cy: Float, unit: Float) {
-        val wingBeat = sin(animationTime * 8f)
-        val wingScale = 0.6f + wingBeat * 0.4f
-
-        paint.style = Paint.Style.FILL
-
-        canvas.save()
-        canvas.translate(cx, cy)
-
-        // Body
-        paint.color = Color.argb(230, 60, 40, 30)
-        canvas.drawOval(-unit * 0.15f, -unit * 1.2f, unit * 0.15f, unit * 1.2f, paint)
-
-        // Head
-        canvas.drawCircle(0f, -unit * 1.5f, unit * 0.25f, paint)
-
-        // Antennae
-        paint.strokeWidth = unit * 0.08f
-        paint.style = Paint.Style.STROKE
-        canvas.drawLine(-unit * 0.1f, -unit * 1.6f, -unit * 0.5f, -unit * 2.2f, paint)
-        canvas.drawLine(unit * 0.1f, -unit * 1.6f, unit * 0.5f, -unit * 2.2f, paint)
-
-        // Wings (orange monarch style)
-        paint.style = Paint.Style.FILL
-        paint.color = Color.argb(220, 255, 140, 0)
-
-        // Left upper wing
-        canvas.save()
-        canvas.scale(-wingScale, 1f)
-        path.reset()
-        path.moveTo(0f, -unit * 0.5f)
-        path.quadTo(-unit * 2f, -unit * 2f, -unit * 2f, 0f)
-        path.quadTo(-unit * 1f, unit * 0.5f, 0f, 0f)
-        canvas.drawPath(path, paint)
-        canvas.restore()
-
-        // Right upper wing
-        canvas.save()
-        canvas.scale(wingScale, 1f)
-        path.reset()
-        path.moveTo(0f, -unit * 0.5f)
-        path.quadTo(unit * 2f, -unit * 2f, unit * 2f, 0f)
-        path.quadTo(unit * 1f, unit * 0.5f, 0f, 0f)
-        canvas.drawPath(path, paint)
-        canvas.restore()
-
-        // Lower wings
-        paint.color = Color.argb(200, 255, 120, 0)
-
-        // Left lower
-        canvas.save()
-        canvas.scale(-wingScale, 1f)
-        path.reset()
-        path.moveTo(0f, unit * 0.2f)
-        path.quadTo(-unit * 1.5f, unit * 0.5f, -unit * 1.5f, unit * 1.5f)
-        path.quadTo(-unit * 0.5f, unit * 1.2f, 0f, unit * 0.8f)
-        canvas.drawPath(path, paint)
-        canvas.restore()
-
-        // Right lower
-        canvas.save()
-        canvas.scale(wingScale, 1f)
-        path.reset()
-        path.moveTo(0f, unit * 0.2f)
-        path.quadTo(unit * 1.5f, unit * 0.5f, unit * 1.5f, unit * 1.5f)
-        path.quadTo(unit * 0.5f, unit * 1.2f, 0f, unit * 0.8f)
-        canvas.drawPath(path, paint)
-        canvas.restore()
-
-        canvas.restore()
-    }
-
-    // ===== WATER EVENTS =====
-
-    private fun drawFish(canvas: Canvas, cx: Float, cy: Float, unit: Float) {
-        val jumpY = sin(animationTime * 3f).coerceAtLeast(0f) * unit * 3f
-        val rotation = sin(animationTime * 3f) * 30f
-
-        canvas.save()
-        canvas.translate(cx, cy - jumpY)
-        canvas.rotate(rotation)
-
-        // Body
-        paint.color = Color.argb(220, 140, 160, 190)
-        paint.style = Paint.Style.FILL
-        canvas.drawOval(-unit * 2f, -unit * 0.7f, unit * 2f, unit * 0.7f, paint)
-
-        // Tail
-        path.reset()
-        path.moveTo(-unit * 1.8f, 0f)
-        path.lineTo(-unit * 3f, -unit * 1f)
-        path.lineTo(-unit * 3f, unit * 1f)
-        path.close()
-        canvas.drawPath(path, paint)
-
-        // Dorsal fin
-        path.reset()
-        path.moveTo(-unit * 0.3f, -unit * 0.6f)
-        path.lineTo(unit * 0.2f, -unit * 1.3f)
-        path.lineTo(unit * 1f, -unit * 0.6f)
-        path.close()
-        canvas.drawPath(path, paint)
-
-        // Eye
-        paint.color = Color.argb(255, 20, 20, 20)
-        canvas.drawCircle(unit * 1.2f, -unit * 0.1f, unit * 0.15f, paint)
-
-        // Splash droplets
-        if (jumpY > unit * 0.5f) {
-            paint.color = Color.argb(100, 180, 210, 240)
-            canvas.drawCircle(-unit * 1f, unit * 2f, unit * 0.2f, paint)
-            canvas.drawCircle(unit * 0.5f, unit * 2.5f, unit * 0.15f, paint)
-        }
-
-        canvas.restore()
-    }
-
-    private fun drawDuck(canvas: Canvas, cx: Float, cy: Float, unit: Float) {
-        val waddle = sin(animationTime * 4f) * 3f
-        val walkX = sin(animationTime * 1.5f) * unit * 2f
-
-        canvas.save()
-        canvas.translate(cx + walkX, cy + unit * 0.5f)
-        canvas.rotate(waddle)
-
-        // Body
-        paint.color = Color.argb(220, 100, 120, 70)
-        paint.style = Paint.Style.FILL
-        canvas.drawOval(-unit * 2f, -unit * 0.8f, unit * 1.5f, unit * 0.8f, paint)
-
-        // Neck
-        paint.color = Color.argb(220, 40, 100, 50)
-        canvas.drawRoundRect(unit * 0.8f, -unit * 1.5f, unit * 1.5f, -unit * 0.3f,
-            unit * 0.3f, unit * 0.3f, paint)
-
-        // Head
-        canvas.drawOval(unit * 0.7f, -unit * 2.2f, unit * 1.8f, -unit * 1.3f, paint)
-
-        // Bill
-        paint.color = Color.argb(230, 220, 160, 40)
-        path.reset()
-        path.moveTo(unit * 1.6f, -unit * 1.8f)
-        path.lineTo(unit * 2.5f, -unit * 1.6f)
-        path.lineTo(unit * 1.6f, -unit * 1.5f)
-        path.close()
-        canvas.drawPath(path, paint)
-
-        // Eye
-        paint.color = Color.argb(255, 15, 15, 15)
-        canvas.drawCircle(unit * 1.3f, -unit * 1.8f, unit * 0.1f, paint)
-
-        // Legs
-        paint.color = Color.argb(220, 210, 140, 30)
-        val legPhase = sin(animationTime * 4f) * unit * 0.3f
-        canvas.drawRoundRect(-unit * 0.3f, unit * 0.5f, 0f, unit * 1.3f + legPhase,
-            unit * 0.05f, unit * 0.05f, paint)
-        canvas.drawRoundRect(-unit * 0.9f, unit * 0.5f, -unit * 0.6f, unit * 1.3f - legPhase,
-            unit * 0.05f, unit * 0.05f, paint)
-
-        // Tail
-        paint.color = Color.argb(200, 100, 120, 70)
-        path.reset()
-        path.moveTo(-unit * 1.8f, -unit * 0.3f)
-        path.lineTo(-unit * 2.5f, -unit * 0.9f)
-        path.lineTo(-unit * 2.1f, 0f)
-        path.close()
-        canvas.drawPath(path, paint)
-
-        canvas.restore()
-    }
-
-    private fun drawFrog(canvas: Canvas, cx: Float, cy: Float, unit: Float) {
-        val breathe = sin(animationTime * 2f) * unit * 0.15f
-
-        canvas.save()
-        canvas.translate(cx, cy + unit * 0.5f)
-
-        // Body (green)
-        paint.color = Color.argb(220, 60, 120, 50)
-        paint.style = Paint.Style.FILL
-        canvas.drawOval(-unit * 1.5f, -unit * 0.6f, unit * 1.2f, unit * 0.6f, paint)
-
-        // Belly (lighter)
-        paint.color = Color.argb(180, 180, 200, 160)
-        canvas.drawOval(-unit * 1f, -unit * 0.1f + breathe, unit * 0.8f, unit * 0.5f + breathe, paint)
-
-        // Head
-        paint.color = Color.argb(220, 60, 120, 50)
-        canvas.drawOval(unit * 0.5f, -unit * 0.8f, unit * 1.8f, unit * 0.2f, paint)
-
-        // Eyes (large, protruding)
-        paint.color = Color.argb(230, 200, 180, 40)
-        canvas.drawCircle(unit * 1.1f, -unit * 1f, unit * 0.25f, paint)
-        canvas.drawCircle(unit * 1.5f, -unit * 1f, unit * 0.25f, paint)
-
-        // Pupils
-        paint.color = Color.argb(255, 10, 10, 10)
-        canvas.drawOval(unit * 1f, -unit * 1.05f, unit * 1.2f, -unit * 0.95f, paint)
-        canvas.drawOval(unit * 1.4f, -unit * 1.05f, unit * 1.6f, -unit * 0.95f, paint)
-
-        // Back legs (folded)
-        paint.color = Color.argb(200, 50, 100, 40)
-        path.reset()
-        path.moveTo(-unit * 1.2f, unit * 0.1f)
-        path.lineTo(-unit * 2f, -unit * 0.5f)
-        path.lineTo(-unit * 1.7f, unit * 0.5f)
-        path.close()
-        canvas.drawPath(path, paint)
-
-        // Front legs
-        canvas.drawRoundRect(unit * 0.4f, unit * 0.2f, unit * 0.65f, unit * 0.7f,
-            unit * 0.05f, unit * 0.05f, paint)
-        canvas.drawRoundRect(unit * 0.7f, unit * 0.2f, unit * 0.95f, unit * 0.7f,
-            unit * 0.05f, unit * 0.05f, paint)
-
-        canvas.restore()
     }
 }

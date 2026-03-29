@@ -114,7 +114,10 @@ class LakeLayer(private val context: Context) : SceneLayer {
      */
     fun getTargetLayerIndex(totalLayers: Int): Int {
         if (!enabled || totalLayers <= 0) return -1
-        return (depthLayerPercent * (totalLayers - 1)).toInt().coerceIn(0, totalLayers - 1)
+        // Settings semantics: 0=foreground, 100=background.
+        // Terrain layer index semantics: 0=background, last=foreground.
+        val clampedDepthPercent = depthLayerPercent.coerceIn(0f, 1f)
+        return ((1f - clampedDepthPercent) * (totalLayers - 1)).toInt().coerceIn(0, totalLayers - 1)
     }
 
     /**

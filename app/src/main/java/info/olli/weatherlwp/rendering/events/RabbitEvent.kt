@@ -5,7 +5,6 @@ import android.graphics.Color
 import android.graphics.Paint
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.RenderConstants
-import info.olli.weatherlwp.simulation.SimulationState
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -89,19 +88,19 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
         canvas.save()
         canvas.translate(cx, cy)
         canvas.scale(flip, 1f)
+
+        val hopLeg = sin(hopPhase) * 0.2f * s
+
+        // Back legs (behind body)
+        canvas.drawRoundRect(-1.6f*s, 0.2f*s, -1.2f*s, 1.0f*s - hopLeg, 0.15f*s, 0.15f*s, paint)
+        canvas.drawRoundRect(-2.0f*s, 0.2f*s, -1.6f*s, 1.0f*s + hopLeg, 0.15f*s, 0.15f*s, paint)
         
         // Body + haunch
         canvas.drawOval(-1.8f*s, -0.9f*s, 1.6f*s, 0.8f*s, paint)
         canvas.drawOval(-2.3f*s, -0.6f*s, -1.0f*s, 0.6f*s, paint)
-        
-        // Legs
-        val hopLeg = sin(hopPhase) * 0.2f * s
-        // Front legs
-        canvas.drawRoundRect(0.6f*s, 0.3f*s, 0.95f*s, 1.1f*s + hopLeg, 0.15f*s, 0.15f*s, paint)
-        canvas.drawRoundRect(0.2f*s, 0.3f*s, 0.55f*s, 1.1f*s - hopLeg, 0.15f*s, 0.15f*s, paint)
-        // Back legs (larger)
-        canvas.drawRoundRect(-1.6f*s, 0.2f*s, -1.2f*s, 1.0f*s - hopLeg, 0.15f*s, 0.15f*s, paint)
-        canvas.drawRoundRect(-2.0f*s, 0.2f*s, -1.6f*s, 1.0f*s + hopLeg, 0.15f*s, 0.15f*s, paint)
+
+        // Shoulder/neck bridge to avoid detached head look.
+        canvas.drawOval(0.7f*s, -0.95f*s, 1.5f*s, -0.2f*s, paint)
         
         // Head
         canvas.drawOval(1.0f*s, -1.2f*s, 2.4f*s, -0.1f*s, paint)
@@ -122,6 +121,11 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
         // Nose (small pink dot)
         paint.color = Color.rgb(180, 120, 120)
         canvas.drawCircle(2.35f*s, -0.5f*s, 0.08f*s, paint)
+
+        // Front legs (in front of torso)
+        paint.color = RenderConstants.blendWithAmbient(Color.rgb(140, 120, 100), ambientColor, 0.35f)
+        canvas.drawRoundRect(0.6f*s, 0.3f*s, 0.95f*s, 1.1f*s + hopLeg, 0.15f*s, 0.15f*s, paint)
+        canvas.drawRoundRect(0.2f*s, 0.3f*s, 0.55f*s, 1.1f*s - hopLeg, 0.15f*s, 0.15f*s, paint)
         
         // Whiskers
         strokePaint.color = Color.argb(100, 80, 70, 60)

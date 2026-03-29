@@ -35,7 +35,14 @@ class WeatherHistory(private val context: Context) {
         private const val KEY_LAST_RECORD_HOUR = "last_record_hour"
         private const val KEY_SNOW_DEPTH = "snow_depth"
         private const val KEY_RIVER_LEVEL = "river_level"
+        private const val KEY_LAST_PHYSICS_UPDATE_MS = "last_physics_update_ms"
+        private const val KEY_LAST_WEATHER_TYPE = "last_weather_type"
+        private const val KEY_LAST_TEMP_CELSIUS = "last_temp_celsius"
+        private const val KEY_LAST_PRECIP_PROB = "last_precip_prob"
         const val MAX_HISTORY_DAYS = 14
+
+        private const val HOUR_MS = 60L * 60L * 1000L
+        private const val MAX_CATCH_UP_HOURS = MAX_HISTORY_DAYS * 24
 
         // Physics tuning
         private const val SNOW_ACCUMULATION_RATE = 0.06f   // per hour of heavy snow
@@ -85,6 +92,10 @@ class WeatherHistory(private val context: Context) {
     private var todaySnowHours = 0f
     private var currentDayId = 0
     private var lastRecordHour = -1
+    private var lastPhysicsUpdateMs = 0L
+    private var lastKnownWeatherType = WeatherType.CLEAR
+    private var lastKnownTempCelsius = Float.NaN
+    private var lastKnownPrecipProb = 0f
 
     @Volatile
     private var cachedSnapshot = Snapshot()
@@ -101,7 +112,11 @@ class WeatherHistory(private val context: Context) {
      * Thread-safe snapshot for the render thread.
      * Call from SimulationController.getState() without synchronization.
      */
-    fun getSnapshot(): Snapshot = cachedSnapshot
+    @Synchronized
+    fun getSnapshot(): Snapshot {
+        catchUpIfNeeded()
+        return cachedSnapshot
+    }
 
     /**
      * Record current weather conditions. Call periodically (e.g., every frame or on weather update).
@@ -117,6 +132,19 @@ class WeatherHistory(private val context: Context) {
         overrideWeather: WeatherType? = null,
         overridePrecipProb: Float = Float.NaN
     ) {
+        catchUpIfNeeded()
+
+        // Read current weather (allow simulation override) up-front so catch-up state stays current,
+        // even if this call is deduplicated for the current hour.
+        val weatherType = overrideWeather ?: WeatherRepository.getWeatherType(context)
+        val extData = WeatherRepository.getExtendedData(context)
+        val temp = extData.temperatureCelsius
+        val precipProb = if (!overridePrecipProb.isNaN()) overridePrecipProb
+                         else extData.precipProbability / 100f
+        lastKnownWeatherType = weatherType
+        lastKnownTempCelsius = temp
+        lastKnownPrecipProb = precipProb.coerceIn(0f, 1f)
+
         val cal = Calendar.getInstance()
         val dayId = dayIdFrom(cal)
         val hour = cal.get(Calendar.HOUR_OF_DAY)
@@ -130,13 +158,6 @@ class WeatherHistory(private val context: Context) {
         }
         currentDayId = dayId
         lastRecordHour = hour
-
-        // Read current weather (allow simulation override)
-        val weatherType = overrideWeather ?: WeatherRepository.getWeatherType(context)
-        val extData = WeatherRepository.getExtendedData(context)
-        val temp = extData.temperatureCelsius
-        val precipProb = if (!overridePrecipProb.isNaN()) overridePrecipProb
-                         else extData.precipProbability / 100f
 
         // Accumulate intra-day
         if (!temp.isNaN()) {
@@ -160,6 +181,7 @@ class WeatherHistory(private val context: Context) {
 
         // Update running levels for this hour
         updateLevelsForHour(weatherType, temp, precipWeight)
+        lastPhysicsUpdateMs = System.currentTimeMillis()
 
         // Persist
         saveToPrefs()
@@ -206,6 +228,10 @@ class WeatherHistory(private val context: Context) {
         todayRainHours = 0f
         todaySnowHours = 0f
         lastRecordHour = -1
+        lastPhysicsUpdateMs = System.currentTimeMillis()
+        lastKnownWeatherType = WeatherType.CLEAR
+        lastKnownTempCelsius = Float.NaN
+        lastKnownPrecipProb = 0f
         saveToPrefs()
         updateSnapshot()
     }
@@ -328,6 +354,37 @@ class WeatherHistory(private val context: Context) {
         )
     }
 
+    /**
+     * Apply offline progression when enough real-world time elapsed since the last physics update.
+     * Uses the last known weather state so snow/river levels evolve while wallpaper rendering is paused.
+     */
+    private fun catchUpIfNeeded() {
+        val nowMs = System.currentTimeMillis()
+
+        if (lastPhysicsUpdateMs <= 0L) {
+            lastPhysicsUpdateMs = nowMs
+            saveToPrefs()
+            return
+        }
+
+        val elapsedMs = nowMs - lastPhysicsUpdateMs
+        if (elapsedMs < HOUR_MS) return
+
+        val missedHours = (elapsedMs / HOUR_MS).toInt().coerceIn(0, MAX_CATCH_UP_HOURS)
+        if (missedHours <= 0) return
+
+        var hour = 0
+        while (hour < missedHours) {
+            updateLevelsForHour(lastKnownWeatherType, lastKnownTempCelsius, lastKnownPrecipProb)
+            hour++
+        }
+
+        // Advance by the simulated amount so sub-hour remainder carries into future calls.
+        lastPhysicsUpdateMs += missedHours * HOUR_MS
+        saveToPrefs()
+        updateSnapshot()
+    }
+
     // ========================= Persistence =========================
 
     private fun saveToPrefs() {
@@ -349,6 +406,10 @@ class WeatherHistory(private val context: Context) {
             .putInt(KEY_LAST_RECORD_HOUR, lastRecordHour)
             .putFloat(KEY_SNOW_DEPTH, snowDepth)
             .putFloat(KEY_RIVER_LEVEL, riverLevel)
+            .putLong(KEY_LAST_PHYSICS_UPDATE_MS, lastPhysicsUpdateMs)
+            .putString(KEY_LAST_WEATHER_TYPE, lastKnownWeatherType.name)
+            .putFloat(KEY_LAST_TEMP_CELSIUS, lastKnownTempCelsius)
+            .putFloat(KEY_LAST_PRECIP_PROB, lastKnownPrecipProb)
             .apply()
     }
 
@@ -357,6 +418,14 @@ class WeatherHistory(private val context: Context) {
         riverLevel = historyPrefs.getFloat(KEY_RIVER_LEVEL, 0f)
         lastRecordHour = historyPrefs.getInt(KEY_LAST_RECORD_HOUR, -1)
         currentDayId = dayIdFrom(Calendar.getInstance())
+        lastPhysicsUpdateMs = historyPrefs.getLong(KEY_LAST_PHYSICS_UPDATE_MS, System.currentTimeMillis())
+        lastKnownWeatherType = runCatching {
+            val name = historyPrefs.getString(KEY_LAST_WEATHER_TYPE, WeatherType.CLEAR.name)
+                ?: WeatherType.CLEAR.name
+            WeatherType.valueOf(name)
+        }.getOrDefault(WeatherType.CLEAR)
+        lastKnownTempCelsius = historyPrefs.getFloat(KEY_LAST_TEMP_CELSIUS, Float.NaN)
+        lastKnownPrecipProb = historyPrefs.getFloat(KEY_LAST_PRECIP_PROB, 0f).coerceIn(0f, 1f)
 
         val jsonStr = historyPrefs.getString(KEY_DAILY_HISTORY, null) ?: return
         try {

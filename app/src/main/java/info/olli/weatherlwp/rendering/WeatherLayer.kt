@@ -28,6 +28,10 @@ class WeatherLayer : SceneLayer {
     override val layerType = LayerType.WEATHER
 
     private companion object {
+        private const val RAIN_DEPTH_FAR = 0
+        private const val RAIN_DEPTH_MEDIUM = 1
+        private const val RAIN_DEPTH_NEAR = 2
+
         private const val SNOW_DEPTH_SMALL = 0
         private const val SNOW_DEPTH_MEDIUM = 1
         private const val SNOW_DEPTH_LARGE = 2
@@ -68,11 +72,15 @@ class WeatherLayer : SceneLayer {
     private val hailParticles = Array(150) { Particle() }  // Hail is larger, needs fewer
 
     // Batched draw buffers - reused every frame (no per-frame allocation)
-    private val rainCoords = FloatArray(RenderConstants.RAIN_PARTICLE_POOL_SIZE * 4)
+    private val rainCoordsFar = FloatArray(RenderConstants.RAIN_PARTICLE_POOL_SIZE * 4)
+    private val rainCoordsMedium = FloatArray(RenderConstants.RAIN_PARTICLE_POOL_SIZE * 4)
+    private val rainCoordsNear = FloatArray(RenderConstants.RAIN_PARTICLE_POOL_SIZE * 4)
     private val snowCoordsSmall = FloatArray(RenderConstants.SNOW_PARTICLE_POOL_SIZE * 2)
     private val snowCoordsMedium = FloatArray(RenderConstants.SNOW_PARTICLE_POOL_SIZE * 2)
     private val snowCoordsLarge = FloatArray(RenderConstants.SNOW_PARTICLE_POOL_SIZE * 2)
-    private var rainCoordCount = 0
+    private var rainFarCoordCount = 0
+    private var rainMediumCoordCount = 0
+    private var rainNearCoordCount = 0
     private var snowSmallCoordCount = 0
     private var snowMediumCoordCount = 0
     private var snowLargeCoordCount = 0
@@ -81,9 +89,23 @@ class WeatherLayer : SceneLayer {
     private var intensity = 0.5f  // Default medium intensity
 
     // Pre-allocated paints
-    private val rainPaint = Paint().apply {
+    private val rainPaintFar = Paint().apply {
+        color = Color.argb(120, 145, 175, 215)
+        strokeWidth = 1.3f
+        strokeCap = Paint.Cap.ROUND
+        isAntiAlias = true
+    }
+
+    private val rainPaintMedium = Paint().apply {
+        color = Color.argb(165, 150, 180, 220)
+        strokeWidth = 1.9f
+        strokeCap = Paint.Cap.ROUND
+        isAntiAlias = true
+    }
+
+    private val rainPaintNear = Paint().apply {
         color = Color.argb(180, 150, 180, 220)
-        strokeWidth = 2f
+        strokeWidth = 2.6f
         strokeCap = Paint.Cap.ROUND
         isAntiAlias = true
     }
@@ -250,6 +272,7 @@ class WeatherLayer : SceneLayer {
     }
 
     private fun initParticles() {
+        configureRainLinePaints()
         configureSnowPointPaints()
 
         // Initialize rain particles
@@ -339,6 +362,23 @@ class WeatherLayer : SceneLayer {
         snowPaintLarge.strokeWidth = (2.5f * heightScale).coerceAtLeast(1.5f)
     }
 
+    private fun configureRainLinePaints() {
+        val heightScale = RenderConstants.getHeightScale(screenHeight.toFloat()).coerceAtLeast(0.35f)
+        rainPaintFar.strokeWidth = (1.1f * heightScale).coerceAtLeast(0.75f)
+        rainPaintMedium.strokeWidth = (1.6f * heightScale).coerceAtLeast(1.05f)
+        rainPaintNear.strokeWidth = (2.2f * heightScale).coerceAtLeast(1.4f)
+    }
+
+    private fun getRainDepthBucket(layer: Int): Int {
+        if (weatherLayers <= 1) return RAIN_DEPTH_MEDIUM
+        val normalizedLayer = layer.toFloat() / (weatherLayers - 1)
+        return when {
+            normalizedLayer >= 0.66f -> RAIN_DEPTH_FAR
+            normalizedLayer >= 0.33f -> RAIN_DEPTH_MEDIUM
+            else -> RAIN_DEPTH_NEAR
+        }
+    }
+
     private fun getSnowDepthBucket(layer: Int): Int {
         if (weatherLayers <= 1) return SNOW_DEPTH_MEDIUM
         val normalizedLayer = layer.toFloat() / (weatherLayers - 1)
@@ -381,9 +421,19 @@ class WeatherLayer : SceneLayer {
         rainDimPaint.color = Color.argb(dimAlpha, 100, 105, 115)
         canvas.drawRect(0f, 0f, screenWidth.toFloat(), screenHeight.toFloat(), rainDimPaint)
 
-        // Batched rain streak draw: one GPU call instead of per-particle drawLine calls
-        if (rainCoordCount > 0) {
-            canvas.drawLines(rainCoords, 0, rainCoordCount, rainPaint)
+        // Slightly boost visual dynamics by varying alpha per depth batch.
+        rainPaintFar.alpha = (105 + intensity * 55f).toInt().coerceIn(70, 200)
+        rainPaintMedium.alpha = (145 + intensity * 65f).toInt().coerceIn(100, 225)
+        rainPaintNear.alpha = (180 + intensity * 70f).toInt().coerceIn(130, 255)
+
+        if (rainFarCoordCount > 0) {
+            canvas.drawLines(rainCoordsFar, 0, rainFarCoordCount, rainPaintFar)
+        }
+        if (rainMediumCoordCount > 0) {
+            canvas.drawLines(rainCoordsMedium, 0, rainMediumCoordCount, rainPaintMedium)
+        }
+        if (rainNearCoordCount > 0) {
+            canvas.drawLines(rainCoordsNear, 0, rainNearCoordCount, rainPaintNear)
         }
     }
 
@@ -589,6 +639,8 @@ class WeatherLayer : SceneLayer {
         screenWidth = w.toInt()
         screenHeight = h.toInt()
         initialized = false
+        configureRainLinePaints()
+        configureSnowPointPaints()
         // Invalidate cached fog gradients on resize
         cachedFogGradient = null
         cachedFogMidGradient = null
@@ -631,7 +683,9 @@ class WeatherLayer : SceneLayer {
         val speedMult = 0.7f + intensity * 0.6f
         // Scale to ~60fps equivalent (base speed assumed at 60fps)
         val frameScale = deltaSec * 60f
-        var coordIndex = 0
+        var farCoordIndex = 0
+        var mediumCoordIndex = 0
+        var nearCoordIndex = 0
         
         for (i in 0 until activeCount) {
             val p = rainParticles[i]
@@ -642,14 +696,36 @@ class WeatherLayer : SceneLayer {
                 recycleRainParticle(p)
             }
 
-            rainCoords[coordIndex] = p.x
-            rainCoords[coordIndex + 1] = p.y
-            rainCoords[coordIndex + 2] = p.x - 2f - windDrift
-            rainCoords[coordIndex + 3] = p.y + p.size
-            coordIndex += 4
+            when (getRainDepthBucket(p.layer)) {
+                RAIN_DEPTH_FAR -> {
+                    rainCoordsFar[farCoordIndex] = p.x
+                    rainCoordsFar[farCoordIndex + 1] = p.y
+                    rainCoordsFar[farCoordIndex + 2] = p.x - (1.3f + windDrift * 0.55f)
+                    rainCoordsFar[farCoordIndex + 3] = p.y + p.size * 0.72f
+                    farCoordIndex += 4
+                }
+
+                RAIN_DEPTH_MEDIUM -> {
+                    rainCoordsMedium[mediumCoordIndex] = p.x
+                    rainCoordsMedium[mediumCoordIndex + 1] = p.y
+                    rainCoordsMedium[mediumCoordIndex + 2] = p.x - (1.8f + windDrift * 0.8f)
+                    rainCoordsMedium[mediumCoordIndex + 3] = p.y + p.size * 0.95f
+                    mediumCoordIndex += 4
+                }
+
+                else -> {
+                    rainCoordsNear[nearCoordIndex] = p.x
+                    rainCoordsNear[nearCoordIndex + 1] = p.y
+                    rainCoordsNear[nearCoordIndex + 2] = p.x - (2.4f + windDrift)
+                    rainCoordsNear[nearCoordIndex + 3] = p.y + p.size * 1.15f
+                    nearCoordIndex += 4
+                }
+            }
         }
 
-        rainCoordCount = coordIndex
+        rainFarCoordCount = farCoordIndex
+        rainMediumCoordCount = mediumCoordIndex
+        rainNearCoordCount = nearCoordIndex
     }
     
     private fun updateSnowParticles(deltaSec: Float) {
@@ -664,14 +740,46 @@ class WeatherLayer : SceneLayer {
         
         for (i in 0 until activeCount) {
             val p = snowParticles[i]
-            p.y += p.speed * speedMult * frameScale
-            p.x += kotlin.math.sin((p.y * 0.02f).toDouble()).toFloat() * 0.8f * frameScale + windDrift * 0.5f * frameScale
+            val bucket = getSnowDepthBucket(p.layer)
+            val fallSpeedMultiplier: Float
+            val swayMultiplier: Float
+            val windMultiplier: Float
+            val swayPhase: Float
+
+            when (bucket) {
+                SNOW_DEPTH_SMALL -> {
+                    // Background flakes: slow and subtle movement.
+                    fallSpeedMultiplier = 0.62f
+                    swayMultiplier = 0.55f
+                    windMultiplier = 0.35f
+                    swayPhase = 0.015f
+                }
+
+                SNOW_DEPTH_MEDIUM -> {
+                    fallSpeedMultiplier = 1.0f
+                    swayMultiplier = 1.0f
+                    windMultiplier = 0.55f
+                    swayPhase = 0.02f
+                }
+
+                else -> {
+                    // Foreground flakes: faster fall and wider sway for strong parallax.
+                    fallSpeedMultiplier = 1.55f
+                    swayMultiplier = 1.85f
+                    windMultiplier = 0.85f
+                    swayPhase = 0.028f
+                }
+            }
+
+            p.y += p.speed * speedMult * fallSpeedMultiplier * frameScale
+            p.x += kotlin.math.sin((p.y * swayPhase).toDouble()).toFloat() * (0.8f * swayMultiplier) * frameScale +
+                windDrift * windMultiplier * frameScale
 
             if (p.y > screenHeight) {
                 recycleSnowParticle(p)
             }
 
-            when (getSnowDepthBucket(p.layer)) {
+            when (bucket) {
                 SNOW_DEPTH_SMALL -> {
                     snowCoordsSmall[smallIndex] = p.x
                     snowCoordsSmall[smallIndex + 1] = p.y

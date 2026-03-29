@@ -6,7 +6,6 @@ import android.graphics.Paint
 import android.graphics.Path
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.RenderConstants
-import info.olli.weatherlwp.simulation.SimulationState
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -16,6 +15,20 @@ import kotlin.random.Random
  * Seasonal: Autumn/Winter (cooler months when deer are more active)
  */
 class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
+    private companion object {
+        // Precomputed fawn spot coordinates (x, y) to keep draw() allocation-free.
+        private val FAWN_SPOT_COORDS = floatArrayOf(
+            -2f, -1.5f,
+            -0.5f, -1.8f,
+            1.5f, -1.2f,
+            -1f, -0.5f,
+            1f, -0.8f,
+            2.5f, -1.5f,
+            0f, -1f,
+            -2.5f, -0.8f
+        )
+    }
+
     override val layer = EventLayer.GROUND
     
     // Depth: 0.4-0.8 (ground level parallax)
@@ -104,15 +117,56 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         canvas.translate(deerX, deerY)
         if (direction < 0) canvas.scale(-1f, 1f)
         
-        // Leg animation (walking gait or stationary if grazing)
-        val walkPhase = if (isGrazing) 0f else timeSeconds * 3f + legPhaseOffset
-        val legSwing = if (isGrazing) 0f else sin(walkPhase) * 0.15f
+        // Leg animation (elapsed-time based for stable motion independent of frame pacing).
+        val walkPhase = if (isGrazing) 0f else movingTime * 0.003f + legPhaseOffset
+        val legSwing = if (isGrazing) 0f else sin(walkPhase) * 0.13f
         
         // Calculate body position (head lowers when grazing)
         val headLower = if (isGrazing) unit * 3f else 0f
-        
-        // Body (horizontal oval)
         val bodyY = -unit * 8f
+        val headX = unit * 5.5f
+        val headY = bodyY - unit * 7f + headLower
+
+        // Legs (4 legs with walking animation) — split by depth: back before body, front after body.
+        val legWidth = unit * 0.6f
+        val frontLegX1 = unit * 2f
+        val frontLegX2 = unit * 0.5f
+        val frontSwing1 = legSwing
+        val frontSwing2 = -legSwing * 0.8f
+        val backLegX1 = -unit * 2f
+        val backLegX2 = -unit * 3.5f
+        val backSwing1 = -legSwing * 0.9f
+        val backSwing2 = legSwing * 0.7f
+        val hoofSize = unit * 0.35f
+        
+        strokePaint.color = bodyColor
+        strokePaint.strokeWidth = legWidth
+        strokePaint.style = Paint.Style.STROKE
+        strokePaint.strokeCap = Paint.Cap.ROUND
+
+        // Back legs (behind body)
+        path.reset()
+        path.moveTo(backLegX1, bodyY + unit * 1.5f)
+        path.quadTo(backLegX1 + backSwing1 * unit * 3f, bodyY + unit * 4f,
+            backLegX1 + backSwing1 * unit * 2f, 0f)
+        canvas.drawPath(path, strokePaint)
+
+        path.reset()
+        path.moveTo(backLegX2, bodyY + unit * 1.5f)
+        path.quadTo(backLegX2 + backSwing2 * unit * 3f, bodyY + unit * 4f,
+            backLegX2 + backSwing2 * unit * 2f, 0f)
+        canvas.drawPath(path, strokePaint)
+
+        // Back hooves remain behind body as well.
+        paint.color = Color.argb((180 * alpha).toInt(), 50, 40, 30)
+        canvas.drawOval(backLegX1 + backSwing1 * unit * 2f - hoofSize, -hoofSize,
+            backLegX1 + backSwing1 * unit * 2f + hoofSize, hoofSize * 0.5f, paint)
+        canvas.drawOval(backLegX2 + backSwing2 * unit * 2f - hoofSize, -hoofSize,
+            backLegX2 + backSwing2 * unit * 2f + hoofSize, hoofSize * 0.5f, paint)
+
+        paint.color = bodyColor
+
+        // Body (horizontal oval)
         canvas.drawOval(-unit * 4f, bodyY - unit * 2.5f, unit * 4f, bodyY + unit * 2.5f, paint)
         
         // Belly (lighter underside)
@@ -126,32 +180,29 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         // Fawn spots (white dots on flanks)
         if (isFawn) {
             paint.color = Color.argb((120 * alpha).toInt(), 255, 250, 240)
-            val spotPositions = listOf(
-                -2f to -1.5f, -0.5f to -1.8f, 1.5f to -1.2f,
-                -1f to -0.5f, 1f to -0.8f, 2.5f to -1.5f,
-                0f to -1f, -2.5f to -0.8f
-            )
-            for ((sx, sy) in spotPositions) {
+            var i = 0
+            while (i < FAWN_SPOT_COORDS.size) {
+                val sx = FAWN_SPOT_COORDS[i]
+                val sy = FAWN_SPOT_COORDS[i + 1]
                 canvas.drawCircle(unit * sx, bodyY + unit * sy, unit * 0.35f, paint)
+                i += 2
             }
         }
         
         paint.color = bodyColor
         
-        // Neck
+        // Neck (overlaps torso/head slightly so joints read as connected in all poses)
         path.reset()
-        path.moveTo(unit * 3f, bodyY - unit * 1f)
-        path.quadTo(unit * 5f, bodyY - unit * 4f + headLower * 0.3f, 
-                    unit * 6f, bodyY - unit * 6f + headLower)
-        path.lineTo(unit * 4f, bodyY - unit * 6f + headLower)
-        path.quadTo(unit * 3.5f, bodyY - unit * 3f + headLower * 0.3f, 
-                    unit * 2f, bodyY - unit * 1f)
+        path.moveTo(unit * 1.8f, bodyY - unit * 0.2f)
+        path.quadTo(unit * 3.4f, bodyY - unit * 3.8f + headLower * 0.2f,
+            headX - unit * 0.25f, headY - unit * 0.55f)
+        path.lineTo(headX - unit * 1.05f, headY + unit * 0.1f)
+        path.quadTo(unit * 3.1f, bodyY - unit * 2.2f + headLower * 0.15f,
+            unit * 2.0f, bodyY + unit * 0.25f)
         path.close()
         canvas.drawPath(path, paint)
         
         // Head
-        val headX = unit * 5.5f
-        val headY = bodyY - unit * 7f + headLower
         canvas.drawOval(headX - unit * 1.5f, headY - unit * 1f, 
                         headX + unit * 2f, headY + unit * 1.2f, paint)
         
@@ -218,19 +269,8 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         canvas.drawOval(-unit * 4.5f, bodyY - unit * 0.5f, -unit * 3.5f, bodyY + unit * 1f, paint)
         
         paint.color = bodyColor
-        
-        // Legs (4 legs with walking animation) — filled shapes for solid look
-        val legWidth = unit * 0.6f
-        paint.color = bodyColor
-        paint.style = Paint.Style.FILL
-        
-        // Front legs
-        val frontLegX1 = unit * 2f
-        val frontLegX2 = unit * 0.5f
-        val frontSwing1 = legSwing
-        val frontSwing2 = -legSwing * 0.8f
-        
-        // Front right leg (filled rounded rect approximation via path+stroke)
+
+        // Front legs (in front of body)
         strokePaint.color = bodyColor
         strokePaint.strokeWidth = legWidth
         strokePaint.style = Paint.Style.STROKE
@@ -248,38 +288,13 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         path.quadTo(frontLegX2 + frontSwing2 * unit * 3f, bodyY + unit * 4f,
                     frontLegX2 + frontSwing2 * unit * 2f, 0f)
         canvas.drawPath(path, strokePaint)
-        
-        // Back legs
-        val backLegX1 = -unit * 2f
-        val backLegX2 = -unit * 3.5f
-        val backSwing1 = -legSwing * 0.9f
-        val backSwing2 = legSwing * 0.7f
-        
-        // Back right leg
-        path.reset()
-        path.moveTo(backLegX1, bodyY + unit * 1.5f)
-        path.quadTo(backLegX1 + backSwing1 * unit * 3f, bodyY + unit * 4f,
-                    backLegX1 + backSwing1 * unit * 2f, 0f)
-        canvas.drawPath(path, strokePaint)
-        
-        // Back left leg
-        path.reset()
-        path.moveTo(backLegX2, bodyY + unit * 1.5f)
-        path.quadTo(backLegX2 + backSwing2 * unit * 3f, bodyY + unit * 4f,
-                    backLegX2 + backSwing2 * unit * 2f, 0f)
-        canvas.drawPath(path, strokePaint)
-        
-        // Hooves (small dark marks at leg ends)
+
+        // Front hooves (in front layer)
         paint.color = Color.argb((180 * alpha).toInt(), 50, 40, 30)
-        val hoofSize = unit * 0.35f
         canvas.drawOval(frontLegX1 + frontSwing1 * unit * 2f - hoofSize, -hoofSize,
                         frontLegX1 + frontSwing1 * unit * 2f + hoofSize, hoofSize * 0.5f, paint)
         canvas.drawOval(frontLegX2 + frontSwing2 * unit * 2f - hoofSize, -hoofSize,
                         frontLegX2 + frontSwing2 * unit * 2f + hoofSize, hoofSize * 0.5f, paint)
-        canvas.drawOval(backLegX1 + backSwing1 * unit * 2f - hoofSize, -hoofSize,
-                        backLegX1 + backSwing1 * unit * 2f + hoofSize, hoofSize * 0.5f, paint)
-        canvas.drawOval(backLegX2 + backSwing2 * unit * 2f - hoofSize, -hoofSize,
-                        backLegX2 + backSwing2 * unit * 2f + hoofSize, hoofSize * 0.5f, paint)
         
         canvas.restore()
         canvas.restore()

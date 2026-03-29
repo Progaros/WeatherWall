@@ -274,15 +274,18 @@ class RiverLayer(private val context: Context) : SceneLayer {
         canvas.save()
         canvas.translate(px, py)
 
-        val left = -extendedOffset - width * 0.05f
-        val right = width + extendedOffset + width * 0.05f
+        // Match TerrainLayer drawHill() bounds exactly so terrain sampling and river geometry align.
+        val left = -extendedOffset - width * 0.1f
+        val right = width + extendedOffset + width * 0.1f
         val totalW = right - left
         val numSamples = 50
+        val sampleStepX = totalW / numSamples
 
         var minTerrainY = Float.MAX_VALUE
         var maxTerrainY = Float.MIN_VALUE
         for (i in 0..numSamples) {
-            val xRatio = i.toFloat() / numSamples
+            val screenX = left + i * sampleStepX
+            val xRatio = ((screenX - left) / totalW).coerceIn(0f, 1f)
             val terrainY = provider(xRatio, depthFactor) * height
             terrainYsArray[i] = terrainY
             if (terrainY < minTerrainY) minTerrainY = terrainY
@@ -301,7 +304,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
         var hasContent = false
 
         for (i in 0..numSamples) {
-            val screenX = left + (i.toFloat() / numSamples) * totalW
+            val screenX = left + i * sampleStepX
             val terrainY = terrainYsArray[i]
 
             if (terrainY > waterSurfaceY) {

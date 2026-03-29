@@ -1,3 +1,7 @@
--keep class info.olli.weatherlwp.** { *; }
+-keep class info.olli.weatherlwp.wallpaper.WeatherWallpaper { *; }
+-keep class info.olli.weatherlwp.MainActivity { *; }
+-keep class info.olli.weatherlwp.weather.BreezyWeatherReceiver { *; }
+-keep public class * extends android.view.View { public <init>(...); }
+-keep public class * extends androidx.preference.Preference { public <init>(...); }
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
