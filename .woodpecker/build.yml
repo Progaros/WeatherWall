@@ -1,5 +1,5 @@
 when:
-  event: [push, pull_request, tag]
+  event: [push, pull_request, tag, manual]
 
 steps:
   # 1. Prepare & Download Dependencies
@@ -24,7 +24,7 @@ steps:
       - ./gradlew lintDebug --no-daemon
       - echo "Lint report available at app/build/reports/lint-results-debug.html"
     when:
-      event: [pull_request, push]
+      event: [pull_request, push, manual]
 
   # 3. Unit Tests
   - name: test
