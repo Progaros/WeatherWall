@@ -29,11 +29,14 @@ import info.olli.weatherlwp.rendering.events.RandomEvent
 import info.olli.weatherlwp.rendering.events.ShootingStarEvent
 import info.olli.weatherlwp.rendering.events.SnowflakeEvent
 import info.olli.weatherlwp.rendering.events.SquirrelEvent
+import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Event preview that renders with the same runtime event classes used by the wallpaper.
- * This avoids drift between settings previews and live rendering logic.
+ * Event preview rendered with runtime RandomEvent classes.
+ *
+ * Uses a virtual full-size scene and a camera transform so tiny settings previews
+ * stay centered and legible even when events use off-screen/random spawn coordinates.
  */
 class EventPreviewView @JvmOverloads constructor(
     context: Context,
@@ -42,28 +45,37 @@ class EventPreviewView @JvmOverloads constructor(
 ) : View(context, attrs, defStyleAttr) {
 
     enum class EventType {
-        // Sky events
         AIRPLANE, BIRDS, EAGLE, OWL, BALLOON, SHOOTING_STAR, UFO,
-        // Ground events
         BUTTERFLY, DRAGONFLY, RABBIT, FOX, SQUIRREL, FIREFLIES, SNOWFLAKE, BAT, DEER,
-        // Water events
         FISH, DUCK, FROG
     }
+
+    enum class PreviewMode {
+        SMALL,
+        LARGE
+    }
+
+    private data class PreviewFraming(
+        val scale: Float,
+        val yOffsetFactor: Float
+    )
 
     var eventType: EventType = EventType.BAT
         set(value) {
             if (field == value) return
             field = value
-            rebuildPreviewEvent()
+            recreatePreviewEvent()
+        }
+
+    var previewMode: PreviewMode = PreviewMode.SMALL
+        set(value) {
+            if (field == value) return
+            field = value
             invalidate()
         }
 
-    private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
-    }
-    private val eventPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
-    }
+    private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val eventPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val eventStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
@@ -72,31 +84,57 @@ class EventPreviewView @JvmOverloads constructor(
     }
 
     private val previewParallax = ParallaxCalculator().apply {
+        setCanvasSize(PREVIEW_WORLD_WIDTH, PREVIEW_WORLD_HEIGHT)
         reset()
     }
 
-    private val previewAmbientColor = Color.rgb(220, 230, 235)
     private val previewGroundColor = Color.argb(70, 85, 105, 80)
 
     private val previewHillProvider: HillHeightProvider = { xRatio, depthFactor ->
-        val normalizedX = ((xRatio + 0.2f) / 1.4f).coerceIn(0f, 1f)
-        val centered = normalizedX * 2f - 1f
+        val x = xRatio.coerceIn(-0.2f, 1.2f)
+        val centered = ((x + 0.2f) / 1.4f) * 2f - 1f
         val arch = 1f - centered * centered
         val depthShift = (depthFactor - 0.65f) * 0.06f
         (0.80f - arch * 0.10f + depthShift).coerceIn(0.62f, 0.92f)
     }
 
-    private var previewEvent: RandomEvent = createPreviewEvent(eventType)
-    private var previewAbsoluteTimeMs: Long = computePreviewTime(previewEvent)
+    private var animationTimeSeconds = 0f
+    private var previewEvent: RandomEvent? = null
+    private var previewSpawnTimeMs = 0L
 
-    init {
-        rebuildPreviewEvent()
+    private val animator = object : Runnable {
+        override fun run() {
+            animationTimeSeconds += 0.016f
+            if (animationTimeSeconds > 120f) {
+                animationTimeSeconds = 0f
+            }
+            invalidate()
+            postDelayed(this, FRAME_DELAY_MS)
+        }
     }
 
-    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        super.onSizeChanged(w, h, oldw, oldh)
-        previewParallax.setCanvasSize(w.toFloat(), h.toFloat())
-        previewParallax.reset()
+    private val backgroundColor: Int
+        get() {
+            val phase = sin(animationTimeSeconds * 0.785f)
+            val t = ((phase + 1f) / 2f).coerceIn(0f, 1f)
+            val r = (15 + (100 - 15) * t).toInt()
+            val g = (15 + (180 - 15) * t).toInt()
+            val b = (35 + (235 - 35) * t).toInt()
+            return Color.argb(55, r, g, b)
+        }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        if (previewEvent == null) {
+            recreatePreviewEvent()
+        }
+        removeCallbacks(animator)
+        post(animator)
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        removeCallbacks(animator)
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -106,63 +144,147 @@ class EventPreviewView @JvmOverloads constructor(
         val h = height.toFloat()
         if (w <= 0f || h <= 0f) return
 
-        val cx = w * 0.5f
-        val cy = h * 0.5f
-        val radius = minOf(w, h) * 0.48f
-
-        backgroundPaint.color = Color.argb(55, 100, 165, 205)
-        canvas.drawCircle(cx, cy, radius, backgroundPaint)
-
-        if (previewEvent.layer == EventLayer.GROUND) {
-            backgroundPaint.color = previewGroundColor
-            canvas.drawOval(cx - radius * 0.8f, cy + radius * 0.15f, cx + radius * 0.8f, cy + radius * 0.55f, backgroundPaint)
+        if (previewEvent == null) {
+            recreatePreviewEvent()
         }
 
-        // Normalize paint baseline before event-specific mutations.
+        var event = previewEvent ?: return
+        var absoluteTimeMs = previewSpawnTimeMs + (animationTimeSeconds * 1000f).toLong()
+        if (!event.isActive(absoluteTimeMs)) {
+            recreatePreviewEvent()
+            event = previewEvent ?: return
+            absoluteTimeMs = previewSpawnTimeMs + (animationTimeSeconds * 1000f).toLong()
+        }
+
+        val centerX = w * 0.5f
+        val centerY = h * 0.5f
+        val size = minOf(w, h)
+        val radius = size * 0.48f
+
+        backgroundPaint.style = Paint.Style.FILL
+        backgroundPaint.color = backgroundColor
+        canvas.drawCircle(centerX, centerY, radius, backgroundPaint)
+
+        if (event.layer == EventLayer.GROUND) {
+            backgroundPaint.color = previewGroundColor
+            canvas.drawOval(
+                centerX - radius * 0.8f,
+                centerY + radius * 0.15f,
+                centerX + radius * 0.8f,
+                centerY + radius * 0.55f,
+                backgroundPaint
+            )
+        }
+
         eventPaint.style = Paint.Style.FILL
         eventStrokePaint.style = Paint.Style.STROKE
         eventStrokePaint.strokeCap = Paint.Cap.ROUND
         eventStrokePaint.strokeJoin = Paint.Join.ROUND
 
+        val anchorXRatio = event.getPreviewAnchorXRatio(absoluteTimeMs).coerceIn(-0.5f, 1.5f)
+        val anchorYRatio = event.getPreviewAnchorYRatio(absoluteTimeMs, previewHillProvider).coerceIn(-0.3f, 1.3f)
+        val anchorX = anchorXRatio * PREVIEW_WORLD_WIDTH - PREVIEW_EXTENDED_OFFSET
+        val anchorY = anchorYRatio * PREVIEW_WORLD_HEIGHT
+        val framing = getFraming(eventType)
+
+        canvas.save()
+        canvas.translate(centerX, centerY + framing.yOffsetFactor * size)
+        canvas.scale(framing.scale, framing.scale)
+        canvas.translate(-anchorX, -anchorY)
         try {
-            val timeSeconds = previewAbsoluteTimeMs / 1000f
-            previewEvent.draw(
+            event.draw(
                 canvas = canvas,
                 paint = eventPaint,
                 strokePaint = eventStrokePaint,
                 parallaxCalculator = previewParallax,
-                width = w,
-                height = h,
-                timeSeconds = timeSeconds,
-                ambientColor = previewAmbientColor,
-                extendedOffset = 0f,
-                absoluteTimeMs = previewAbsoluteTimeMs,
+                width = PREVIEW_WORLD_WIDTH,
+                height = PREVIEW_WORLD_HEIGHT,
+                timeSeconds = animationTimeSeconds,
+                ambientColor = previewAmbientColor(),
+                extendedOffset = PREVIEW_EXTENDED_OFFSET,
+                absoluteTimeMs = absoluteTimeMs,
                 hillHeightProvider = previewHillProvider
             )
         } catch (_: Exception) {
-            // Preview should never crash settings UI due to a single event draw issue.
+            // Keep settings responsive if one event renderer throws.
         }
+        canvas.restore()
     }
 
-    private fun rebuildPreviewEvent() {
-        previewEvent = createPreviewEvent(eventType)
-        previewAbsoluteTimeMs = computePreviewTime(previewEvent)
+    private fun recreatePreviewEvent() {
+        val seed = 10_000L + eventType.ordinal.toLong() * 9_973L
+        val now = System.currentTimeMillis()
+
+        val sample = createPreviewEvent(eventType, seed, now)
+        val offsetMs = getPreviewOffsetMs(sample)
+
+        previewSpawnTimeMs = now - offsetMs
+        previewEvent = createPreviewEvent(eventType, seed, previewSpawnTimeMs)
         previewParallax.reset()
+        invalidate()
     }
 
-    private fun computePreviewTime(event: RandomEvent): Long {
-        val ratio = when (event) {
-            is ShootingStarEvent -> 0.45f
-            else -> 0.5f
+    private fun getPreviewOffsetMs(event: RandomEvent): Long {
+        val targetOffset = when (eventType) {
+            EventType.SHOOTING_STAR -> (event.durationMs * 0.75f).toLong()
+            EventType.DEER, EventType.FOX, EventType.RABBIT, EventType.SQUIRREL,
+            EventType.DUCK, EventType.FROG -> (event.durationMs * 0.5f).toLong()
+            EventType.FIREFLIES -> (event.durationMs * 0.35f).toLong()
+            else -> (event.durationMs * 0.4f).toLong()
         }
-        return (event.durationMs * ratio).toLong().coerceAtLeast(1L)
+
+        val minOffset = 300L
+        val maxOffset = (event.durationMs - 300L).coerceAtLeast(minOffset)
+        return targetOffset.coerceIn(minOffset, maxOffset)
     }
 
-    private fun createPreviewEvent(type: EventType): RandomEvent {
-        val seed = 10_000L + type.ordinal.toLong() * 9_973L
-        val random = Random(seed)
-        val spawnTimeMs = 0L
+    private fun getFraming(type: EventType): PreviewFraming {
+        val smallScale = when (type) {
+            EventType.DEER -> 0.30f
+            EventType.FOX -> 0.32f
+            EventType.RABBIT -> 0.34f
+            EventType.SQUIRREL -> 0.34f
+            EventType.DUCK -> 0.36f
+            EventType.FROG -> 0.37f
+            EventType.FISH -> 0.38f
+            EventType.BAT -> 0.35f
+            EventType.AIRPLANE -> 0.33f
+            EventType.BIRDS -> 0.35f
+            EventType.EAGLE -> 0.34f
+            EventType.OWL -> 0.34f
+            EventType.BALLOON -> 0.34f
+            EventType.SHOOTING_STAR -> 0.36f
+            EventType.UFO -> 0.34f
+            EventType.BUTTERFLY -> 0.36f
+            EventType.DRAGONFLY -> 0.35f
+            EventType.FIREFLIES -> 0.38f
+            EventType.SNOWFLAKE -> 0.40f
+        }
 
+        val baseYOffset = when (type) {
+            EventType.DEER, EventType.FOX, EventType.RABBIT, EventType.SQUIRREL,
+            EventType.DUCK, EventType.FROG -> 0.16f
+            EventType.FISH -> 0.08f
+            EventType.AIRPLANE, EventType.BIRDS, EventType.EAGLE, EventType.OWL,
+            EventType.BALLOON, EventType.SHOOTING_STAR, EventType.UFO, EventType.BAT -> -0.03f
+            else -> 0f
+        }
+
+        return if (previewMode == PreviewMode.LARGE) {
+            PreviewFraming(
+                scale = (smallScale * 2.05f).coerceAtMost(0.9f),
+                yOffsetFactor = baseYOffset * 0.5f
+            )
+        } else {
+            PreviewFraming(
+                scale = smallScale,
+                yOffsetFactor = baseYOffset
+            )
+        }
+    }
+
+    private fun createPreviewEvent(type: EventType, seed: Long, spawnTimeMs: Long): RandomEvent {
+        val random = Random(seed)
         return when (type) {
             EventType.AIRPLANE -> AirplaneEvent(random, spawnTimeMs)
             EventType.BIRDS -> BirdFlockEvent(random, spawnTimeMs)
@@ -184,5 +306,17 @@ class EventPreviewView @JvmOverloads constructor(
             EventType.DUCK -> DuckEvent(random, spawnTimeMs)
             EventType.FROG -> FrogEvent(random, spawnTimeMs)
         }
+    }
+
+    private fun previewAmbientColor(): Int {
+        val color = backgroundColor
+        return Color.rgb(Color.red(color), Color.green(color), Color.blue(color))
+    }
+
+    companion object {
+        private const val FRAME_DELAY_MS = 16L
+        private const val PREVIEW_WORLD_WIDTH = 1920f
+        private const val PREVIEW_WORLD_HEIGHT = 1080f
+        private const val PREVIEW_EXTENDED_OFFSET = 0f
     }
 }

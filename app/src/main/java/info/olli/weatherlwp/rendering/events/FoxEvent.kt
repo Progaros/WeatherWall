@@ -56,6 +56,11 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         val hillY = hillHeightProvider?.invoke(x, depthFactor) ?: fallbackGroundY
         return hillY + groundOffset
     }
+
+    override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
+        return startX + direction * speed * elapsedMs
+    }
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,

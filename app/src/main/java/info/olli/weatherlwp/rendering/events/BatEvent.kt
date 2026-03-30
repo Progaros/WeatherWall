@@ -39,6 +39,15 @@ class BatEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
     
     // Parallax depth
     private val parallaxDepth = 0.30f + distance * 0.25f
+
+    override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
+        return startX + direction * speed * elapsedMs
+    }
+
+    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+        return baseY
+    }
     
     private class Bat(random: Random, sizeScale: Float) {
         val offsetX = (random.nextFloat() - 0.5f) * 0.08f * sizeScale

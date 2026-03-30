@@ -43,6 +43,10 @@ class FrogEvent(random: Random, override val spawnTimeMs: Long = System.currentT
     // Frog belly color variation
     private val bellyBrightness = 180 + random.nextInt(50)
 
+    override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
+        return getCurrentX(absoluteTimeMs)
+    }
+
     override fun getCurrentYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
         val currentX = getCurrentX(absoluteTimeMs)
         return (hillHeightProvider?.invoke(currentX, depthFactor) ?: fallbackGroundY) + groundOffset

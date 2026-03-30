@@ -56,6 +56,23 @@ class DragonflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
     
     // Parallax
     private val parallaxDepth = 0.45f + distance * 0.25f
+
+    override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
+        val t = elapsedMs / 1000f
+        val progress = (elapsedMs / durationMs.toFloat()).coerceIn(0f, 1f)
+        val dartPhase = sin(t * 0.3f)
+        val dartBoost = if (dartPhase > 0.9f) 0.012f else 0f
+        return EventTraversal.xAtProgress(traversal, progress) +
+            direction * t * driftX * dartBoost +
+            sin(t * hoverFreqX + wingPhase) * hoverAmpX
+    }
+
+    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
+        val t = elapsedMs / 1000f
+        return startY + sin(t * hoverFreqY) * hoverAmpY
+    }
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,

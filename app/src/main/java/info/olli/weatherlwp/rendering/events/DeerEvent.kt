@@ -60,6 +60,29 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
     // Is this deer an adult or young fawn (20% chance for fawn)
     private val isFawn = random.nextFloat() < 0.2f
     private val fawnScale = if (isFawn) 0.6f else 1.0f
+
+    private fun movingElapsedMs(absoluteTimeMs: Long): Long {
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
+        val cycleTime = elapsedMs % (grazeInterval + grazeDuration)
+        val isGrazing = cycleTime >= grazeInterval
+        return if (isGrazing) {
+            val fullCycles = elapsedMs / (grazeInterval + grazeDuration)
+            fullCycles * grazeInterval + grazeInterval
+        } else {
+            val fullCycles = elapsedMs / (grazeInterval + grazeDuration)
+            fullCycles * grazeInterval + cycleTime
+        }
+    }
+
+    override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
+        val movingTime = movingElapsedMs(absoluteTimeMs)
+        return startX + direction * speed * movingTime
+    }
+
+    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+        val x = getPreviewAnchorXRatio(absoluteTimeMs)
+        return hillHeightProvider?.invoke(x, depthValue) ?: (0.65f + depthValue * 0.1f)
+    }
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
@@ -72,14 +95,7 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         val isGrazing = cycleTime >= grazeInterval
         
         // Calculate position considering grazing pauses
-        val movingTime = if (isGrazing) {
-            val fullCycles = elapsedMs / (grazeInterval + grazeDuration)
-            fullCycles * grazeInterval + grazeInterval
-        } else {
-            val fullCycles = elapsedMs / (grazeInterval + grazeDuration)
-            fullCycles * grazeInterval + cycleTime
-        }
-        
+        val movingTime = movingElapsedMs(absoluteTimeMs)
         val x = startX + direction * speed * movingTime
         
         // Skip if off-screen

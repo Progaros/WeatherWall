@@ -48,6 +48,18 @@ class HotAirBalloonEvent(random: Random, override val spawnTimeMs: Long = System
     
     // Parallax depth based on distance
     private val parallaxDepth = 0.15f + distance * 0.20f
+
+    override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
+        val progress = -0.1f + speed * elapsedMs
+        return progress * 1.3f
+    }
+
+    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+        val elapsedSec = (absoluteTimeMs - spawnTimeMs) / 1000f
+        val bobOffsetRatio = sin(elapsedSec * 0.4f + bobPhase) * (0.0045f * sizeScale * sizeScale)
+        return y + bobOffsetRatio
+    }
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,

@@ -36,6 +36,18 @@ class EagleEvent(random: Random, override val spawnTimeMs: Long = System.current
     
     // Parallax depth based on distance
     private val parallaxDepth = 0.2f + distance * 0.2f
+
+    override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
+        val progress = -0.1f + speed * elapsedMs
+        return -0.1f + 1.4f * progress
+    }
+
+    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+        val elapsedSec = (absoluteTimeMs - spawnTimeMs) / 1000f
+        val soarOffset = sin(elapsedSec * 0.8f + soarPhase) * 0.015f * sizeScale
+        return baseY + soarOffset
+    }
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,

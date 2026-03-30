@@ -39,6 +39,20 @@ class ShootingStarEvent(random: Random, override val spawnTimeMs: Long = System.
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
     }
+
+    override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
+        val activeElapsedMs = (elapsedMs - spawnDelayMs).coerceAtLeast(0L)
+        val progress = speed * activeElapsedMs
+        return startX + cos(angle) * progress * 0.5f
+    }
+
+    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
+        val activeElapsedMs = (elapsedMs - spawnDelayMs).coerceAtLeast(0L)
+        val progress = speed * activeElapsedMs
+        return startY + sin(angle) * progress * 0.5f
+    }
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,

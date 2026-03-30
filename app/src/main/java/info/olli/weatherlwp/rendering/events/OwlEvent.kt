@@ -44,6 +44,19 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         return t * t * (3f - 2f * t)
     }
 
+    override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
+        val progress = -0.15f + speed * elapsedMs
+        val eased = smoothstep01((progress + 0.15f) / 1.15f)
+        return -0.2f + eased * 1.4f
+    }
+
+    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+        val elapsedSec = (absoluteTimeMs - spawnTimeMs) / 1000f
+        val bob = sin(elapsedSec * 0.7f + bobPhase) * 0.0016f * sizeScale
+        return y + bob
+    }
+
     override fun draw(
         canvas: Canvas, paint: Paint, strokePaint: Paint,
         parallaxCalculator: ParallaxCalculator, width: Float, height: Float,

@@ -39,6 +39,16 @@ class AirplaneEvent(random: Random, override val spawnTimeMs: Long = System.curr
     
     // Parallax depth based on distance
     private val parallaxDepth = 0.05f + distance * 0.15f
+
+    override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
+        val progress = (elapsedMs * speed).coerceIn(-0.1f, 1.4f)
+        return -0.1f + 1.4f * progress
+    }
+
+    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+        return y
+    }
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,

@@ -75,6 +75,12 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
         val x = startX + direction * speed * effectiveElapsedMs
         return hillHeightProvider?.invoke(x, depthValue) ?: baseY
     }
+
+    override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
+        val effectiveElapsedMs = getEffectiveElapsedMs(elapsedMs)
+        return startX + direction * speed * effectiveElapsedMs
+    }
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,

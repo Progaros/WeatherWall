@@ -44,6 +44,11 @@ class DuckEvent(random: Random, override val spawnTimeMs: Long = System.currentT
 
     private val duckPath = Path()
 
+    override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
+        return startX + direction * speed * elapsedMs
+    }
+
     override fun getCurrentYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val x = startX + direction * speed * elapsedMs

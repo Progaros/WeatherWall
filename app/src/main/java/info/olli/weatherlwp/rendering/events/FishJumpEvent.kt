@@ -39,6 +39,10 @@ class FishJumpEvent(random: Random, override val spawnTimeMs: Long = System.curr
 
     private val fishPath = Path()
 
+    override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
+        return xPos
+    }
+
     override fun getCurrentYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
         return hillHeightProvider?.invoke(xPos, depthFactor) ?: fallbackGroundY
     }

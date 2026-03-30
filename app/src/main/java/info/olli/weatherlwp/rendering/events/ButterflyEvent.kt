@@ -48,6 +48,22 @@ class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
     private val wobbleAmpY = 0.01f + random.nextFloat() * 0.015f   // Reduced vertical amplitude
     // Parallax based on distance
     private val parallaxDepth = 0.55f + distance * 0.25f
+
+    override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
+        val t = elapsedMs / 1000f
+        val progress = (elapsedMs / durationMs.toFloat()).coerceIn(0f, 1f)
+        return EventTraversal.xAtProgress(traversal, progress) +
+            sin(t * wobbleFreqX + flutterPhase) * wobbleAmpX
+    }
+
+    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
+        val t = elapsedMs / 1000f
+        return startY +
+            sin(t * wobbleFreqY + flutterPhase * 0.7f + t * driftSpeedY) * wobbleAmpY +
+            cos(t * wobbleFreqY * 0.5f) * wobbleAmpY * 0.3f
+    }
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,

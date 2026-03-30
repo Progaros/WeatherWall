@@ -33,6 +33,14 @@ class FireflyEvent(random: Random, override val spawnTimeMs: Long = System.curre
         val driftX = (random.nextFloat() - 0.5f) * 0.00003f  // Slowed 3x
         val driftY = (random.nextFloat() - 0.5f) * 0.000025f // Slowed 3x
     }
+
+    override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
+        return baseX
+    }
+
+    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+        return baseY
+    }
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,

@@ -43,6 +43,19 @@ class BirdFlockEvent(random: Random, override val spawnTimeMs: Long = System.cur
     
     // Parallax depth based on distance
     private val parallaxDepth = 0.25f + distance * 0.25f
+
+    override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
+        return -0.15f + speed * elapsedMs
+    }
+
+    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+        val elapsedSec = (absoluteTimeMs - spawnTimeMs) / 1000f
+        val flapCycleSec = flapCycleMs / 1000f
+        val cyclePhase = (elapsedSec % flapCycleSec) / flapCycleSec
+        val verticalWave = sin(cyclePhase * 6.28f) * 0.008f * sizeScale
+        return baseY + verticalWave
+    }
     
     private class Bird(random: Random, sizeScale: Float) {
         val offsetX = random.nextFloat() * 0.06f * sizeScale

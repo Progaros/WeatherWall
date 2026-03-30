@@ -1,8 +1,13 @@
 package info.olli.weatherlwp.settings
 
 import android.content.Context
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.util.AttributeSet
+import android.view.Gravity
+import android.widget.FrameLayout
 import android.widget.ImageButton
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.SwitchCompat
 import androidx.preference.PreferenceViewHolder
 import androidx.preference.SwitchPreferenceCompat
@@ -31,8 +36,15 @@ class SpawnSwitchPreference @JvmOverloads constructor(
         super.onBindViewHolder(holder)
 
         // Configure animated preview based on preference key
+        val mappedEventType = getEventTypeFromKey(key)
         val previewView = holder.findViewById(R.id.event_preview) as? EventPreviewView
-        previewView?.eventType = getEventTypeFromKey(key)
+        previewView?.apply {
+            eventType = mappedEventType
+            previewMode = EventPreviewView.PreviewMode.SMALL
+            setOnClickListener {
+                showLargePreviewDialog(mappedEventType)
+            }
+        }
         
         val spawnButton = holder.findViewById(R.id.spawn_button) as? ImageButton
         spawnButton?.setOnClickListener {
@@ -62,6 +74,31 @@ class SpawnSwitchPreference @JvmOverloads constructor(
                 }
             }
         }
+    }
+
+    private fun showLargePreviewDialog(eventType: EventPreviewView.EventType) {
+        val density = context.resources.displayMetrics.density
+        val previewSizePx = (300f * density).toInt()
+        val paddingPx = (16f * density).toInt()
+
+        val container = FrameLayout(context).apply {
+            setPadding(paddingPx, paddingPx, paddingPx, paddingPx)
+        }
+
+        val largePreview = EventPreviewView(context).apply {
+            this.eventType = eventType
+            previewMode = EventPreviewView.PreviewMode.LARGE
+            layoutParams = FrameLayout.LayoutParams(previewSizePx, previewSizePx, Gravity.CENTER)
+        }
+        container.addView(largePreview)
+
+        val dialog = AlertDialog.Builder(context)
+            .setView(container)
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+
+        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        dialog.show()
     }
     
     /**

@@ -108,6 +108,28 @@ interface RandomEvent {
     }
 
     /**
+     * Preview-only X anchor as ratio of virtual canvas width.
+     *
+     * EventPreviewView uses this to center tiny previews on the event body.
+     */
+    fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
+        return 0.5f
+    }
+
+    /**
+     * Preview-only Y anchor as ratio of virtual canvas height.
+     *
+     * Ground events default to their current terrain Y.
+     */
+    fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+        return if (layer == EventLayer.GROUND) {
+            getCurrentYRatio(absoluteTimeMs, hillHeightProvider)
+        } else {
+            0.5f
+        }
+    }
+
+    /**
      * Update is now optional - events can be stateless.
      * Default implementation just checks if still active.
      */

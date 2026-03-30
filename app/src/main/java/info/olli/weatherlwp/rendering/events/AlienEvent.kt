@@ -41,6 +41,18 @@ class AlienEvent(random: Random, override val spawnTimeMs: Long = System.current
     
     // Parallax based on distance
     private val parallaxDepth = 0.1f + distance * 0.1f
+
+    override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
+        return startX + direction * speed * elapsedMs
+    }
+
+    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
+        val hoverPhase = initialHoverPhase + elapsedMs * 0.0005f
+        val verticalOffset = sin(hoverPhase) * 0.015f
+        return (startY + verticalOffset).coerceIn(0.05f, 0.3f)
+    }
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
