@@ -156,24 +156,8 @@ class TreeRenderer {
      * Blend tree foliage toward autumn colours based on weight.
      * Shifts green toward orange/red/golden tones per tree.
      */
-    fun autumnTreeColor(baseColor: Int, weight: Float, treeIndex: Int): Int {
-        if (weight <= 0f) return baseColor
-        // Each tree gets a slightly different autumn hue based on its index
-        val hueShift = (treeIndex * 37) % 3  // 0, 1, or 2
-        val (targetR, targetG, targetB) = when (hueShift) {
-            0 -> Triple(200, 90, 20)    // Orange
-            1 -> Triple(180, 140, 30)   // Golden
-            else -> Triple(190, 60, 25) // Red-orange
-        }
-        val r = Color.red(baseColor)
-        val g = Color.green(baseColor)
-        val b = Color.blue(baseColor)
-        return Color.rgb(
-            (r + (targetR - r) * weight).toInt().coerceIn(0, 255),
-            (g + (targetG - g) * weight).toInt().coerceIn(0, 255),
-            (b + (targetB - b) * weight).toInt().coerceIn(0, 255)
-        )
-    }
+    fun autumnTreeColor(baseColor: Int, weight: Float, treeIndex: Int): Int =
+        VegetationUtil.autumnColor(baseColor, weight, treeIndex)
 
     // ========================================================================
     // Private helpers
@@ -184,22 +168,8 @@ class TreeRenderer {
     /**
      * Interpolate hill Y at a given xRatio (0-1), same algorithm as TerrainLayer.getHillY().
      */
-    private fun getHillY(xRatio: Float, hill: HillInfo): Float {
-        val points = hill.controlPoints
-        // Need at least 2 points to interpolate between
-        if (points.size < 2) return hill.heightOffset
-
-        // xRatio is 0-1 across the extended width (matches hill control points)
-        val indexFloat = xRatio * (points.size - 1)
-        val index = indexFloat.toInt().coerceIn(0, points.size - 2)
-        val fraction = indexFloat - index
-
-        val p1 = points[index]
-        val p2 = points[index + 1]
-        val interpolated = p1 + fraction * (p2 - p1)
-
-        return hill.heightOffset + 0.12f * (1f - interpolated)
-    }
+    private fun getHillY(xRatio: Float, hill: HillInfo): Float =
+        VegetationUtil.getHillY(xRatio, hill)
 
     // ========================================================================
     // Generation methods
@@ -232,12 +202,13 @@ class TreeRenderer {
             return
         }
 
-        // Calculate tree count based on density and screen area
-        // More width = more trees to maintain density; taller terrain = more trees needed
-        val areaRatio = RenderConstants.getAreaDensityScale(extendedWidth, height)
+        // Calculate tree count based on density and horizontal span.
+        // Width-only scaling ensures consistent density between wallpaper and preview
+        // regardless of canvas height (preview is short, wallpaper is full-screen).
+        val widthRatio = RenderConstants.getHorizontalDensityScale(extendedWidth)
         // Base trees gives target coverage at 100% density
         val baseTrees = 200
-        val treeCount = ((treeDensity / 100f) * baseTrees * areaRatio).toInt().coerceIn(0, 3000)
+        val treeCount = ((treeDensity / 100f) * baseTrees * widthRatio).toInt().coerceIn(0, 3000)
         if (treeCount <= 0) {
             trees = emptyList()
             treesByDepth = emptyMap()

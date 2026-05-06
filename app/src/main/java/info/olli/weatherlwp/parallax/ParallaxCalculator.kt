@@ -321,13 +321,7 @@ class ParallaxCalculator {
      */
     fun getOffsetForDepth(depthFactor: Float): Pair<Float, Float> {
         val mult = movementMultiplier(depthFactor)
-        // Apply perspective curve: tan() gives natural acceleration at larger tilts
-        val effectiveMaxOffset = getEffectiveMaxOffset()
-        val normX = if (effectiveMaxOffset > 0) positionX / effectiveMaxOffset else 0f
-        val normY = if (effectiveMaxOffset > 0) positionY / effectiveMaxOffset else 0f
-        val curvedX = applyTanCurve(normX) * effectiveMaxOffset
-        val curvedY = applyTanCurve(normY) * effectiveMaxOffset
-        return Pair(curvedX * mult, curvedY * mult)
+        return Pair(curvedOffset(positionX, mult), curvedOffset(positionY, mult))
     }
     
     /**
@@ -335,10 +329,7 @@ class ParallaxCalculator {
      * Applies tan() perspective curve for natural depth perception.
      */
     fun getOffsetXForDepth(depthFactor: Float): Float {
-        val mult = movementMultiplier(depthFactor)
-        val effectiveMaxOffset = getEffectiveMaxOffset()
-        val normX = if (effectiveMaxOffset > 0) positionX / effectiveMaxOffset else 0f
-        return applyTanCurve(normX) * effectiveMaxOffset * mult
+        return curvedOffset(positionX, movementMultiplier(depthFactor))
     }
     
     /**
@@ -346,10 +337,16 @@ class ParallaxCalculator {
      * Applies tan() perspective curve for natural depth perception.
      */
     fun getOffsetYForDepth(depthFactor: Float): Float {
-        val mult = movementMultiplier(depthFactor)
+        return curvedOffset(positionY, movementMultiplier(depthFactor))
+    }
+
+    /**
+     * Apply perspective curve to a position component and scale by depth multiplier.
+     */
+    private fun curvedOffset(position: Float, mult: Float): Float {
         val effectiveMaxOffset = getEffectiveMaxOffset()
-        val normY = if (effectiveMaxOffset > 0) positionY / effectiveMaxOffset else 0f
-        return applyTanCurve(normY) * effectiveMaxOffset * mult
+        val normalized = if (effectiveMaxOffset > 0) position / effectiveMaxOffset else 0f
+        return applyTanCurve(normalized) * effectiveMaxOffset * mult
     }
     
     /** Get the effective max offset in pixels based on current settings. */

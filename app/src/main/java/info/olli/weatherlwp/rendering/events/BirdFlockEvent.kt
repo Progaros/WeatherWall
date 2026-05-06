@@ -39,7 +39,6 @@ class BirdFlockEvent(random: Random, override val spawnTimeMs: Long = System.cur
     
     // Flapping pattern is deterministic based on seed
     private val flapCycleMs = 3000L + random.nextLong(4000)
-    private val flapUpDuration = 800L
     
     // Parallax depth based on distance
     private val parallaxDepth = 0.25f + distance * 0.25f

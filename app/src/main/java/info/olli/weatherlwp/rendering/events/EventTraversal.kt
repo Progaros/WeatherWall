@@ -1,5 +1,7 @@
 package info.olli.weatherlwp.rendering.events
 
+import android.graphics.Canvas
+import info.olli.weatherlwp.parallax.ParallaxCalculator
 import kotlin.math.abs
 import kotlin.random.Random
 
@@ -45,4 +47,23 @@ object EventTraversal {
     fun xAtProgress(path: HorizontalPath, progress: Float): Float {
         return path.startX + (path.endX - path.startX) * progress
     }
+}
+
+/**
+ * Draw with parallax offset applied for a given depth layer.
+ * Saves canvas state, translates by the parallax offset, runs the draw block,
+ * then restores canvas state.
+ */
+inline fun Canvas.withParallax(
+    parallaxCalculator: ParallaxCalculator,
+    depthFactor: Float,
+    block: Canvas.() -> Unit
+) {
+    save()
+    translate(
+        parallaxCalculator.getOffsetXForDepth(depthFactor),
+        parallaxCalculator.getOffsetYForDepth(depthFactor)
+    )
+    block()
+    restore()
 }

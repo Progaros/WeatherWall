@@ -13,6 +13,7 @@ import android.view.SurfaceHolder
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationSettingsRepository
+import info.olli.weatherlwp.rendering.CanvasHelper
 import info.olli.weatherlwp.rendering.ParallaxScene
 import info.olli.weatherlwp.rendering.RenderConstants
 import info.olli.weatherlwp.weather.WeatherRepository
@@ -441,21 +442,8 @@ class WeatherWallpaper : WallpaperService() {
          * Tries hardware canvas first, then safely falls back to software canvas.
          */
         private fun acquireCanvas(holder: SurfaceHolder): Canvas? {
-            if (preferHardwareCanvas) {
-                try {
-                    return holder.lockHardwareCanvas()
-                } catch (e: Throwable) {
-                    // Hardware path can fail on some surfaces/devices; fall back safely.
-                    preferHardwareCanvas = false
-                    Log.w(TAG, "lockHardwareCanvas failed, falling back to lockCanvas", e)
-                }
-            }
-
-            return try {
-                holder.lockCanvas()
-            } catch (e: Throwable) {
-                Log.e(TAG, "lockCanvas failed", e)
-                null
+            return CanvasHelper.acquire(holder, preferHardwareCanvas) {
+                preferHardwareCanvas = false
             }
         }
 

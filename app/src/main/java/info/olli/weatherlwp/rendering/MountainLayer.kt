@@ -120,15 +120,16 @@ class MountainLayer(private val context: Context) : SceneLayer {
     private fun quantizeAmbientColor(color: Int): Int = ColorMath.quantizeColor(color)
     
     private fun generateMountains() {
-        // Calculate mountain count from density and screen area
-        // More width = more mountains; taller screen = more visible vertical space
-        val areaRatio = if (extendedWidth > 0f && height > 0f) {
-            RenderConstants.getAreaDensityScale(extendedWidth, height)
+        // Calculate mountain count from density and horizontal span.
+        // Width-only scaling ensures consistent density between wallpaper and preview
+        // regardless of canvas height (preview is short, wallpaper is full-screen).
+        val widthRatio = if (extendedWidth > 0f) {
+            RenderConstants.getHorizontalDensityScale(extendedWidth)
         } else {
             1f
         }
         val baseMountains = 14  // Base number at 100% density in portrait
-        val mountainCount = ((mountainDensity / 100f) * baseMountains * areaRatio).toInt().coerceIn(0, 60)
+        val mountainCount = ((mountainDensity / 100f) * baseMountains * widthRatio).toInt().coerceIn(0, 60)
         
         // Build new list (thread-safe: atomic swap at end)
         val newMountains = ArrayList<MountainData>(mountainCount)

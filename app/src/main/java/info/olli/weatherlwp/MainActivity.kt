@@ -22,6 +22,7 @@ import androidx.fragment.app.Fragment
 import androidx.preference.PreferenceManager
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import androidx.viewpager2.widget.ViewPager2
+import info.olli.weatherlwp.rendering.CanvasHelper
 import info.olli.weatherlwp.rendering.ParallaxScene
 import info.olli.weatherlwp.wallpaper.WeatherWallpaper
 import info.olli.weatherlwp.weather.WeatherRepository
@@ -181,27 +182,7 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
                 surfaceHolder = holder
                 // Use actual view dimensions, not callback params (which report fixed buffer size
                 // after setFixedSize is called, causing stretch on subsequent resizes).
-                val viewWidth = previewSurface.width
-                val viewHeight = previewSurface.height
-                // Cap rendering resolution to avoid performance issues on large previews.
-                // Max 720px wide, height scaled proportionally to maintain aspect ratio.
-                val maxWidth = 720
-                val targetWidth: Int
-                val targetHeight: Int
-                if (viewWidth > maxWidth) {
-                    val scale = maxWidth.toFloat() / viewWidth
-                    targetWidth = maxWidth
-                    targetHeight = (viewHeight * scale).toInt()
-                } else {
-                    targetWidth = viewWidth
-                    targetHeight = viewHeight
-                }
-                if (targetWidth != lastFixedWidth || targetHeight != lastFixedHeight) {
-                    lastFixedWidth = targetWidth
-                    lastFixedHeight = targetHeight
-                    holder.setFixedSize(targetWidth, targetHeight)
-                    Log.d(TAG, "Set preview buffer to ${targetWidth}x${targetHeight}")
-                }
+                applyBufferSize(previewSurface.width, previewSurface.height, holder)
                 // Reload settings when surface changes to ensure proper rendering
                 previewScene?.loadPrefs()
             }
@@ -472,26 +453,32 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
         previewContainer.post {
             val surface = previewContainer.findViewById<SurfaceView>(R.id.preview_surface) ?: return@post
             val holder = surfaceHolder ?: return@post
-            val viewWidth = surface.width
-            val viewHeight = surface.height
-            if (viewWidth <= 0 || viewHeight <= 0) return@post
-            val maxWidth = 720
-            val targetWidth: Int
-            val targetHeight: Int
-            if (viewWidth > maxWidth) {
-                val scale = maxWidth.toFloat() / viewWidth
-                targetWidth = maxWidth
-                targetHeight = (viewHeight * scale).toInt()
-            } else {
-                targetWidth = viewWidth
-                targetHeight = viewHeight
-            }
-            if (targetWidth != lastFixedWidth || targetHeight != lastFixedHeight) {
-                lastFixedWidth = targetWidth
-                lastFixedHeight = targetHeight
-                holder.setFixedSize(targetWidth, targetHeight)
-                Log.d(TAG, "Resize: updated preview buffer to ${targetWidth}x${targetHeight}")
-            }
+            applyBufferSize(surface.width, surface.height, holder)
+        }
+    }
+
+    /**
+     * Cap rendering resolution to max 720px width (height scaled proportionally)
+     * and apply via setFixedSize if dimensions changed.
+     */
+    private fun applyBufferSize(viewWidth: Int, viewHeight: Int, holder: SurfaceHolder) {
+        if (viewWidth <= 0 || viewHeight <= 0) return
+        val maxWidth = 720
+        val targetWidth: Int
+        val targetHeight: Int
+        if (viewWidth > maxWidth) {
+            val scale = maxWidth.toFloat() / viewWidth
+            targetWidth = maxWidth
+            targetHeight = (viewHeight * scale).toInt()
+        } else {
+            targetWidth = viewWidth
+            targetHeight = viewHeight
+        }
+        if (targetWidth != lastFixedWidth || targetHeight != lastFixedHeight) {
+            lastFixedWidth = targetWidth
+            lastFixedHeight = targetHeight
+            holder.setFixedSize(targetWidth, targetHeight)
+            Log.d(TAG, "Preview buffer: ${targetWidth}x${targetHeight}")
         }
     }
     
@@ -541,15 +528,8 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
         
         var canvas: android.graphics.Canvas? = null
         try {
-            canvas = if (preferHardwareCanvas) {
-                try {
-                    holder.lockHardwareCanvas()
-                } catch (e: Throwable) {
-                    preferHardwareCanvas = false
-                    holder.lockCanvas()
-                }
-            } else {
-                holder.lockCanvas()
+            canvas = CanvasHelper.acquire(holder, preferHardwareCanvas) {
+                preferHardwareCanvas = false
             }
             
             if (canvas == null) {

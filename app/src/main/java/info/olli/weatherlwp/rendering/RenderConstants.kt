@@ -69,17 +69,6 @@ object RenderConstants {
     }
 
     /**
-     * Scale factor for count-based density that accounts for both width AND height.
-     * Use this for elements placed across terrain where vertical extent matters.
-     * In portrait, terrain is taller and needs more elements to look full.
-     */
-    fun getAreaDensityScale(extendedWidth: Float, screenHeight: Float): Float {
-        val widthScale = getHorizontalDensityScale(extendedWidth)
-        val heightScale = (screenHeight / REFERENCE_HEIGHT).coerceIn(0.5f, 1.5f)
-        return widthScale * heightScale
-    }
-    
-    /**
      * Get the horizontal offset to center the extended canvas.
      * Content at X=0 in extended space should appear at screen center.
      * 

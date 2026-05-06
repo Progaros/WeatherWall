@@ -108,24 +108,8 @@ class BushRenderer {
      * Blend foliage toward autumn colours based on weight.
      * Shifts green toward orange/red/golden tones per bush.
      */
-    fun autumnTreeColor(baseColor: Int, weight: Float, bushIndex: Int): Int {
-        if (weight <= 0f) return baseColor
-        // Each bush gets a slightly different autumn hue based on its index
-        val hueShift = (bushIndex * 37) % 3  // 0, 1, or 2
-        val (targetR, targetG, targetB) = when (hueShift) {
-            0 -> Triple(200, 90, 20)    // Orange
-            1 -> Triple(180, 140, 30)   // Golden
-            else -> Triple(190, 60, 25) // Red-orange
-        }
-        val r = Color.red(baseColor)
-        val g = Color.green(baseColor)
-        val b = Color.blue(baseColor)
-        return Color.rgb(
-            (r + (targetR - r) * weight).toInt().coerceIn(0, 255),
-            (g + (targetG - g) * weight).toInt().coerceIn(0, 255),
-            (b + (targetB - b) * weight).toInt().coerceIn(0, 255)
-        )
-    }
+    fun autumnTreeColor(baseColor: Int, weight: Float, bushIndex: Int): Int =
+        VegetationUtil.autumnColor(baseColor, weight, bushIndex)
 
     // ========================================================================
     // Private helpers
@@ -136,20 +120,8 @@ class BushRenderer {
     /**
      * Interpolate hill Y at a given xRatio (0-1), same algorithm as TerrainLayer.getHillY().
      */
-    private fun getHillY(xRatio: Float, hill: TreeRenderer.HillInfo): Float {
-        val points = hill.controlPoints
-        if (points.size < 2) return hill.heightOffset
-
-        val indexFloat = xRatio * (points.size - 1)
-        val index = indexFloat.toInt().coerceIn(0, points.size - 2)
-        val fraction = indexFloat - index
-
-        val p1 = points[index]
-        val p2 = points[index + 1]
-        val interpolated = p1 + fraction * (p2 - p1)
-
-        return hill.heightOffset + 0.12f * (1f - interpolated)
-    }
+    private fun getHillY(xRatio: Float, hill: TreeRenderer.HillInfo): Float =
+        VegetationUtil.getHillY(xRatio, hill)
 
     // ========================================================================
     // Generation methods
@@ -182,8 +154,8 @@ class BushRenderer {
             return
         }
 
-        val areaRatio = RenderConstants.getAreaDensityScale(extendedWidth, height)
-        val bushCount = ((bushDensity / 100f) * 80 * areaRatio).toInt().coerceIn(0, 600)
+        val widthRatio = RenderConstants.getHorizontalDensityScale(extendedWidth)
+        val bushCount = ((bushDensity / 100f) * 80 * widthRatio).toInt().coerceIn(0, 600)
         if (bushCount <= 0) {
             bushes = emptyList()
             bushesByDepth = emptyMap()
