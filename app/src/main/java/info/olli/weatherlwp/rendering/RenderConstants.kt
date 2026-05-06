@@ -51,7 +51,7 @@ object RenderConstants {
      * @param screenHeight The actual visible screen height
      * @return The extended width for content generation
      */
-    fun getExtendedWidth(screenWidth: Float, screenHeight: Float): Float {
+    fun getExtendedWidth(screenWidth: Float, @Suppress("UNUSED_PARAMETER") screenHeight: Float): Float {
         // Width-based expansion keeps scaling consistent around screen center
         // across orientation changes while preserving off-screen spawn space.
         val sideMargin = screenWidth * EXTENDED_SIDE_MARGIN_RATIO
@@ -66,6 +66,17 @@ object RenderConstants {
         val referenceWidth = REFERENCE_HEIGHT * REFERENCE_ASPECT_RATIO
         val referenceExtendedWidth = referenceWidth * (1f + 2f * EXTENDED_SIDE_MARGIN_RATIO)
         return (extendedWidth / referenceExtendedWidth).coerceAtLeast(0.25f)
+    }
+
+    /**
+     * Scale factor for count-based density that accounts for both width AND height.
+     * Use this for elements placed across terrain where vertical extent matters.
+     * In portrait, terrain is taller and needs more elements to look full.
+     */
+    fun getAreaDensityScale(extendedWidth: Float, screenHeight: Float): Float {
+        val widthScale = getHorizontalDensityScale(extendedWidth)
+        val heightScale = (screenHeight / REFERENCE_HEIGHT).coerceIn(0.5f, 1.5f)
+        return widthScale * heightScale
     }
     
     /**

@@ -232,12 +232,12 @@ class TreeRenderer {
             return
         }
 
-        // Calculate tree count based on density and extended width
-        // More width = more trees to maintain density
-        val widthRatio = RenderConstants.getHorizontalDensityScale(extendedWidth)
+        // Calculate tree count based on density and screen area
+        // More width = more trees to maintain density; taller terrain = more trees needed
+        val areaRatio = RenderConstants.getAreaDensityScale(extendedWidth, height)
         // Base trees gives target coverage at 100% density
         val baseTrees = 200
-        val treeCount = ((treeDensity / 100f) * baseTrees * widthRatio).toInt().coerceIn(0, 3000)
+        val treeCount = ((treeDensity / 100f) * baseTrees * areaRatio).toInt().coerceIn(0, 3000)
         if (treeCount <= 0) {
             trees = emptyList()
             treesByDepth = emptyMap()

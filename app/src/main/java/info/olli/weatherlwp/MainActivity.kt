@@ -179,20 +179,22 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
             override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
                 Log.d(TAG, "Preview surface changed: ${width}x${height}, format=$format")
                 surfaceHolder = holder
+                // Use actual view dimensions, not callback params (which report fixed buffer size
+                // after setFixedSize is called, causing stretch on subsequent resizes).
+                val viewWidth = previewSurface.width
+                val viewHeight = previewSurface.height
                 // Cap rendering resolution to avoid performance issues on large previews.
                 // Max 720px wide, height scaled proportionally to maintain aspect ratio.
-                // Always call setFixedSize so the buffer matches the new view dimensions
-                // (prevents stretched stale content after preview resize).
                 val maxWidth = 720
                 val targetWidth: Int
                 val targetHeight: Int
-                if (width > maxWidth) {
-                    val scale = maxWidth.toFloat() / width
+                if (viewWidth > maxWidth) {
+                    val scale = maxWidth.toFloat() / viewWidth
                     targetWidth = maxWidth
-                    targetHeight = (height * scale).toInt()
+                    targetHeight = (viewHeight * scale).toInt()
                 } else {
-                    targetWidth = width
-                    targetHeight = height
+                    targetWidth = viewWidth
+                    targetHeight = viewHeight
                 }
                 if (targetWidth != lastFixedWidth || targetHeight != lastFixedHeight) {
                     lastFixedWidth = targetWidth
@@ -464,6 +466,33 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
         val params = previewContainer.layoutParams
         params.height = previewHeightPx
         previewContainer.layoutParams = params
+        // After layout, update the surface buffer size to match new view dimensions.
+        // surfaceChanged is NOT called when setFixedSize was previously used,
+        // so we must manually update the buffer to prevent stretching.
+        previewContainer.post {
+            val surface = previewContainer.findViewById<SurfaceView>(R.id.preview_surface) ?: return@post
+            val holder = surfaceHolder ?: return@post
+            val viewWidth = surface.width
+            val viewHeight = surface.height
+            if (viewWidth <= 0 || viewHeight <= 0) return@post
+            val maxWidth = 720
+            val targetWidth: Int
+            val targetHeight: Int
+            if (viewWidth > maxWidth) {
+                val scale = maxWidth.toFloat() / viewWidth
+                targetWidth = maxWidth
+                targetHeight = (viewHeight * scale).toInt()
+            } else {
+                targetWidth = viewWidth
+                targetHeight = viewHeight
+            }
+            if (targetWidth != lastFixedWidth || targetHeight != lastFixedHeight) {
+                lastFixedWidth = targetWidth
+                lastFixedHeight = targetHeight
+                holder.setFixedSize(targetWidth, targetHeight)
+                Log.d(TAG, "Resize: updated preview buffer to ${targetWidth}x${targetHeight}")
+            }
+        }
     }
     
     private fun startPreview() {

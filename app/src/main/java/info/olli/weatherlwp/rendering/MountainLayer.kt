@@ -120,15 +120,15 @@ class MountainLayer(private val context: Context) : SceneLayer {
     private fun quantizeAmbientColor(color: Int): Int = ColorMath.quantizeColor(color)
     
     private fun generateMountains() {
-        // Calculate mountain count from density and extended width
-        // More width = more mountains to maintain visual density
-        val widthRatio = if (extendedWidth > 0f) {
-            RenderConstants.getHorizontalDensityScale(extendedWidth)
+        // Calculate mountain count from density and screen area
+        // More width = more mountains; taller screen = more visible vertical space
+        val areaRatio = if (extendedWidth > 0f && height > 0f) {
+            RenderConstants.getAreaDensityScale(extendedWidth, height)
         } else {
             1f
         }
-        val baseMountains = 12  // Base number at 100% density
-        val mountainCount = ((mountainDensity / 100f) * baseMountains * widthRatio).toInt().coerceIn(0, 50)
+        val baseMountains = 14  // Base number at 100% density in portrait
+        val mountainCount = ((mountainDensity / 100f) * baseMountains * areaRatio).toInt().coerceIn(0, 60)
         
         // Build new list (thread-safe: atomic swap at end)
         val newMountains = ArrayList<MountainData>(mountainCount)
@@ -142,8 +142,12 @@ class MountainLayer(private val context: Context) : SceneLayer {
             val depthFactor = RenderConstants.PARALLAX_MOUNTAIN_MIN + 
                 depth * (RenderConstants.PARALLAX_MOUNTAIN_MAX - RenderConstants.PARALLAX_MOUNTAIN_MIN)
             
-            // Position: spread across extended width (0-1 range)
-            val peakX = itemRandom.nextFloat()
+            // Position: stratified placement with jitter for even distribution
+            // Divide extended width into equal cells, then jitter within each cell
+            val cellWidth = 1f / mountainCount.coerceAtLeast(1)
+            val cellCenter = (i + 0.5f) * cellWidth
+            val jitter = (itemRandom.nextFloat() - 0.5f) * cellWidth * 0.8f
+            val peakX = (cellCenter + jitter).coerceIn(0f, 1f)
             
             // Height: varies by scale setting
             val h = (RenderConstants.MOUNTAIN_HEIGHT_MIN + itemRandom.nextFloat() * RenderConstants.MOUNTAIN_HEIGHT_RANGE) * mountainHeightScale
