@@ -68,12 +68,23 @@ object RenderConstants {
 
     /**
      * Scale factor for count-based object density using horizontal span only.
-     * This keeps tree/mountain/bush counts stable when only height changes.
+     * Accounts for aspect ratio: wider views (shorter canvas) get proportionally
+     * more objects so the scene doesn't look empty with tiny elements.
      */
-    fun getHorizontalDensityScale(extendedWidth: Float): Float {
+    fun getHorizontalDensityScale(extendedWidth: Float, screenWidth: Float = 0f, screenHeight: Float = 0f): Float {
         val referenceWidth = REFERENCE_HEIGHT * REFERENCE_ASPECT_RATIO
         val referenceExtendedWidth = referenceWidth * (1f + 2f * EXTENDED_SIDE_MARGIN_RATIO)
-        return (extendedWidth / referenceExtendedWidth).coerceAtLeast(0.25f)
+        val baseScale = (extendedWidth / referenceExtendedWidth).coerceAtLeast(0.25f)
+        
+        // When aspect ratio is wider than reference, boost density so
+        // the wider visible area is filled with proportionally more objects.
+        if (screenWidth > 0f && screenHeight > 0f) {
+            val referenceAspect = REFERENCE_ASPECT_RATIO  // 0.5625 (9:16)
+            val currentAspect = screenWidth / screenHeight
+            val aspectBoost = (currentAspect / referenceAspect).coerceIn(1f, 3f)
+            return baseScale * aspectBoost
+        }
+        return baseScale
     }
 
     /**

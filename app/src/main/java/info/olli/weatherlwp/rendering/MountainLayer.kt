@@ -124,7 +124,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
         // Width-only scaling ensures consistent density between wallpaper and preview
         // regardless of canvas height (preview is short, wallpaper is full-screen).
         val widthRatio = if (extendedWidth > 0f) {
-            RenderConstants.getHorizontalDensityScale(extendedWidth)
+            RenderConstants.getHorizontalDensityScale(extendedWidth, width, height)
         } else {
             1f
         }

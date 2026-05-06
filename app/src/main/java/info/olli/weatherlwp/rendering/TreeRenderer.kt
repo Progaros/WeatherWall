@@ -205,7 +205,8 @@ class TreeRenderer {
         // Calculate tree count based on density and horizontal span.
         // Width-only scaling ensures consistent density between wallpaper and preview
         // regardless of canvas height (preview is short, wallpaper is full-screen).
-        val widthRatio = RenderConstants.getHorizontalDensityScale(extendedWidth)
+        val screenWidth = extendedWidth - 2f * extendedOffset
+        val widthRatio = RenderConstants.getHorizontalDensityScale(extendedWidth, screenWidth, height)
         // Base trees gives target coverage at 100% density
         val baseTrees = 200
         val treeCount = ((treeDensity / 100f) * baseTrees * widthRatio).toInt().coerceIn(0, 3000)

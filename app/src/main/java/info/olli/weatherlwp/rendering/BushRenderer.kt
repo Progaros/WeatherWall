@@ -154,7 +154,8 @@ class BushRenderer {
             return
         }
 
-        val widthRatio = RenderConstants.getHorizontalDensityScale(extendedWidth)
+        val screenWidth = extendedWidth - 2f * extendedOffset
+        val widthRatio = RenderConstants.getHorizontalDensityScale(extendedWidth, screenWidth, height)
         val bushCount = ((bushDensity / 100f) * 80 * widthRatio).toInt().coerceIn(0, 600)
         if (bushCount <= 0) {
             bushes = emptyList()
