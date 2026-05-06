@@ -242,7 +242,10 @@ class ParallaxCalculator {
         // Determine interpolation speed
         // Blend smoothly between tilt-following and return-to-center based on tilt magnitude
         // (avoids abrupt mode switch at a fixed threshold)
-        val returnBlend = (1f - tiltMagnitude / 0.15f).coerceIn(0f, 1f)  // 1=flat, 0=tilted
+        // Threshold scales with returnSpeed: higher return speed means broader engagement,
+        // so a mostly-stable held position already starts drifting toward center.
+        val returnThreshold = 0.15f + returnSpeed * 0.35f  // 0.15 at speed=0, 0.50 at speed=1
+        val returnBlend = (1f - tiltMagnitude / returnThreshold).coerceIn(0f, 1f)  // 1=flat, 0=tilted
         
         // Calculate edge easing multiplier based on current position
         val edgeEasingMultiplier = if (edgeEasing > 0.01f) {
