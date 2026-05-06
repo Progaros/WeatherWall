@@ -653,4 +653,192 @@ class SimulationStateTest {
         )
         assertEquals(1f, stateNoon.getLightLevel(), 0.01f)
     }
+
+    // ============== Light Source Angle Tests ==============
+
+    @Test
+    fun `getLightSourceAngle at noon is PI div 2 (overhead)`() {
+        val state = SimulationState.default().copy(timeOfDayHours = 12f)
+        // noon: dayProgress = (12-6)/12 = 0.5, angle = PI*(1-0.5) = PI/2
+        assertEquals(kotlin.math.PI.toFloat() / 2f, state.getLightSourceAngle(), 0.01f)
+    }
+
+    @Test
+    fun `getLightSourceAngle at 6am is PI (left)`() {
+        val state = SimulationState.default().copy(timeOfDayHours = 6f)
+        // 6am: dayProgress = (6-6)/12 = 0, angle = PI*(1-0) = PI
+        assertEquals(kotlin.math.PI.toFloat(), state.getLightSourceAngle(), 0.01f)
+    }
+
+    @Test
+    fun `getLightSourceAngle at 6pm is 0 (right)`() {
+        val state = SimulationState.default().copy(timeOfDayHours = 18f)
+        // 6pm: dayProgress = (18-6)/12 = 1, angle = PI*(1-1) = 0
+        assertEquals(0f, state.getLightSourceAngle(), 0.01f)
+    }
+
+    @Test
+    fun `getLightSourceAngle at midnight is PI div 2 (moon overhead)`() {
+        val state = SimulationState.default().copy(timeOfDayHours = 0f)
+        // midnight: nightProgress = (0+6)/12 = 0.5, angle = PI*(1-0.5) = PI/2
+        assertEquals(kotlin.math.PI.toFloat() / 2f, state.getLightSourceAngle(), 0.01f)
+    }
+
+    // ============== Shadow Offset Tests ==============
+
+    @Test
+    fun `getShadowOffset at noon points down`() {
+        val state = SimulationState.default().copy(
+            timeOfDayHours = 12f,
+            mountainShadowsEnabled = true,
+            treeShadowsEnabled = true,
+            shadowStrength = 1f
+        )
+        val (dx, dy) = state.getShadowOffset(1f)
+        // At noon, light is overhead (PI/2), cos(PI/2)≈0 so dx≈0
+        assertEquals(0f, dx, 0.1f)
+        // dy should be positive (shadow extends downward)
+        assertTrue("Shadow at noon should point down", dy > 0f)
+    }
+
+    @Test
+    fun `getShadowOffset at morning points right`() {
+        val state = SimulationState.default().copy(
+            timeOfDayHours = 7f,
+            mountainShadowsEnabled = true,
+            treeShadowsEnabled = true,
+            shadowStrength = 1f
+        )
+        val (dx, _) = state.getShadowOffset(1f)
+        // At 7am, light from left (angle > PI/2), -cos(angle) > 0 -> shadow to right
+        assertTrue("Morning shadow should point right (dx>0)", dx > 0f)
+    }
+
+    @Test
+    fun `getShadowOffset at evening points left`() {
+        val state = SimulationState.default().copy(
+            timeOfDayHours = 17f,
+            mountainShadowsEnabled = true,
+            treeShadowsEnabled = true,
+            shadowStrength = 1f
+        )
+        val (dx, _) = state.getShadowOffset(1f)
+        // At 5pm, light from right (angle < PI/2), -cos(angle) < 0 -> shadow to left
+        assertTrue("Evening shadow should point left (dx<0)", dx < 0f)
+    }
+
+    @Test
+    fun `getShadowOffset returns zero when shadows disabled`() {
+        val state = SimulationState.default().copy(
+            timeOfDayHours = 12f,
+            mountainShadowsEnabled = false,
+            treeShadowsEnabled = false,
+            shadowsEnabled = false,
+            shadowStrength = 1f
+        )
+        val (dx, dy) = state.getShadowOffset(1f)
+        assertEquals(0f, dx, 0.001f)
+        assertEquals(0f, dy, 0.001f)
+    }
+
+    @Test
+    fun `getEffectiveShadowStrength at night uses moon illumination`() {
+        val state = SimulationState.default().copy(
+            isNight = true,
+            timeOfDayHours = 0f,
+            mountainShadowsEnabled = true,
+            treeShadowsEnabled = true,
+            shadowStrength = 1f,
+            moonIllumination = 1f  // Full moon
+        )
+        // Night + full moon: moonIllumination * 0.4 * shadowStrength = 1.0 * 0.4 * 1.0 = 0.4
+        assertEquals(0.4f, state.getEffectiveShadowStrength(), 0.01f)
+    }
+
+    @Test
+    fun `getEffectiveShadowStrength at night with new moon is near zero`() {
+        val state = SimulationState.default().copy(
+            isNight = true,
+            timeOfDayHours = 0f,
+            mountainShadowsEnabled = true,
+            treeShadowsEnabled = true,
+            shadowStrength = 1f,
+            moonIllumination = 0f  // New moon
+        )
+        assertEquals(0f, state.getEffectiveShadowStrength(), 0.01f)
+    }
+
+    // ============== CloudCover Boundary Tests ==============
+
+    @Test
+    fun `cloudCover at 10 percent boundary gives 2 clouds`() {
+        val state = SimulationState.default().copy(
+            cloudDensity = CloudDensity.AUTO,
+            weather = WeatherType.CLEAR,
+            cloudCover = 0.1f
+        )
+        assertEquals(2, state.getCloudCount())
+    }
+
+    @Test
+    fun `cloudCover at 30 percent boundary gives 8 clouds`() {
+        val state = SimulationState.default().copy(
+            cloudDensity = CloudDensity.AUTO,
+            weather = WeatherType.PARTLY_CLOUDY,
+            cloudCover = 0.3f
+        )
+        assertEquals(8, state.getCloudCount())
+    }
+
+    @Test
+    fun `cloudCover at 60 percent boundary gives 22 clouds`() {
+        val state = SimulationState.default().copy(
+            cloudDensity = CloudDensity.AUTO,
+            weather = WeatherType.CLOUDY,
+            cloudCover = 0.6f
+        )
+        assertEquals(22, state.getCloudCount())
+    }
+
+    @Test
+    fun `cloudCover at 85 percent boundary gives 45 clouds`() {
+        val state = SimulationState.default().copy(
+            cloudDensity = CloudDensity.AUTO,
+            weather = WeatherType.OVERCAST,
+            cloudCover = 0.85f
+        )
+        assertEquals(45, state.getCloudCount())
+    }
+
+    // ============== Wind Direction Tests ==============
+
+    @Test
+    fun `getWindDirX at 0 degrees is 1`() {
+        val state = SimulationState.default().copy(windDirection = 0f)
+        assertEquals(1f, state.getWindDirX(), 0.01f)
+    }
+
+    @Test
+    fun `getWindDirY at 0 degrees is 0`() {
+        val state = SimulationState.default().copy(windDirection = 0f)
+        assertEquals(0f, state.getWindDirY(), 0.01f)
+    }
+
+    @Test
+    fun `getWindDirX at 90 degrees is 0`() {
+        val state = SimulationState.default().copy(windDirection = 90f)
+        assertEquals(0f, state.getWindDirX(), 0.01f)
+    }
+
+    @Test
+    fun `getWindDirY at 90 degrees is 1`() {
+        val state = SimulationState.default().copy(windDirection = 90f)
+        assertEquals(1f, state.getWindDirY(), 0.01f)
+    }
+
+    @Test
+    fun `getWindDirX at 180 degrees is negative 1`() {
+        val state = SimulationState.default().copy(windDirection = 180f)
+        assertEquals(-1f, state.getWindDirX(), 0.01f)
+    }
 }

@@ -414,11 +414,15 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
     
     @Suppress("DEPRECATION")
     private fun getCurrentDisplayRotation(): Int {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            context.display.rotation
-        } else {
-            (context.getSystemService(Context.WINDOW_SERVICE) as WindowManager)
-                .defaultDisplay.rotation
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                context.display?.rotation ?: Surface.ROTATION_0
+            } else {
+                (context.getSystemService(Context.WINDOW_SERVICE) as WindowManager)
+                    .defaultDisplay?.rotation ?: Surface.ROTATION_0
+            }
+        } catch (_: Exception) {
+            Surface.ROTATION_0
         }
     }
 

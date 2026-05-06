@@ -251,4 +251,179 @@ class SeasonHelperTest {
         assertNotNull(blend)
         assertTrue(blend.primarySeason in TerrainSeason.values())
     }
+
+    // ============== getSeasonForDate with controlled dates ==============
+
+    @Test
+    fun `March is spring`() {
+        val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.MONTH, java.util.Calendar.MARCH)
+        cal.set(java.util.Calendar.DAY_OF_MONTH, 15)
+        assertEquals(TerrainSeason.SPRING, SeasonHelper.getSeasonForDate(cal))
+    }
+
+    @Test
+    fun `April is spring`() {
+        val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.MONTH, java.util.Calendar.APRIL)
+        assertEquals(TerrainSeason.SPRING, SeasonHelper.getSeasonForDate(cal))
+    }
+
+    @Test
+    fun `May is spring`() {
+        val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.MONTH, java.util.Calendar.MAY)
+        assertEquals(TerrainSeason.SPRING, SeasonHelper.getSeasonForDate(cal))
+    }
+
+    @Test
+    fun `June is summer`() {
+        val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.MONTH, java.util.Calendar.JUNE)
+        assertEquals(TerrainSeason.SUMMER, SeasonHelper.getSeasonForDate(cal))
+    }
+
+    @Test
+    fun `July is summer`() {
+        val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.MONTH, java.util.Calendar.JULY)
+        assertEquals(TerrainSeason.SUMMER, SeasonHelper.getSeasonForDate(cal))
+    }
+
+    @Test
+    fun `August is summer`() {
+        val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.MONTH, java.util.Calendar.AUGUST)
+        assertEquals(TerrainSeason.SUMMER, SeasonHelper.getSeasonForDate(cal))
+    }
+
+    @Test
+    fun `September is autumn`() {
+        val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.MONTH, java.util.Calendar.SEPTEMBER)
+        assertEquals(TerrainSeason.AUTUMN, SeasonHelper.getSeasonForDate(cal))
+    }
+
+    @Test
+    fun `October is autumn`() {
+        val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.MONTH, java.util.Calendar.OCTOBER)
+        assertEquals(TerrainSeason.AUTUMN, SeasonHelper.getSeasonForDate(cal))
+    }
+
+    @Test
+    fun `November is autumn`() {
+        val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.MONTH, java.util.Calendar.NOVEMBER)
+        assertEquals(TerrainSeason.AUTUMN, SeasonHelper.getSeasonForDate(cal))
+    }
+
+    @Test
+    fun `December is winter`() {
+        val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.MONTH, java.util.Calendar.DECEMBER)
+        assertEquals(TerrainSeason.WINTER, SeasonHelper.getSeasonForDate(cal))
+    }
+
+    @Test
+    fun `January is winter`() {
+        val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.MONTH, java.util.Calendar.JANUARY)
+        assertEquals(TerrainSeason.WINTER, SeasonHelper.getSeasonForDate(cal))
+    }
+
+    @Test
+    fun `February is winter`() {
+        val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.MONTH, java.util.Calendar.FEBRUARY)
+        assertEquals(TerrainSeason.WINTER, SeasonHelper.getSeasonForDate(cal))
+    }
+
+    // ============== getSeasonBlendForDate transition tests ==============
+
+    @Test
+    fun `season blend mid-season is fully primary`() {
+        val cal = java.util.Calendar.getInstance()
+        cal.set(2024, java.util.Calendar.JULY, 15) // Mid-summer
+        val blend = SeasonHelper.getSeasonBlendForDate(cal, 14)
+        assertEquals(TerrainSeason.SUMMER, blend.primarySeason)
+        assertEquals(1f, blend.transitionProgress, 0.01f)
+        assertFalse(blend.isTransitioning)
+    }
+
+    @Test
+    fun `season blend start of season is transitioning`() {
+        val cal = java.util.Calendar.getInstance()
+        cal.set(2024, java.util.Calendar.JUNE, 3) // 2 days into summer
+        val blend = SeasonHelper.getSeasonBlendForDate(cal, 14)
+        assertEquals(TerrainSeason.SUMMER, blend.primarySeason)
+        assertEquals(TerrainSeason.SPRING, blend.previousSeason)
+        assertTrue(blend.isTransitioning)
+        assertTrue(blend.transitionProgress < 0.5f)
+    }
+
+    @Test
+    fun `season blend weights sum to 1`() {
+        val cal = java.util.Calendar.getInstance()
+        cal.set(2024, java.util.Calendar.MARCH, 5)
+        val blend = SeasonHelper.getSeasonBlendForDate(cal, 14)
+        assertEquals(1f, blend.primaryWeight + blend.previousWeight, 0.001f)
+    }
+
+    @Test
+    fun `season blend January transitions from autumn to winter`() {
+        val cal = java.util.Calendar.getInstance()
+        cal.set(2024, java.util.Calendar.JANUARY, 15) // Mid-January, well past transition
+        val blend = SeasonHelper.getSeasonBlendForDate(cal, 14)
+        assertEquals(TerrainSeason.WINTER, blend.primarySeason)
+        assertEquals(1f, blend.transitionProgress, 0.01f)
+    }
+
+    @Test
+    fun `season blend with 0 transition days is instant`() {
+        val cal = java.util.Calendar.getInstance()
+        cal.set(2024, java.util.Calendar.JUNE, 1)
+        val blend = SeasonHelper.getSeasonBlendForDate(cal, 0)
+        assertEquals(TerrainSeason.SUMMER, blend.primarySeason)
+        assertEquals(TerrainSeason.SUMMER, blend.previousSeason)
+        assertFalse(blend.isTransitioning)
+    }
+
+    // ============== getEffectiveSeasonBlend dayOfYearOverride ==============
+
+    @Test
+    fun `getEffectiveSeasonBlend dayOfYearOverride simulates date`() {
+        // Day 180 is late June (summer)
+        val blend = SeasonHelper.getEffectiveSeasonBlend(
+            debugEnabled = true,
+            seasonOverride = "auto",
+            transitionDays = 14,
+            dayOfYearOverride = 180
+        )
+        assertEquals(TerrainSeason.SUMMER, blend.primarySeason)
+    }
+
+    @Test
+    fun `getEffectiveSeasonBlend dayOfYearOverride ignored when not debug`() {
+        val blend = SeasonHelper.getEffectiveSeasonBlend(
+            debugEnabled = false,
+            seasonOverride = "auto",
+            transitionDays = 14,
+            dayOfYearOverride = 180
+        )
+        // Should use current calendar, ignore override
+        assertNotNull(blend)
+    }
+
+    @Test
+    fun `getEffectiveSeasonBlend invalid override falls back to calendar`() {
+        val blend = SeasonHelper.getEffectiveSeasonBlend(
+            debugEnabled = true,
+            seasonOverride = "invalid_season",
+            transitionDays = 14
+        )
+        // fromString returns null, falls back to getCurrentSeasonBlend
+        assertNotNull(blend)
+        assertTrue(blend.primarySeason in TerrainSeason.values())
+    }
 }

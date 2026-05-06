@@ -267,4 +267,103 @@ class SimulationClockTest {
         clock.setManualTime(16 * 60 + 30)
         assertTrue("16:30 after 16:00 sunset should be night", clock.isNight())
     }
+
+    // ============== Boundary Precision Tests ==============
+
+    @Test
+    fun `isDawn at exact sunrise boundary is true`() {
+        clock.setUseRealTime(false)
+        // Default sunrise = 6.0
+        clock.setManualTime(6 * 60) // Exactly 6:00
+        assertTrue("Exactly at sunrise should be dawn", clock.isDawn())
+    }
+
+    @Test
+    fun `isDawn one minute before sunrise is false`() {
+        clock.setUseRealTime(false)
+        clock.setManualTime(5 * 60 + 59) // 5:59
+        assertFalse("One minute before sunrise is NOT dawn", clock.isDawn())
+    }
+
+    @Test
+    fun `isDusk one minute before sunset-3h is false`() {
+        clock.setUseRealTime(false)
+        // Default sunset = 20.0, dusk starts at 17.0
+        clock.setManualTime(16 * 60 + 59) // 16:59
+        assertFalse("16:59 is before dusk start (17:00)", clock.isDusk())
+    }
+
+    @Test
+    fun `isDusk at exact dusk start is true`() {
+        clock.setUseRealTime(false)
+        // Dusk: sunset-3h to sunset = 17:00 to 20:00
+        clock.setManualTime(17 * 60) // Exactly 17:00
+        assertTrue("Exactly at dusk start should be dusk", clock.isDusk())
+    }
+
+    @Test
+    fun `isNight boundary at sunset is true`() {
+        clock.setUseRealTime(false)
+        // sunset = 20:00 (hour >= sunsetHour)
+        clock.setManualTime(20 * 60) // Exactly 20:00
+        assertTrue("Exactly at sunset is night", clock.isNight())
+    }
+
+    @Test
+    fun `isNight one minute before sunset is false`() {
+        clock.setUseRealTime(false)
+        clock.setManualTime(19 * 60 + 59) // 19:59
+        assertFalse("One minute before sunset is NOT night", clock.isNight())
+    }
+
+    @Test
+    fun `setTimeMultiplier clamps low values`() {
+        clock.setTimeMultiplier(0.01f) // Below 0.1
+        // Verify time is still valid (clamped to 0.1)
+        val time = clock.getTimeSeconds()
+        assertTrue(time >= 0f)
+    }
+
+    @Test
+    fun `setTimeMultiplier clamps high values`() {
+        clock.setTimeMultiplier(100f) // Above 10
+        // Verify time is still valid (clamped to 10)
+        val time = clock.getTimeSeconds()
+        assertTrue(time >= 0f)
+    }
+
+    @Test
+    fun `getTimeOfDayHours in manual mode converts minutes to hours`() {
+        clock.setUseRealTime(false)
+        clock.setManualTime(450) // 7:30 AM = 7.5 hours
+        assertEquals(7.5f, clock.getTimeOfDayHours(), 0.01f)
+    }
+
+    @Test
+    fun `getTimeOfDayHours at midnight is 0`() {
+        clock.setUseRealTime(false)
+        clock.setManualTime(0)
+        assertEquals(0f, clock.getTimeOfDayHours(), 0.01f)
+    }
+
+    @Test
+    fun `getTimeOfDayHours at max is 23-98`() {
+        clock.setUseRealTime(false)
+        clock.setManualTime(1439) // 23:59
+        assertEquals(23.983f, clock.getTimeOfDayHours(), 0.01f)
+    }
+
+    @Test
+    fun `getDayProgress at 6am is 0-25`() {
+        clock.setUseRealTime(false)
+        clock.setManualTime(6 * 60)
+        assertEquals(0.25f, clock.getDayProgress(), 0.01f)
+    }
+
+    @Test
+    fun `getDayProgress at 6pm is 0-75`() {
+        clock.setUseRealTime(false)
+        clock.setManualTime(18 * 60)
+        assertEquals(0.75f, clock.getDayProgress(), 0.01f)
+    }
 }

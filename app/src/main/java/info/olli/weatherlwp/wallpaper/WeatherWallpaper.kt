@@ -77,7 +77,8 @@ class WeatherWallpaper : WallpaperService() {
                 // onVisibilityChanged(true) first. Treat a created surface as visible.
                 isVisible = true
                 preferHardwareCanvas = true
-                scene.start()  // Start sensors
+                runCatching { scene.start() }
+                    .onFailure { Log.e(TAG, "scene.start() failed, continuing without sensors", it) }
                 startRender()
                 // Paint at least one frame immediately so previews don't stay black.
                 drawFrame(System.nanoTime())
@@ -122,7 +123,8 @@ class WeatherWallpaper : WallpaperService() {
                     // Reset frame timing to avoid large delta on first frame after resume
                     lastFrameTimeMs = 0L
                     preferHardwareCanvas = true
-                    scene.start()  // Start sensors
+                    runCatching { scene.start() }
+                        .onFailure { Log.e(TAG, "scene.start() failed, continuing without sensors", it) }
                     startRender()
                 } else {
                     Log.d(TAG, "Wallpaper hidden - stopping render loop and sensors (battery optimization)")

@@ -316,4 +316,131 @@ class RenderConstantsTest {
         assertTrue("Dragonfly duration reasonable", dragonflyDuration in 5000L..20000L)
         assertTrue("Snowflake duration allows slow fall", snowflakeDuration in 10000L..30000L)
     }
+
+    // ============== Direct Function Tests ==============
+
+    @Test
+    fun `getHeightScale at reference height returns 1`() {
+        assertEquals(1.0f, info.olli.weatherlwp.rendering.RenderConstants.getHeightScale(1920f), 0.001f)
+    }
+
+    @Test
+    fun `getHeightScale at double height returns 2`() {
+        assertEquals(2.0f, info.olli.weatherlwp.rendering.RenderConstants.getHeightScale(3840f), 0.001f)
+    }
+
+    @Test
+    fun `getHeightScale clamps at minimum`() {
+        assertEquals(0.5f, info.olli.weatherlwp.rendering.RenderConstants.getHeightScale(100f), 0.001f)
+    }
+
+    @Test
+    fun `getHeightScale at zero still returns minimum`() {
+        assertEquals(0.5f, info.olli.weatherlwp.rendering.RenderConstants.getHeightScale(0f), 0.001f)
+    }
+
+    @Test
+    fun `getExtendedWidth is wider than screen`() {
+        val extended = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(1080f, 1920f)
+        assertTrue(extended > 1080f)
+    }
+
+    @Test
+    fun `getExtendedWidth uses margin ratio correctly`() {
+        val extended = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(1080f, 1920f)
+        val expected = 1080f + 1080f * 0.38f * 2f
+        assertEquals(expected, extended, 0.01f)
+    }
+
+    @Test
+    fun `getExtendedWidth scales with screen width`() {
+        val ext1 = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(1080f, 1920f)
+        val ext2 = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(2160f, 3840f)
+        assertEquals(ext1 * 2f, ext2, 0.01f)
+    }
+
+    @Test
+    fun `getHorizontalDensityScale at reference width returns 1`() {
+        // Reference extended width = 1920 * 0.5625 * (1 + 2*0.38) = 1080 * 1.76 = 1900.8
+        val refExtended = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(1080f, 1920f)
+        val scale = info.olli.weatherlwp.rendering.RenderConstants.getHorizontalDensityScale(refExtended)
+        assertEquals(1.0f, scale, 0.01f)
+    }
+
+    @Test
+    fun `getHorizontalDensityScale at double width returns 2`() {
+        val refExtended = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(1080f, 1920f)
+        val scale = info.olli.weatherlwp.rendering.RenderConstants.getHorizontalDensityScale(refExtended * 2f)
+        assertEquals(2.0f, scale, 0.01f)
+    }
+
+    @Test
+    fun `getHorizontalDensityScale clamps at minimum`() {
+        val scale = info.olli.weatherlwp.rendering.RenderConstants.getHorizontalDensityScale(10f)
+        assertEquals(0.25f, scale, 0.001f)
+    }
+
+    @Test
+    fun `getExtendedOffset centers content`() {
+        val offset = info.olli.weatherlwp.rendering.RenderConstants.getExtendedOffset(1080f, 1900.8f)
+        assertEquals((1900.8f - 1080f) / 2f, offset, 0.01f)
+    }
+
+    @Test
+    fun `getExtendedOffset is zero when widths match`() {
+        val offset = info.olli.weatherlwp.rendering.RenderConstants.getExtendedOffset(1000f, 1000f)
+        assertEquals(0f, offset, 0.001f)
+    }
+
+    @Test
+    fun `getHillParallaxDepth at 0 returns HILLS_MIN`() {
+        val depth = info.olli.weatherlwp.rendering.RenderConstants.getHillParallaxDepth(0f)
+        assertEquals(0.50f, depth, 0.001f)
+    }
+
+    @Test
+    fun `getHillParallaxDepth at 1 returns HILLS_MAX`() {
+        val depth = info.olli.weatherlwp.rendering.RenderConstants.getHillParallaxDepth(1f)
+        assertEquals(0.80f, depth, 0.001f)
+    }
+
+    @Test
+    fun `getHillParallaxDepth at 0-5 returns midpoint`() {
+        val depth = info.olli.weatherlwp.rendering.RenderConstants.getHillParallaxDepth(0.5f)
+        assertEquals(0.65f, depth, 0.001f)
+    }
+
+    @Test
+    fun `calculateEventDuration basic case`() {
+        val dur = info.olli.weatherlwp.rendering.RenderConstants.calculateEventDuration(1.3f, 0.0001f)
+        assertEquals(13000L, dur)
+    }
+
+    @Test
+    fun `calculateEventDuration clamps to minimum`() {
+        val dur = info.olli.weatherlwp.rendering.RenderConstants.calculateEventDuration(0.001f, 1f)
+        assertEquals(1000L, dur)
+    }
+
+    @Test
+    fun `calculateEventDuration clamps to maximum`() {
+        val dur = info.olli.weatherlwp.rendering.RenderConstants.calculateEventDuration(100f, 0.00001f)
+        assertEquals(180000L, dur)
+    }
+
+    @Test
+    fun `calculateEventDuration handles zero speed`() {
+        val dur = info.olli.weatherlwp.rendering.RenderConstants.calculateEventDuration(1f, 0f)
+        // Speed coerced to 0.00001, distance=1 -> 100000ms clamped to 180000
+        assertEquals(100000L, dur)
+    }
+
+    @Test
+    fun `calculateEventDuration custom min max`() {
+        val dur = info.olli.weatherlwp.rendering.RenderConstants.calculateEventDuration(
+            1f, 0.001f, minMs = 2000L, maxMs = 5000L
+        )
+        // raw: 1/0.001 = 1000 -> clamped to minMs=2000
+        assertEquals(2000L, dur)
+    }
 }
