@@ -74,7 +74,13 @@ Without Breezy Weather, sensible defaults are used (sunrise 6:00, sunset 20:00).
 
 ## 📱 Screenshots
 
-*Coming soon*
+<p align="center">
+  <img src="docs/screenshots/Screenshot_1.png" width="180" alt="Dawn clouds">
+  <img src="docs/screenshots/Screenshot_2.png" width="180" alt="Clear day">
+  <img src="docs/screenshots/Screenshot_3.png" width="180" alt="Snowy day">
+  <img src="docs/screenshots/Screenshot_4.png" width="180" alt="Rainy dusk">
+  <img src="docs/screenshots/Screenshot_5.png" width="180" alt="Night sky">
+</p>
 
 ## 🚀 Quick Start
 
