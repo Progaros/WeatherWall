@@ -68,7 +68,7 @@
             android:key="pref_vignette_enabled"
             android:title="Edge Vignette"
             android:summary="Screen edge darkening (bottom, top, sides)"
-            android:defaultValue="true"
+            android:defaultValue="false"
             app:fragment="info.olli.weatherlwp.settings.EffectsVignetteFragment" />
     </PreferenceCategory>
 

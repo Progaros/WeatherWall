@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Shader
 import androidx.preference.PreferenceManager
+import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
@@ -126,7 +127,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
         } else {
             1f
         }
-        val baseMountains = 8  // Base number at 100% density
+        val baseMountains = 12  // Base number at 100% density
         val mountainCount = ((mountainDensity / 100f) * baseMountains * widthRatio).toInt().coerceIn(0, 50)
         
         // Build new list (thread-safe: atomic swap at end)
@@ -169,15 +170,29 @@ class MountainLayer(private val context: Context) : SceneLayer {
     override fun resize(w: Float, h: Float) {
         val oldW = width
         val oldH = height
+        val sizeChanged = oldW != w || oldH != h
         width = w
         height = h
         // Calculate extended width for parallax content
         extendedWidth = RenderConstants.getExtendedWidth(w, h)
         extendedOffset = RenderConstants.getExtendedOffset(w, extendedWidth)
 
+        if (!sizeChanged) return
+
+        // Invalidate cached gradients that embed old height coordinates
+        cachedLeftGradients.clear()
+        cachedRightGradients.clear()
+        cachedSnowGradients.clear()
+        cachedMtnAmbient = 0
+        cachedMtnLightAngleBucket = -1
+        cachedHazeAmbient = 0
+        cachedHazeHeight = 0f
+
         val firstGenerate = lastGeneratedWidth <= 0f || lastGeneratedHeight <= 0f
-        val orientationChanged = (oldW > oldH) != (w > h)
-        if (firstGenerate || orientationChanged) {
+        val sizeChangedSignificantly =
+            kotlin.math.abs(lastGeneratedWidth - w) > 1f ||
+            kotlin.math.abs(lastGeneratedHeight - h) > 1f
+        if (firstGenerate || sizeChangedSignificantly) {
             generateMountains()
             lastGeneratedWidth = w
             lastGeneratedHeight = h
@@ -577,14 +592,14 @@ class MountainLayer(private val context: Context) : SceneLayer {
         randomSeed = settings.getInt("pref_random_seed", 42)
         
         // Mountain density: 0-100 percentage (scales with extended width)
-        mountainDensity = settings.getInt("pref_mountain_density", 50)
+        mountainDensity = settings.getInt("pref_mountain_density", PreferenceDefaults.MOUNTAIN_DENSITY)
         
-        // Height: 10-1000 -> 0.1 - 10.0
-        val heightVal = settings.getInt("pref_mountain_height", 140)
+        // Height: 25-200 -> 0.25 - 2.0
+        val heightVal = settings.getInt("pref_mountain_height", PreferenceDefaults.MOUNTAIN_HEIGHT)
         mountainHeightScale = heightVal / 100f
         
-        // Width: 50-1000 -> 0.5 - 10.0 (default 175 = 1.75x for good visual size)
-        val widthVal = settings.getInt("pref_mountain_width", 175)
+        // Width: 50-200 -> 0.5 - 2.0
+        val widthVal = settings.getInt("pref_mountain_width", PreferenceDefaults.MOUNTAIN_WIDTH)
         mountainWidthScale = widthVal / 100f
         
         // Roughness: 0-200 -> 0.0 - 2.0

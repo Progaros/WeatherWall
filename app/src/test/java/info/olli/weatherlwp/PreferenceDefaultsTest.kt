@@ -83,6 +83,9 @@ class PreferenceDefaultsTest {
             "pref_hill_frequency" to PreferenceDefaults.HILL_FREQUENCY,
             
             // Mountain settings
+            "pref_mountain_density" to PreferenceDefaults.MOUNTAIN_DENSITY,
+            "pref_mountain_height" to PreferenceDefaults.MOUNTAIN_HEIGHT,
+            "pref_mountain_width" to PreferenceDefaults.MOUNTAIN_WIDTH,
             "pref_mountain_bottom_offset" to PreferenceDefaults.MOUNTAIN_BOTTOM_OFFSET,
             
             // Weather settings
