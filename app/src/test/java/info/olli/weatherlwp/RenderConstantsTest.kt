@@ -360,6 +360,25 @@ class RenderConstantsTest {
     }
 
     @Test
+    fun `getExtendedWidth scales with height for taller screens`() {
+        // Taller screen (9:20) should have wider extended width to maintain proportions
+        val ext916 = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(1080f, 1920f)
+        val ext920 = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(1080f, 2400f)
+        assertTrue("Taller screen should have wider extended width", ext920 > ext916)
+        // Height ratio 2400/1920 = 1.25, so extended should be ~1.25x wider
+        assertEquals(ext916 * 1.25f, ext920, 1f)
+    }
+
+    @Test
+    fun `getExtendedWidth uses screen width for landscape`() {
+        // When screen is wider than height predicts, screen-based wins
+        val ext = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(720f, 400f)
+        // heightBased = 1900.8 * (400/1920) = 395.8, screenBased = 720*1.76 = 1267.2
+        // max(395.8, 1267.2) = 1267.2 (screen-based)
+        assertEquals(720f * 1.76f, ext, 0.01f)
+    }
+
+    @Test
     fun `getHorizontalDensityScale at reference width returns 1`() {
         // Reference extended width = 1920 * 0.5625 * (1 + 2*0.38) = 1080 * 1.76 = 1900.8
         val refExtended = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(1080f, 1920f)

@@ -59,14 +59,24 @@ class LayoutStabilityTest {
     }
 
     @Test
-    fun `horizontal density scale is height independent`() {
-        val extendedA = RenderConstants.getExtendedWidth(1080f, 2400f)
-        val extendedB = RenderConstants.getExtendedWidth(1080f, 1200f)
+    fun `extended width scales proportionally with height for tall screens`() {
+        val extendedTall = RenderConstants.getExtendedWidth(1080f, 2400f)
+        val extendedRef = RenderConstants.getExtendedWidth(1080f, 1920f)
 
-        val scaleA = RenderConstants.getHorizontalDensityScale(extendedA)
-        val scaleB = RenderConstants.getHorizontalDensityScale(extendedB)
+        // Taller screen should have wider extended width (proportional to height ratio)
+        val expectedRatio = 2400f / 1920f  // 1.25
+        assertEquals(expectedRatio, extendedTall / extendedRef, 0.01f)
+    }
 
-        assertEquals(scaleA, scaleB, 0.0001f)
+    @Test
+    fun `extended width uses screen width for short screens`() {
+        // When height is small, screen-based width takes over
+        val extendedShort = RenderConstants.getExtendedWidth(1080f, 800f)
+        val extendedRef = RenderConstants.getExtendedWidth(1080f, 1920f)
+
+        // At 800px height: heightBased = 1900.8 * (800/1920) = 792 < screenBased = 1900.8
+        // So screen-based wins, giving the same result as reference
+        assertEquals(extendedRef, extendedShort, 0.01f)
     }
 
     @Test
