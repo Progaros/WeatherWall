@@ -131,6 +131,11 @@ class ParallaxScene(
             terrainLayer.getHillYAtPosition(xRatio, depthFactor)
         }
         
+        // Set up hill info provider so events snap to actual hill depths for correct draw ordering
+        randomEventLayer.hillInfoProvider = { _, requestedDepthFactor ->
+            terrainLayer.getHillInfoAtPosition(0.5f, requestedDepthFactor).second
+        }
+        
         // Wire river layer to terrain data so water flows through valleys
         riverLayer.terrainYProvider = { xRatio, depthFactor ->
             terrainLayer.getHillYAtPosition(xRatio, depthFactor)

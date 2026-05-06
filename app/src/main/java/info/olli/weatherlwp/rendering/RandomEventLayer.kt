@@ -57,6 +57,12 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
      */
     var hillHeightProvider: HillHeightProvider? = null
     
+    /**
+     * Hill info provider that returns the actual hill depthFactor for a given requested depth.
+     * Used to snap event depth to actual hill layers for correct draw ordering.
+     */
+    var hillInfoProvider: ((xRatio: Float, requestedDepthFactor: Float) -> Float)? = null
+    
     // Reusable ground-event entries to avoid per-frame Pair/lambda allocation.
     private val groundEventResults = ArrayList<TerrainLayer.GroundEventDrawEntry>(32)
     private val groundEventEntryPool = ArrayList<GroundEventDrawEntryImpl>(32)
@@ -403,14 +409,17 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         )
         
         for (event in currentEvents) {
-            if (event.layer == EventLayer.GROUND && 
-                event.depthFactor >= minDepth && event.depthFactor < maxDepth) {
-                try {
-                    event.draw(canvas, paint, strokePaint, parallaxCalculator, extendedWidth, height, 
-                        state.timeSeconds, ambientColor, extendedOffset, state.absoluteTimeMs,
-                        hillHeightProvider)
-                } catch (e: Exception) {
-                    android.util.Log.e("RandomEventLayer", "Error drawing event ${event.javaClass.simpleName}", e)
+            if (event.layer == EventLayer.GROUND) {
+                val effectiveDepth = hillInfoProvider?.invoke(0.5f, event.depthFactor)
+                    ?: event.depthFactor
+                if (effectiveDepth >= minDepth && effectiveDepth < maxDepth) {
+                    try {
+                        event.draw(canvas, paint, strokePaint, parallaxCalculator, extendedWidth, height, 
+                            state.timeSeconds, ambientColor, extendedOffset, state.absoluteTimeMs,
+                            hillHeightProvider)
+                    } catch (e: Exception) {
+                        android.util.Log.e("RandomEventLayer", "Error drawing event ${event.javaClass.simpleName}", e)
+                    }
                 }
             }
         }
@@ -448,14 +457,18 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         var resultCount = 0
         
         for (event in currentEvents) {
-            if (event.layer == EventLayer.GROUND && 
-                event.depthFactor >= minDepth && event.depthFactor < maxDepth) {
-                // Get the event's current Y position for depth sorting
-                val eventY = event.getCurrentYRatio(groundDrawAbsoluteTimeMs, hillHeightProvider)
-                val entry = groundEventEntryPool[resultCount]
-                entry.bind(event, eventY)
-                result.add(entry)
-                resultCount++
+            if (event.layer == EventLayer.GROUND) {
+                // Snap event's depthFactor to the actual hill it visually sits on
+                val effectiveDepth = hillInfoProvider?.invoke(0.5f, event.depthFactor)
+                    ?: event.depthFactor
+                if (effectiveDepth >= minDepth && effectiveDepth < maxDepth) {
+                    // Get the event's current Y position for depth sorting
+                    val eventY = event.getCurrentYRatio(groundDrawAbsoluteTimeMs, hillHeightProvider)
+                    val entry = groundEventEntryPool[resultCount]
+                    entry.bind(event, eventY)
+                    result.add(entry)
+                    resultCount++
+                }
             }
         }
 

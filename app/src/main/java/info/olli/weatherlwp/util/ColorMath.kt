@@ -30,4 +30,31 @@ object ColorMath {
 
         return (a shl 24) or (nr shl 16) or (ng shl 8) or nb
     }
+
+    /**
+     * Darken an RGB color by a multiplicative factor.
+     * Alpha channel is preserved. Factor of 1.0 = no change, 0.0 = black.
+     */
+    fun darkenColor(color: Int, factor: Float = 0.65f): Int {
+        val a = (color ushr 24) and 0xFF
+        val r = ((color ushr 16) and 0xFF) * factor
+        val g = ((color ushr 8) and 0xFF) * factor
+        val b = (color and 0xFF) * factor
+        return (a shl 24) or
+            (r.toInt().coerceIn(0, 255) shl 16) or
+            (g.toInt().coerceIn(0, 255) shl 8) or
+            b.toInt().coerceIn(0, 255)
+    }
+
+    /**
+     * Quantize a color to 5-bit per channel precision (32 levels per channel).
+     * Useful for reducing cache misses on gradient lookups.
+     */
+    fun quantizeColor(color: Int): Int {
+        val a = (color ushr 24) and 0xFF
+        val r = (color ushr 16) and 0xF8
+        val g = (color ushr 8) and 0xF8
+        val b = color and 0xF8
+        return (a shl 24) or (r shl 16) or (g shl 8) or b
+    }
 }

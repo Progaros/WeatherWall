@@ -12,6 +12,7 @@ import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
+import info.olli.weatherlwp.util.ColorMath
 import info.olli.weatherlwp.util.SeasonHelper
 import kotlin.math.sin
 import kotlin.random.Random
@@ -206,19 +207,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         reloadSettings()
     }
     
-    /**
-     * Determines current terrain season based on date or override setting.
-     * Returns: "spring" (Mar-May), "summer" (Jun-Aug), "autumn" (Sep-Nov), "winter" (Dec-Feb)
-     * 
-     * Delegates to centralized SeasonHelper for consistency with MountainLayer.
-     */
-    private fun getCurrentTerrainSeason(): String {
-        return if (terrainSeasonOverride != "auto") {
-            terrainSeasonOverride
-        } else {
-            SeasonHelper.getCurrentCalendarSeasonKey()
-        }
-    }
+
 
     // Pseudo-random hash function for value noise
     private fun hash(n: Int): Float {
@@ -239,14 +228,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         return h1 + t * (h2 - h1)
     }
 
-    // Darken a color for gradient shading
-    private fun darkenColor(color: Int, factor: Float = 0.65f): Int {
-        return Color.rgb(
-            (Color.red(color) * factor).toInt().coerceIn(0, 255),
-            (Color.green(color) * factor).toInt().coerceIn(0, 255),
-            (Color.blue(color) * factor).toInt().coerceIn(0, 255)
-        )
-    }
+    private fun darkenColor(color: Int, factor: Float = 0.65f): Int = ColorMath.darkenColor(color, factor)
     
     // Blend color towards brown for autumn
     private fun autumnColor(color: Int, intensity: Float): Int {
@@ -1113,6 +1095,17 @@ class TerrainLayer(private val context: Context) : SceneLayer {
 
     override fun reloadSettings(settings: SimulationSettings) {
         
+        // Track previous structural values to detect changes
+        val prevSeed = randomSeed
+        val prevHillCount = hillCount
+        val prevStartY = hillStartY
+        val prevEndY = hillEndY
+        val prevRoughness = hillRoughness
+        val prevAmplitude = hillAmplitude
+        val prevFrequency = hillFrequency
+        val prevDistance = hillDistance
+        val prevSpread = hillDepthSpread
+        
         // Random seed for consistent placement
         randomSeed = settings.getInt("pref_random_seed", 42)
         
@@ -1173,8 +1166,21 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         treeRenderer.reloadSettings(settings)
         bushRenderer.reloadSettings(settings)
         
-        android.util.Log.d("TerrainLayer", "Reloaded: hills=$hillCount, freq=$hillFrequency, amp=$hillAmplitude, dist=$hillDistance, spread=$hillDepthSpread")
-        generateTerrain()
+        // Only regenerate terrain when structural settings change (expensive operation)
+        val structuralChanged = prevSeed != randomSeed ||
+            prevHillCount != hillCount ||
+            prevStartY != hillStartY ||
+            prevEndY != hillEndY ||
+            kotlin.math.abs(prevRoughness - hillRoughness) > 0.001f ||
+            kotlin.math.abs(prevAmplitude - hillAmplitude) > 0.001f ||
+            kotlin.math.abs(prevFrequency - hillFrequency) > 0.001f ||
+            kotlin.math.abs(prevDistance - hillDistance) > 0.001f ||
+            kotlin.math.abs(prevSpread - hillDepthSpread) > 0.001f
+        
+        if (structuralChanged) {
+            android.util.Log.d("TerrainLayer", "Reloaded: hills=$hillCount, freq=$hillFrequency, amp=$hillAmplitude, dist=$hillDistance, spread=$hillDepthSpread")
+            generateTerrain()
+        }
     }
 
     override fun destroy() {

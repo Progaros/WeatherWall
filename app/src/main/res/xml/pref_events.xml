@@ -4,11 +4,12 @@
 
     <!-- Events - Essential toggles only, details in sub-screens -->
     <PreferenceCategory android:title="Random Events">
-        <SwitchPreferenceCompat
+        <info.olli.weatherlwp.settings.ToggleNavPreference
             android:key="pref_events_enabled"
-            android:title="Enable Events"
+            android:title="Random Events"
             android:summary="Birds, planes, animals, and more"
-            android:defaultValue="true" />
+            android:defaultValue="true"
+            app:fragment="info.olli.weatherlwp.settings.EventsChooseFragment" />
 
         <SeekBarPreference
             android:key="pref_event_frequency"
@@ -26,39 +27,23 @@
             android:title="Spawn Random Event"
             android:summary="Manually trigger a random enabled event"
             android:dependency="pref_events_enabled" />
-
-        <Preference
-            android:key="pref_nav_choose_events"
-            android:title="Choose Events"
-            android:summary="Enable/disable individual event types"
-            app:fragment="info.olli.weatherlwp.settings.EventsChooseFragment" />
     </PreferenceCategory>
 
     <PreferenceCategory android:title="Seasonal Events">
-        <SwitchPreferenceCompat
+        <info.olli.weatherlwp.settings.ToggleNavPreference
             android:key="pref_seasonal_enabled"
-            android:title="Enable Seasonal"
-            android:summary="Holiday effects (Christmas, New Year, etc.)"
-            android:defaultValue="true" />
-
-        <Preference
-            android:key="pref_nav_seasonal"
-            android:title="Seasonal Details"
+            android:title="Seasonal Effects"
             android:summary="Christmas, New Year, St. Patrick's settings"
+            android:defaultValue="true"
             app:fragment="info.olli.weatherlwp.settings.EventsSeasonalFragment" />
     </PreferenceCategory>
 
     <PreferenceCategory android:title="Shake Gesture">
-        <SwitchPreferenceCompat
+        <info.olli.weatherlwp.settings.ToggleNavPreference
             android:key="pref_shake_fireworks_enabled"
             android:title="Shake for Fireworks"
-            android:summary="Shake phone 3 times to launch fireworks"
-            android:defaultValue="true" />
-
-        <Preference
-            android:key="pref_nav_shake"
-            android:title="Shake Settings"
             android:summary="Firework count, sensitivity, delay"
+            android:defaultValue="true"
             app:fragment="info.olli.weatherlwp.settings.EventsShakeFragment" />
     </PreferenceCategory>
 

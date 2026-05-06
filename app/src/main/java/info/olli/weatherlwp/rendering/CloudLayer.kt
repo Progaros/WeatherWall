@@ -199,10 +199,10 @@ class CloudLayer(private val context: Context) : SceneLayer {
         
         // Hard cap on bitmap dimensions to avoid GPU texture limits
         // REDUCED for performance: smaller max = less GPU work
-        const val MAX_BITMAP_DIMENSION = 800
+        const val MAX_BITMAP_DIMENSION = 512
         
-        // Max groups for overcast conditions (increased to support full sky coverage)
-        const val MAX_GROUPS = 50
+        // Max groups for overcast conditions
+        const val MAX_GROUPS = 30
     }
     
     init {
@@ -471,13 +471,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         return effect
     }
 
-    private fun quantizeCloudTintColor(color: Int): Int {
-        val a = Color.alpha(color)
-        val r = Color.red(color) and 0xF8
-        val g = Color.green(color) and 0xF8
-        val b = Color.blue(color) and 0xF8
-        return Color.argb(a, r, g, b)
-    }
+    private fun quantizeCloudTintColor(color: Int): Int = ColorMath.quantizeColor(color)
 
     private fun clearGroupBitmaps() {
         for (group in cloudGroups) {
@@ -637,11 +631,10 @@ class CloudLayer(private val context: Context) : SceneLayer {
      * to prevent frame stutters during allocation/blur operations.
      */
     private fun drawCachedMode(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
-        // Cloud count from weather, scaled by visible sky area.
-        // On tall screens or wide extended canvases, the sky area is proportionally larger,
-        // so we need more cloud groups to maintain density.
-        val skyAreaRatio = (extendedWidth / width) * (height / 1920f)  // Normalize to reference 1080×1920
-        val areaScale = skyAreaRatio.coerceIn(1.0f, 3.0f)
+        // Cloud count from weather, scaled modestly by visible area.
+        // Keep scaling conservative to avoid excessive bitmap rendering.
+        val skyAreaRatio = (extendedWidth / width) * (height / 1920f)
+        val areaScale = skyAreaRatio.coerceIn(1.0f, 1.5f)
         val baseCount = state.getCloudCount()
         val targetCount = (baseCount * areaScale).toInt().coerceIn(0, MAX_GROUPS)
         
@@ -699,6 +692,11 @@ class CloudLayer(private val context: Context) : SceneLayer {
 
             val groupWidthPx = (group.groupWidth * minDim).toInt()
                 .coerceIn(50, MAX_BITMAP_DIMENSION)
+
+            // Viewport culling: skip clouds entirely off-screen
+            val halfW = groupWidthPx * 0.7f  // approximate with padding
+            if (screenX + halfW < 0f || screenX - halfW > width) continue
+            if (screenY + groupWidthPx * 0.5f < 0f || screenY - groupWidthPx * 0.5f > height) continue
             // Scale cloud height with screen height so they fill tall sky areas
             val heightRef = maxOf(minDim, height * 0.5f)
             val groupHeightPx = (group.groupHeight * heightRef).toInt()
@@ -766,6 +764,12 @@ class CloudLayer(private val context: Context) : SceneLayer {
 
             val groupWidthPx = (group.groupWidth * minDim).toInt()
                 .coerceIn(50, MAX_BITMAP_DIMENSION)
+
+            // Viewport culling: skip clouds entirely off-screen
+            val halfW = groupWidthPx * 0.7f
+            if (screenX + halfW < 0f || screenX - halfW > width) continue
+            if (screenY + groupWidthPx * 0.5f < 0f || screenY - groupWidthPx * 0.5f > height) continue
+
             val heightRef = maxOf(minDim, height * 0.5f)
             val groupHeightPx = (group.groupHeight * heightRef).toInt()
                 .coerceIn(30, MAX_BITMAP_DIMENSION)
@@ -1107,7 +1111,6 @@ class CloudLayer(private val context: Context) : SceneLayer {
         
         // Detect changes that require regeneration
         val stretchChanged = kotlin.math.abs(newStretch - cloudStretch) > 0.01f
-        val opacityChanged = kotlin.math.abs(newOpacity - cloudOpacity) > 0.01f
         cloudStretch = newStretch
         cloudOpacity = newOpacity
         
@@ -1118,8 +1121,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
             clearGroupRenderNodes()
             resetRenderNodeEffects()
             cloudGroups = emptyList()
-        } else if (enabledChanged || stretchChanged || seedChanged || opacityChanged || fluffinessChanged) {
-            // Invalidate cached cloud resources when settings change
+        } else if (enabledChanged || stretchChanged || seedChanged || fluffinessChanged) {
+            // Invalidate cached cloud resources when structural settings change
+            // Note: opacity is applied at draw time, no bitmap regeneration needed
             clearGroupBitmaps()
             clearGroupRenderNodes()
             resetRenderNodeEffects()

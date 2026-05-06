@@ -11,6 +11,7 @@ import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
+import info.olli.weatherlwp.util.ColorMath
 import info.olli.weatherlwp.util.SeasonHelper
 import kotlin.random.Random
 
@@ -105,17 +106,8 @@ class MountainLayer(private val context: Context) : SceneLayer {
         reloadSettings()
     }
     
-    /**
-     * Determines current terrain season based on date or override setting.
-     * Delegates to centralized SeasonHelper for consistency with TerrainLayer.
-     */
-    private fun getCurrentTerrainSeason(): String {
-        return if (terrainSeasonOverride != "auto") {
-            terrainSeasonOverride
-        } else {
-            SeasonHelper.getCurrentCalendarSeasonKey()
-        }
-    }
+    private fun getCurrentTerrainSeason(): String =
+        SeasonHelper.getEffectiveTerrainSeasonKey(true, terrainSeasonOverride)
 
     private fun ambientColorBucket(color: Int): Int {
         val r = Color.red(color) shr 3
@@ -124,13 +116,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
         return (r shl 10) or (g shl 5) or b
     }
 
-    private fun quantizeAmbientColor(color: Int): Int {
-        val a = Color.alpha(color)
-        val r = Color.red(color) and 0xF8
-        val g = Color.green(color) and 0xF8
-        val b = Color.blue(color) and 0xF8
-        return Color.argb(a, r, g, b)
-    }
+    private fun quantizeAmbientColor(color: Int): Int = ColorMath.quantizeColor(color)
     
     private fun generateMountains() {
         // Calculate mountain count from density and extended width

@@ -105,4 +105,96 @@ class ColorMathTest {
         assertTrue("Red darkened", red(result) < red(original))
         assertTrue("Still visible", red(result) > 80)
     }
+
+    // ---- darkenColor tests ----
+
+    @Test
+    fun `darkenColor with factor 1 returns same color`() {
+        val original = argb(255, 100, 150, 200)
+        val result = ColorMath.darkenColor(original, 1.0f)
+        assertEquals(red(original), red(result))
+        assertEquals(green(original), green(result))
+        assertEquals(blue(original), blue(result))
+    }
+
+    @Test
+    fun `darkenColor with default factor darkens to 65 percent`() {
+        val original = argb(255, 200, 200, 200)
+        val result = ColorMath.darkenColor(original)
+        assertEquals(130, red(result))
+        assertEquals(130, green(result))
+        assertEquals(130, blue(result))
+    }
+
+    @Test
+    fun `darkenColor preserves alpha`() {
+        val original = argb(128, 200, 200, 200)
+        val result = ColorMath.darkenColor(original, 0.5f)
+        assertEquals(128, alpha(result))
+    }
+
+    @Test
+    fun `darkenColor with factor 0 returns black`() {
+        val original = argb(255, 200, 150, 100)
+        val result = ColorMath.darkenColor(original, 0.0f)
+        assertEquals(0, red(result))
+        assertEquals(0, green(result))
+        assertEquals(0, blue(result))
+        assertEquals(255, alpha(result))
+    }
+
+    @Test
+    fun `darkenColor clamps channels to valid range`() {
+        val bright = argb(255, 255, 255, 255)
+        val result = ColorMath.darkenColor(bright, 0.7f)
+        assertTrue(red(result) in 0..255)
+        assertTrue(green(result) in 0..255)
+        assertTrue(blue(result) in 0..255)
+    }
+
+    // ---- quantizeColor tests ----
+
+    @Test
+    fun `quantizeColor masks lower 3 bits of each channel`() {
+        // 0xFF = 11111111, masked with 0xF8 = 11111000 -> 0xF8 = 248
+        val color = argb(255, 0xFF, 0xFF, 0xFF)
+        val result = ColorMath.quantizeColor(color)
+        assertEquals(248, red(result))
+        assertEquals(248, green(result))
+        assertEquals(248, blue(result))
+    }
+
+    @Test
+    fun `quantizeColor preserves alpha`() {
+        val color = argb(128, 100, 150, 200)
+        val result = ColorMath.quantizeColor(color)
+        assertEquals(128, alpha(result))
+    }
+
+    @Test
+    fun `quantizeColor rounds down to 8-step boundaries`() {
+        // 107 = 01101011, masked = 01101000 = 104
+        val color = argb(255, 107, 107, 107)
+        val result = ColorMath.quantizeColor(color)
+        assertEquals(104, red(result))
+        assertEquals(104, green(result))
+        assertEquals(104, blue(result))
+    }
+
+    @Test
+    fun `quantizeColor zero stays zero`() {
+        val color = argb(255, 0, 0, 0)
+        val result = ColorMath.quantizeColor(color)
+        assertEquals(0, red(result))
+        assertEquals(0, green(result))
+        assertEquals(0, blue(result))
+    }
+
+    @Test
+    fun `quantizeColor is idempotent`() {
+        val color = argb(255, 123, 234, 56)
+        val once = ColorMath.quantizeColor(color)
+        val twice = ColorMath.quantizeColor(once)
+        assertEquals(once, twice)
+    }
 }

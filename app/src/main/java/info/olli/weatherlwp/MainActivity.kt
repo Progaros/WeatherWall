@@ -47,7 +47,7 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
         // Match wallpaper FPS (30) for consistent parallax preview
         private const val TARGET_FPS = 30
         private const val FRAME_TIME_MS = 1000L / TARGET_FPS
-        private const val PREF_RELOAD_THROTTLE_MS = 100L  // Max 10 reloads per second
+        private const val PREF_RELOAD_THROTTLE_MS = 150L  // Max ~7 reloads per second
         
         // Preview resize constants
         private const val PREVIEW_HEIGHT_MIN_DP = 80
@@ -174,6 +174,15 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
             override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
                 Log.d(TAG, "Preview surface changed: ${width}x${height}, format=$format")
                 surfaceHolder = holder
+                // Cap rendering resolution to avoid performance issues on large previews.
+                // Max 720px wide, height scaled proportionally to maintain aspect ratio.
+                val maxWidth = 720
+                if (width > maxWidth) {
+                    val scale = maxWidth.toFloat() / width
+                    val scaledHeight = (height * scale).toInt()
+                    holder.setFixedSize(maxWidth, scaledHeight)
+                    Log.d(TAG, "Capped preview resolution to ${maxWidth}x${scaledHeight}")
+                }
                 // Reload settings when surface changes to ensure proper rendering
                 previewScene?.loadPrefs()
             }

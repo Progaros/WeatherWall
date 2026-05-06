@@ -95,15 +95,7 @@ object SeasonHelper {
     /**
      * Get the current calendar-based terrain season.
      */
-    fun getCurrentCalendarSeason(): TerrainSeason {
-        val cal = Calendar.getInstance()
-        return when (cal.get(Calendar.MONTH)) {
-            Calendar.MARCH, Calendar.APRIL, Calendar.MAY -> TerrainSeason.SPRING
-            Calendar.JUNE, Calendar.JULY, Calendar.AUGUST -> TerrainSeason.SUMMER
-            Calendar.SEPTEMBER, Calendar.OCTOBER, Calendar.NOVEMBER -> TerrainSeason.AUTUMN
-            else -> TerrainSeason.WINTER // Dec, Jan, Feb
-        }
-    }
+    fun getCurrentCalendarSeason(): TerrainSeason = getSeasonForDate(Calendar.getInstance())
     
     /**
      * Get the current calendar-based terrain season as a string key.
@@ -207,7 +199,7 @@ object SeasonHelper {
     /**
      * Get season for a specific date.
      */
-    private fun getSeasonForDate(cal: Calendar): TerrainSeason {
+    fun getSeasonForDate(cal: Calendar): TerrainSeason {
         return when (cal.get(Calendar.MONTH)) {
             Calendar.MARCH, Calendar.APRIL, Calendar.MAY -> TerrainSeason.SPRING
             Calendar.JUNE, Calendar.JULY, Calendar.AUGUST -> TerrainSeason.SUMMER

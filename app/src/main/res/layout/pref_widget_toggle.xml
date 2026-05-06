@@ -1,10 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Switch widget for ToggleNavPreference: clickable independently from text area -->
-<androidx.appcompat.widget.SwitchCompat
+<LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/toggle_switch"
     android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
-    android:focusable="true"
-    android:clickable="true"
-    android:background="@null" />
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:gravity="center_vertical">
+
+    <!-- Vertical separator line -->
+    <View
+        android:layout_width="1dp"
+        android:layout_height="32dp"
+        android:layout_marginEnd="12dp"
+        android:background="?android:attr/listDivider" />
+
+    <androidx.appcompat.widget.SwitchCompat
+        android:id="@+id/toggle_switch"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:focusable="true"
+        android:clickable="true"
+        android:background="@null" />
+
+</LinearLayout>

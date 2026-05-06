@@ -32,30 +32,20 @@
             android:entryValues="@array/fps_values"
             android:defaultValue="30" />
 
-        <SwitchPreferenceCompat
+        <info.olli.weatherlwp.settings.ToggleNavPreference
             android:key="pref_idle_mode_enabled"
             android:title="Idle Mode"
-            android:summary="Reduce FPS when scene is static (battery saver)"
-            android:defaultValue="true" />
-
-        <Preference
-            android:key="pref_nav_idle"
-            android:title="Idle Settings"
             android:summary="Idle FPS, timeout duration"
+            android:defaultValue="true"
             app:fragment="info.olli.weatherlwp.settings.SystemIdleFragment" />
     </PreferenceCategory>
 
     <PreferenceCategory android:title="Testing">
-        <SwitchPreferenceCompat
+        <info.olli.weatherlwp.settings.ToggleNavPreference
             android:key="pref_debug_enabled"
-            android:title="Enable Simulation"
-            android:summary="Override weather, time, wind for testing"
-            android:defaultValue="false" />
-
-        <Preference
-            android:key="pref_nav_simulation"
             android:title="Simulation Mode"
             android:summary="Time, wind, weather, season overrides"
+            android:defaultValue="false"
             app:fragment="info.olli.weatherlwp.settings.SystemSimulationFragment" />
 
         <Preference

@@ -11,8 +11,8 @@ android {
         applicationId = "info.olli.weatherlwp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 177
-        versionName = "1.17.7"
+        versionCode = 178
+        versionName = "1.18.0"
     }
 
     buildFeatures {
@@ -66,4 +66,59 @@ dependencies {
     testImplementation("org.mockito:mockito-core:5.8.0")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.2.1")
     testImplementation("org.robolectric:robolectric:4.14.1")
+}
+
+// PIT Mutation Testing - runs against debug unit test classes
+// Usage: ./gradlew pitest
+configurations.create("pitest")
+dependencies {
+    "pitest"("org.pitest:pitest-command-line:1.17.4")
+    "pitest"("org.pitest:pitest-entry:1.17.4")
+}
+
+tasks.register<JavaExec>("pitest") {
+    dependsOn("testDebugUnitTest")
+    group = "verification"
+    description = "Run PIT mutation testing"
+    
+    mainClass.set("org.pitest.mutationtest.commandline.MutationCoverageReport")
+    classpath = configurations["pitest"]
+    
+    doFirst {
+        val buildDir = layout.buildDirectory.get().asFile
+        val runtimeCp = configurations["debugUnitTestRuntimeClasspath"].resolve().joinToString(",")
+        
+        val appClassesDirs = listOf(
+            File(buildDir, "tmp/kotlin-classes/debug"),
+            File(buildDir, "intermediates/javac/debug/classes")
+        ).filter { it.exists() }
+        
+        val testClassesDirs = listOf(
+            File(buildDir, "tmp/kotlin-classes/debugUnitTest")
+        ).filter { it.exists() }
+        
+        val allClasspath = (appClassesDirs + testClassesDirs).joinToString(",") { it.absolutePath } +
+            "," + runtimeCp +
+            ",/opt/android-sdk-linux/platforms/android-35/android.jar"
+        
+        // Log classpath for debugging
+        appClassesDirs.forEach { dir ->
+            logger.lifecycle("PIT app classes: ${dir.absolutePath} (exists=${dir.exists()}, files=${dir.walkTopDown().filter { it.extension == "class" }.count()})")
+        }
+        testClassesDirs.forEach { dir ->
+            logger.lifecycle("PIT test classes: ${dir.absolutePath} (exists=${dir.exists()}, files=${dir.walkTopDown().filter { it.extension == "class" }.count()})")
+        }
+        
+        setArgs(listOf(
+            "--reportDir", File(buildDir, "reports/pitest").absolutePath,
+            "--targetClasses", "info.olli.weatherlwp.rendering.*,info.olli.weatherlwp.simulation.*,info.olli.weatherlwp.util.*,info.olli.weatherlwp.parallax.*,info.olli.weatherlwp.weather.*",
+            "--targetTests", "info.olli.weatherlwp.*",
+            "--sourceDirs", file("src/main/java").absolutePath,
+            "--classPath", allClasspath,
+            "--outputFormats", "HTML,XML",
+            "--threads", "4",
+            "--mutators", "DEFAULTS",
+            "--skipFailingTests"
+        ))
+    }
 }

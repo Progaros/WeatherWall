@@ -7,6 +7,7 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
 import androidx.preference.PreferenceManager
+import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
@@ -36,6 +37,9 @@ class VignetteLayer(private val context: Context) : SceneLayer {
 
     private var width = 0f
     private var height = 0f
+
+    // Master toggle
+    private var vignetteEnabled = true
 
     // Edge settings: distance (0-50% of dimension), fade (5-50%), alpha (0-100%)
     private var topDistance = 0      // 0 = off
@@ -70,7 +74,7 @@ class VignetteLayer(private val context: Context) : SceneLayer {
     }
 
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
-        if (width <= 0 || height <= 0) return
+        if (width <= 0 || height <= 0 || !vignetteEnabled) return
         
         // Rebuild gradients if needed
         if (gradientsDirty) {
@@ -226,6 +230,7 @@ class VignetteLayer(private val context: Context) : SceneLayer {
     }
 
     override fun reloadSettings(settings: SimulationSettings) {
+        vignetteEnabled = settings.getBoolean("pref_vignette_enabled", PreferenceDefaults.VIGNETTE_ENABLED)
         
         // Top edge vignette
         topDistance = settings.getInt("pref_vignette_top_distance", 0).coerceIn(0, 50)

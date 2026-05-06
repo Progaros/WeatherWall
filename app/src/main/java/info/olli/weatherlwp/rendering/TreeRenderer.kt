@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import info.olli.weatherlwp.PreferenceDefaults
+import info.olli.weatherlwp.util.ColorMath
 import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
 import kotlin.math.sin
@@ -178,14 +179,7 @@ class TreeRenderer {
     // Private helpers
     // ========================================================================
 
-    /** Darken a color for gradient shading. */
-    private fun darkenColor(color: Int, factor: Float = 0.65f): Int {
-        return Color.rgb(
-            (Color.red(color) * factor).toInt().coerceIn(0, 255),
-            (Color.green(color) * factor).toInt().coerceIn(0, 255),
-            (Color.blue(color) * factor).toInt().coerceIn(0, 255)
-        )
-    }
+    private fun darkenColor(color: Int, factor: Float = 0.65f): Int = ColorMath.darkenColor(color, factor)
 
     /**
      * Interpolate hill Y at a given xRatio (0-1), same algorithm as TerrainLayer.getHillY().
