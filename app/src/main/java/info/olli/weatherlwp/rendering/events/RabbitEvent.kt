@@ -21,7 +21,7 @@ import kotlin.random.Random
 class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
     override val layer = EventLayer.GROUND
     
-    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.05f)
+    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.03f)
     private val startX = traversal.startX
     private val direction = traversal.direction
     private val size = 0.5f + random.nextFloat() * 0.2f

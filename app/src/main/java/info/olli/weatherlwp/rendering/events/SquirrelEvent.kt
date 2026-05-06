@@ -23,7 +23,7 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
     private val sizeScale = 1.0f - depthValue * 0.3f
     
     // Direction: left or right
-    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.05f)
+    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.03f)
     private val direction = traversal.direction
     private val startX = traversal.startX
     

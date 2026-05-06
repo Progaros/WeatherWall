@@ -36,7 +36,7 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
     private val sizeScale = 1.0f - (depthValue - RenderConstants.PARALLAX_HILLS_MIN) * 0.3f
     
     // Starting position and movement
-    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.15f)
+    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.05f)
     private val startX = traversal.startX
     private val direction = traversal.direction
     

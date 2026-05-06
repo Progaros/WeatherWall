@@ -23,7 +23,7 @@ class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
     private val sizeScale = 1.0f - distance * 0.4f  // 0.68-1.0 based on distance
     
     // Spawn fully off-screen and cross the full viewport before expiring.
-    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.12f)
+    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.04f)
     private val startY = 0.30f + random.nextFloat() * 0.18f  // 0.30-0.48: above terrain, visible in MID_SKY layer
     private val travelSpeed = 0.000028f + random.nextFloat() * 0.000016f
     override val durationMs = EventTraversal.durationMsForPath(

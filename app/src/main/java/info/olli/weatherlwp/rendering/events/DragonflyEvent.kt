@@ -21,7 +21,7 @@ class DragonflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
     private val distance = 0.3f + random.nextFloat() * 0.4f
     private val sizeScale = 1.0f - distance * 0.4f
     
-    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.10f)
+    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.04f)
     private val direction = traversal.direction
     private val startY = 0.50f + random.nextFloat() * 0.20f  // Lower in the sky, near plants
     private val travelSpeed = 0.000035f + random.nextFloat() * 0.000018f

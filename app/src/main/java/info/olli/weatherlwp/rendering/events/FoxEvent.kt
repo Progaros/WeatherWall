@@ -22,7 +22,7 @@ import kotlin.random.Random
 class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
     override val layer = EventLayer.GROUND
     
-    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.1f)
+    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.04f)
     private val startX = traversal.startX
     private val direction = traversal.direction
     private val size = 0.7f + random.nextFloat() * 0.3f

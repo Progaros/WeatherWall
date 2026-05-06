@@ -121,7 +121,7 @@ class EventPreviewView @JvmOverloads constructor(
             val r = (15 + (100 - 15) * t).toInt()
             val g = (15 + (180 - 15) * t).toInt()
             val b = (35 + (235 - 35) * t).toInt()
-            return Color.argb(55, r, g, b)
+            return Color.argb(140, r, g, b)
         }
 
     override fun onAttachedToWindow() {
@@ -241,25 +241,25 @@ class EventPreviewView @JvmOverloads constructor(
 
     private fun getFraming(type: EventType): PreviewFraming {
         val smallScale = when (type) {
-            EventType.DEER -> 0.30f
-            EventType.FOX -> 0.32f
-            EventType.RABBIT -> 0.34f
-            EventType.SQUIRREL -> 0.34f
-            EventType.DUCK -> 0.36f
-            EventType.FROG -> 0.37f
-            EventType.FISH -> 0.38f
-            EventType.BAT -> 0.35f
-            EventType.AIRPLANE -> 0.33f
-            EventType.BIRDS -> 0.35f
-            EventType.EAGLE -> 0.34f
-            EventType.OWL -> 0.34f
-            EventType.BALLOON -> 0.34f
-            EventType.SHOOTING_STAR -> 0.36f
-            EventType.UFO -> 0.34f
-            EventType.BUTTERFLY -> 0.36f
-            EventType.DRAGONFLY -> 0.35f
-            EventType.FIREFLIES -> 0.38f
-            EventType.SNOWFLAKE -> 0.40f
+            EventType.DEER -> 0.55f
+            EventType.FOX -> 0.58f
+            EventType.RABBIT -> 0.60f
+            EventType.SQUIRREL -> 0.60f
+            EventType.DUCK -> 0.62f
+            EventType.FROG -> 0.63f
+            EventType.FISH -> 0.65f
+            EventType.BAT -> 0.60f
+            EventType.AIRPLANE -> 0.58f
+            EventType.BIRDS -> 0.60f
+            EventType.EAGLE -> 0.58f
+            EventType.OWL -> 0.58f
+            EventType.BALLOON -> 0.58f
+            EventType.SHOOTING_STAR -> 0.62f
+            EventType.UFO -> 0.58f
+            EventType.BUTTERFLY -> 0.62f
+            EventType.DRAGONFLY -> 0.60f
+            EventType.FIREFLIES -> 0.65f
+            EventType.SNOWFLAKE -> 0.68f
         }
 
         val baseYOffset = when (type) {

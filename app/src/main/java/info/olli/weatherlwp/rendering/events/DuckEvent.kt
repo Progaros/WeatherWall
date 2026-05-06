@@ -17,7 +17,7 @@ import kotlin.random.Random
 class DuckEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
     override val layer = EventLayer.GROUND
 
-    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.08f)
+    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.03f)
     private val startX = traversal.startX
     private val direction = traversal.direction
 

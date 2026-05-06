@@ -516,7 +516,7 @@
 
         <Preference
             android:key="pref_spawn_event"
-            android:title="🎲 Spawn Random Event"
+            android:title="▶ Spawn Random Event"
             android:summary="Manually trigger a random enabled event"
             android:dependency="pref_events_enabled" />
 
