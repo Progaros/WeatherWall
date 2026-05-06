@@ -48,4 +48,22 @@ object VegetationUtil {
 
         return hill.heightOffset + 0.12f * (1f - interpolated)
     }
+
+    /**
+     * Calculate the blending weight for a given season during transitions.
+     * Shared by TerrainLayer, TreeRenderer, and BushRenderer.
+     */
+    fun getSeasonWeight(
+        season: String,
+        currentSeason: String,
+        previousSeason: String,
+        blend: Float
+    ): Float {
+        return when {
+            currentSeason == season && previousSeason == season -> 1f
+            currentSeason == season -> blend
+            previousSeason == season -> 1f - blend
+            else -> 0f
+        }
+    }
 }

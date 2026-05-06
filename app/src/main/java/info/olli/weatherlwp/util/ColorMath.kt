@@ -57,4 +57,15 @@ object ColorMath {
         val b = color and 0xF8
         return (a shl 24) or (r shl 16) or (g shl 8) or b
     }
+
+    /**
+     * Bucket a color into a compact 15-bit key (5 bits per RGB channel).
+     * Used to detect when ambient lighting changes enough to invalidate cached gradients.
+     */
+    fun ambientColorBucket(color: Int): Int {
+        val r = ((color ushr 16) and 0xFF) shr 3
+        val g = ((color ushr 8) and 0xFF) shr 3
+        val b = (color and 0xFF) shr 3
+        return (r shl 10) or (g shl 5) or b
+    }
 }

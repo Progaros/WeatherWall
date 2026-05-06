@@ -110,12 +110,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
     private fun getCurrentTerrainSeason(): String =
         SeasonHelper.getEffectiveTerrainSeasonKey(true, terrainSeasonOverride)
 
-    private fun ambientColorBucket(color: Int): Int {
-        val r = Color.red(color) shr 3
-        val g = Color.green(color) shr 3
-        val b = Color.blue(color) shr 3
-        return (r shl 10) or (g shl 5) or b
-    }
+    private fun ambientColorBucket(color: Int): Int = ColorMath.ambientColorBucket(color)
 
     private fun quantizeAmbientColor(color: Int): Int = ColorMath.quantizeColor(color)
     

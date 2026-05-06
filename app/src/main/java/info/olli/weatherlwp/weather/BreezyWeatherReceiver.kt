@@ -25,6 +25,13 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
         private val executor: ExecutorService = Executors.newSingleThreadExecutor { r ->
             Thread(r, "BreezyWeatherWorker").apply { isDaemon = true }
         }
+
+        /** Convert a temperature that may be in Kelvin or Celsius to Celsius. */
+        fun kelvinOrCelsiusToC(value: Double): Float {
+            return if (!value.isNaN() && value > 100) (value - 273.15).toFloat()
+                   else if (!value.isNaN()) value.toFloat()
+                   else Float.NaN
+        }
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -98,15 +105,9 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
             
             // Breezy Weather via Gadgetbridge sends temperature in Kelvin
             // Convert to Celsius: K - 273.15
-            val tempC = if (!tempK.isNaN() && tempK > 100) (tempK - 273.15).toFloat()
-                       else if (!tempK.isNaN()) tempK.toFloat()  // Already Celsius
-                       else Float.NaN
-            val feelsC = if (!feelsLikeK.isNaN() && feelsLikeK > 100) (feelsLikeK - 273.15).toFloat()
-                        else if (!feelsLikeK.isNaN()) feelsLikeK.toFloat()
-                        else Float.NaN
-            val dewC = if (!dewPointK.isNaN() && dewPointK > 100) (dewPointK - 273.15).toFloat()
-                      else if (!dewPointK.isNaN()) dewPointK.toFloat()
-                      else Float.NaN
+            val tempC = kelvinOrCelsiusToC(tempK)
+            val feelsC = kelvinOrCelsiusToC(feelsLikeK)
+            val dewC = kelvinOrCelsiusToC(dewPointK)
             
             // Extended weather data
             val extendedData = WeatherRepository.ExtendedWeatherData(

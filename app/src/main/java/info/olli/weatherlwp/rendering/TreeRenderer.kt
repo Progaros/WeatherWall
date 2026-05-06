@@ -144,12 +144,7 @@ class TreeRenderer {
      * and intermediate values during transitions into/out of the season.
      */
     fun getSeasonWeight(season: String): Float {
-        return when {
-            cachedSeason == season && cachedPrevSeason == season -> 1f
-            cachedSeason == season -> cachedSeasonBlend        // Transitioning INTO this season
-            cachedPrevSeason == season -> 1f - cachedSeasonBlend  // Transitioning OUT of this season
-            else -> 0f
-        }
+        return VegetationUtil.getSeasonWeight(season, cachedSeason, cachedPrevSeason, cachedSeasonBlend)
     }
 
     /**

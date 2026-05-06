@@ -529,14 +529,9 @@ object RenderConstants {
     }
     
     /**
-     * Linear RGB color interpolation.
+     * Linear RGB color interpolation. Delegates to [lerpColor].
      */
-    fun lerpColorRGB(from: Int, to: Int, t: Float): Int {
-        val r = (Color.red(from) + (Color.red(to) - Color.red(from)) * t).toInt().coerceIn(0, 255)
-        val g = (Color.green(from) + (Color.green(to) - Color.green(from)) * t).toInt().coerceIn(0, 255)
-        val b = (Color.blue(from) + (Color.blue(to) - Color.blue(from)) * t).toInt().coerceIn(0, 255)
-        return Color.rgb(r, g, b)
-    }
+    fun lerpColorRGB(from: Int, to: Int, t: Float): Int = lerpColor(from, to, t)
     
     /**
      * Ease-in-out cubic function for smooth transitions.

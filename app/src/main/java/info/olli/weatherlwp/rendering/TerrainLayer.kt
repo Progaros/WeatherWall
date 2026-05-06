@@ -581,24 +581,14 @@ class TerrainLayer(private val context: Context) : SceneLayer {
      * and intermediate values during transitions into/out of the season.
      */
     private fun getSeasonWeight(season: String): Float {
-        return when {
-            cachedSeason == season && cachedPrevSeason == season -> 1f
-            cachedSeason == season -> cachedSeasonBlend        // Transitioning INTO this season
-            cachedPrevSeason == season -> 1f - cachedSeasonBlend  // Transitioning OUT of this season
-            else -> 0f
-        }
+        return VegetationUtil.getSeasonWeight(season, cachedSeason, cachedPrevSeason, cachedSeasonBlend)
     }
 
     /**
      * Bucket ambient color so gradient cache only refreshes on visible color steps,
      * not every frame during tiny time-of-day transitions.
      */
-    private fun ambientColorBucket(color: Int): Int {
-        val r = Color.red(color) shr 3
-        val g = Color.green(color) shr 3
-        val b = Color.blue(color) shr 3
-        return (r shl 10) or (g shl 5) or b
-    }
+    private fun ambientColorBucket(color: Int): Int = ColorMath.ambientColorBucket(color)
 
     /** Ensure reusable draw-entry buffer can hold this hill's interleaved items. */
     private fun ensureDrawEntryCapacity(required: Int) {

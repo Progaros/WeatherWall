@@ -10,6 +10,7 @@ import android.service.wallpaper.WallpaperService
 import android.util.Log
 import android.view.Choreographer
 import android.view.SurfaceHolder
+import info.olli.weatherlwp.BuildConfig
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationSettingsRepository
@@ -28,6 +29,14 @@ import kotlinx.coroutines.launch
 class WeatherWallpaper : WallpaperService() {
     companion object {
         private const val TAG = "WeatherWallpaper"
+
+        /** Bucket atmosphere phase into discrete categories: 0=night, 1=golden hour, 2=day, 3=blue hour. */
+        private fun bucketAtmospherePhase(phaseVal: Float): Int = when {
+            phaseVal >= 0.5f -> 2
+            phaseVal >= -0.25f -> 1
+            phaseVal >= -0.75f -> 3
+            else -> 0
+        }
     }
 
     override fun onCreateEngine(): Engine = WeatherEngine()
@@ -183,12 +192,7 @@ class WeatherWallpaper : WallpaperService() {
             try {
                 val simState = if (::scene.isInitialized) scene.getSimulationState() else null
                 val phaseVal = simState?.getAtmospherePhase() ?: -1f
-                val phase = when {
-                    phaseVal >= 0.5f -> 2    // day
-                    phaseVal >= -0.25f -> 1  // golden hour (dawn/dusk)
-                    phaseVal >= -0.75f -> 3  // blue hour
-                    else -> 0                // night
-                }
+                val phase = bucketAtmospherePhase(phaseVal)
                 
                 val (primary, secondary, tertiary) = when (phase) {
                     1 -> Triple(  // Dawn
@@ -342,21 +346,22 @@ class WeatherWallpaper : WallpaperService() {
                     }
                     val dt = SystemClock.uptimeMillis() - start
 
-                    // Track performance
-                    frameCount++
-                    totalDrawTimeMs += dt
-                    if (dt > maxFrameTimeMs) maxFrameTimeMs = dt
+                    // Track performance (debug builds only)
+                    if (BuildConfig.DEBUG) {
+                        frameCount++
+                        totalDrawTimeMs += dt
+                        if (dt > maxFrameTimeMs) maxFrameTimeMs = dt
 
-                    // Log performance stats every 5 seconds
-                    if (start - lastLogTime > 5000) {
-                        val avgFrameMs = if (frameCount > 0) totalDrawTimeMs / frameCount else 0
-                        val actualFps = if (avgFrameMs > 0) 1000 / avgFrameMs else 0
-                        val idleInfo = if (isIdle) " (IDLE)" else ""
-                        Log.d(TAG, "Perf: ${frameCount} frames, avg=${avgFrameMs}ms, max=${maxFrameTimeMs}ms, ~${actualFps}fps$idleInfo")
-                        frameCount = 0L
-                        totalDrawTimeMs = 0L
-                        maxFrameTimeMs = 0L
-                        lastLogTime = start
+                        if (start - lastLogTime > 5000) {
+                            val avgFrameMs = if (frameCount > 0) totalDrawTimeMs / frameCount else 0
+                            val actualFps = if (avgFrameMs > 0) 1000 / avgFrameMs else 0
+                            val idleInfo = if (isIdle) " (IDLE)" else ""
+                            Log.d(TAG, "Perf: ${frameCount} frames, avg=${avgFrameMs}ms, max=${maxFrameTimeMs}ms, ~${actualFps}fps$idleInfo")
+                            frameCount = 0L
+                            totalDrawTimeMs = 0L
+                            maxFrameTimeMs = 0L
+                            lastLogTime = start
+                        }
                     }
 
                     lastDrawFrameNanos = frameTimeNanos
@@ -414,12 +419,7 @@ class WeatherWallpaper : WallpaperService() {
                     val state = scene.getSimulationState()
                     // Bucket: -1=night, -0.5=blue hour, 0=golden hour, 1=day
                     val phaseVal = state?.getAtmospherePhase() ?: -1f
-                    val currentPhase = when {
-                        phaseVal >= 0.5f -> 2    // day
-                        phaseVal >= -0.25f -> 1  // golden hour (dawn/dusk)
-                        phaseVal >= -0.75f -> 3  // blue hour (dusk/dawn)
-                        else -> 0                // night
-                    }
+                    val currentPhase = bucketAtmospherePhase(phaseVal)
                     if (currentPhase != lastAtmospherePhase && lastAtmospherePhase >= 0) {
                         notifyColorsChanged()
                     }

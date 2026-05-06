@@ -47,7 +47,9 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     // Extended canvas dimensions for parallax content
     private var extendedWidth = 0f
     private var extendedOffset = 0f
-    
+
+    // Cached per-frame ambient color (computed in update, used by multiple draw methods)
+    private var cachedAmbientColor = 0
     private var eventsEnabled = true
     private var spawnChance = 0.001f
     
@@ -189,6 +191,11 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     
     override fun update(state: SimulationState, deltaTimeMs: Long) {
         if (!eventsEnabled || width <= 0) return
+
+        cachedAmbientColor = RenderConstants.getAmbientColor(
+            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
+            state.nightShadeStrength, state.sunriseHours, state.sunsetHours
+        )
         
         // Track if we need to create a new list (only allocate when events actually change)
         var needsListUpdate = false
@@ -371,10 +378,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         val currentEvents = events
         if (currentEvents.isEmpty()) return
         
-        val ambientColor = RenderConstants.getAmbientColor(
-            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
-            state.nightShadeStrength, state.sunriseHours, state.sunsetHours
-        )
+        val ambientColor = cachedAmbientColor
         
         for (event in currentEvents) {
             if (event.layer == EventLayer.GROUND && event.depthFactor < maxDepth) {
@@ -403,10 +407,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         val currentEvents = events
         if (currentEvents.isEmpty()) return
         
-        val ambientColor = RenderConstants.getAmbientColor(
-            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
-            state.nightShadeStrength, state.sunriseHours, state.sunsetHours
-        )
+        val ambientColor = cachedAmbientColor
         
         for (event in currentEvents) {
             if (event.layer == EventLayer.GROUND) {
@@ -437,10 +438,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         val currentEvents = events
         if (currentEvents.isEmpty()) return emptyList()
         
-        val ambientColor = RenderConstants.getAmbientColor(
-            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
-            state.nightShadeStrength, state.sunriseHours, state.sunsetHours
-        )
+        val ambientColor = cachedAmbientColor
         
         val result = groundEventResults
         result.clear()
@@ -495,10 +493,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         val currentEvents = events
         if (currentEvents.isEmpty()) return
         
-        val ambientColor = RenderConstants.getAmbientColor(
-            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
-            state.nightShadeStrength, state.sunriseHours, state.sunsetHours
-        )
+        val ambientColor = cachedAmbientColor
         
         for (event in currentEvents) {
             if (event.layer == EventLayer.GROUND && event.depthFactor >= minDepth) {
@@ -520,10 +515,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         val currentEvents = events
         if (currentEvents.isEmpty()) return
         
-        val ambientColor = RenderConstants.getAmbientColor(
-            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
-            state.nightShadeStrength, state.sunriseHours, state.sunsetHours
-        )
+        val ambientColor = cachedAmbientColor
         
         for (event in currentEvents) {
             if (event.layer == targetLayer) {
