@@ -12,6 +12,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
+import android.view.Choreographer
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
@@ -46,7 +47,6 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
         private const val TAG = "MainActivity"
         // Match wallpaper FPS (30) for consistent parallax preview
         private const val TARGET_FPS = 30
-        private const val FRAME_TIME_MS = 1000L / TARGET_FPS
         private const val PREF_RELOAD_THROTTLE_MS = 150L  // Max ~7 reloads per second
         
         // Preview resize constants
@@ -70,12 +70,15 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
     // Dependencies
     private lateinit var sensorManager: ParallaxSensorManager
     private val weatherRepo = WeatherRepository
-    private var previewThread: Thread? = null
+    private var choreographer: Choreographer? = null
     @Volatile private var previewRunning = false
     @Volatile private var surfaceReady = false
     private var surfaceHolder: SurfaceHolder? = null
     private var lastFixedWidth = 0
     private var lastFixedHeight = 0
+    private var lastDrawFrameNanos = 0L
+    private var lastFrameTimeMs = 0L
+    private var preferHardwareCanvas = true
     
     // Preference change throttling
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -464,157 +467,116 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
     }
     
     private fun startPreview() {
-        // Stop any existing thread first
         stopPreview()
         
         previewRunning = true
         frameCount = 0
         lastFpsLogTime = SystemClock.elapsedRealtime()
+        lastDrawFrameNanos = 0L
+        lastFrameTimeMs = 0L
+        preferHardwareCanvas = true
         
-        previewThread = Thread {
-            Log.d(TAG, "Preview thread started")
-            
-            // Wait for surface to be fully ready
-            var waitCount = 0
-            while (!surfaceReady && waitCount < 10) {
-                SystemClock.sleep(50)
-                waitCount++
-            }
-            
-            if (!surfaceReady) {
-                Log.e(TAG, "Surface not ready after waiting, aborting preview thread")
-                return@Thread
-            }
-            
-            Log.d(TAG, "Starting render loop: running=$previewRunning, ready=$surfaceReady")
-            
-            var consecutiveNullCanvasCount = 0
-            val maxNullCanvas = 5  // Give up after 5 consecutive null canvases
-            var lastFrameTimeMs = 0L
-            
-            while (previewRunning && surfaceReady && !Thread.currentThread().isInterrupted) {
-                val frameStart = SystemClock.elapsedRealtime()
-                
-                // Calculate real frame delta for accurate physics
-                val deltaTimeMs = if (lastFrameTimeMs > 0) {
-                    (frameStart - lastFrameTimeMs).coerceIn(1L, 200L)
-                } else {
-                    16L
-                }
-                lastFrameTimeMs = frameStart
-                
-                val holder = surfaceHolder
-                
-                if (holder == null) {
-                    Log.w(TAG, "SurfaceHolder is null, waiting...")
-                    SystemClock.sleep(100)
-                    continue
-                }
-                
-                var canvas: android.graphics.Canvas? = null
-                try {
-                    // Use hardware-accelerated canvas for better GPU performance
-                    canvas = holder.lockHardwareCanvas()
-                    if (canvas == null) {
-                        // Fall back to software canvas if hardware canvas fails
-                        canvas = holder.lockCanvas()
-                    }
-                    
-                    if (canvas == null) {
-                        consecutiveNullCanvasCount++
-                        if (consecutiveNullCanvasCount >= maxNullCanvas) {
-                            Log.e(TAG, "lockCanvas() returned null $consecutiveNullCanvasCount times, surface may be invalid")
-                            // Don't break - the surface might become valid again
-                        }
-                        SystemClock.sleep(50)
-                        continue
-                    }
-                    
-                    consecutiveNullCanvasCount = 0  // Reset on success
-                    
-                    val cw = canvas.width
-                    val ch = canvas.height
-                    
-                    if (cw <= 0 || ch <= 0) {
-                        Log.w(TAG, "Invalid canvas dimensions: ${cw}x${ch}")
-                        continue
-                    }
-                    
-                    // Clear canvas with a fallback color first (helps debug)
-                    canvas.drawColor(Color.BLACK)
-                    
-                    // Render scene with real delta time for accurate physics
-                    // ParallaxScene internally handles weather and seasonal layers,
-                    // so we only call scene.render() - no separate weather/seasonal calls needed
-                    previewScene?.render(canvas, deltaTimeMs)
-                    
-                    frameCount++
-                    
-                    // Log first 5 frames for debugging
-                    if (frameCount <= 5) {
-                        Log.d(TAG, "Frame $frameCount rendered successfully: ${cw}x${ch}")
-                    }
-                    
-                    // Log FPS every 5 seconds
-                    val now = SystemClock.elapsedRealtime()
-                    if (now - lastFpsLogTime >= 5000) {
-                        val elapsed = (now - lastFpsLogTime) / 1000f
-                        val fps = frameCount / elapsed
-                        Log.d(TAG, "Preview FPS: %.1f (${frameCount} frames in %.1fs)".format(fps, elapsed))
-                        frameCount = 0
-                        lastFpsLogTime = now
-                    }
-                    
-                } catch (e: Exception) {
-                    if (previewRunning && surfaceReady) {
-                        Log.e(TAG, "Error in preview render loop", e)
-                    }
-                } finally {
-                    if (canvas != null) {
-                        try {
-                            holder.unlockCanvasAndPost(canvas)
-                        } catch (e: IllegalArgumentException) {
-                            Log.w(TAG, "Failed to post canvas (surface destroyed?)")
-                            break
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error posting canvas", e)
-                            break
-                        }
-                    }
-                }
-                
-                // Frame rate limiting
-                val frameTime = SystemClock.elapsedRealtime() - frameStart
-                val sleepTime = FRAME_TIME_MS - frameTime
-                if (sleepTime > 0) {
-                    try {
-                        Thread.sleep(sleepTime)
-                    } catch (e: InterruptedException) {
-                        Log.d(TAG, "Preview thread interrupted during sleep")
-                        break
-                    }
-                }
-            }
-            Log.d(TAG, "Preview thread exiting: running=$previewRunning, ready=$surfaceReady, totalFrames=$frameCount")
-        }.also { 
-            it.name = "PreviewRenderThread"
-            it.isDaemon = true
-            it.start() 
+        choreographer = Choreographer.getInstance()
+        postNextFrame()
+    }
+    
+    private fun postNextFrame() {
+        if (!previewRunning || !surfaceReady) return
+        choreographer?.postFrameCallback(frameCallback)
+    }
+    
+    private val frameCallback = Choreographer.FrameCallback { frameTimeNanos ->
+        if (!previewRunning || !surfaceReady) return@FrameCallback
+        
+        // FPS limiting: skip frame if too soon
+        val minFrameIntervalNanos = 1_000_000_000L / TARGET_FPS.toLong()
+        if (lastDrawFrameNanos != 0L && (frameTimeNanos - lastDrawFrameNanos) < minFrameIntervalNanos) {
+            postNextFrame()
+            return@FrameCallback
         }
+        
+        val holder = surfaceHolder
+        if (holder == null) {
+            postNextFrame()
+            return@FrameCallback
+        }
+        
+        // Calculate real frame delta for accurate physics
+        val nowMs = frameTimeNanos / 1_000_000L
+        val deltaTimeMs = if (lastFrameTimeMs > 0) {
+            (nowMs - lastFrameTimeMs).coerceIn(1L, 200L)
+        } else {
+            16L
+        }
+        lastFrameTimeMs = nowMs
+        
+        var canvas: android.graphics.Canvas? = null
+        try {
+            canvas = if (preferHardwareCanvas) {
+                try {
+                    holder.lockHardwareCanvas()
+                } catch (e: Throwable) {
+                    preferHardwareCanvas = false
+                    holder.lockCanvas()
+                }
+            } else {
+                holder.lockCanvas()
+            }
+            
+            if (canvas == null) {
+                postNextFrame()
+                return@FrameCallback
+            }
+            
+            val cw = canvas.width
+            val ch = canvas.height
+            
+            if (cw <= 0 || ch <= 0) {
+                holder.unlockCanvasAndPost(canvas)
+                postNextFrame()
+                return@FrameCallback
+            }
+            
+            canvas.drawColor(Color.BLACK)
+            previewScene?.render(canvas, deltaTimeMs)
+            
+            frameCount++
+            if (frameCount <= 5) {
+                Log.d(TAG, "Frame $frameCount rendered successfully: ${cw}x${ch}")
+            }
+            
+            val now = SystemClock.elapsedRealtime()
+            if (now - lastFpsLogTime >= 5000) {
+                val elapsed = (now - lastFpsLogTime) / 1000f
+                val fps = frameCount / elapsed
+                Log.d(TAG, "Preview FPS: %.1f (${frameCount} frames in %.1fs)".format(fps, elapsed))
+                frameCount = 0
+                lastFpsLogTime = now
+            }
+            
+            lastDrawFrameNanos = frameTimeNanos
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in preview render", e)
+        } finally {
+            if (canvas != null) {
+                try {
+                    holder.unlockCanvasAndPost(canvas)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to post canvas", e)
+                }
+            }
+        }
+        
+        postNextFrame()
     }
     
     private fun stopPreview() {
-        Log.d(TAG, "Stopping preview...")
         previewRunning = false
-        previewThread?.let { thread ->
-            thread.interrupt()
-            try {
-                thread.join(500)  // Wait up to 500ms for thread to finish
-            } catch (e: InterruptedException) {
-                Log.w(TAG, "Interrupted while waiting for preview thread to stop")
-            }
-        }
-        previewThread = null
+        choreographer?.removeFrameCallback(frameCallback)
+        choreographer = null
+        lastDrawFrameNanos = 0L
+        lastFrameTimeMs = 0L
     }
     
     override fun onDestroy() {

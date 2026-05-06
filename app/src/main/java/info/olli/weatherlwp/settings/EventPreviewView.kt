@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.util.AttributeSet
 import android.view.View
+import androidx.core.graphics.withSave
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.events.AirplaneEvent
 import info.olli.weatherlwp.rendering.events.AlienEvent
@@ -187,28 +188,28 @@ class EventPreviewView @JvmOverloads constructor(
         val anchorY = anchorYRatio * PREVIEW_WORLD_HEIGHT
         val framing = getFraming(eventType)
 
-        canvas.save()
-        canvas.translate(centerX, centerY + framing.yOffsetFactor * size)
-        canvas.scale(framing.scale, framing.scale)
-        canvas.translate(-anchorX, -anchorY)
-        try {
-            event.draw(
-                canvas = canvas,
-                paint = eventPaint,
-                strokePaint = eventStrokePaint,
-                parallaxCalculator = previewParallax,
-                width = PREVIEW_WORLD_WIDTH,
-                height = PREVIEW_WORLD_HEIGHT,
-                timeSeconds = animationTimeSeconds,
-                ambientColor = previewAmbientColor(),
-                extendedOffset = PREVIEW_EXTENDED_OFFSET,
-                absoluteTimeMs = absoluteTimeMs,
-                hillHeightProvider = previewHillProvider
-            )
-        } catch (_: Exception) {
-            // Keep settings responsive if one event renderer throws.
+        canvas.withSave {
+            translate(centerX, centerY + framing.yOffsetFactor * size)
+            scale(framing.scale, framing.scale)
+            translate(-anchorX, -anchorY)
+            try {
+                event.draw(
+                    canvas = this,
+                    paint = eventPaint,
+                    strokePaint = eventStrokePaint,
+                    parallaxCalculator = previewParallax,
+                    width = PREVIEW_WORLD_WIDTH,
+                    height = PREVIEW_WORLD_HEIGHT,
+                    timeSeconds = animationTimeSeconds,
+                    ambientColor = previewAmbientColor(),
+                    extendedOffset = PREVIEW_EXTENDED_OFFSET,
+                    absoluteTimeMs = absoluteTimeMs,
+                    hillHeightProvider = previewHillProvider
+                )
+            } catch (_: Exception) {
+                // Keep settings responsive if one event renderer throws.
+            }
         }
-        canvas.restore()
     }
 
     private fun recreatePreviewEvent() {

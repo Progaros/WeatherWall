@@ -54,6 +54,9 @@ class WeatherWallpaper : WallpaperService() {
 
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             super.onCreate(surfaceHolder)
+            // This wallpaper uses device tilt for parallax, not scroll offsets.
+            // Disabling offset notifications is a performance optimization per Android docs.
+            setOffsetNotificationsEnabled(false)
             try {
                 choreographer = Choreographer.getInstance()
                 settingsRepository = SimulationSettingsRepository(this@WeatherWallpaper)
@@ -368,8 +371,7 @@ class WeatherWallpaper : WallpaperService() {
         private var lastFrameTimeMs = 0L
 
         private fun drawFrame(frameTimeNanos: Long) {
-            val holder = surfaceHolder
-            if (holder == null) return
+            val holder = surfaceHolder ?: return
             
             // Calculate real frame delta for accurate physics
             val now = frameTimeNanos / 1_000_000L

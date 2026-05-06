@@ -5,6 +5,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.os.Build
 import android.util.Log
 import android.view.Surface
 import android.view.WindowManager
@@ -26,7 +27,7 @@ import kotlin.math.sqrt
  * 4. All smoothing/return-to-center handled by ParallaxCalculator
  * 5. Auto-resets when display rotation changes
  */
-class ParallaxSensorManager(context: Context) : SensorEventListener {
+class ParallaxSensorManager(private val context: Context) : SensorEventListener {
     companion object {
         private const val TAG = "ParallaxSensorManager"
         private const val FULL_TILT_RADIANS = (45f * PI / 180f).toFloat()
@@ -90,7 +91,6 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     }
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-    private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     
     // Available sensors
     private val rotationVector = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
@@ -414,7 +414,12 @@ class ParallaxSensorManager(context: Context) : SensorEventListener {
     
     @Suppress("DEPRECATION")
     private fun getCurrentDisplayRotation(): Int {
-        return windowManager.defaultDisplay?.rotation ?: Surface.ROTATION_0
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            context.display.rotation
+        } else {
+            (context.getSystemService(Context.WINDOW_SERVICE) as WindowManager)
+                .defaultDisplay.rotation
+        }
     }
 
     override fun onSensorChanged(event: SensorEvent) {

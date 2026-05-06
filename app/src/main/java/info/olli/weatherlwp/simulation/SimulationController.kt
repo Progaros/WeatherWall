@@ -6,6 +6,7 @@ import info.olli.weatherlwp.weather.WeatherRepository
 import info.olli.weatherlwp.weather.WeatherType
 import info.olli.weatherlwp.util.SeasonHelper
 import kotlin.math.sin
+import kotlin.random.Random
 
 /**
  * Main controller for the simulation.
@@ -262,7 +263,7 @@ class SimulationController(private val context: Context) {
             // Gust interval: 1-2s at high wind, 4-7s at low wind
             val minInterval = (1000 + (1 - baseWind) * 3000).toLong()  // 1000-4000ms
             val maxInterval = (2000 + (1 - baseWind) * 5000).toLong()  // 2000-7000ms
-            val interval = minInterval + (Math.random() * (maxInterval - minInterval)).toLong()
+            val interval = minInterval + (Random.nextDouble() * (maxInterval - minInterval)).toLong()
             nextGustTime = currentMs + interval
             
             // Gust intensity: proportional to base wind (no fixed floor)
@@ -270,7 +271,7 @@ class SimulationController(private val context: Context) {
             // At high wind (0.8): strong gusts 0.5-0.8
             val minGust = baseWind * 0.5f
             val maxGust = baseWind * 0.3f + baseWind * 0.7f
-            targetGust = minGust + Math.random().toFloat() * (maxGust - minGust)
+            targetGust = minGust + Random.nextFloat() * (maxGust - minGust)
             
             // Decay rate: faster at higher wind (gusts are shorter but more frequent)
             gustDecay = 0.3f + baseWind * 0.5f  // 0.3-0.8 intensity per second
