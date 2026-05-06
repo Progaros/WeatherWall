@@ -74,6 +74,8 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
     @Volatile private var previewRunning = false
     @Volatile private var surfaceReady = false
     private var surfaceHolder: SurfaceHolder? = null
+    private var lastFixedWidth = 0
+    private var lastFixedHeight = 0
     
     // Preference change throttling
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -176,12 +178,24 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
                 surfaceHolder = holder
                 // Cap rendering resolution to avoid performance issues on large previews.
                 // Max 720px wide, height scaled proportionally to maintain aspect ratio.
+                // Always call setFixedSize so the buffer matches the new view dimensions
+                // (prevents stretched stale content after preview resize).
                 val maxWidth = 720
+                val targetWidth: Int
+                val targetHeight: Int
                 if (width > maxWidth) {
                     val scale = maxWidth.toFloat() / width
-                    val scaledHeight = (height * scale).toInt()
-                    holder.setFixedSize(maxWidth, scaledHeight)
-                    Log.d(TAG, "Capped preview resolution to ${maxWidth}x${scaledHeight}")
+                    targetWidth = maxWidth
+                    targetHeight = (height * scale).toInt()
+                } else {
+                    targetWidth = width
+                    targetHeight = height
+                }
+                if (targetWidth != lastFixedWidth || targetHeight != lastFixedHeight) {
+                    lastFixedWidth = targetWidth
+                    lastFixedHeight = targetHeight
+                    holder.setFixedSize(targetWidth, targetHeight)
+                    Log.d(TAG, "Set preview buffer to ${targetWidth}x${targetHeight}")
                 }
                 // Reload settings when surface changes to ensure proper rendering
                 previewScene?.loadPrefs()

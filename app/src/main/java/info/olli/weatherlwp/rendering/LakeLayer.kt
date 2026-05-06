@@ -179,40 +179,32 @@ class LakeLayer(private val context: Context) : SceneLayer {
         }
 
         // Water surface fills the valley
-        val waterSurfaceY = maxTerrainY - valleyRange * (1f - effectiveLevel * 0.5f)
-        val maxLakeDepthPx = height * 0.04f * effectiveLevel
+        val waterSurfaceY = maxTerrainY - valleyRange * effectiveLevel * 0.5f
 
         // Build lake path: water fills below waterSurfaceY within lake bounds
         lakePath.reset()
-        var hasContent = false
+        var segmentStart = -1
+        val sampleStepX = (lakeRight - lakeLeft) / numSamples
 
         for (i in 0..numSamples) {
-            val screenX = lakeLeft + (lakeRight - lakeLeft) * i.toFloat() / numSamples
             val terrainY = terrainYsArray[i]
 
             if (terrainY > waterSurfaceY) {
-                val waveAmp = if (isFrozen) 0f else 1.5f * effectiveLevel
-                val wave = if (isFrozen) 0f
-                else sin((screenX * 0.03f + shimmerPhase * 0.8f).toDouble()).toFloat() * waveAmp
-
-                if (!hasContent) {
-                    lakePath.moveTo(screenX, terrainY + maxLakeDepthPx)
-                    hasContent = true
-                }
-                lakePath.lineTo(screenX, waterSurfaceY + wave)
-            } else if (hasContent) {
-                lakePath.lineTo(screenX, terrainYsArray[(i - 1).coerceAtLeast(0)] + maxLakeDepthPx)
-                lakePath.close()
-                drawLakeSegment(canvas, state, waterColor, isFrozen, waterSurfaceY, maxTerrainY + maxLakeDepthPx)
-                lakePath.reset()
-                hasContent = false
+                if (segmentStart < 0) segmentStart = i
+            } else if (segmentStart >= 0) {
+                buildAndDrawLakeSegment(
+                    canvas, state, segmentStart, i - 1, lakeLeft, sampleStepX,
+                    waterSurfaceY, isFrozen, waterColor, effectiveLevel, maxTerrainY
+                )
+                segmentStart = -1
             }
         }
 
-        if (hasContent) {
-            lakePath.lineTo(lakeRight, terrainYsArray[numSamples] + maxLakeDepthPx)
-            lakePath.close()
-            drawLakeSegment(canvas, state, waterColor, isFrozen, waterSurfaceY, maxTerrainY + maxLakeDepthPx)
+        if (segmentStart >= 0) {
+            buildAndDrawLakeSegment(
+                canvas, state, segmentStart, numSamples, lakeLeft, sampleStepX,
+                waterSurfaceY, isFrozen, waterColor, effectiveLevel, maxTerrainY
+            )
         }
 
         // Draw shimmer/sparkles on lake surface
@@ -263,6 +255,42 @@ class LakeLayer(private val context: Context) : SceneLayer {
                 shimmerPaint
             )
         }
+    }
+
+    /**
+     * Build proper lake polygon for one contiguous valley segment and draw it.
+     * Top edge traces the animated water surface; bottom edge follows terrain contour.
+     */
+    private fun buildAndDrawLakeSegment(
+        canvas: Canvas, state: SimulationState,
+        startIdx: Int, endIdx: Int,
+        lakeLeft: Float, sampleStepX: Float,
+        waterSurfaceY: Float, isFrozen: Boolean,
+        waterColor: Int, effectiveLevel: Float, maxTerrainY: Float
+    ) {
+        lakePath.reset()
+        val waveAmp = if (isFrozen) 0f else 1.5f * effectiveLevel
+
+        // Phase 1: Trace water surface left-to-right (top edge)
+        for (i in startIdx..endIdx) {
+            val screenX = lakeLeft + i * sampleStepX
+            val wave = if (isFrozen) 0f
+                       else sin((screenX * 0.03f + shimmerPhase * 0.8f).toDouble()).toFloat() * waveAmp
+            if (i == startIdx) {
+                lakePath.moveTo(screenX, waterSurfaceY + wave)
+            } else {
+                lakePath.lineTo(screenX, waterSurfaceY + wave)
+            }
+        }
+
+        // Phase 2: Trace terrain contour right-to-left (bottom edge)
+        for (i in endIdx downTo startIdx) {
+            val screenX = lakeLeft + i * sampleStepX
+            lakePath.lineTo(screenX, terrainYsArray[i])
+        }
+
+        lakePath.close()
+        drawLakeSegment(canvas, state, waterColor, isFrozen, waterSurfaceY, maxTerrainY)
     }
 
     /**

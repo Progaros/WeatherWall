@@ -199,43 +199,33 @@ class RiverLayer(private val context: Context) : SceneLayer {
                 continue  // Flat terrain, skip
             }
 
-            val waterSurfaceY = maxTerrainY - valleyRange * (1f - waterLevel * 0.6f)
+            val waterSurfaceY = maxTerrainY - valleyRange * waterLevel * 0.6f
 
             // Build river path: water fills below waterSurfaceY
             riverPath.reset()
-            var hasContent = false
+            var segmentStart = -1
+            val sampleStepX = totalW / numSamples
 
             for (i in 0..numSamples) {
-                val screenX = left + (i.toFloat() / numSamples) * totalW
                 val terrainY = terrainYsArray[i]
 
                 if (terrainY > waterSurfaceY) {
-                    // This point is in a valley below water surface
-                    val waveAmp = if (isFrozen) 0f else (2f + waterLevel * 3f) * layerWidthFactor
-                    val wave = if (isFrozen) 0f
-                               else sin((screenX * 0.02f + flowPhase * 1.5f).toDouble()).toFloat() * waveAmp +
-                                    sin((screenX * 0.045f + flowPhase * 0.7f).toDouble()).toFloat() * waveAmp * 0.3f
-
-                    if (!hasContent) {
-                        riverPath.moveTo(screenX, terrainY + maxRiverDepthPx)  // Bottom of river
-                        hasContent = true
-                    }
-                    riverPath.lineTo(screenX, waterSurfaceY + wave)
-                } else if (hasContent) {
-                    // Leaving valley — close this segment and draw it
-                    riverPath.lineTo(screenX, terrainYsArray[(i - 1).coerceAtLeast(0)] + maxRiverDepthPx)
-                    riverPath.close()
-                    drawRiverSegment(canvas, state, waterColor, layerAlpha, isFrozen, waterLevel, layerWidthFactor)
-                    riverPath.reset()
-                    hasContent = false
+                    if (segmentStart < 0) segmentStart = i
+                } else if (segmentStart >= 0) {
+                    buildAndDrawSegment(
+                        canvas, state, segmentStart, i - 1, left, sampleStepX,
+                        waterSurfaceY, isFrozen, waterColor, layerAlpha, waterLevel, layerWidthFactor
+                    )
+                    segmentStart = -1
                 }
             }
 
-            // Close any remaining path
-            if (hasContent) {
-                riverPath.lineTo(right, terrainYsArray[numSamples] + maxRiverDepthPx)
-                riverPath.close()
-                drawRiverSegment(canvas, state, waterColor, layerAlpha, isFrozen, waterLevel, layerWidthFactor)
+            // Close any remaining segment
+            if (segmentStart >= 0) {
+                buildAndDrawSegment(
+                    canvas, state, segmentStart, numSamples, left, sampleStepX,
+                    waterSurfaceY, isFrozen, waterColor, layerAlpha, waterLevel, layerWidthFactor
+                )
             }
 
             canvas.restore()
@@ -298,42 +288,72 @@ class RiverLayer(private val context: Context) : SceneLayer {
             return
         }
 
-        val waterSurfaceY = maxTerrainY - valleyRange * (1f - waterLevel * 0.6f)
+        val waterSurfaceY = maxTerrainY - valleyRange * waterLevel * 0.6f
 
         riverPath.reset()
-        var hasContent = false
+        var segmentStart = -1
 
         for (i in 0..numSamples) {
-            val screenX = left + i * sampleStepX
             val terrainY = terrainYsArray[i]
 
             if (terrainY > waterSurfaceY) {
-                val waveAmp = if (isFrozen) 0f else (2f + waterLevel * 3f) * layerWidthFactor
-                val wave = if (isFrozen) 0f
-                           else sin((screenX * 0.02f + flowPhase * 1.5f).toDouble()).toFloat() * waveAmp +
-                                sin((screenX * 0.045f + flowPhase * 0.7f).toDouble()).toFloat() * waveAmp * 0.3f
-
-                if (!hasContent) {
-                    riverPath.moveTo(screenX, terrainY + maxRiverDepthPx)
-                    hasContent = true
-                }
-                riverPath.lineTo(screenX, waterSurfaceY + wave)
-            } else if (hasContent) {
-                riverPath.lineTo(screenX, terrainYsArray[(i - 1).coerceAtLeast(0)] + maxRiverDepthPx)
-                riverPath.close()
-                drawRiverSegment(canvas, state, waterColor, layerAlpha, isFrozen, waterLevel, layerWidthFactor)
-                riverPath.reset()
-                hasContent = false
+                if (segmentStart < 0) segmentStart = i
+            } else if (segmentStart >= 0) {
+                // End of valley segment - build proper polygon and draw
+                buildAndDrawSegment(
+                    canvas, state, segmentStart, i - 1, left, sampleStepX,
+                    waterSurfaceY, isFrozen, waterColor, layerAlpha, waterLevel, layerWidthFactor
+                )
+                segmentStart = -1
             }
         }
 
-        if (hasContent) {
-            riverPath.lineTo(right, terrainYsArray[numSamples] + maxRiverDepthPx)
-            riverPath.close()
-            drawRiverSegment(canvas, state, waterColor, layerAlpha, isFrozen, waterLevel, layerWidthFactor)
+        // Trailing segment
+        if (segmentStart >= 0) {
+            buildAndDrawSegment(
+                canvas, state, segmentStart, numSamples, left, sampleStepX,
+                waterSurfaceY, isFrozen, waterColor, layerAlpha, waterLevel, layerWidthFactor
+            )
         }
 
         canvas.restore()
+    }
+
+    /**
+     * Build a proper river polygon for one contiguous valley segment.
+     * Top edge traces the animated water surface; bottom edge follows terrain contour.
+     */
+    private fun buildAndDrawSegment(
+        canvas: Canvas, state: SimulationState,
+        startIdx: Int, endIdx: Int,
+        left: Float, sampleStepX: Float,
+        waterSurfaceY: Float, isFrozen: Boolean,
+        waterColor: Int, layerAlpha: Float, waterLevel: Float, layerWidthFactor: Float
+    ) {
+        riverPath.reset()
+        val waveAmp = if (isFrozen) 0f else (2f + waterLevel * 3f) * layerWidthFactor
+
+        // Phase 1: Trace water surface left-to-right (top edge)
+        for (i in startIdx..endIdx) {
+            val screenX = left + i * sampleStepX
+            val wave = if (isFrozen) 0f
+                       else sin((screenX * 0.02f + flowPhase * 1.5f).toDouble()).toFloat() * waveAmp +
+                            sin((screenX * 0.045f + flowPhase * 0.7f).toDouble()).toFloat() * waveAmp * 0.3f
+            if (i == startIdx) {
+                riverPath.moveTo(screenX, waterSurfaceY + wave)
+            } else {
+                riverPath.lineTo(screenX, waterSurfaceY + wave)
+            }
+        }
+
+        // Phase 2: Trace terrain contour right-to-left (bottom edge)
+        for (i in endIdx downTo startIdx) {
+            val screenX = left + i * sampleStepX
+            riverPath.lineTo(screenX, terrainYsArray[i])
+        }
+
+        riverPath.close()
+        drawRiverSegment(canvas, state, waterColor, layerAlpha, isFrozen, waterLevel, layerWidthFactor)
     }
 
     /**

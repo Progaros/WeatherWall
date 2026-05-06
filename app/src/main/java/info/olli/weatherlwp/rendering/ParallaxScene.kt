@@ -95,6 +95,7 @@ class ParallaxScene(
         layers.add(cloudLayer) // Clouds behind mountains? Or in front? Usually behind or mixed.
                                // Original code had clouds behind mountains (layer 0.5).
                                // Let's put them behind mountains for now.
+        cloudLayer.isPreviewMode = isPreview
         layers.add(mountainLayer)
         layers.add(randomEventLayer)  // Ground animals and sky events (behind trees)
         layers.add(seasonalEvents)    // Seasonal effects (rendered at specific z-depths)

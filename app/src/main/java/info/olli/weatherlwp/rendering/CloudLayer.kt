@@ -200,10 +200,27 @@ class CloudLayer(private val context: Context) : SceneLayer {
         // Hard cap on bitmap dimensions to avoid GPU texture limits
         // REDUCED for performance: smaller max = less GPU work
         const val MAX_BITMAP_DIMENSION = 512
+        const val MAX_BITMAP_DIMENSION_PREVIEW = 256
         
         // Max groups for overcast conditions
         const val MAX_GROUPS = 30
+        const val MAX_GROUPS_PREVIEW = 12
     }
+
+    /** When true, reduces bitmap sizes and group count for better preview performance. */
+    var isPreviewMode = false
+        set(value) {
+            if (field != value) {
+                field = value
+                clearGroupBitmaps()
+                clearGroupRenderNodes()
+                resetRenderNodeEffects()
+                generateCloudGroups()
+            }
+        }
+
+    private val effectiveMaxDimension get() = if (isPreviewMode) MAX_BITMAP_DIMENSION_PREVIEW else MAX_BITMAP_DIMENSION
+    private val effectiveMaxGroups get() = if (isPreviewMode) MAX_GROUPS_PREVIEW else MAX_GROUPS
     
     init {
         reloadSettings()
@@ -217,7 +234,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
     internal fun generateCloudGroups() {
         // Cloud count is directly from weather - number of cloud groups on screen
         // fluffinessMultiplier only affects how many puffs each cloud has (set later in render)
-        val targetGroups = cloudCount.coerceIn(0, MAX_GROUPS)
+        val targetGroups = cloudCount.coerceIn(0, effectiveMaxGroups)
         
         // If no clouds requested (NONE density), return empty list
         if (targetGroups == 0) {
@@ -636,7 +653,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val skyAreaRatio = (extendedWidth / width) * (height / 1920f)
         val areaScale = skyAreaRatio.coerceIn(1.0f, 1.5f)
         val baseCount = state.getCloudCount()
-        val targetCount = (baseCount * areaScale).toInt().coerceIn(0, MAX_GROUPS)
+        val targetCount = (baseCount * areaScale).toInt().coerceIn(0, effectiveMaxGroups)
         
         // Regenerate groups if count changed significantly
         if (kotlin.math.abs(targetCount - cloudCount) > 3 || 
@@ -691,7 +708,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
             val screenY = group.y * height + py
 
             val groupWidthPx = (group.groupWidth * minDim).toInt()
-                .coerceIn(50, MAX_BITMAP_DIMENSION)
+                .coerceIn(50, effectiveMaxDimension)
 
             // Viewport culling: skip clouds entirely off-screen
             val halfW = groupWidthPx * 0.7f  // approximate with padding
@@ -700,7 +717,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
             // Scale cloud height with screen height so they fill tall sky areas
             val heightRef = maxOf(minDim, height * 0.5f)
             val groupHeightPx = (group.groupHeight * heightRef).toInt()
-                .coerceIn(30, MAX_BITMAP_DIMENSION)
+                .coerceIn(30, effectiveMaxDimension)
 
             // Padding scales with cloudStretch to accommodate wider puffs
             val stretchPaddingMult = (cloudStretch / 2f).coerceIn(1f, 3f)
@@ -763,7 +780,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
             val screenY = group.y * height + py
 
             val groupWidthPx = (group.groupWidth * minDim).toInt()
-                .coerceIn(50, MAX_BITMAP_DIMENSION)
+                .coerceIn(50, effectiveMaxDimension)
 
             // Viewport culling: skip clouds entirely off-screen
             val halfW = groupWidthPx * 0.7f
@@ -772,7 +789,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
 
             val heightRef = maxOf(minDim, height * 0.5f)
             val groupHeightPx = (group.groupHeight * heightRef).toInt()
-                .coerceIn(30, MAX_BITMAP_DIMENSION)
+                .coerceIn(30, effectiveMaxDimension)
 
             val stretchPaddingMult = (cloudStretch / 2f).coerceIn(1f, 3f)
             val paddingX = (groupWidthPx * BLUR_PADDING * stretchPaddingMult).toInt()
