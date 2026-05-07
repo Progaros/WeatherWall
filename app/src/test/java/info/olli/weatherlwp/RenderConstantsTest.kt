@@ -346,46 +346,51 @@ class RenderConstantsTest {
     }
 
     @Test
-    fun `getExtendedWidth uses margin ratio correctly`() {
+    fun `getExtendedWidth equals genWorldRange at reference height`() {
+        // At reference height, heightScale = 1.0, so extendedWidth = genWorldRange
         val extended = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(1080f, 1920f)
-        val expected = 1080f + 1080f * 0.38f * 2f
-        assertEquals(expected, extended, 0.01f)
+        val genRange = info.olli.weatherlwp.rendering.RenderConstants.getGenerationWorldRange(1080f)
+        assertEquals(genRange, extended, 0.01f)
+    }
+
+    @Test
+    fun `getExtendedWidth scales linearly with height`() {
+        // extendedWidth = genWorldRange * heightScale
+        // Doubling height doubles heightScale (if not clamped) → doubles extendedWidth
+        val ext1 = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(1080f, 1920f)
+        val ext2 = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(1080f, 3840f)
+        assertEquals(ext1 * 2f, ext2, 1f)
     }
 
     @Test
     fun `getExtendedWidth scales with screen width`() {
+        // Different screen widths give different genWorldRange → different extendedWidth
         val ext1 = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(1080f, 1920f)
-        val ext2 = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(2160f, 3840f)
-        assertEquals(ext1 * 2f, ext2, 0.01f)
+        val ext2 = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(2160f, 1920f)
+        assertTrue(ext2 > ext1)
     }
 
     @Test
-    fun `getExtendedWidth scales with height for taller screens`() {
-        val ext916 = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(1080f, 1920f)
-        val ext920 = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(1080f, 2400f)
-        assertTrue("Taller screen should have wider extended width", ext920 > ext916)
-        assertEquals(ext916 * 1.25f, ext920, 1f)
+    fun `getExtendedWidth at min height uses MIN_HEIGHT_SCALE`() {
+        // Heights below 960 (MIN_HEIGHT_SCALE * REFERENCE_HEIGHT) should clamp
+        val extAt960 = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(1080f, 960f)
+        val extAt400 = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(1080f, 400f)
+        assertEquals(extAt960, extAt400, 0.01f)
     }
 
     @Test
-    fun `getExtendedWidth uses screen width for landscape`() {
-        val ext = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(720f, 400f)
-        assertEquals(720f * 1.76f, ext, 0.01f)
+    fun `getHorizontalDensityScale is stable across height changes`() {
+        // Density must not depend on height — only on screen width
+        val scale1 = info.olli.weatherlwp.rendering.RenderConstants.getHorizontalDensityScale(0f, 1080f, 1920f)
+        val scale2 = info.olli.weatherlwp.rendering.RenderConstants.getHorizontalDensityScale(0f, 1080f, 800f)
+        assertEquals(scale1, scale2, 0.001f)
     }
 
     @Test
-    fun `getHorizontalDensityScale at reference width returns 1`() {
-        // Reference extended width = 1920 * 0.5625 * (1 + 2*0.38) = 1080 * 1.76 = 1900.8
-        val refExtended = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(1080f, 1920f)
-        val scale = info.olli.weatherlwp.rendering.RenderConstants.getHorizontalDensityScale(refExtended)
-        assertEquals(1.0f, scale, 0.01f)
-    }
-
-    @Test
-    fun `getHorizontalDensityScale at double width returns 2`() {
-        val refExtended = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(1080f, 1920f)
-        val scale = info.olli.weatherlwp.rendering.RenderConstants.getHorizontalDensityScale(refExtended * 2f)
-        assertEquals(2.0f, scale, 0.01f)
+    fun `getHorizontalDensityScale grows with screen width`() {
+        val scaleSmall = info.olli.weatherlwp.rendering.RenderConstants.getHorizontalDensityScale(0f, 720f, 1920f)
+        val scaleLarge = info.olli.weatherlwp.rendering.RenderConstants.getHorizontalDensityScale(0f, 1440f, 1920f)
+        assertTrue(scaleLarge > scaleSmall)
     }
 
     @Test

@@ -42,51 +42,70 @@ object RenderConstants {
      * for parallax reveal and object spawn just outside the viewport.
      */
     const val EXTENDED_SIDE_MARGIN_RATIO = 0.38f
-    
+
+    /** Reference extended width: the canonical world width at reference height on reference device. */
+    val REFERENCE_EXTENDED_WIDTH = REFERENCE_HEIGHT * REFERENCE_ASPECT_RATIO * (1f + 2f * EXTENDED_SIDE_MARGIN_RATIO)
+
     /**
-     * Calculate the extended canvas width.
-     * Content (mountains, hills, trees, events) should be generated for this width.
+     * Calculate the generation world range for the given screen width.
      *
-     * Height-proportional scaling makes the coordinate space grow with height,
-     * producing a zoom-from-center effect when only height changes (e.g. preview
-     * drag). Layers must skip regeneration on height-only resizes so that
-     * element positions stay stable and simply scale through the new
-     * [extendedWidth] / [getExtendedOffset] at draw time.
+     * This is the total width of the deterministic world that elements are
+     * generated across. It must be wide enough to cover the full screen plus
+     * parallax padding even at the minimum height scale (maximum zoom-out).
      *
-     * Falls back to screen-width-based sizing when the canvas is wider than
-     * the reference aspect ratio predicts (landscape).
+     * Only depends on [screenWidth] — height has no influence. This ensures
+     * that the same set of elements (same count, same positions) is generated
+     * regardless of the current preview height.
      *
      * @param screenWidth The actual visible screen width
-     * @param screenHeight The actual visible screen height
-     * @return The extended width for content generation and positioning
+     * @return The world range for element generation
      */
-    fun getExtendedWidth(screenWidth: Float, screenHeight: Float): Float {
-        val heightScale = (screenHeight / REFERENCE_HEIGHT).coerceAtLeast(MIN_HEIGHT_SCALE)
-        val referenceExtendedWidth = REFERENCE_HEIGHT * REFERENCE_ASPECT_RATIO * (1f + 2f * EXTENDED_SIDE_MARGIN_RATIO)
-        val heightBasedExtended = referenceExtendedWidth * heightScale
-        val screenBasedExtended = screenWidth + screenWidth * EXTENDED_SIDE_MARGIN_RATIO * 2f
-        return maxOf(heightBasedExtended, screenBasedExtended)
+    fun getGenerationWorldRange(screenWidth: Float): Float {
+        val minHeight = REFERENCE_HEIGHT * MIN_HEIGHT_SCALE
+        val parallaxPadding = minHeight * 0.45f * 2f
+        val neededAtMinScale = (screenWidth + parallaxPadding) / MIN_HEIGHT_SCALE
+        return maxOf(neededAtMinScale, REFERENCE_EXTENDED_WIDTH)
     }
 
     /**
-     * Scale factor for count-based object density using horizontal span only.
-     * Accounts for aspect ratio: wider views (shorter canvas) get proportionally
-     * more objects so the scene doesn't look empty with tiny elements.
+     * Calculate the extended canvas width for draw-time coordinate mapping.
+     *
+     * Returns [getGenerationWorldRange] scaled by [getHeightScale]. This makes
+     * the coordinate space shrink when height decreases, causing all elements
+     * to move symmetrically toward center (zoom-in effect). When height
+     * increases, elements spread apart and previously off-screen content
+     * becomes visible from both sides (zoom-out effect).
+     *
+     * Layers store element positions as xRatio (0–1) across the generation
+     * world range. At draw time: `screenX = xRatio * extendedWidth - extendedOffset`
+     * produces the zoom-from-center transform automatically.
+     *
+     * @param screenWidth The actual visible screen width
+     * @param screenHeight The actual visible screen height
+     * @return The extended width for draw-time position mapping
      */
-    fun getHorizontalDensityScale(extendedWidth: Float, screenWidth: Float = 0f, screenHeight: Float = 0f): Float {
-        val referenceWidth = REFERENCE_HEIGHT * REFERENCE_ASPECT_RATIO
-        val referenceExtendedWidth = referenceWidth * (1f + 2f * EXTENDED_SIDE_MARGIN_RATIO)
-        val baseScale = (extendedWidth / referenceExtendedWidth).coerceAtLeast(0.25f)
-        
-        // When aspect ratio is wider than reference, boost density so
-        // the wider visible area is filled with proportionally more objects.
-        if (screenWidth > 0f && screenHeight > 0f) {
-            val referenceAspect = REFERENCE_ASPECT_RATIO  // 0.5625 (9:16)
-            val currentAspect = screenWidth / screenHeight
-            val aspectBoost = (currentAspect / referenceAspect).coerceIn(1f, 3f)
-            return baseScale * aspectBoost
-        }
-        return baseScale
+    fun getExtendedWidth(screenWidth: Float, screenHeight: Float): Float {
+        val heightScale = getHeightScale(screenHeight)
+        return getGenerationWorldRange(screenWidth) * heightScale
+    }
+
+    /**
+     * Scale factor for count-based object density.
+     *
+     * Scales element counts proportionally to the generation world range
+     * relative to the reference. This ensures consistent on-screen density:
+     * wider screens generate more elements to fill the wider world range,
+     * but the visible density stays the same.
+     *
+     * Height has no influence — the same count is generated regardless of
+     * preview height, ensuring deterministic, stable element positions.
+     */
+    fun getHorizontalDensityScale(extendedWidth: Float, screenWidth: Float = 0f, @Suppress("UNUSED_PARAMETER") screenHeight: Float = 0f): Float {
+        // Use the generation world range (width-only) for density scaling.
+        // When screenWidth is provided, compute the canonical range directly.
+        // Otherwise fall back to using extendedWidth as an approximation.
+        val genRange = if (screenWidth > 0f) getGenerationWorldRange(screenWidth) else extendedWidth
+        return (genRange / REFERENCE_EXTENDED_WIDTH).coerceIn(0.25f, 4f)
     }
 
     /**

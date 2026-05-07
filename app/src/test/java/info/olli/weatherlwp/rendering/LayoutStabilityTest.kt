@@ -59,15 +59,16 @@ class LayoutStabilityTest {
     }
 
     @Test
-    fun `extended width grows with height for zoom effect`() {
+    fun `extended width scales linearly with height`() {
         val extendedTall = RenderConstants.getExtendedWidth(1080f, 2400f)
         val extendedRef = RenderConstants.getExtendedWidth(1080f, 1920f)
-        val extendedShort = RenderConstants.getExtendedWidth(1080f, 800f)
+        val extendedShort = RenderConstants.getExtendedWidth(1080f, 960f)
 
-        // Taller canvas → wider extended width (zoom-out reveals more content)
+        // extendedWidth = genWorldRange * heightScale
+        // Taller canvas → larger heightScale → wider extendedWidth
         assertTrue(extendedTall > extendedRef)
-        // Short canvas falls back to screen-based minimum
-        assertEquals(extendedRef, extendedShort, 0.01f)
+        // At min height (960 → heightScale 0.5): exactly half of reference
+        assertEquals(extendedRef * 0.5f, extendedShort, 1f)
     }
 
     @Test
@@ -111,7 +112,7 @@ class LayoutStabilityTest {
     @Test
     fun `element screen position scales proportionally with height`() {
         // When height changes, positions scale from center (zoom effect).
-        // Distance from center at peakX=0.3 should be proportional to extendedWidth.
+        // Distance from center at peakX=0.3 is proportional to heightScale.
         val w = 720f
         val ewRef = RenderConstants.getExtendedWidth(w, 1920f)
         val eoRef = RenderConstants.getExtendedOffset(w, ewRef)
@@ -121,7 +122,19 @@ class LayoutStabilityTest {
         val eoTall = RenderConstants.getExtendedOffset(w, ewTall)
         val distTall = w / 2f - (0.3f * ewTall - eoTall)
 
-        // Distance from center scales with extendedWidth ratio
-        assertEquals(ewTall / ewRef, distTall / distRef, 0.01f)
+        // Distance from center scales with heightScale ratio
+        val scaleRef = RenderConstants.getHeightScale(1920f)
+        val scaleTall = RenderConstants.getHeightScale(2400f)
+        assertEquals(scaleTall / scaleRef, distTall / distRef, 0.01f)
+    }
+
+    @Test
+    fun `density scale is stable across height changes`() {
+        // Same screen width must give same density regardless of height
+        val scale1 = RenderConstants.getHorizontalDensityScale(
+            RenderConstants.getExtendedWidth(1080f, 1920f), 1080f, 1920f)
+        val scale2 = RenderConstants.getHorizontalDensityScale(
+            RenderConstants.getExtendedWidth(1080f, 800f), 1080f, 800f)
+        assertEquals(scale1, scale2, 0.01f)
     }
 }

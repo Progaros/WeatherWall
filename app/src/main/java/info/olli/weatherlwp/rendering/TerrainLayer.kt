@@ -290,7 +290,12 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             val depthAmplitudeScale = 0.4f + depth.coerceIn(0f, 1f) * 0.6f
             
             // More points for smoother curves
-            val numPoints = RenderConstants.HILL_CURVE_POINTS_MIN + hillRandom.nextInt(RenderConstants.HILL_CURVE_POINTS_RANGE)
+            // Scale control point count with generation world range for consistent
+            // curve resolution. More points needed when the world is wider so the
+            // hill doesn't look jagged at large extendedWidth.
+            val worldScale = RenderConstants.getGenerationWorldRange(width) / RenderConstants.REFERENCE_EXTENDED_WIDTH
+            val basePoints = RenderConstants.HILL_CURVE_POINTS_MIN + hillRandom.nextInt(RenderConstants.HILL_CURVE_POINTS_RANGE)
+            val numPoints = (basePoints * worldScale).toInt().coerceIn(80, 400)
             val points = ArrayList<Float>()
             
             // Use Fractal Brownian Motion (fBm) for natural terrain
