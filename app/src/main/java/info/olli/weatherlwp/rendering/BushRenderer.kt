@@ -18,6 +18,11 @@ class BushRenderer {
 
     // ---- Data classes ----
 
+    companion object {
+        /** World-space cell size for bush placement. ~24 world units per cell. */
+        const val BUSH_CELL_SIZE = 24f
+    }
+
     /**
      * Pre-calculated circle arrangement for organic bush shape.
      */
@@ -32,7 +37,7 @@ class BushRenderer {
      * Bush data — small round/oval bushes placed on hills.
      */
     data class BushData(
-        val xRatio: Float,    // 0-1 across extended width
+        val worldX: Float,    // World-space x coordinate (0 = center)
         val yRatio: Float,    // Ground Y position
         val scale: Float,
         val depthFactor: Float,
@@ -162,31 +167,46 @@ class BushRenderer {
         }
 
         val screenWidth = extendedWidth - 2f * extendedOffset
-        val widthRatio = RenderConstants.getHorizontalDensityScale(extendedWidth, screenWidth, height)
-        val bushCount = ((bushDensity / 100f) * 80 * widthRatio).toInt().coerceIn(0, 600)
-        if (bushCount <= 0) {
+        val genWorldRange = RenderConstants.getGenerationWorldRange(screenWidth)
+        val halfWorld = genWorldRange / 2f
+
+        // Cell-indexed generation: each cell deterministically hosts 0 or 1 bush.
+        // At 100% density with 80 base bushes across REFERENCE_EXTENDED_WIDTH,
+        // cell size ≈ 1902 / 80 ≈ 24.
+        val bushCellSize = BUSH_CELL_SIZE
+        val indexRange = WorldViewportTransform.indexRangeForWorldRange(
+            -halfWorld, halfWorld, bushCellSize
+        )
+        val densityFraction = (bushDensity / 100f).coerceIn(0f, 1f)
+        if (densityFraction <= 0f) {
             bushes = emptyList()
             bushesByDepth = emptyMap()
             return
         }
 
-        val newBushes = ArrayList<BushData>(bushCount)
-        val random = Random(randomSeed.toLong() + 5000)  // Different seed from trees
-
-        val bushesPerHill = (bushCount.toFloat() / hills.size).toInt().coerceAtLeast(1)
+        val newBushes = ArrayList<BushData>()
 
         for (hillIndex in hills.indices) {
             val hill = hills[hillIndex]
             val depthFactor = hill.depthFactor
 
-            val hillBushCount = bushesPerHill.coerceAtMost(bushCount - newBushes.size)
+            for (cellIndex in indexRange) {
+                // Per-bush deterministic seed (stable per cell index)
+                val bushRandom = DeterministicLayout.random(randomSeed + 5000 + hillIndex, section = 500, index = cellIndex)
 
-            for (b in 0 until hillBushCount) {
-                val xRatio = random.nextFloat()
+                // Density gating: deterministic skip based on density setting
+                if (bushRandom.nextFloat() > densityFraction) continue
+
+                // World-space position: cell center + jitter
+                val worldX = cellIndex * bushCellSize +
+                    (bushRandom.nextFloat() - 0.5f) * bushCellSize * 0.8f
+
+                // Derive hill-relative xRatio for terrain queries
+                val xRatio = ((worldX / genWorldRange) + 0.5f).coerceIn(0f, 1f)
                 val groundY = getHillY(xRatio, hill)
 
                 // Bushes sit on or slightly below the hill line
-                val verticalOffset = random.nextFloat() * 0.06f
+                val verticalOffset = bushRandom.nextFloat() * 0.06f
                 val yRatio = groundY + verticalOffset
 
                 // Normalize depth for scale
@@ -195,20 +215,20 @@ class BushRenderer {
 
                 // Bushes are smaller than trees, scale with depth
                 val baseScale = 0.4f + normalizedDepth * 0.6f
-                val sizeVariation = 0.7f + random.nextFloat() * 0.6f
+                val sizeVariation = 0.7f + bushRandom.nextFloat() * 0.6f
                 val scale = baseScale * sizeVariation * bushSize
 
                 // Green/dark green color for bush
-                val varR = random.nextInt(20) - 10
-                val varG = random.nextInt(30)
+                val varR = bushRandom.nextInt(20) - 10
+                val varG = bushRandom.nextInt(30)
                 val dayColor = Color.rgb(
                     (40 + varR).coerceIn(0, 255),
                     (80 + varG).coerceIn(0, 255),
                     30
                 )
 
-                newBushes.add(BushData(xRatio, yRatio, scale, depthFactor, dayColor, newBushes.size,
-                    generateBushCircles(random)))
+                newBushes.add(BushData(worldX, yRatio, scale, depthFactor, dayColor, newBushes.size,
+                    generateBushCircles(bushRandom)))
             }
         }
 
@@ -228,7 +248,6 @@ class BushRenderer {
      */
     fun generateBushDecorations(randomSeed: Int) {
         val currentBushes = bushes
-        val random = Random(randomSeed.toLong() + 8000)
 
         if (berriesEnabled && currentBushes.isNotEmpty()) {
             val berryColors = intArrayOf(
@@ -241,15 +260,16 @@ class BushRenderer {
             val berryProbability = berryDensity / 100f
 
             for ((index, _) in currentBushes.withIndex()) {
-                if (random.nextFloat() > berryProbability) continue
+                val bushRandom = DeterministicLayout.random(randomSeed + 8000, section = 510, index = index)
+                if (bushRandom.nextFloat() > berryProbability) continue
                 val bushBerries = mutableListOf<BerryData>()
-                val numBerries = 2 + random.nextInt(4)  // 2-5 berries per bush
+                val numBerries = 2 + bushRandom.nextInt(4)  // 2-5 berries per bush
                 for (b in 0 until numBerries) {
                     bushBerries.add(BerryData(
-                        xOffset = (random.nextFloat() - 0.5f) * 0.8f,
-                        yRatio = 0.2f + random.nextFloat() * 0.6f,
-                        color = berryColors[random.nextInt(berryColors.size)],
-                        size = 0.002f + random.nextFloat() * 0.002f
+                        xOffset = (bushRandom.nextFloat() - 0.5f) * 0.8f,
+                        yRatio = 0.2f + bushRandom.nextFloat() * 0.6f,
+                        color = berryColors[bushRandom.nextInt(berryColors.size)],
+                        size = 0.002f + bushRandom.nextFloat() * 0.002f
                     ))
                 }
                 newBerries[index] = bushBerries
@@ -301,7 +321,10 @@ class BushRenderer {
      * @param ambientColor Pre-computed ambient tint color for the current time of day.
      */
     fun drawBush(canvas: Canvas, bush: BushData, state: SimulationState, ambientColor: Int) {
-        val x = bush.xRatio * extendedWidth - extendedOffset
+        // World-space to screen projection
+        val heightScale = RenderConstants.getHeightScale(height)
+        val screenWidthPx = extendedWidth - 2f * extendedOffset
+        val x = screenWidthPx / 2f + bush.worldX * heightScale
         val groundY = bush.yRatio * height
 
         // Bush size: smaller than trees
@@ -325,7 +348,10 @@ class BushRenderer {
         val windStrength = state.windStrength.coerceIn(0f, 1f) * state.windMultiplier
         val swaySpeed = state.treeSwaySpeed
         val timeSec = state.timeSeconds
-        val sway = sin((timeSec * 1.5f * swaySpeed + bush.xRatio * 3f).toDouble()).toFloat() * windStrength * bushWidth * 0.1f
+        // Use world position for spatial phase
+        val genWorldRange = RenderConstants.getGenerationWorldRange(screenWidthPx)
+        val normalizedPos = (bush.worldX + genWorldRange / 2f) / genWorldRange
+        val sway = sin((timeSec * 1.5f * swaySpeed + normalizedPos * 3f).toDouble()).toFloat() * windStrength * bushWidth * 0.1f
 
         val centerY = groundY - bushHeight * 0.5f
 

@@ -77,7 +77,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
     private var cachedSnowGradients = HashMap<Int, LinearGradient>()
     
     private data class MountainData(
-        val peakX: Float,      // 0.0 to 1.0 (relative to extended width)
+        val worldX: Float,     // World-space x coordinate (0 = center)
         val height: Float,     // 0.0 to 1.0 (relative to screen height)
         val width: Float,      // Width multiplier
         val dayColor: Int,     // Color during day
@@ -114,55 +114,64 @@ class MountainLayer(private val context: Context) : SceneLayer {
 
     private fun quantizeAmbientColor(color: Int): Int = ColorMath.quantizeColor(color)
     
+    companion object {
+        /** World-space cell size for mountain placement. */
+        const val MOUNTAIN_CELL_SIZE = 220f
+    }
+
     private fun generateMountains() {
-        // Calculate mountain count from density and horizontal span.
-        // Width-only scaling ensures consistent density between wallpaper and preview
-        // regardless of canvas height (preview is short, wallpaper is full-screen).
-        val widthRatio = if (extendedWidth > 0f) {
-            RenderConstants.getHorizontalDensityScale(extendedWidth, width, height)
-        } else {
-            1f
-        }
-        val baseMountains = 14  // Base number at 100% density in portrait
-        val mountainCount = ((mountainDensity / 100f) * baseMountains * widthRatio).toInt().coerceIn(0, 60)
-        
+        // Compute visible world range for mountains at worst-case (min) heightScale.
+        // Use getGenerationWorldRange to determine how far the world extends.
+        val genWorldRange = RenderConstants.getGenerationWorldRange(width)
+        val halfWorld = genWorldRange / 2f
+
+        // Determine index range: mountains are placed at stable world cells
+        val indexRange = WorldViewportTransform.indexRangeForWorldRange(
+            -halfWorld, halfWorld, MOUNTAIN_CELL_SIZE
+        )
+
+        // Density scaling: skip indices to respect mountainDensity setting
+        // At 100% density, use all indices. At lower density, skip proportionally.
+        val densityFraction = (mountainDensity / 100f).coerceIn(0f, 1f)
+
         // Build new list (thread-safe: atomic swap at end)
-        val newMountains = ArrayList<MountainData>(mountainCount)
-        
-        for (i in 0 until mountainCount) {
-            val itemRandom = DeterministicLayout.random(randomSeed, section = 100, index = i)
-            // Depth: 0 is far, 1 is near
-            val depth = i.toFloat() / mountainCount.coerceAtLeast(1)
-            
+        val newMountains = ArrayList<MountainData>()
+
+        for (index in indexRange) {
+            val itemRandom = DeterministicLayout.random(randomSeed, section = 100, index = index)
+
+            // Density gating: deterministic skip based on density setting
+            if (itemRandom.nextFloat() > densityFraction) continue
+
+            // World-space position: cell center + jitter
+            val worldX = index * MOUNTAIN_CELL_SIZE +
+                (itemRandom.nextFloat() - 0.5f) * MOUNTAIN_CELL_SIZE * 0.6f
+
+            // Depth: deterministic per index (0 = far, 1 = near)
+            val depth = itemRandom.nextFloat()
+
             // Parallax factor based on depth using centralized constants
-            val depthFactor = RenderConstants.PARALLAX_MOUNTAIN_MIN + 
+            val depthFactor = RenderConstants.PARALLAX_MOUNTAIN_MIN +
                 depth * (RenderConstants.PARALLAX_MOUNTAIN_MAX - RenderConstants.PARALLAX_MOUNTAIN_MIN)
-            
-            // Position: stratified placement with jitter for even distribution
-            // Divide extended width into equal cells, then jitter within each cell
-            val cellWidth = 1f / mountainCount.coerceAtLeast(1)
-            val cellCenter = (i + 0.5f) * cellWidth
-            val jitter = (itemRandom.nextFloat() - 0.5f) * cellWidth * 0.8f
-            val peakX = (cellCenter + jitter).coerceIn(0f, 1f)
-            
+
             // Height: varies by scale setting
             val h = (RenderConstants.MOUNTAIN_HEIGHT_MIN + itemRandom.nextFloat() * RenderConstants.MOUNTAIN_HEIGHT_RANGE) * mountainHeightScale
-            
+
             // Width: Random variation
             val w = (RenderConstants.MOUNTAIN_WIDTH_MIN + itemRandom.nextFloat() * RenderConstants.MOUNTAIN_WIDTH_RANGE) * mountainWidthScale
-            
+
             // Color: Darker/bluer for far mountains (atmospheric perspective)
-            val baseGray = RenderConstants.MOUNTAIN_GRAY_MIN + 
+            val baseGray = RenderConstants.MOUNTAIN_GRAY_MIN +
                 (depth * (RenderConstants.MOUNTAIN_GRAY_MAX - RenderConstants.MOUNTAIN_GRAY_MIN)).toInt()
             val dayColor = Color.rgb(baseGray, baseGray + 5, baseGray + 15)
-            
-            val shapeSeed = DeterministicLayout.mix(randomSeed, section = 101, index = i)
-            newMountains.add(MountainData(peakX, h, w, dayColor, depthFactor, shapeSeed))
+
+            val shapeSeed = DeterministicLayout.mix(randomSeed, section = 101, index = index)
+            newMountains.add(MountainData(worldX, h, w, dayColor, depthFactor, shapeSeed))
         }
-        
+
         // Sort: Far mountains first (drawn behind)
         newMountains.sortBy { it.depthFactor }
-        
+
         // Atomic reference swap (volatile ensures visibility to render thread)
         mountains = newMountains
     }
@@ -231,8 +240,12 @@ class MountainLayer(private val context: Context) : SceneLayer {
             cachedSnowGradients.clear()
         }
         
+        // Build transform for world-to-screen projection
+        val heightScale = RenderConstants.getHeightScale(height)
+        val transform = WorldViewportTransform(width, height, heightScale)
+
         for (mountain in currentMountains) {
-            val peakCenterX = mountain.peakX * extendedWidth - extendedOffset
+            val peakCenterX = transform.worldToScreenX(mountain.worldX, mountain.depthFactor)
             val halfWidthPx = height * mountain.width * 0.25f
             val screenWidth = ViewportCulling.screenWidth(extendedWidth, extendedOffset)
             if (!ViewportCulling.isVisibleHorizontally(
@@ -302,8 +315,9 @@ class MountainLayer(private val context: Context) : SceneLayer {
         pathLeft.reset()
         pathRight.reset()
         
-        // Convert from 0-1 extended space to screen coordinates
-        val peakCenterX = mountain.peakX * extendedWidth - extendedOffset
+        // Convert world-space coordinate to screen pixels
+        val heightScale = RenderConstants.getHeightScale(height)
+        val peakCenterX = width / 2f + mountain.worldX * heightScale * mountain.depthFactor
         // Apply bottom offset to shift mountains up
         val offsetPx = mountainBottomOffset * height
         val peakY = height * (1f - mountain.height) - offsetPx

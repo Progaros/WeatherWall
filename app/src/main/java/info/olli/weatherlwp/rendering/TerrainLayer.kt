@@ -354,8 +354,6 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     }
     
     private fun generateSeasonalDecorations(currentHills: List<HillData>) {
-        val random = Random(randomSeed.toLong() + 5000)
-        
         // Always pre-generate all seasonal decorations.
         // Visibility/opacity is controlled at draw time using season blend factors,
         // enabling smooth transitions between seasons.
@@ -376,14 +374,16 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             for (index in currentHills.indices) {
                 val hillFlowers = mutableListOf<FlowerData>()
                 for (f in 0 until flowersPerHill) {
-                    val xRatio = random.nextFloat()
+                    val flowerRandom = DeterministicLayout.random(randomSeed + 6000 + index, section = 600, index = f)
+                    val xRatio = flowerRandom.nextFloat()
                     val maxVerticalOffset = springFlowerSpread * 0.12f
-                    val verticalOffset = random.nextFloat() * maxVerticalOffset * height
+                    // Store normalized vertical offset (height-independent)
+                    val verticalOffset = flowerRandom.nextFloat() * maxVerticalOffset
                     hillFlowers.add(FlowerData(
                         xRatio = xRatio,
                         yOffset = verticalOffset,
-                        color = flowerColors[random.nextInt(flowerColors.size)],
-                        size = 0.002f + random.nextFloat() * 0.003f
+                        color = flowerColors[flowerRandom.nextInt(flowerColors.size)],
+                        size = 0.002f + flowerRandom.nextFloat() * 0.003f
                     ))
                 }
                 newFlowers[index] = hillFlowers
@@ -401,12 +401,13 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             for ((index, _) in currentHills.withIndex()) {
                 val hillSnow = mutableListOf<SnowPatchData>()
                 for (p in 0 until patchesPerHill) {
-                    val startX = random.nextFloat() * 0.9f
-                    val width = 0.05f + random.nextFloat() * 0.1f * (winterSnowCoverage / 50f)
+                    val snowRandom = DeterministicLayout.random(randomSeed + 7000 + index, section = 700, index = p)
+                    val startX = snowRandom.nextFloat() * 0.9f
+                    val width = 0.05f + snowRandom.nextFloat() * 0.1f * (winterSnowCoverage / 50f)
                     hillSnow.add(SnowPatchData(
                         startXRatio = startX,
                         endXRatio = (startX + width).coerceAtMost(1f),
-                        alpha = 150 + random.nextInt(80)
+                        alpha = 150 + snowRandom.nextInt(80)
                     ))
                 }
                 newSnow[index] = hillSnow
@@ -432,12 +433,13 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             for (index in currentHills.indices) {
                 val hillLeaves = mutableListOf<FallenLeafData>()
                 for (l in 0 until leavesPerHill) {
+                    val leafRandom = DeterministicLayout.random(randomSeed + 8000 + index, section = 800, index = l)
                     hillLeaves.add(FallenLeafData(
-                        xRatio = random.nextFloat(),
-                        yOffset = random.nextFloat() * 0.08f * height,
-                        color = leafColors[random.nextInt(leafColors.size)],
-                        size = 0.003f + random.nextFloat() * 0.004f,
-                        rotation = random.nextFloat() * 360f
+                        xRatio = leafRandom.nextFloat(),
+                        yOffset = leafRandom.nextFloat() * 0.08f,
+                        color = leafColors[leafRandom.nextInt(leafColors.size)],
+                        size = 0.003f + leafRandom.nextFloat() * 0.004f,
+                        rotation = leafRandom.nextFloat() * 360f
                     ))
                 }
                 newLeaves[index] = hillLeaves
@@ -462,11 +464,12 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             for (index in currentHills.indices) {
                 val hillMushrooms = mutableListOf<MushroomData>()
                 for (m in 0 until mushroomsPerHill) {
+                    val mushRandom = DeterministicLayout.random(randomSeed + 9000 + index, section = 900, index = m)
                     hillMushrooms.add(MushroomData(
-                        xRatio = random.nextFloat(),
-                        yOffset = random.nextFloat() * 0.04f * height,
-                        capColor = capColors[random.nextInt(capColors.size)],
-                        size = 0.004f + random.nextFloat() * 0.005f
+                        xRatio = mushRandom.nextFloat(),
+                        yOffset = mushRandom.nextFloat() * 0.04f,
+                        capColor = capColors[mushRandom.nextInt(capColors.size)],
+                        size = 0.004f + mushRandom.nextFloat() * 0.005f
                     ))
                 }
                 newMushrooms[index] = hillMushrooms
@@ -986,7 +989,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 val pointIndex = (flower.xRatio * (hill.controlPoints.size - 1)).toInt()
                     .coerceIn(0, hill.controlPoints.size - 1)
                 val yRatio = hill.heightOffset + 0.12f * (1f - hill.controlPoints[pointIndex])
-                val y = yRatio * height + flower.yOffset
+                val y = yRatio * height + flower.yOffset * height
                 
                 // Blend flower color with ambient for time-of-day consistency
                 val blendedColor = RenderConstants.blendWithAmbient(flower.color, ambientColor, 0.15f)
@@ -1011,7 +1014,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 val pointIndex = (leaf.xRatio * (hill.controlPoints.size - 1)).toInt()
                     .coerceIn(0, hill.controlPoints.size - 1)
                 val yRatio = hill.heightOffset + 0.12f * (1f - hill.controlPoints[pointIndex])
-                val y = yRatio * height + leaf.yOffset
+                val y = yRatio * height + leaf.yOffset * height
                 
                 val blendedColor = RenderConstants.blendWithAmbient(leaf.color, ambientColor, 0.15f)
                 leafPaint.color = blendedColor
@@ -1038,7 +1041,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 val pointIndex = (mushroom.xRatio * (hill.controlPoints.size - 1)).toInt()
                     .coerceIn(0, hill.controlPoints.size - 1)
                 val yRatio = hill.heightOffset + 0.12f * (1f - hill.controlPoints[pointIndex])
-                val y = yRatio * height + mushroom.yOffset
+                val y = yRatio * height + mushroom.yOffset * height
                 
                 val size = mushroom.size * height * (0.5f + mushroomAlpha * 0.5f)  // Grow as they appear
                 

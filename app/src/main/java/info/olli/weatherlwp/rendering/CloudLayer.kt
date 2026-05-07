@@ -94,7 +94,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
      * Each group contains multiple cloud puffs rendered to a single bitmap.
      */
     internal data class CloudGroup(
-        val initialX: Float,      // 0-1 across extended width
+        val initialWorldX: Float,  // World-space x coordinate (0 = center)
         val y: Float,             // Y center position (0-1)
         val speed: Float,         // Movement speed multiplier
         val alpha: Int,           // Pre-calculated alpha (0-255)
@@ -114,8 +114,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
         var renderNodeWidth: Int = 0
         var renderNodeHeight: Int = 0
         
-        // Current X position (accumulated via delta time, wraps 0-1)
-        @Volatile var currentX: Float = initialX
+        // Current world-space X position (accumulated via wind delta, wraps in world-space)
+        @Volatile var currentWorldX: Float = initialWorldX
         
         // Flag to prevent duplicate background render requests
         val isRendering = AtomicBoolean(false)
@@ -243,26 +243,30 @@ class CloudLayer(private val context: Context) : SceneLayer {
         }
         
         val newGroups = ArrayList<CloudGroup>(targetGroups)
-        val random = Random(randomSeed.toLong() + 4000)
         
         val backCount = (targetGroups * BACK_LAYER_RATIO).toInt().coerceAtLeast(1)
         val frontCount = (targetGroups - backCount).coerceAtLeast(1)
         
         // Generate back layer groups (majority of clouds, lower alpha)
+        // Per-cloud deterministic seed: stable regardless of count changes
         for (i in 0 until backCount) {
-            newGroups.add(createCloudGroup(random, isBackLayer = true))
+            val cloudRandom = DeterministicLayout.random(randomSeed + 4000, section = 401, index = i)
+            newGroups.add(createCloudGroup(cloudRandom, isBackLayer = true))
         }
         
         // Generate front layer groups (fewer clouds, higher alpha)
         for (i in 0 until frontCount) {
-            newGroups.add(createCloudGroup(random, isBackLayer = false))
+            val cloudRandom = DeterministicLayout.random(randomSeed + 4000, section = 402, index = i)
+            newGroups.add(createCloudGroup(cloudRandom, isBackLayer = false))
         }
         
         cloudGroups = newGroups
     }
     
     private fun createCloudGroup(random: Random, isBackLayer: Boolean): CloudGroup {
-        val x = random.nextFloat()
+        // Generate world-space position: clouds distributed across the generation world range
+        val genWorldRange = RenderConstants.getGenerationWorldRange(width.coerceAtLeast(1f))
+        val worldX = (random.nextFloat() - 0.5f) * genWorldRange
         val y = RenderConstants.CLOUD_Y_MIN + random.nextFloat() * RenderConstants.CLOUD_Y_RANGE
         
         val groupWidth = GROUP_WIDTH_MIN + random.nextFloat() * (GROUP_WIDTH_MAX - GROUP_WIDTH_MIN)
@@ -283,7 +287,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val depth = depthMin + random.nextFloat() * (depthMax - depthMin)
         
         return CloudGroup(
-            initialX = x,
+            initialWorldX = worldX,
             y = y,
             speed = speed,
             alpha = alpha,
@@ -581,19 +585,18 @@ class CloudLayer(private val context: Context) : SceneLayer {
         // Convert delta time to seconds, cap to prevent jumps
         val deltaSec = (deltaTimeMs / 1000f).coerceAtMost(0.1f)
         
-        // Update each cloud group's position
-        // Speed is in normalized units per second (0-1 = screen width)
-        // At max wind + storm, clouds cross screen in ~8-15 seconds
-        // At calm weather, clouds cross screen in ~60-90 seconds
+        // Update each cloud group's position in world-space
+        // Movement in world-space units per second, scaled by generation world range
+        val genWorldRange = RenderConstants.getGenerationWorldRange(width.coerceAtLeast(1f))
         for (group in currentGroups) {
-            // Move cloud based on current speed with direction
-            // CLOUD_MOVEMENT_SCALE scales to reasonable speed (full screen in ~8s at max, ~80s at min)
-            val movement = deltaSec * group.speed * effectiveSpeed * RenderConstants.CLOUD_MOVEMENT_SCALE * dirX
-            var newX = group.currentX + movement
-            // Wrap position smoothly (0-1 range)
-            while (newX > 1f) newX -= 1f
-            while (newX < 0f) newX += 1f
-            group.currentX = newX
+            // Move cloud in world-space units
+            val movement = deltaSec * group.speed * effectiveSpeed * RenderConstants.CLOUD_MOVEMENT_SCALE * dirX * genWorldRange
+            var newX = group.currentWorldX + movement
+            // Wrap position in world-space (symmetric around center)
+            val halfRange = genWorldRange / 2f
+            while (newX > halfRange) newX -= genWorldRange
+            while (newX < -halfRange) newX += genWorldRange
+            group.currentWorldX = newX
         }
         
         // Update tiled/shader mode offset using same wind calculation as cached mode
@@ -657,11 +660,11 @@ class CloudLayer(private val context: Context) : SceneLayer {
      */
     private fun drawCachedMode(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         // Cloud count from weather, scaled modestly by visible area.
-        // Keep scaling conservative to avoid excessive bitmap rendering.
-        val skyAreaRatio = (extendedWidth / width) * (height / 1920f)
-        val areaScale = skyAreaRatio.coerceIn(1.0f, 1.5f)
+        // Only scale by width ratio to prevent height-only resize from changing cloud count.
+        val screenWidth = width.coerceAtLeast(1f)
+        val widthScale = (RenderConstants.getGenerationWorldRange(screenWidth) / RenderConstants.REFERENCE_EXTENDED_WIDTH).coerceIn(1.0f, 1.5f)
         val baseCount = state.getCloudCount()
-        val targetCount = (baseCount * areaScale).toInt().coerceIn(0, effectiveMaxGroups)
+        val targetCount = (baseCount * widthScale).toInt().coerceIn(0, effectiveMaxGroups)
         
         // Regenerate groups if count changed significantly
         if (kotlin.math.abs(targetCount - cloudCount) > 3 || 
@@ -703,6 +706,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         isBackLayer: Boolean,
         parallaxCalculator: ParallaxCalculator
     ) {
+        val heightScale = RenderConstants.getHeightScale(height)
         var i = 0
         while (i < groups.size) {
             val group = groups[i]
@@ -711,8 +715,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
 
             val px = parallaxCalculator.getOffsetXForDepth(group.depthFactor)
             val py = parallaxCalculator.getOffsetYForDepth(group.depthFactor)
-            val groupX = group.currentX
-            val screenX = groupX * extendedWidth - extendedOffset + px
+            // World-space to screen projection
+            val screenX = width / 2f + group.currentWorldX * heightScale + px
             val screenY = group.y * height + py
 
             val groupWidthPx = (group.groupWidth * minDim).toInt()
@@ -775,6 +779,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         parallaxCalculator: ParallaxCalculator,
         effect: RenderEffect
     ) {
+        val heightScale = RenderConstants.getHeightScale(height)
         var i = 0
         while (i < groups.size) {
             val group = groups[i]
@@ -783,8 +788,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
 
             val px = parallaxCalculator.getOffsetXForDepth(group.depthFactor)
             val py = parallaxCalculator.getOffsetYForDepth(group.depthFactor)
-            val groupX = group.currentX
-            val screenX = groupX * extendedWidth - extendedOffset + px
+            // World-space to screen projection
+            val screenX = width / 2f + group.currentWorldX * heightScale + px
             val screenY = group.y * height + py
 
             val groupWidthPx = (group.groupWidth * minDim).toInt()

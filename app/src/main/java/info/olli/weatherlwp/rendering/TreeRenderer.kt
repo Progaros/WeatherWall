@@ -47,7 +47,7 @@ class TreeRenderer {
     )
 
     data class TreeData(
-        val xRatio: Float,    // 0-1 across extended width
+        val worldX: Float,    // World-space x coordinate (0 = center)
         val yRatio: Float,
         val scale: Float,
         val depthFactor: Float,
@@ -76,6 +76,11 @@ class TreeRenderer {
     )
 
     // ---- Pre-allocated Paint/Path objects (zero-allocation rendering) ----
+
+    companion object {
+        /** World-space cell size for tree placement. ~10 world units per cell. */
+        const val TREE_CELL_SIZE = 10f
+    }
 
     private val treePaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val shadowPaint = Paint().apply {
@@ -209,97 +214,80 @@ class TreeRenderer {
             return
         }
 
-        // Calculate tree count based on density and horizontal span.
-        // Width-only scaling ensures consistent density between wallpaper and preview
-        // regardless of canvas height (preview is short, wallpaper is full-screen).
+        // Compute the generation world range (width-only, height-independent)
         val screenWidth = extendedWidth - 2f * extendedOffset
-        val widthRatio = RenderConstants.getHorizontalDensityScale(extendedWidth, screenWidth, height)
-        // Base trees gives target coverage at 100% density
-        val baseTrees = 200
-        val treeCount = ((treeDensity / 100f) * baseTrees * widthRatio).toInt().coerceIn(0, 3000)
-        if (treeCount <= 0) {
+        val genWorldRange = RenderConstants.getGenerationWorldRange(screenWidth)
+        val halfWorld = genWorldRange / 2f
+
+        // Cell-indexed generation: each cell deterministically hosts 0 or 1 tree.
+        // At 100% density with baseTrees=200 across REFERENCE_EXTENDED_WIDTH,
+        // cell size ≈ REFERENCE_EXTENDED_WIDTH / 200 ≈ 9.5. Round to 10.
+        val treeCellSize = TREE_CELL_SIZE
+        val indexRange = WorldViewportTransform.indexRangeForWorldRange(
+            -halfWorld, halfWorld, treeCellSize
+        )
+        // Density fraction: what fraction of cells actually produce a tree
+        val densityFraction = (treeDensity / 100f).coerceIn(0f, 1f)
+        if (densityFraction <= 0f) {
             trees = emptyList()
             treesByDepth = emptyMap()
             return
         }
 
         // Build new list (thread-safe: atomic swap at end)
-        val newTrees = ArrayList<TreeData>(treeCount)
-
-        // Calculate number of trees per hill (more on foreground hills)
-        val treesPerHill = (treeCount.toFloat() / hills.size).toInt().coerceAtLeast(3)
+        val newTrees = ArrayList<TreeData>()
 
         for (hillIndex in hills.indices) {
             val hill = hills[hillIndex]
             val depthFactor = hill.depthFactor
             val hillRandom = DeterministicLayout.random(randomSeed + 2000, section = 300, index = hillIndex)
 
-            // More trees on foreground hills
-            val extraTrees = if (hillIndex >= hills.size - 2) 5 else 0
-            val hillTreeCount = (treesPerHill + extraTrees).coerceAtMost(treeCount - newTrees.size)
-
-            // Find peak positions for reference (to determine "upper" parts of hill)
-            val points = hill.controlPoints
-            val peakPositions = mutableListOf<Float>()
-            if (points.size >= 3) {
-                for (j in 1 until points.size - 1) {
-                    if (points[j] > points[j - 1] && points[j] > points[j + 1]) {
-                        val normalizedX = j.toFloat() / (points.size - 1)
-                        peakPositions.add(normalizedX)
-                    }
-                }
-            }
-            if (peakPositions.isEmpty()) {
-                peakPositions.add(0.25f)
-                peakPositions.add(0.5f)
-                peakPositions.add(0.75f)
-            }
-
             // Generate clearings (Lichtungen) for this hill layer
-            // Higher sparsity = more and larger clearings
             val numClearings = ((treeSparsity * 5).toInt() + if (hillRandom.nextFloat() < treeSparsity) 1 else 0)
                 .coerceIn(0, 6)
-            val clearings = mutableListOf<Pair<Float, Float>>()  // List of (start, end) x-positions
+            val clearings = mutableListOf<Pair<Float, Float>>()
             for (c in 0 until numClearings) {
                 val clearingRandom = DeterministicLayout.random(randomSeed + 2000 + hillIndex, section = 301, index = c)
-                // Clearing width: 5% to 20% of the width depending on sparsity
                 val clearingWidth = 0.05f + clearingRandom.nextFloat() * 0.15f * treeSparsity
                 val clearingStart = clearingRandom.nextFloat() * (1f - clearingWidth)
                 val clearingEnd = clearingStart + clearingWidth
                 clearings.add(clearingStart to clearingEnd)
             }
 
-            // Place trees along the extended width
-            for (t in 0 until hillTreeCount) {
-                val treeRandom = DeterministicLayout.random(randomSeed + 2000 + hillIndex, section = 310, index = t)
+            // Place trees using stable world-cell indices
+            for (cellIndex in indexRange) {
+                val treeRandom = DeterministicLayout.random(randomSeed + 2000 + hillIndex, section = 310, index = cellIndex)
 
-                // Pure seeded placement keeps the first N trees stable when density changes.
-                val xRatio = treeRandom.nextFloat()
+                // Density gating: deterministic skip based on density setting
+                if (treeRandom.nextFloat() > densityFraction) continue
+
+                // World-space position: cell center + jitter
+                val worldX = cellIndex * treeCellSize +
+                    (treeRandom.nextFloat() - 0.5f) * treeCellSize * 0.8f
+
+                // Derive hill-relative xRatio for terrain queries (0-1 along hill)
+                val xRatio = ((worldX / genWorldRange) + 0.5f).coerceIn(0f, 1f)
 
                 // Skip tree if it falls within a clearing (Lichtung)
                 val inClearing = clearings.any { (start, end) -> xRatio in start..end }
-                if (inClearing) {
-                    continue  // Skip this tree - it's in a clearing
-                }
+                if (inClearing) continue
 
-                // Additional random skip for some extra variation (but less than before)
-                if (treeRandom.nextFloat() < treeSparsity * 0.3f) {
-                    continue  // Occasional extra skip for natural variation
-                }
+                // Additional random skip for some extra variation
+                if (treeRandom.nextFloat() < treeSparsity * 0.3f) continue
 
-                // Get the hill surface Y at this X position (this is the hill line)
+                // Get the hill surface Y at this X position
                 val groundY = getHillY(xRatio, hill)
 
                 // Tree spread controls vertical distribution DOWN from the hill line
-                val maxVerticalOffset = treeSpread * 0.15f  // Max 15% of height below hill line
+                val maxVerticalOffset = treeSpread * 0.15f
                 val verticalOffset = treeRandom.nextFloat() * maxVerticalOffset
-                val yRatio = groundY + verticalOffset  // Move tree down (higher Y = lower on screen)
+                val yRatio = groundY + verticalOffset
 
-                // Normalize depth to 0-1 range for scale using RenderConstants
+                // Normalize depth to 0-1 range for scale
                 val hillsRange = RenderConstants.PARALLAX_HILLS_MAX - RenderConstants.PARALLAX_HILLS_MIN
                 val normalizedDepth = ((depthFactor - RenderConstants.PARALLAX_HILLS_MIN) / hillsRange).coerceIn(0f, 1f)
 
-                // Tree scale: foreground trees (normalizedDepth near 1) are larger
+                // Tree scale: foreground trees are larger
                 val baseScale = RenderConstants.TREE_SCALE_MIN + normalizedDepth * RenderConstants.TREE_SCALE_RANGE
                 val sizeVariation = 1f + (treeRandom.nextFloat() - 0.5f) * 2f * treeSizeRandomness
                 val scale = baseScale * sizeVariation.coerceIn(0.3f, 2.0f)
@@ -321,7 +309,7 @@ class TreeRenderer {
                 val crown = if (isLeaf) generateCrownCircles(treeRandom) else emptyList()
                 val branches = if (isLeaf) generateBranches(treeRandom) else emptyList()
 
-                newTrees.add(TreeData(xRatio, yRatio, scale, depthFactor, dayColor, newTrees.size,
+                newTrees.add(TreeData(worldX, yRatio, scale, depthFactor, dayColor, newTrees.size,
                     type, crown, branches))
             }
         }
@@ -329,7 +317,6 @@ class TreeRenderer {
         newTrees.sortBy { it.depthFactor }
 
         // Build pre-grouped tree map (avoids per-frame filter allocations)
-        // Also pre-sort each group by yRatio for correct Y-based draw order
         val groupedByDepth = newTrees.groupBy { it.depthFactor }
             .mapValues { (_, treesInGroup) -> treesInGroup.sortedBy { it.yRatio } }
 
@@ -481,8 +468,10 @@ class TreeRenderer {
             return
         }
         // --- NEEDLE tree (conifer) rendering below ---
-        // xRatio is 0-1 across extended width, convert to screen coordinates
-        val x = tree.xRatio * extendedWidth - extendedOffset
+        // World-space to screen projection
+        val heightScale = RenderConstants.getHeightScale(height)
+        val screenWidthPx = extendedWidth - 2f * extendedOffset
+        val x = screenWidthPx / 2f + tree.worldX * heightScale
 
         // yRatio is the ground level where tree BASE sits
         val groundY = tree.yRatio * height
@@ -519,12 +508,15 @@ class TreeRenderer {
         val baseFreq = RenderConstants.TREE_SWAY_FREQUENCY * swaySpeed
 
         // TRAVELING WIND WAVE: Gusts move across the scene left-to-right
-        val spatialPhase = tree.xRatio * kotlin.math.PI.toFloat() * 1.0f  // 1 wave cycle across screen
-        val waveSpeed = 1.2f + baseWindStrength * 1.0f  // Wave travels faster with more wind
+        // Spatial phase from world position for traveling wind wave
+        val genWorldRange = RenderConstants.getGenerationWorldRange(screenWidthPx)
+        val normalizedPos = (tree.worldX + genWorldRange / 2f) / genWorldRange
+        val spatialPhase = normalizedPos * kotlin.math.PI.toFloat() * 1.0f
+        val waveSpeed = 1.2f + baseWindStrength * 1.0f
 
         // The gust wave: a traveling sine wave that affects tree intensity
         val gustWavePhase = timeSec * waveSpeed - spatialPhase
-        val gustWave = (sin(gustWavePhase) * 0.5f + 0.5f)  // 0-1 wave intensity at this tree
+        val gustWave = (sin(gustWavePhase) * 0.5f + 0.5f)
 
         // Additional secondary wave for more natural variation
         val secondaryWave = (sin(gustWavePhase * 0.6f + 1.5f) * 0.3f + 0.5f)
@@ -711,7 +703,9 @@ class TreeRenderer {
      * Crown fades out in late autumn and regrows in spring using season transition weights.
      */
     private fun drawLeafTree(canvas: Canvas, tree: TreeData, state: SimulationState, @Suppress("UNUSED_PARAMETER") treeIndex: Int) {
-        val x = tree.xRatio * extendedWidth - extendedOffset
+        val heightScale = RenderConstants.getHeightScale(height)
+        val screenWidth = ViewportCulling.screenWidth(extendedWidth, extendedOffset)
+        val x = screenWidth / 2f + tree.worldX * heightScale
         val groundY = tree.yRatio * height
 
         val totalHeight = height * RenderConstants.TREE_HEIGHT_FACTOR * tree.scale * treeSizeScale
@@ -719,7 +713,6 @@ class TreeRenderer {
         val crownRadius = totalHeight * 0.32f
         val crownCenterY = groundY - totalHeight * 0.65f
 
-        val screenWidth = ViewportCulling.screenWidth(extendedWidth, extendedOffset)
         val objectHalfWidth = crownRadius * 1.8f
         if (!ViewportCulling.isVisibleHorizontally(
                 x = x,
@@ -739,7 +732,9 @@ class TreeRenderer {
         val effectiveWind = (baseWindStrength + gustIntensity * 0.5f).coerceIn(0f, 1f) * windMultiplier
         val timeSec = state.timeSeconds
         val baseFreq = RenderConstants.TREE_SWAY_FREQUENCY * swaySpeed
-        val spatialPhase = tree.xRatio * kotlin.math.PI.toFloat() * 1.0f
+        val genWorldRange = RenderConstants.getGenerationWorldRange(screenWidth)
+        val normalizedPos = (tree.worldX + genWorldRange / 2f) / genWorldRange
+        val spatialPhase = normalizedPos * kotlin.math.PI.toFloat() * 1.0f
         val waveSpeed = 1.2f + baseWindStrength * 1.0f
         val gustWavePhase = timeSec * waveSpeed - spatialPhase
         val gustWave = (sin(gustWavePhase) * 0.5f + 0.5f)
