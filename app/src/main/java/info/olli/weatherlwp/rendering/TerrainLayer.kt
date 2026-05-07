@@ -553,12 +553,17 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         cachedHillGradientAmbientBucket = -1
         cachedHillGradientSnow = -1
 
-        val firstGenerate = lastGeneratedWidth <= 0f || lastGeneratedHeight <= 0f
-        val sizeChangedSignificantly =
-            kotlin.math.abs(lastGeneratedWidth - w) > 1f ||
-            kotlin.math.abs(lastGeneratedHeight - h) > 1f
+        // Always keep sub-renderer dimensions in sync so draw-time
+        // position calculations use the current extendedWidth/extendedOffset.
+        treeRenderer.updateDimensions(extendedWidth, extendedOffset, h)
+        bushRenderer.updateDimensions(extendedWidth, extendedOffset, h)
 
-        if (firstGenerate || sizeChangedSignificantly) {
+        val firstGenerate = lastGeneratedWidth <= 0f || lastGeneratedHeight <= 0f
+        // Only regenerate when WIDTH changes. Height-only changes produce a
+        // zoom-from-center effect via the updated extendedWidth/extendedOffset.
+        val widthChangedSignificantly = kotlin.math.abs(lastGeneratedWidth - w) > 1f
+
+        if (firstGenerate || widthChangedSignificantly) {
             generateTerrain()
             lastGeneratedWidth = w
             lastGeneratedHeight = h

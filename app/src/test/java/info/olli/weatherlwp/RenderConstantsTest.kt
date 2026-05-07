@@ -360,16 +360,15 @@ class RenderConstantsTest {
     }
 
     @Test
-    fun `getExtendedWidth is stable when only height changes`() {
-        // Width-only formula: changing height must NOT change extendedWidth,
-        // so element positions stay centred during preview resize.
+    fun `getExtendedWidth scales with height for taller screens`() {
         val ext916 = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(1080f, 1920f)
         val ext920 = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(1080f, 2400f)
-        assertEquals(ext916, ext920, 0.01f)
+        assertTrue("Taller screen should have wider extended width", ext920 > ext916)
+        assertEquals(ext916 * 1.25f, ext920, 1f)
     }
 
     @Test
-    fun `getExtendedWidth uses width for landscape`() {
+    fun `getExtendedWidth uses screen width for landscape`() {
         val ext = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(720f, 400f)
         assertEquals(720f * 1.76f, ext, 0.01f)
     }

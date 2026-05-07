@@ -189,10 +189,11 @@ class MountainLayer(private val context: Context) : SceneLayer {
         cachedHazeHeight = 0f
 
         val firstGenerate = lastGeneratedWidth <= 0f || lastGeneratedHeight <= 0f
-        val sizeChangedSignificantly =
-            kotlin.math.abs(lastGeneratedWidth - w) > 1f ||
-            kotlin.math.abs(lastGeneratedHeight - h) > 1f
-        if (firstGenerate || sizeChangedSignificantly) {
+        // Only regenerate when WIDTH changes. Height-only changes produce a
+        // zoom-from-center effect via the updated extendedWidth/extendedOffset
+        // without touching element positions or counts.
+        val widthChangedSignificantly = kotlin.math.abs(lastGeneratedWidth - w) > 1f
+        if (firstGenerate || widthChangedSignificantly) {
             generateMountains()
             lastGeneratedWidth = w
             lastGeneratedHeight = h

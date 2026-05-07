@@ -521,6 +521,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
     }
 
     override fun resize(w: Float, h: Float) {
+        val oldW = width
         val sizeChanged = width != w || height != h
         width = w
         height = h
@@ -530,7 +531,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
 
         if (!sizeChanged) return
         
-        // Invalidate cached bitmaps on resize
+        // Invalidate cached bitmaps on any resize (pixel dimensions changed)
         clearGroupBitmaps()
         clearGroupRenderNodes()
         resetRenderNodeEffects()
@@ -539,7 +540,14 @@ class CloudLayer(private val context: Context) : SceneLayer {
         // Recreate lazily on the next frame at the new size.
         clearTiledResources()
         
-        generateCloudGroups()
+        // Only regenerate cloud group positions on WIDTH changes.
+        // Height-only changes produce a zoom-from-center effect via the
+        // updated extendedWidth/extendedOffset; bitmaps are rebuilt lazily.
+        val firstGenerate = oldW <= 0f
+        val widthChangedSignificantly = kotlin.math.abs(oldW - w) > 1f
+        if (firstGenerate || widthChangedSignificantly) {
+            generateCloudGroups()
+        }
     }
 
     override fun update(state: SimulationState, deltaTimeMs: Long) {

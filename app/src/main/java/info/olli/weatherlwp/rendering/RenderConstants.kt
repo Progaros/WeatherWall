@@ -47,18 +47,25 @@ object RenderConstants {
      * Calculate the extended canvas width.
      * Content (mountains, hills, trees, events) should be generated for this width.
      *
-     * Width-proportional scaling keeps element positions stable when only height
-     * changes (e.g. preview resize). Elements grow symmetrically from center
-     * because [getExtendedOffset] is always `(extendedWidth - screenWidth) / 2`.
+     * Height-proportional scaling makes the coordinate space grow with height,
+     * producing a zoom-from-center effect when only height changes (e.g. preview
+     * drag). Layers must skip regeneration on height-only resizes so that
+     * element positions stay stable and simply scale through the new
+     * [extendedWidth] / [getExtendedOffset] at draw time.
+     *
+     * Falls back to screen-width-based sizing when the canvas is wider than
+     * the reference aspect ratio predicts (landscape).
      *
      * @param screenWidth The actual visible screen width
-     * @param screenHeight Unused; kept for API compatibility
+     * @param screenHeight The actual visible screen height
      * @return The extended width for content generation and positioning
      */
-    fun getExtendedWidth(screenWidth: Float, @Suppress("UNUSED_PARAMETER") screenHeight: Float): Float {
-        // Width-based expansion keeps positions centred across height changes.
-        val sideMargin = screenWidth * EXTENDED_SIDE_MARGIN_RATIO
-        return screenWidth + sideMargin * 2f
+    fun getExtendedWidth(screenWidth: Float, screenHeight: Float): Float {
+        val heightScale = (screenHeight / REFERENCE_HEIGHT).coerceAtLeast(MIN_HEIGHT_SCALE)
+        val referenceExtendedWidth = REFERENCE_HEIGHT * REFERENCE_ASPECT_RATIO * (1f + 2f * EXTENDED_SIDE_MARGIN_RATIO)
+        val heightBasedExtended = referenceExtendedWidth * heightScale
+        val screenBasedExtended = screenWidth + screenWidth * EXTENDED_SIDE_MARGIN_RATIO * 2f
+        return maxOf(heightBasedExtended, screenBasedExtended)
     }
 
     /**

@@ -80,6 +80,18 @@ class BushRenderer {
     private var extendedOffset = 0f
     private var height = 0f
 
+    /**
+     * Update render-time dimensions without regenerating bush positions.
+     * Called on height-only resizes so that draw-time coordinate mapping
+     * uses the current [extendedWidth]/[extendedOffset], producing a
+     * zoom-from-center effect.
+     */
+    fun updateDimensions(extendedWidth: Float, extendedOffset: Float, height: Float) {
+        this.extendedWidth = extendedWidth
+        this.extendedOffset = extendedOffset
+        this.height = height
+    }
+
     // ---- Season state (set by TerrainLayer before each draw frame) ----
 
     @Volatile var cachedSeason: String = "summer"

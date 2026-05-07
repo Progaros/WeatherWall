@@ -59,14 +59,33 @@ class LayoutStabilityTest {
     }
 
     @Test
-    fun `extended width is stable when only height changes`() {
+    fun `extended width grows with height for zoom effect`() {
         val extendedTall = RenderConstants.getExtendedWidth(1080f, 2400f)
         val extendedRef = RenderConstants.getExtendedWidth(1080f, 1920f)
         val extendedShort = RenderConstants.getExtendedWidth(1080f, 800f)
 
-        // Width-only formula: height changes must NOT affect extendedWidth
-        assertEquals(extendedRef, extendedTall, 0.01f)
+        // Taller canvas → wider extended width (zoom-out reveals more content)
+        assertTrue(extendedTall > extendedRef)
+        // Short canvas falls back to screen-based minimum
         assertEquals(extendedRef, extendedShort, 0.01f)
+    }
+
+    @Test
+    fun `height change produces symmetric zoom from center`() {
+        // Core zoom property: when only height changes, elements at
+        // symmetric ratios (e.g. 0.3 and 0.7) must move equally far
+        // from screen center.
+        val w = 720f
+        for (h in listOf(800f, 1200f, 1920f, 2400f)) {
+            val ew = RenderConstants.getExtendedWidth(w, h)
+            val eo = RenderConstants.getExtendedOffset(w, ew)
+            val pos03 = 0.3f * ew - eo
+            val pos07 = 0.7f * ew - eo
+            val center = w / 2f
+            val distLeft = center - pos03
+            val distRight = pos07 - center
+            assertEquals("zoom asymmetric at h=$h", distLeft, distRight, 0.01f)
+        }
     }
 
     @Test
@@ -90,18 +109,19 @@ class LayoutStabilityTest {
     }
 
     @Test
-    fun `element screen position is stable across height changes`() {
-        // When width stays constant, height-only changes must NOT shift element screen X.
+    fun `element screen position scales proportionally with height`() {
+        // When height changes, positions scale from center (zoom effect).
+        // Distance from center at peakX=0.3 should be proportional to extendedWidth.
         val w = 720f
-        val ew = RenderConstants.getExtendedWidth(w, 1920f)
-        val eo = RenderConstants.getExtendedOffset(w, ew)
-        val posRef = 0.3f * ew - eo
+        val ewRef = RenderConstants.getExtendedWidth(w, 1920f)
+        val eoRef = RenderConstants.getExtendedOffset(w, ewRef)
+        val distRef = w / 2f - (0.3f * ewRef - eoRef)
 
-        for (h in listOf(800f, 1200f, 1920f, 2400f)) {
-            val ew2 = RenderConstants.getExtendedWidth(w, h)
-            val eo2 = RenderConstants.getExtendedOffset(w, ew2)
-            val pos = 0.3f * ew2 - eo2
-            assertEquals("position shifted at height=$h", posRef, pos, 0.01f)
-        }
+        val ewTall = RenderConstants.getExtendedWidth(w, 2400f)
+        val eoTall = RenderConstants.getExtendedOffset(w, ewTall)
+        val distTall = w / 2f - (0.3f * ewTall - eoTall)
+
+        // Distance from center scales with extendedWidth ratio
+        assertEquals(ewTall / ewRef, distTall / distRef, 0.01f)
     }
 }
