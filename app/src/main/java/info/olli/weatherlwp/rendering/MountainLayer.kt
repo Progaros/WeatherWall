@@ -244,7 +244,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
         val heightScale = RenderConstants.getHeightScale(height)
         val transform = WorldViewportTransform(width, height, heightScale)
 
-        for (mountain in currentMountains) {
+        for ((mountainIdx, mountain) in currentMountains.withIndex()) {
             val peakCenterX = transform.worldToScreenX(mountain.worldX, mountain.depthFactor)
             val halfWidthPx = height * mountain.width * 0.25f
             val screenWidth = ViewportCulling.screenWidth(extendedWidth, extendedOffset)
@@ -264,7 +264,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
             canvas.save()
             canvas.translate(px, py)
             
-            drawMountain(canvas, mountain, state, bucketedAmbientColor)
+            drawMountain(canvas, mountainIdx, mountain, state, bucketedAmbientColor)
             
             canvas.restore()
         }
@@ -310,8 +310,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
     }
     
     @Suppress("UNUSED_PARAMETER")
-    private fun drawMountain(canvas: Canvas, mountain: MountainData, state: SimulationState, ambientColor: Int) {
-        val mountainIdx = mountains.indexOf(mountain)
+    private fun drawMountain(canvas: Canvas, mountainIdx: Int, mountain: MountainData, state: SimulationState, ambientColor: Int) {
         pathLeft.reset()
         pathRight.reset()
         

@@ -481,21 +481,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     }
     
     private fun getHillY(xRatio: Float, hill: HillData): Float {
-        val points = hill.controlPoints
-        // Need at least 2 points to interpolate between
-        if (points.size < 2) return hill.heightOffset
-        
-        // xRatio is 0-1 across the extended width (matches hill control points)
-        // Simply interpolate along the points array
-        val indexFloat = xRatio * (points.size - 1)
-        val index = indexFloat.toInt().coerceIn(0, points.size - 2)
-        val fraction = indexFloat - index
-        
-        val p1 = points[index]
-        val p2 = points[index + 1]
-        val interpolated = p1 + fraction * (p2 - p1)
-        
-        return hill.heightOffset + 0.12f * (1f - interpolated)
+        return VegetationUtil.getHillY(
+            xRatio,
+            TreeRenderer.HillInfo(hill.controlPoints, hill.depthFactor, hill.heightOffset)
+        )
     }
     
     /**
