@@ -47,23 +47,18 @@ object RenderConstants {
      * Calculate the extended canvas width.
      * Content (mountains, hills, trees, events) should be generated for this width.
      *
-     * Uses height-proportional scaling to maintain uniform world appearance:
-     * horizontal spacing scales with height, so the scene looks proportionally
-     * the same at any aspect ratio. Falls back to screen-width-based sizing
-     * when the canvas is wider than the reference aspect ratio predicts (landscape).
+     * Width-proportional scaling keeps element positions stable when only height
+     * changes (e.g. preview resize). Elements grow symmetrically from center
+     * because [getExtendedOffset] is always `(extendedWidth - screenWidth) / 2`.
      *
      * @param screenWidth The actual visible screen width
-     * @param screenHeight The actual visible screen height
+     * @param screenHeight Unused; kept for API compatibility
      * @return The extended width for content generation and positioning
      */
-    fun getExtendedWidth(screenWidth: Float, screenHeight: Float): Float {
-        // Height-proportional: at REFERENCE_HEIGHT, gives the reference extended width.
-        val heightScale = (screenHeight / REFERENCE_HEIGHT).coerceAtLeast(MIN_HEIGHT_SCALE)
-        val referenceExtendedWidth = REFERENCE_HEIGHT * REFERENCE_ASPECT_RATIO * (1f + 2f * EXTENDED_SIDE_MARGIN_RATIO)
-        val heightBasedExtended = referenceExtendedWidth * heightScale
-        // Screen-based minimum: extended width must at least cover the screen + margins
-        val screenBasedExtended = screenWidth + screenWidth * EXTENDED_SIDE_MARGIN_RATIO * 2f
-        return maxOf(heightBasedExtended, screenBasedExtended)
+    fun getExtendedWidth(screenWidth: Float, @Suppress("UNUSED_PARAMETER") screenHeight: Float): Float {
+        // Width-based expansion keeps positions centred across height changes.
+        val sideMargin = screenWidth * EXTENDED_SIDE_MARGIN_RATIO
+        return screenWidth + sideMargin * 2f
     }
 
     /**

@@ -59,23 +59,13 @@ class LayoutStabilityTest {
     }
 
     @Test
-    fun `extended width scales proportionally with height for tall screens`() {
+    fun `extended width is stable when only height changes`() {
         val extendedTall = RenderConstants.getExtendedWidth(1080f, 2400f)
         val extendedRef = RenderConstants.getExtendedWidth(1080f, 1920f)
-
-        // Taller screen should have wider extended width (proportional to height ratio)
-        val expectedRatio = 2400f / 1920f  // 1.25
-        assertEquals(expectedRatio, extendedTall / extendedRef, 0.01f)
-    }
-
-    @Test
-    fun `extended width uses screen width for short screens`() {
-        // When height is small, screen-based width takes over
         val extendedShort = RenderConstants.getExtendedWidth(1080f, 800f)
-        val extendedRef = RenderConstants.getExtendedWidth(1080f, 1920f)
 
-        // At 800px height: heightBased = 1900.8 * (800/1920) = 792 < screenBased = 1900.8
-        // So screen-based wins, giving the same result as reference
+        // Width-only formula: height changes must NOT affect extendedWidth
+        assertEquals(extendedRef, extendedTall, 0.01f)
         assertEquals(extendedRef, extendedShort, 0.01f)
     }
 
@@ -85,5 +75,33 @@ class LayoutStabilityTest {
         val large = RenderConstants.getHorizontalDensityScale(RenderConstants.getExtendedWidth(1440f, 1600f))
 
         assertTrue(large > small)
+    }
+
+    @Test
+    fun `element at peakX half always maps to screen center`() {
+        // Core centering property: peakX=0.5 must map to screenWidth/2
+        // regardless of canvas dimensions.
+        for ((w, h) in listOf(400f to 800f, 720f to 1920f, 1080f to 1920f, 1920f to 1080f)) {
+            val ew = RenderConstants.getExtendedWidth(w, h)
+            val eo = RenderConstants.getExtendedOffset(w, ew)
+            val screenX = 0.5f * ew - eo
+            assertEquals("center broken at ${w}x${h}", w / 2f, screenX, 0.01f)
+        }
+    }
+
+    @Test
+    fun `element screen position is stable across height changes`() {
+        // When width stays constant, height-only changes must NOT shift element screen X.
+        val w = 720f
+        val ew = RenderConstants.getExtendedWidth(w, 1920f)
+        val eo = RenderConstants.getExtendedOffset(w, ew)
+        val posRef = 0.3f * ew - eo
+
+        for (h in listOf(800f, 1200f, 1920f, 2400f)) {
+            val ew2 = RenderConstants.getExtendedWidth(w, h)
+            val eo2 = RenderConstants.getExtendedOffset(w, ew2)
+            val pos = 0.3f * ew2 - eo2
+            assertEquals("position shifted at height=$h", posRef, pos, 0.01f)
+        }
     }
 }
