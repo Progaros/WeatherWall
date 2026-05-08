@@ -34,20 +34,26 @@ object VegetationUtil {
      * Interpolate hill Y at a given xRatio (0-1).
      * Uses linear interpolation between hill control points.
      */
-    fun getHillY(xRatio: Float, hill: TreeRenderer.HillInfo): Float {
-        val points = hill.controlPoints
-        if (points.size < 2) return hill.heightOffset
+    fun getHillY(xRatio: Float, controlPoints: List<Float>, heightOffset: Float): Float {
+        if (controlPoints.size < 2) return heightOffset
 
-        val indexFloat = xRatio * (points.size - 1)
-        val index = indexFloat.toInt().coerceIn(0, points.size - 2)
+        val indexFloat = xRatio * (controlPoints.size - 1)
+        val index = indexFloat.toInt().coerceIn(0, controlPoints.size - 2)
         val fraction = indexFloat - index
 
-        val p1 = points[index]
-        val p2 = points[index + 1]
+        val p1 = controlPoints[index]
+        val p2 = controlPoints[index + 1]
         val interpolated = p1 + fraction * (p2 - p1)
 
-        return hill.heightOffset + 0.12f * (1f - interpolated)
+        return heightOffset + 0.12f * (1f - interpolated)
     }
+
+    /**
+     * Interpolate hill Y at a given xRatio (0-1) using HillInfo.
+     * Convenience overload that delegates to the raw version.
+     */
+    fun getHillY(xRatio: Float, hill: TreeRenderer.HillInfo): Float =
+        getHillY(xRatio, hill.controlPoints, hill.heightOffset)
 
     /**
      * Calculate the blending weight for a given season during transitions.

@@ -867,8 +867,19 @@ class TreeRenderer {
     /**
      * Reload tree-related settings from immutable settings snapshot.
      * Must be called whenever preferences change (and on init).
+     * @return true if any generation-affecting setting changed (requires re-generation)
      */
-    fun reloadSettings(settings: SimulationSettings) {
+    fun reloadSettings(settings: SimulationSettings): Boolean {
+        // Snapshot previous generation-affecting values
+        val prevDensity = treeDensity
+        val prevRatio = leafTreeRatio
+        val prevSpread = treeSpread
+        val prevSparsity = treeSparsity
+        val prevSizeRandom = treeSizeRandomness
+        val prevColorVar = treeColorVariation
+        val prevPinecones = pineconesEnabled
+        val prevPineconeDens = pineconeDensity
+
         // Tree density: 0-200 percentage (50 = normal, 200 = dense forest)
         treeDensity = settings.getInt("pref_tree_density", 50)
 
@@ -901,5 +912,14 @@ class TreeRenderer {
         winterSnowEnabled = settings.getBoolean("pref_winter_snow_hills", true)
         winterSnowCoverage = settings.getInt("pref_winter_snow_coverage", 50)
         useWeatherSnow = settings.getBoolean("pref_weather_snow_enabled", true)
+
+        return prevDensity != treeDensity ||
+            prevRatio != leafTreeRatio ||
+            kotlin.math.abs(prevSpread - treeSpread) > 0.001f ||
+            kotlin.math.abs(prevSparsity - treeSparsity) > 0.001f ||
+            kotlin.math.abs(prevSizeRandom - treeSizeRandomness) > 0.001f ||
+            kotlin.math.abs(prevColorVar - treeColorVariation) > 0.001f ||
+            prevPinecones != pineconesEnabled ||
+            prevPineconeDens != pineconeDensity
     }
 }

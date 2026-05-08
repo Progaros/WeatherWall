@@ -248,11 +248,22 @@ class TerrainLayer(private val context: Context) : SceneLayer {
 
     private fun generateTerrain() {
         generateHills()
-        val hillInfos = hills.map { TreeRenderer.HillInfo(it.controlPoints, it.depthFactor, it.heightOffset) }
+        regenerateVegetation()
+    }
+
+    /**
+     * Regenerate trees, bushes, and seasonal decorations using existing hills.
+     * Called when vegetation/decoration settings change without hill shape changes.
+     */
+    private fun regenerateVegetation() {
+        val currentHills = hills
+        if (currentHills.isEmpty() || extendedWidth <= 0f) return
+        val hillInfos = currentHills.map { TreeRenderer.HillInfo(it.controlPoints, it.depthFactor, it.heightOffset) }
         treeRenderer.generateTrees(hillInfos, extendedWidth, extendedOffset, height, randomSeed)
         treeRenderer.generateTreeDecorations(randomSeed)
         bushRenderer.generateBushes(hillInfos, extendedWidth, extendedOffset, height, randomSeed)
         bushRenderer.generateBushDecorations(randomSeed)
+        generateSeasonalDecorations(currentHills)
     }
     
     private fun generateHills() {
@@ -481,10 +492,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     }
     
     private fun getHillY(xRatio: Float, hill: HillData): Float {
-        return VegetationUtil.getHillY(
-            xRatio,
-            TreeRenderer.HillInfo(hill.controlPoints, hill.depthFactor, hill.heightOffset)
-        )
+        return VegetationUtil.getHillY(xRatio, hill.controlPoints, hill.heightOffset)
     }
     
     /**
@@ -1097,6 +1105,18 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val prevFrequency = hillFrequency
         val prevDistance = hillDistance
         val prevSpread = hillDepthSpread
+
+        // Track previous decoration settings for change detection
+        val prevFlowersEnabled = springFlowersEnabled
+        val prevFlowerDensity = springFlowerDensity
+        val prevFlowerSpread = springFlowerSpread
+        val prevSnowEnabled = winterSnowEnabled
+        val prevSnowCoverage = winterSnowCoverage
+        val prevLeavesEnabled = fallenLeavesEnabled
+        val prevLeavesDensity = fallenLeavesDensity
+        val prevMushroomsEnabled = mushroomsEnabled
+        val prevMushroomDensity = mushroomDensity
+        val prevFrostEnabled = frostEnabled
         
         // Random seed for consistent placement
         randomSeed = settings.getInt("pref_random_seed", 42)
@@ -1154,11 +1174,24 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         mushroomDensity = settings.getInt("pref_mushroom_density", PreferenceDefaults.MUSHROOM_DENSITY)
         frostEnabled = settings.getBoolean("pref_frost_enabled", PreferenceDefaults.FROST_ENABLED)
         
-        // Delegate tree and bush settings to their renderers
-        treeRenderer.reloadSettings(settings)
-        bushRenderer.reloadSettings(settings)
+        // Delegate tree and bush settings to their renderers.
+        // Returns true if any generation-affecting setting changed.
+        val treeSettingsChanged = treeRenderer.reloadSettings(settings)
+        val bushSettingsChanged = bushRenderer.reloadSettings(settings)
+
+        // Detect decoration setting changes
+        val decorationChanged = prevFlowersEnabled != springFlowersEnabled ||
+            prevFlowerDensity != springFlowerDensity ||
+            kotlin.math.abs(prevFlowerSpread - springFlowerSpread) > 0.001f ||
+            prevSnowEnabled != winterSnowEnabled ||
+            prevSnowCoverage != winterSnowCoverage ||
+            prevLeavesEnabled != fallenLeavesEnabled ||
+            prevLeavesDensity != fallenLeavesDensity ||
+            prevMushroomsEnabled != mushroomsEnabled ||
+            prevMushroomDensity != mushroomDensity ||
+            prevFrostEnabled != frostEnabled
         
-        // Only regenerate terrain when structural settings change (expensive operation)
+        // Only regenerate hills when hill structural settings change (expensive)
         val structuralChanged = prevSeed != randomSeed ||
             prevHillCount != hillCount ||
             prevStartY != hillStartY ||
@@ -1172,6 +1205,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         if (structuralChanged) {
             android.util.Log.d("TerrainLayer", "Reloaded: hills=$hillCount, freq=$hillFrequency, amp=$hillAmplitude, dist=$hillDistance, spread=$hillDepthSpread")
             generateTerrain()
+        } else if (treeSettingsChanged || bushSettingsChanged || decorationChanged) {
+            android.util.Log.d("TerrainLayer", "Vegetation/decoration settings changed, regenerating")
+            regenerateVegetation()
         }
     }
 

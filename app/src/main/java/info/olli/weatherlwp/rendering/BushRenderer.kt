@@ -393,13 +393,26 @@ class BushRenderer {
     /**
      * Reload bush-related settings from immutable settings snapshot.
      * Must be called whenever preferences change (and on init).
+     * @return true if any generation-affecting setting changed (requires re-generation)
      */
-    fun reloadSettings(settings: SimulationSettings) {
+    fun reloadSettings(settings: SimulationSettings): Boolean {
+        val prevEnabled = bushesEnabled
+        val prevDensity = bushDensity
+        val prevSize = bushSize
+        val prevBerries = berriesEnabled
+        val prevBerryDens = berryDensity
+
         bushesEnabled = settings.getBoolean("pref_bushes_enabled", PreferenceDefaults.BUSHES_ENABLED)
         bushDensity = settings.getInt("pref_bush_density", PreferenceDefaults.BUSH_DENSITY)
         bushSize = settings.getInt("pref_bush_size", PreferenceDefaults.BUSH_SIZE) / 100f
 
         berriesEnabled = settings.getBoolean("pref_berries_enabled", PreferenceDefaults.BERRIES_ENABLED)
         berryDensity = settings.getInt("pref_berry_density", PreferenceDefaults.BERRY_DENSITY)
+
+        return prevEnabled != bushesEnabled ||
+            prevDensity != bushDensity ||
+            kotlin.math.abs(prevSize - bushSize) > 0.001f ||
+            prevBerries != berriesEnabled ||
+            prevBerryDens != berryDensity
     }
 }

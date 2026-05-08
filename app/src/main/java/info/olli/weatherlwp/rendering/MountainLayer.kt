@@ -216,7 +216,10 @@ class MountainLayer(private val context: Context) : SceneLayer {
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         if (width <= 0 || height <= 0) return
         
-        // Take local snapshot for thread-safe iteration
+        // Take local snapshot for thread-safe iteration.
+        // This is NOT a filtered list — it's a direct reference to the volatile
+        // mountains field, so withIndex() gives stable original indices suitable
+        // for gradient cache keys.
         val currentMountains = mountains
         
         // Get ambient color for atmospheric blending
