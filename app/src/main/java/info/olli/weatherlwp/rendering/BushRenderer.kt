@@ -322,9 +322,9 @@ class BushRenderer {
      */
     fun drawBush(canvas: Canvas, bush: BushData, state: SimulationState, ambientColor: Int) {
         // World-space to screen projection
-        val heightScale = RenderConstants.getHeightScale(height)
         val screenWidthPx = extendedWidth - 2f * extendedOffset
-        val x = screenWidthPx / 2f + bush.worldX * heightScale
+        val positionScale = RenderConstants.getPositionScale(screenWidthPx, height)
+        val x = screenWidthPx / 2f + bush.worldX * positionScale
         val groundY = bush.yRatio * height
 
         // Bush size: smaller than trees

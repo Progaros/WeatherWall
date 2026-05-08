@@ -706,7 +706,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
         isBackLayer: Boolean,
         parallaxCalculator: ParallaxCalculator
     ) {
-        val heightScale = RenderConstants.getHeightScale(height)
+        val positionScale = RenderConstants.getPositionScale(width, height)
+        val cloudZoomScale = RenderConstants.getHeightScale(height)
         var i = 0
         while (i < groups.size) {
             val group = groups[i]
@@ -716,16 +717,16 @@ class CloudLayer(private val context: Context) : SceneLayer {
             val px = parallaxCalculator.getOffsetXForDepth(group.depthFactor)
             val py = parallaxCalculator.getOffsetYForDepth(group.depthFactor)
             // World-space to screen projection
-            val screenX = width / 2f + group.currentWorldX * heightScale + px
+            val screenX = width / 2f + group.currentWorldX * positionScale + px
             val screenY = group.y * height + py
 
             val groupWidthPx = (group.groupWidth * minDim).toInt()
                 .coerceIn(50, effectiveMaxDimension)
 
-            // Viewport culling: skip clouds entirely off-screen
-            val halfW = groupWidthPx * 0.7f  // approximate with padding
+            // Viewport culling: skip clouds entirely off-screen (accounting for zoom scale)
+            val halfW = groupWidthPx * 0.7f * cloudZoomScale
             if (screenX + halfW < 0f || screenX - halfW > width) continue
-            if (screenY + groupWidthPx * 0.5f < 0f || screenY - groupWidthPx * 0.5f > height) continue
+            if (screenY + groupWidthPx * 0.5f * cloudZoomScale < 0f || screenY - groupWidthPx * 0.5f * cloudZoomScale > height) continue
             // Scale cloud height with screen height so they fill tall sky areas
             val heightRef = maxOf(minDim, height * 0.5f)
             val groupHeightPx = (group.groupHeight * heightRef).toInt()
@@ -758,12 +759,12 @@ class CloudLayer(private val context: Context) : SceneLayer {
 
             val bitmap = group.cachedBitmap
             if (bitmap != null) {
-                canvas.drawBitmap(
-                    bitmap,
-                    screenX - paddedWidth / 2f,
-                    screenY - paddedHeight / 2f,
-                    drawPaint
-                )
+                // Scale clouds proportionally to scene zoom so they don't shrink relative to other elements
+                canvas.save()
+                canvas.translate(screenX, screenY)
+                canvas.scale(cloudZoomScale, cloudZoomScale)
+                canvas.drawBitmap(bitmap, -paddedWidth / 2f, -paddedHeight / 2f, drawPaint)
+                canvas.restore()
             }
         }
     }
@@ -779,7 +780,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
         parallaxCalculator: ParallaxCalculator,
         effect: RenderEffect
     ) {
-        val heightScale = RenderConstants.getHeightScale(height)
+        val positionScale = RenderConstants.getPositionScale(width, height)
+        val cloudZoomScale = RenderConstants.getHeightScale(height)
         var i = 0
         while (i < groups.size) {
             val group = groups[i]
@@ -789,16 +791,16 @@ class CloudLayer(private val context: Context) : SceneLayer {
             val px = parallaxCalculator.getOffsetXForDepth(group.depthFactor)
             val py = parallaxCalculator.getOffsetYForDepth(group.depthFactor)
             // World-space to screen projection
-            val screenX = width / 2f + group.currentWorldX * heightScale + px
+            val screenX = width / 2f + group.currentWorldX * positionScale + px
             val screenY = group.y * height + py
 
             val groupWidthPx = (group.groupWidth * minDim).toInt()
                 .coerceIn(50, effectiveMaxDimension)
 
-            // Viewport culling: skip clouds entirely off-screen
-            val halfW = groupWidthPx * 0.7f
+            // Viewport culling: skip clouds entirely off-screen (accounting for zoom scale)
+            val halfW = groupWidthPx * 0.7f * cloudZoomScale
             if (screenX + halfW < 0f || screenX - halfW > width) continue
-            if (screenY + groupWidthPx * 0.5f < 0f || screenY - groupWidthPx * 0.5f > height) continue
+            if (screenY + groupWidthPx * 0.5f * cloudZoomScale < 0f || screenY - groupWidthPx * 0.5f * cloudZoomScale > height) continue
 
             val heightRef = maxOf(minDim, height * 0.5f)
             val groupHeightPx = (group.groupHeight * heightRef).toInt()
@@ -820,11 +822,11 @@ class CloudLayer(private val context: Context) : SceneLayer {
             val node = group.renderNode ?: continue
             node.setRenderEffect(effect)
 
+            // Scale clouds proportionally to scene zoom
             canvas.save()
-            canvas.translate(
-                screenX - paddedWidth / 2f,
-                screenY - paddedHeight / 2f
-            )
+            canvas.translate(screenX, screenY)
+            canvas.scale(cloudZoomScale, cloudZoomScale)
+            canvas.translate(-paddedWidth / 2f, -paddedHeight / 2f)
             canvas.drawRenderNode(node)
             canvas.restore()
         }

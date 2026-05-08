@@ -462,4 +462,43 @@ class RenderConstantsTest {
         // raw: 1/0.001 = 1000 -> clamped to minMs=2000
         assertEquals(2000L, dur)
     }
+
+    // ============== getPositionScale Tests ==============
+
+    @Test
+    fun `getPositionScale at reference dimensions returns 1`() {
+        assertEquals(1.0f, info.olli.weatherlwp.rendering.RenderConstants.getPositionScale(1080f, 1920f), 0.001f)
+    }
+
+    @Test
+    fun `getPositionScale reduces on narrow screens`() {
+        val scaleRef = info.olli.weatherlwp.rendering.RenderConstants.getPositionScale(1080f, 1920f)
+        val scaleNarrow = info.olli.weatherlwp.rendering.RenderConstants.getPositionScale(540f, 1920f)
+        assertTrue("Narrow screen should reduce position scale", scaleNarrow < scaleRef)
+        assertEquals(0.5f, scaleNarrow, 0.001f)
+    }
+
+    @Test
+    fun `getPositionScale does not boost on wide screens`() {
+        // Width correction is capped at 1.0 — wide screens should not spread elements further
+        val scaleRef = info.olli.weatherlwp.rendering.RenderConstants.getPositionScale(1080f, 1920f)
+        val scaleWide = info.olli.weatherlwp.rendering.RenderConstants.getPositionScale(2160f, 1920f)
+        assertEquals("Wide screen should not increase position scale", scaleRef, scaleWide, 0.001f)
+    }
+
+    @Test
+    fun `getPositionScale still zooms on narrow tall screens`() {
+        // Even on narrow screens, increasing height should increase the scale
+        val scaleShort = info.olli.weatherlwp.rendering.RenderConstants.getPositionScale(540f, 1920f)
+        val scaleTall = info.olli.weatherlwp.rendering.RenderConstants.getPositionScale(540f, 3840f)
+        assertTrue("Taller screen should still zoom", scaleTall > scaleShort)
+    }
+
+    @Test
+    fun `getPositionScale clamps at MIN_HEIGHT_SCALE`() {
+        // Very narrow screen: widthCorrection = 0.3, raw result = 0.3
+        // But MIN_HEIGHT_SCALE (0.5) applies as floor
+        val scale = info.olli.weatherlwp.rendering.RenderConstants.getPositionScale(100f, 1920f)
+        assertEquals(info.olli.weatherlwp.rendering.RenderConstants.MIN_HEIGHT_SCALE, scale, 0.001f)
+    }
 }

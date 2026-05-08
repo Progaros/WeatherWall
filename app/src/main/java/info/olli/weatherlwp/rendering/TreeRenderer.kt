@@ -97,7 +97,7 @@ class TreeRenderer {
 
     // ---- Settings (loaded from SharedPreferences) ----
 
-    private var treeDensity = 50        // 0-100 percentage of tree coverage
+    private var treeDensity = 50        // 0-200 coverage scale (50 = normal, 200 = dense forest)
     private var leafTreeRatio = 50      // 0-100: percentage of trees that are leaf (deciduous)
     private var treeSizeScale = 1.0f
     private var treeWidthScale = 1.0f
@@ -227,7 +227,8 @@ class TreeRenderer {
             -halfWorld, halfWorld, treeCellSize
         )
         // Density fraction: what fraction of cells actually produce a tree
-        val densityFraction = (treeDensity / 100f).coerceIn(0f, 1f)
+        // Slider range is 0-200 (50 = normal, 200 = dense forest)
+        val densityFraction = (treeDensity / 200f).coerceIn(0f, 1f)
         if (densityFraction <= 0f) {
             trees = emptyList()
             treesByDepth = emptyMap()
@@ -469,9 +470,9 @@ class TreeRenderer {
         }
         // --- NEEDLE tree (conifer) rendering below ---
         // World-space to screen projection
-        val heightScale = RenderConstants.getHeightScale(height)
         val screenWidthPx = extendedWidth - 2f * extendedOffset
-        val x = screenWidthPx / 2f + tree.worldX * heightScale
+        val positionScale = RenderConstants.getPositionScale(screenWidthPx, height)
+        val x = screenWidthPx / 2f + tree.worldX * positionScale
 
         // yRatio is the ground level where tree BASE sits
         val groundY = tree.yRatio * height
@@ -703,9 +704,9 @@ class TreeRenderer {
      * Crown fades out in late autumn and regrows in spring using season transition weights.
      */
     private fun drawLeafTree(canvas: Canvas, tree: TreeData, state: SimulationState, @Suppress("UNUSED_PARAMETER") treeIndex: Int) {
-        val heightScale = RenderConstants.getHeightScale(height)
         val screenWidth = ViewportCulling.screenWidth(extendedWidth, extendedOffset)
-        val x = screenWidth / 2f + tree.worldX * heightScale
+        val positionScale = RenderConstants.getPositionScale(screenWidth, height)
+        val x = screenWidth / 2f + tree.worldX * positionScale
         val groundY = tree.yRatio * height
 
         val totalHeight = height * RenderConstants.TREE_HEIGHT_FACTOR * tree.scale * treeSizeScale

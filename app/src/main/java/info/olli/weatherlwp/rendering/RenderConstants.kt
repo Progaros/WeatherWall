@@ -32,6 +32,27 @@ object RenderConstants {
     fun getHeightScale(screenHeight: Float): Float {
         return (screenHeight / REFERENCE_HEIGHT).coerceAtLeast(MIN_HEIGHT_SCALE)
     }
+
+    /**
+     * Position-mapping scale for world-to-screen projection.
+     *
+     * On screens narrower than the reference width (1080px), reduces the
+     * spread factor so content remains visible at viewport edges instead
+     * of being pushed off-screen by the zoom effect.
+     *
+     * Use this for worldX → screenX projections. For element sizing,
+     * use [getHeightScale] instead.
+     *
+     * @param screenWidth  The actual visible screen width
+     * @param screenHeight The actual visible screen height
+     * @return Scale factor adjusted for both height zoom and viewport width
+     */
+    fun getPositionScale(screenWidth: Float, screenHeight: Float): Float {
+        val rawScale = getHeightScale(screenHeight)
+        val referenceWidth = REFERENCE_HEIGHT * REFERENCE_ASPECT_RATIO
+        val widthCorrection = (screenWidth / referenceWidth).coerceIn(0.3f, 1.0f)
+        return (rawScale * widthCorrection).coerceAtLeast(MIN_HEIGHT_SCALE)
+    }
     
     /** Reference aspect ratio for world-space calculations (9:16 portrait) */
     const val REFERENCE_ASPECT_RATIO = 0.5625f
@@ -85,8 +106,8 @@ object RenderConstants {
      * @return The extended width for draw-time position mapping
      */
     fun getExtendedWidth(screenWidth: Float, screenHeight: Float): Float {
-        val heightScale = getHeightScale(screenHeight)
-        return getGenerationWorldRange(screenWidth) * heightScale
+        val positionScale = getPositionScale(screenWidth, screenHeight)
+        return getGenerationWorldRange(screenWidth) * positionScale
     }
 
     /**

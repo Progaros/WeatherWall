@@ -124,6 +124,40 @@ class VegetationDensityTest {
         assertNotEquals("different density should produce different count", treeCount(r1), treeCount(r2))
     }
 
+    @Test
+    fun `tree density 150 produces more trees than density 100`() {
+        // Slider goes 0-200; density 150 should produce more trees than 100
+        val renderer100 = TreeRenderer()
+        renderer100.reloadSettings(settingsWithTreeDensity(100))
+        renderer100.generateTrees(sampleHills, extendedWidth, extendedOffset, height, seed)
+
+        val renderer150 = TreeRenderer()
+        renderer150.reloadSettings(settingsWithTreeDensity(150))
+        renderer150.generateTrees(sampleHills, extendedWidth, extendedOffset, height, seed)
+
+        assertTrue(
+            "density 150 (${treeCount(renderer150)}) should produce more trees than density 100 (${treeCount(renderer100)})",
+            treeCount(renderer150) > treeCount(renderer100)
+        )
+    }
+
+    @Test
+    fun `tree density 200 produces the most trees`() {
+        // Slider max (200) should produce more trees than 100
+        val renderer100 = TreeRenderer()
+        renderer100.reloadSettings(settingsWithTreeDensity(100))
+        renderer100.generateTrees(sampleHills, extendedWidth, extendedOffset, height, seed)
+
+        val renderer200 = TreeRenderer()
+        renderer200.reloadSettings(settingsWithTreeDensity(200))
+        renderer200.generateTrees(sampleHills, extendedWidth, extendedOffset, height, seed)
+
+        assertTrue(
+            "density 200 (${treeCount(renderer200)}) should produce more trees than density 100 (${treeCount(renderer100)})",
+            treeCount(renderer200) > treeCount(renderer100)
+        )
+    }
+
     // ===================== Height-only resize does not change tree count =====================
 
     @Test

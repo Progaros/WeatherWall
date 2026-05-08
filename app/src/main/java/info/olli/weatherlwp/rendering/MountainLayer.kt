@@ -244,8 +244,8 @@ class MountainLayer(private val context: Context) : SceneLayer {
         }
         
         // Build transform for world-to-screen projection
-        val heightScale = RenderConstants.getHeightScale(height)
-        val transform = WorldViewportTransform(width, height, heightScale)
+        val positionScale = RenderConstants.getPositionScale(width, height)
+        val transform = WorldViewportTransform(width, height, positionScale)
 
         for ((mountainIdx, mountain) in currentMountains.withIndex()) {
             val peakCenterX = transform.worldToScreenX(mountain.worldX, mountain.depthFactor)
@@ -318,8 +318,8 @@ class MountainLayer(private val context: Context) : SceneLayer {
         pathRight.reset()
         
         // Convert world-space coordinate to screen pixels
-        val heightScale = RenderConstants.getHeightScale(height)
-        val peakCenterX = width / 2f + mountain.worldX * heightScale * mountain.depthFactor
+        val positionScale = RenderConstants.getPositionScale(width, height)
+        val peakCenterX = width / 2f + mountain.worldX * positionScale * mountain.depthFactor
         // Apply bottom offset to shift mountains up
         val offsetPx = mountainBottomOffset * height
         val peakY = height * (1f - mountain.height) - offsetPx
