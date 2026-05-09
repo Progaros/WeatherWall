@@ -68,6 +68,25 @@ object RenderConstants {
     val REFERENCE_EXTENDED_WIDTH = REFERENCE_HEIGHT * REFERENCE_ASPECT_RATIO * (1f + 2f * EXTENDED_SIDE_MARGIN_RATIO)
 
     /**
+     * Half-width of the visible world in world-space units.
+     *
+     * Used for viewport-based generation: only cells within this range
+     * around center need to be generated. Includes generous parallax padding
+     * so content is available even at maximum tilt/scroll offset.
+     *
+     * @param screenWidth The actual visible screen width
+     * @return World-space half-width that covers viewport + parallax padding
+     */
+    fun getVisibleWorldHalf(screenWidth: Float): Float {
+        // Visible half in world-space (1:1 mapping, no positionScale)
+        val visibleHalf = screenWidth / 2f
+        // Parallax padding: covers maximum parallax shift
+        // Use 0.45 * reference height as a generous fixed bound
+        val parallaxPad = REFERENCE_HEIGHT * 0.45f
+        return visibleHalf + parallaxPad
+    }
+
+    /**
      * Calculate the generation world range for the given screen width.
      *
      * This is the total width of the deterministic world that elements are

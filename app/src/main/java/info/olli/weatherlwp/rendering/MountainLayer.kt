@@ -59,10 +59,6 @@ class MountainLayer(private val context: Context) : SceneLayer {
     private var lastGeneratedWidth = 0f
     private var lastGeneratedHeight = 0f
     
-    // Extended canvas dimensions for parallax content
-    private var extendedWidth = 0f
-    private var extendedOffset = 0f
-    
     // Cached haze gradient to avoid per-frame allocation
     private var cachedHazeAmbient = 0
     private var cachedHazeHeight = 0f
@@ -128,14 +124,12 @@ class MountainLayer(private val context: Context) : SceneLayer {
     }
 
     private fun generateMountains() {
-        // Compute visible world range for mountains at worst-case (min) heightScale.
-        // Use getGenerationWorldRange to determine how far the world extends.
-        val genWorldRange = RenderConstants.getGenerationWorldRange(width)
-        val halfWorld = genWorldRange / 2f
+        // Viewport-based generation: generate cells visible on screen + parallax padding.
+        val visibleHalf = RenderConstants.getVisibleWorldHalf(width)
 
         // Determine index range: mountains are placed at stable world cells
         val indexRange = WorldViewportTransform.indexRangeForWorldRange(
-            -halfWorld, halfWorld, MOUNTAIN_CELL_SIZE
+            -visibleHalf, visibleHalf, MOUNTAIN_CELL_SIZE
         )
 
         // Density scaling: skip indices to respect mountainDensity setting
@@ -194,9 +188,6 @@ class MountainLayer(private val context: Context) : SceneLayer {
         val sizeChanged = oldW != w || oldH != h
         width = w
         height = h
-        // Calculate extended width for parallax content
-        extendedWidth = RenderConstants.getExtendedWidth(w, h)
-        extendedOffset = RenderConstants.getExtendedOffset(w, extendedWidth)
 
         if (!sizeChanged) return
 
@@ -210,9 +201,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
         cachedHazeHeight = 0f
 
         val firstGenerate = lastGeneratedWidth <= 0f || lastGeneratedHeight <= 0f
-        // Only regenerate when WIDTH changes. Height-only changes produce a
-        // zoom-from-center effect via the updated extendedWidth/extendedOffset
-        // without touching element positions or counts.
+        // Regenerate when WIDTH changes (viewport-based generation)
         val widthChangedSignificantly = kotlin.math.abs(lastGeneratedWidth - w) > 1f
         if (firstGenerate || widthChangedSignificantly) {
             generateMountains()
@@ -255,18 +244,16 @@ class MountainLayer(private val context: Context) : SceneLayer {
             cachedSnowGradients.clear()
         }
         
-        // Build transform for world-to-screen projection
-        val positionScale = RenderConstants.getPositionScale(width, height)
-        val transform = WorldViewportTransform(width, height, positionScale)
+        // Build transform for world-to-screen projection (no positionScale, use depthFactor for perspective)
+        val transform = WorldViewportTransform(width, height, 1f)
 
         for ((mountainIdx, mountain) in currentMountains.withIndex()) {
             val peakCenterX = transform.worldToScreenX(mountain.worldX, mountain.depthFactor)
             val halfWidthPx = height * mountain.width * 0.25f
-            val screenWidth = ViewportCulling.screenWidth(extendedWidth, extendedOffset)
             if (!ViewportCulling.isVisibleHorizontally(
                     x = peakCenterX,
                     objectHalfWidth = halfWidthPx,
-                    screenWidth = screenWidth,
+                    screenWidth = width,
                     height = height,
                     extraMargin = width * 0.05f
                 )) {
@@ -330,8 +317,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
         pathRight.reset()
         
         // Convert world-space coordinate to screen pixels
-        val positionScale = RenderConstants.getPositionScale(width, height)
-        val peakCenterX = width / 2f + mountain.worldX * positionScale * mountain.depthFactor
+        val peakCenterX = width / 2f + mountain.worldX * mountain.depthFactor
         // Apply bottom offset to shift mountains up
         val offsetPx = mountainBottomOffset * height
         val peakY = height * (1f - mountain.height) - offsetPx

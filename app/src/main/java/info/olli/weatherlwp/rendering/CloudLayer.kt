@@ -59,10 +59,6 @@ class CloudLayer(private val context: Context) : SceneLayer {
     private var height = 0f
     private var minDim = 0f  // min(width, height) - used for cloud sizing to prevent giant bitmaps
     
-    // Extended canvas dimensions for parallax content
-    private var extendedWidth = 0f
-    private var extendedOffset = 0f
-    
     /**
      * Pre-calculated cloud group with cached bitmap.
      * Each group contains multiple cloud puffs rendered to a single bitmap.
@@ -207,9 +203,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
     }
     
     private fun createCloudGroup(random: Random, isBackLayer: Boolean): CloudGroup {
-        // Generate world-space position: clouds distributed across the generation world range
-        val genWorldRange = RenderConstants.getGenerationWorldRange(width.coerceAtLeast(1f))
-        val worldX = (random.nextFloat() - 0.5f) * genWorldRange
+        // Generate world-space position: clouds distributed across visible range + padding
+        val visibleHalf = RenderConstants.getVisibleWorldHalf(width.coerceAtLeast(1f))
+        val worldX = (random.nextFloat() - 0.5f) * visibleHalf * 2f
         val y = RenderConstants.CLOUD_Y_MIN + random.nextFloat() * RenderConstants.CLOUD_Y_RANGE
         
         val groupWidth = GROUP_WIDTH_MIN + random.nextFloat() * (GROUP_WIDTH_MAX - GROUP_WIDTH_MIN)
@@ -355,9 +351,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val sizeChanged = width != w || height != h
         width = w
         height = h
-        minDim = minOf(w, h)  // Use smaller dimension to prevent gigantic bitmaps on portrait
-        extendedWidth = RenderConstants.getExtendedWidth(w, h)
-        extendedOffset = RenderConstants.getExtendedOffset(w, extendedWidth)
+        minDim = minOf(w, h)
 
         if (!sizeChanged) return
         
@@ -365,8 +359,6 @@ class CloudLayer(private val context: Context) : SceneLayer {
         clearGroupBitmaps()
         
         // Only regenerate cloud group positions on WIDTH changes.
-        // Height-only changes produce a zoom-from-center effect via the
-        // updated extendedWidth/extendedOffset; bitmaps are rebuilt lazily.
         val firstGenerate = oldW <= 0f
         val widthChangedSignificantly = kotlin.math.abs(oldW - w) > 1f
         if (firstGenerate || widthChangedSignificantly) {
@@ -406,16 +398,16 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val deltaSec = (deltaTimeMs / 1000f).coerceAtMost(0.1f)
         
         // Update each cloud group's position in world-space
-        // Movement in world-space units per second, scaled by generation world range
-        val genWorldRange = RenderConstants.getGenerationWorldRange(width.coerceAtLeast(1f))
+        // Movement in world-space units per second
+        val wrapRange = RenderConstants.getVisibleWorldHalf(width.coerceAtLeast(1f)) * 2f
         for (group in currentGroups) {
             // Move cloud in world-space units
-            val movement = deltaSec * group.speed * effectiveSpeed * RenderConstants.CLOUD_MOVEMENT_SCALE * dirX * genWorldRange
+            val movement = deltaSec * group.speed * effectiveSpeed * RenderConstants.CLOUD_MOVEMENT_SCALE * dirX * wrapRange
             var newX = group.currentWorldX + movement
             // Wrap position in world-space (symmetric around center)
-            val halfRange = genWorldRange / 2f
-            while (newX > halfRange) newX -= genWorldRange
-            while (newX < -halfRange) newX += genWorldRange
+            val halfRange = wrapRange / 2f
+            while (newX > halfRange) newX -= wrapRange
+            while (newX < -halfRange) newX += wrapRange
             group.currentWorldX = newX
         }
     }
@@ -453,7 +445,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         // Cloud count from weather, scaled modestly by visible area.
         // Only scale by width ratio to prevent height-only resize from changing cloud count.
         val screenWidth = width.coerceAtLeast(1f)
-        val widthScale = (RenderConstants.getGenerationWorldRange(screenWidth) / RenderConstants.REFERENCE_EXTENDED_WIDTH).coerceIn(1.0f, 1.5f)
+        val widthScale = (screenWidth / RenderConstants.REFERENCE_EXTENDED_WIDTH).coerceIn(1.0f, 1.5f)
         val baseCount = state.getCloudCount()
         val targetCount = (baseCount * widthScale).toInt().coerceIn(0, effectiveMaxGroups)
         
@@ -486,7 +478,6 @@ class CloudLayer(private val context: Context) : SceneLayer {
         isBackLayer: Boolean,
         parallaxCalculator: ParallaxCalculator
     ) {
-        val positionScale = RenderConstants.getPositionScale(width, height)
         val cloudZoomScale = RenderConstants.getHeightScale(height)
         var i = 0
         while (i < groups.size) {
@@ -496,8 +487,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
 
             val px = parallaxCalculator.getOffsetXForDepth(group.depthFactor)
             val py = parallaxCalculator.getOffsetYForDepth(group.depthFactor)
-            // World-space to screen projection
-            val screenX = width / 2f + group.currentWorldX * positionScale + px
+            // World-space to screen projection (1:1, no positionScale)
+            val screenX = width / 2f + group.currentWorldX + px
             val screenY = group.y * height + py
 
             val groupWidthPx = (group.groupWidth * minDim).toInt()

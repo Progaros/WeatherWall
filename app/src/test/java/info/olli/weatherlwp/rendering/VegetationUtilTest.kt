@@ -93,79 +93,111 @@ class VegetationUtilTest {
     }
 
     @Test
-    fun `getHillY returns heightOffset when less than 2 control points`() {
+    fun `getHillY returns consistent result for same worldX`() {
         val hill = TreeRenderer.HillInfo(
-            controlPoints = listOf(0.8f),
+            noiseSeed = 42,
+            depthAmplitudeScale = 1.0f,
             depthFactor = 0.5f,
-            heightOffset = 0.5f
+            heightOffset = 0.5f,
+            hillFrequency = 2.0f,
+            hillRoughness = 1.0f,
+            hillAmplitude = 1.0f
         )
-        val y = VegetationUtil.getHillY(0.5f, hill)
-        assertEquals(0.5f, y, 0.001f)
+        val y1 = VegetationUtil.getHillY(100f, hill)
+        val y2 = VegetationUtil.getHillY(100f, hill)
+        assertEquals(y1, y2, 0.001f)
     }
 
     @Test
-    fun `getHillY returns heightOffset with empty control points`() {
+    fun `getHillY varies with worldX`() {
         val hill = TreeRenderer.HillInfo(
-            controlPoints = emptyList(),
+            noiseSeed = 42,
+            depthAmplitudeScale = 1.0f,
             depthFactor = 0.5f,
-            heightOffset = 0.3f
+            heightOffset = 0.5f,
+            hillFrequency = 2.0f,
+            hillRoughness = 1.0f,
+            hillAmplitude = 1.0f
         )
-        val y = VegetationUtil.getHillY(0.5f, hill)
-        assertEquals(0.3f, y, 0.001f)
+        // Sample many positions — not all can produce the same float
+        val values = (0..10).map { VegetationUtil.getHillY(it * 200f, hill) }
+        val distinct = values.toSet().size
+        assertTrue("Expected multiple distinct Y values but got $distinct", distinct > 1)
     }
 
     @Test
-    fun `getHillY interpolates between control points`() {
+    fun `getHillY returns value near heightOffset`() {
         val hill = TreeRenderer.HillInfo(
-            controlPoints = listOf(1.0f, 0.5f, 1.0f),
+            noiseSeed = 123,
+            depthAmplitudeScale = 1.0f,
             depthFactor = 0.5f,
-            heightOffset = 0.4f
+            heightOffset = 0.6f,
+            hillFrequency = 2.0f,
+            hillRoughness = 1.0f,
+            hillAmplitude = 1.0f
         )
-        // xRatio=0.5 -> indexFloat=1.0, index=1, fraction=0.0
-        // p1=0.5, p2=1.0, interpolated=0.5
-        // result = 0.4 + 0.12*(1-0.5) = 0.4 + 0.06 = 0.46
-        val y = VegetationUtil.getHillY(0.5f, hill)
-        assertEquals(0.46f, y, 0.001f)
-    }
-
-    @Test
-    fun `getHillY at xRatio 0 uses first control point`() {
-        val hill = TreeRenderer.HillInfo(
-            controlPoints = listOf(0.8f, 0.5f, 0.2f),
-            depthFactor = 0.5f,
-            heightOffset = 0.3f
-        )
-        // xRatio=0 -> indexFloat=0, index=0, fraction=0
-        // p1=0.8, interpolated=0.8
-        // result = 0.3 + 0.12*(1-0.8) = 0.3 + 0.024 = 0.324
         val y = VegetationUtil.getHillY(0f, hill)
-        assertEquals(0.324f, y, 0.001f)
+        // Y should be near heightOffset (within 0.12 range)
+        assertTrue("Y ($y) should be between 0.4 and 0.8", y in 0.4f..0.8f)
     }
 
     @Test
-    fun `getHillY at xRatio 1 uses last control point`() {
+    fun `getHillY low amplitude produces values close to heightOffset`() {
         val hill = TreeRenderer.HillInfo(
-            controlPoints = listOf(0.8f, 0.5f, 0.2f),
+            noiseSeed = 42,
+            depthAmplitudeScale = 0.1f,
             depthFactor = 0.5f,
-            heightOffset = 0.3f
+            heightOffset = 0.5f,
+            hillFrequency = 2.0f,
+            hillRoughness = 1.0f,
+            hillAmplitude = 0.1f
         )
-        // xRatio=1.0 -> indexFloat=2.0, index clamped to 1, fraction=1.0
-        // p1=0.5, p2=0.2, interpolated = 0.5 + 1.0*(0.2-0.5) = 0.2
-        // result = 0.3 + 0.12*(1-0.2) = 0.3 + 0.096 = 0.396
-        val y = VegetationUtil.getHillY(1f, hill)
-        assertEquals(0.396f, y, 0.001f)
+        val y = VegetationUtil.getHillY(200f, hill)
+        // With very low amplitude, variation is tiny so Y stays near
+        // heightOffset + 0.12*(1 - HILL_BASE_HEIGHT) ≈ 0.578
+        assertTrue("Y ($y) should be close to base value", y in 0.56f..0.60f)
     }
 
     @Test
-    fun `getHillY with flat control points returns heightOffset plus base`() {
-        val hill = TreeRenderer.HillInfo(
-            controlPoints = listOf(1.0f, 1.0f, 1.0f),
+    fun `getHillY with different seeds produces different terrain`() {
+        val hill1 = TreeRenderer.HillInfo(
+            noiseSeed = 42,
+            depthAmplitudeScale = 1.0f,
             depthFactor = 0.5f,
-            heightOffset = 0.5f
+            heightOffset = 0.5f,
+            hillFrequency = 2.0f,
+            hillRoughness = 1.0f,
+            hillAmplitude = 1.0f
         )
-        // All points are 1.0, so interpolated=1.0
-        // result = 0.5 + 0.12*(1-1.0) = 0.5
-        val y = VegetationUtil.getHillY(0.5f, hill)
-        assertEquals(0.5f, y, 0.001f)
+        val hill2 = TreeRenderer.HillInfo(
+            noiseSeed = 999,
+            depthAmplitudeScale = 1.0f,
+            depthFactor = 0.5f,
+            heightOffset = 0.5f,
+            hillFrequency = 2.0f,
+            hillRoughness = 1.0f,
+            hillAmplitude = 1.0f
+        )
+        // Sample many positions — at least some must differ between seeds
+        val diffs = (0..10).count {
+            val x = it * 200f
+            VegetationUtil.getHillY(x, hill1) != VegetationUtil.getHillY(x, hill2)
+        }
+        assertTrue("Expected different terrain from different seeds but only $diffs/11 differed", diffs > 0)
+    }
+
+    @Test
+    fun `noise function is deterministic`() {
+        val v1 = VegetationUtil.noise(3.14f, 42)
+        val v2 = VegetationUtil.noise(3.14f, 42)
+        assertEquals(v1, v2, 0.0001f)
+    }
+
+    @Test
+    fun `hash function produces values in 0 to 1`() {
+        for (n in -100..100) {
+            val h = VegetationUtil.hash(n)
+            assertTrue("hash($n) = $h should be in [0, 1]", h in 0f..1f)
+        }
     }
 }

@@ -5,8 +5,95 @@ import android.graphics.Color
 /**
  * Shared vegetation utility functions used by both TreeRenderer and BushRenderer.
  * Eliminates code duplication for common color and terrain calculations.
+ *
+ * Also contains the deterministic noise functions used by hill terrain
+ * generation so that hills can be evaluated at any world-space X position
+ * (infinite width).
  */
 object VegetationUtil {
+
+    // ============== Noise Functions ==============
+
+    /** Integer hash → float in [0, 1). Used by value noise. */
+    fun hash(n: Int): Float {
+        var x = n
+        x = (x shr 13) xor x
+        x = (x * (x * x * 15731 + 789221) + 1376312589)
+        return (x and 0x7fffffff) / 2147483647.0f
+    }
+
+    /** 1D value noise with smoothstep interpolation. Works at any x. */
+    fun noise(x: Float, seed: Int): Float {
+        val i = x.toInt()
+        val f = x - i
+        val h1 = hash(i + seed)
+        val h2 = hash(i + 1 + seed)
+        val t = f * f * (3 - 2 * f)
+        return h1 + t * (h2 - h1)
+    }
+
+    /**
+     * Evaluate fractal Brownian motion (fBm) hill noise at a world-space X.
+     *
+     * The noise coordinate is derived from [worldX] normalised by
+     * [RenderConstants.REFERENCE_EXTENDED_WIDTH] so that the visual
+     * pattern matches the old pre-sampled control-point approach at
+     * reference dimensions and extends seamlessly beyond.
+     *
+     * @return Raw noise value in approximately 0–1 range.
+     */
+    fun evaluateHillNoise(
+        worldX: Float,
+        noiseSeed: Int,
+        hillFrequency: Float,
+        hillRoughness: Float
+    ): Float {
+        val noiseX = (worldX / RenderConstants.REFERENCE_EXTENDED_WIDTH + 0.5f) * hillFrequency * 5.0f
+        var noiseVal = noise(noiseX, noiseSeed) * 1.0f
+        noiseVal += noise(noiseX * 2f, noiseSeed + 100) * 0.5f * hillRoughness
+        noiseVal += noise(noiseX * 4f, noiseSeed + 200) * 0.25f * hillRoughness
+        noiseVal += noise(noiseX * 8f, noiseSeed + 300) * 0.125f * hillRoughness
+        val maxAmp = 1.0f + 0.5f * hillRoughness + 0.25f * hillRoughness + 0.125f * hillRoughness
+        return noiseVal / maxAmp
+    }
+
+    /**
+     * Get hill Y (as a ratio of screen height, 0 = top, 1 = bottom)
+     * at an arbitrary world-space X position.
+     *
+     * This replaces the old control-point interpolation approach and allows
+     * hills to extend infinitely in both directions.
+     */
+    fun getHillYFromNoise(
+        worldX: Float,
+        noiseSeed: Int,
+        depthAmplitudeScale: Float,
+        heightOffset: Float,
+        hillFrequency: Float,
+        hillRoughness: Float,
+        hillAmplitude: Float
+    ): Float {
+        val noiseVal = evaluateHillNoise(worldX, noiseSeed, hillFrequency, hillRoughness)
+        val effectiveAmplitude = hillAmplitude * depthAmplitudeScale
+        val normalizedValue = (RenderConstants.HILL_BASE_HEIGHT +
+            (noiseVal - 0.5f) * RenderConstants.HILL_HEIGHT_RANGE * effectiveAmplitude)
+            .coerceIn(0.05f, 0.75f)
+        return heightOffset + 0.12f * (1f - normalizedValue)
+    }
+
+    /**
+     * Get hill Y at a world-space X using a [TreeRenderer.HillInfo].
+     */
+    fun getHillY(worldX: Float, hill: TreeRenderer.HillInfo): Float =
+        getHillYFromNoise(
+            worldX,
+            hill.noiseSeed,
+            hill.depthAmplitudeScale,
+            hill.heightOffset,
+            hill.hillFrequency,
+            hill.hillRoughness,
+            hill.hillAmplitude
+        )
 
     /**
      * Apply autumn coloring to a base green color.
@@ -29,31 +116,6 @@ object VegetationUtil {
             (b + (targetB - b) * weight).toInt().coerceIn(0, 255)
         )
     }
-
-    /**
-     * Interpolate hill Y at a given xRatio (0-1).
-     * Uses linear interpolation between hill control points.
-     */
-    fun getHillY(xRatio: Float, controlPoints: List<Float>, heightOffset: Float): Float {
-        if (controlPoints.size < 2) return heightOffset
-
-        val indexFloat = xRatio * (controlPoints.size - 1)
-        val index = indexFloat.toInt().coerceIn(0, controlPoints.size - 2)
-        val fraction = indexFloat - index
-
-        val p1 = controlPoints[index]
-        val p2 = controlPoints[index + 1]
-        val interpolated = p1 + fraction * (p2 - p1)
-
-        return heightOffset + 0.12f * (1f - interpolated)
-    }
-
-    /**
-     * Interpolate hill Y at a given xRatio (0-1) using HillInfo.
-     * Convenience overload that delegates to the raw version.
-     */
-    fun getHillY(xRatio: Float, hill: TreeRenderer.HillInfo): Float =
-        getHillY(xRatio, hill.controlPoints, hill.heightOffset)
 
     /**
      * Calculate the blending weight for a given season during transitions.

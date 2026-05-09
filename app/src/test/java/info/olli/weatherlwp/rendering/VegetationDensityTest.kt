@@ -19,19 +19,26 @@ class VegetationDensityTest {
 
     private val sampleHills = listOf(
         TreeRenderer.HillInfo(
-            controlPoints = List(100) { 0.5f },
+            noiseSeed = 42,
+            depthAmplitudeScale = 1.0f,
             depthFactor = 0.6f,
-            heightOffset = 0.7f
+            heightOffset = 0.7f,
+            hillFrequency = 2.0f,
+            hillRoughness = 1.0f,
+            hillAmplitude = 1.0f
         ),
         TreeRenderer.HillInfo(
-            controlPoints = List(100) { 0.5f },
+            noiseSeed = 42,
+            depthAmplitudeScale = 1.0f,
             depthFactor = 0.7f,
-            heightOffset = 0.8f
+            heightOffset = 0.8f,
+            hillFrequency = 2.0f,
+            hillRoughness = 1.0f,
+            hillAmplitude = 1.0f
         )
     )
 
-    private val extendedWidth = 2000f
-    private val extendedOffset = 100f
+    private val screenWidth = 1080f
     private val height = 1920f
     private val seed = 42
 
@@ -41,11 +48,11 @@ class VegetationDensityTest {
     fun `tree density 10 produces fewer trees than density 50`() {
         val renderer10 = TreeRenderer()
         renderer10.reloadSettings(settingsWithTreeDensity(10))
-        renderer10.generateTrees(sampleHills, extendedWidth, extendedOffset, height, seed)
+        renderer10.generateTrees(sampleHills, screenWidth, height, seed)
 
         val renderer50 = TreeRenderer()
         renderer50.reloadSettings(settingsWithTreeDensity(50))
-        renderer50.generateTrees(sampleHills, extendedWidth, extendedOffset, height, seed)
+        renderer50.generateTrees(sampleHills, screenWidth, height, seed)
 
         assertTrue(
             "density 10 (${treeCount(renderer10)}) should produce fewer trees than density 50 (${treeCount(renderer50)})",
@@ -57,11 +64,11 @@ class VegetationDensityTest {
     fun `tree density 100 produces more trees than density 50`() {
         val renderer50 = TreeRenderer()
         renderer50.reloadSettings(settingsWithTreeDensity(50))
-        renderer50.generateTrees(sampleHills, extendedWidth, extendedOffset, height, seed)
+        renderer50.generateTrees(sampleHills, screenWidth, height, seed)
 
         val renderer100 = TreeRenderer()
         renderer100.reloadSettings(settingsWithTreeDensity(100))
-        renderer100.generateTrees(sampleHills, extendedWidth, extendedOffset, height, seed)
+        renderer100.generateTrees(sampleHills, screenWidth, height, seed)
 
         assertTrue(
             "density 100 (${treeCount(renderer100)}) should produce more trees than density 50 (${treeCount(renderer50)})",
@@ -73,7 +80,7 @@ class VegetationDensityTest {
     fun `tree density 0 produces no trees`() {
         val renderer = TreeRenderer()
         renderer.reloadSettings(settingsWithTreeDensity(0))
-        renderer.generateTrees(sampleHills, extendedWidth, extendedOffset, height, seed)
+        renderer.generateTrees(sampleHills, screenWidth, height, seed)
 
         assertEquals(0, treeCount(renderer))
     }
@@ -84,11 +91,11 @@ class VegetationDensityTest {
     fun `same seed and density produces identical tree count`() {
         val r1 = TreeRenderer()
         r1.reloadSettings(settingsWithTreeDensity(50))
-        r1.generateTrees(sampleHills, extendedWidth, extendedOffset, height, seed)
+        r1.generateTrees(sampleHills, screenWidth, height, seed)
 
         val r2 = TreeRenderer()
         r2.reloadSettings(settingsWithTreeDensity(50))
-        r2.generateTrees(sampleHills, extendedWidth, extendedOffset, height, seed)
+        r2.generateTrees(sampleHills, screenWidth, height, seed)
 
         assertEquals(treeCount(r1), treeCount(r2))
     }
@@ -97,11 +104,11 @@ class VegetationDensityTest {
     fun `same seed and density produces identical tree positions`() {
         val r1 = TreeRenderer()
         r1.reloadSettings(settingsWithTreeDensity(50))
-        r1.generateTrees(sampleHills, extendedWidth, extendedOffset, height, seed)
+        r1.generateTrees(sampleHills, screenWidth, height, seed)
 
         val r2 = TreeRenderer()
         r2.reloadSettings(settingsWithTreeDensity(50))
-        r2.generateTrees(sampleHills, extendedWidth, extendedOffset, height, seed)
+        r2.generateTrees(sampleHills, screenWidth, height, seed)
 
         val trees1 = allTrees(r1)
         val trees2 = allTrees(r2)
@@ -115,11 +122,11 @@ class VegetationDensityTest {
     fun `different density changes tree count`() {
         val r1 = TreeRenderer()
         r1.reloadSettings(settingsWithTreeDensity(50))
-        r1.generateTrees(sampleHills, extendedWidth, extendedOffset, height, seed)
+        r1.generateTrees(sampleHills, screenWidth, height, seed)
 
         val r2 = TreeRenderer()
         r2.reloadSettings(settingsWithTreeDensity(80))
-        r2.generateTrees(sampleHills, extendedWidth, extendedOffset, height, seed)
+        r2.generateTrees(sampleHills, screenWidth, height, seed)
 
         assertNotEquals("different density should produce different count", treeCount(r1), treeCount(r2))
     }
@@ -129,11 +136,11 @@ class VegetationDensityTest {
         // Slider goes 0-200; density 150 should produce more trees than 100
         val renderer100 = TreeRenderer()
         renderer100.reloadSettings(settingsWithTreeDensity(100))
-        renderer100.generateTrees(sampleHills, extendedWidth, extendedOffset, height, seed)
+        renderer100.generateTrees(sampleHills, screenWidth, height, seed)
 
         val renderer150 = TreeRenderer()
         renderer150.reloadSettings(settingsWithTreeDensity(150))
-        renderer150.generateTrees(sampleHills, extendedWidth, extendedOffset, height, seed)
+        renderer150.generateTrees(sampleHills, screenWidth, height, seed)
 
         assertTrue(
             "density 150 (${treeCount(renderer150)}) should produce more trees than density 100 (${treeCount(renderer100)})",
@@ -146,11 +153,11 @@ class VegetationDensityTest {
         // Slider max (200) should produce more trees than 100
         val renderer100 = TreeRenderer()
         renderer100.reloadSettings(settingsWithTreeDensity(100))
-        renderer100.generateTrees(sampleHills, extendedWidth, extendedOffset, height, seed)
+        renderer100.generateTrees(sampleHills, screenWidth, height, seed)
 
         val renderer200 = TreeRenderer()
         renderer200.reloadSettings(settingsWithTreeDensity(200))
-        renderer200.generateTrees(sampleHills, extendedWidth, extendedOffset, height, seed)
+        renderer200.generateTrees(sampleHills, screenWidth, height, seed)
 
         assertTrue(
             "density 200 (${treeCount(renderer200)}) should produce more trees than density 100 (${treeCount(renderer100)})",
@@ -166,17 +173,13 @@ class VegetationDensityTest {
 
         val r1 = TreeRenderer()
         r1.reloadSettings(settingsWithTreeDensity(50))
-        val ew1 = RenderConstants.getExtendedWidth(w, 1920f)
-        val eo1 = RenderConstants.getExtendedOffset(w, ew1)
-        r1.generateTrees(sampleHills, ew1, eo1, 1920f, seed)
+        r1.generateTrees(sampleHills, w, 1920f, seed)
 
         val r2 = TreeRenderer()
         r2.reloadSettings(settingsWithTreeDensity(50))
-        val ew2 = RenderConstants.getExtendedWidth(w, 2400f)
-        val eo2 = RenderConstants.getExtendedOffset(w, ew2)
-        r2.generateTrees(sampleHills, ew2, eo2, 2400f, seed)
+        r2.generateTrees(sampleHills, w, 2400f, seed)
 
-        // Same width → same generation world range → same cell indices → same count
+        // Same width → same visible world range → same cell count
         assertEquals(
             "height-only resize should not change tree count",
             treeCount(r1), treeCount(r2)
@@ -189,11 +192,11 @@ class VegetationDensityTest {
     fun `bush density 10 produces fewer bushes than density 50`() {
         val r10 = BushRenderer()
         r10.reloadSettings(settingsWithBushDensity(10))
-        r10.generateBushes(sampleHills, extendedWidth, extendedOffset, height, seed)
+        r10.generateBushes(sampleHills, screenWidth, height, seed)
 
         val r50 = BushRenderer()
         r50.reloadSettings(settingsWithBushDensity(50))
-        r50.generateBushes(sampleHills, extendedWidth, extendedOffset, height, seed)
+        r50.generateBushes(sampleHills, screenWidth, height, seed)
 
         assertTrue(
             "bush density 10 (${bushCount(r10)}) < density 50 (${bushCount(r50)})",
@@ -205,7 +208,7 @@ class VegetationDensityTest {
     fun `bush density 0 produces no bushes`() {
         val renderer = BushRenderer()
         renderer.reloadSettings(settingsWithBushDensity(0))
-        renderer.generateBushes(sampleHills, extendedWidth, extendedOffset, height, seed)
+        renderer.generateBushes(sampleHills, screenWidth, height, seed)
 
         assertEquals(0, bushCount(renderer))
     }
@@ -214,11 +217,11 @@ class VegetationDensityTest {
     fun `same seed and bush density produces identical count`() {
         val r1 = BushRenderer()
         r1.reloadSettings(settingsWithBushDensity(30))
-        r1.generateBushes(sampleHills, extendedWidth, extendedOffset, height, seed)
+        r1.generateBushes(sampleHills, screenWidth, height, seed)
 
         val r2 = BushRenderer()
         r2.reloadSettings(settingsWithBushDensity(30))
-        r2.generateBushes(sampleHills, extendedWidth, extendedOffset, height, seed)
+        r2.generateBushes(sampleHills, screenWidth, height, seed)
 
         assertEquals(bushCount(r1), bushCount(r2))
     }
@@ -261,31 +264,14 @@ class VegetationDensityTest {
         assertEquals("should not report change", false, changed)
     }
 
-    // ===================== VegetationUtil.getHillY raw overload =====================
+    // ===================== VegetationUtil.getHillY noise-based =====================
 
     @Test
-    fun `getHillY raw overload matches HillInfo overload`() {
-        val points = listOf(1.0f, 0.5f, 1.0f)
-        val offset = 0.4f
-        val hill = TreeRenderer.HillInfo(points, 0.5f, offset)
-
-        for (xRatio in listOf(0f, 0.25f, 0.5f, 0.75f, 1f)) {
-            val fromHill = VegetationUtil.getHillY(xRatio, hill)
-            val fromRaw = VegetationUtil.getHillY(xRatio, points, offset)
-            assertEquals("mismatch at xRatio=$xRatio", fromHill, fromRaw, 0f)
-        }
-    }
-
-    @Test
-    fun `getHillY raw overload returns heightOffset for single point`() {
-        val y = VegetationUtil.getHillY(0.5f, listOf(0.8f), 0.5f)
-        assertEquals(0.5f, y, 0.001f)
-    }
-
-    @Test
-    fun `getHillY raw overload returns heightOffset for empty points`() {
-        val y = VegetationUtil.getHillY(0.5f, emptyList(), 0.3f)
-        assertEquals(0.3f, y, 0.001f)
+    fun `getHillY noise evaluation is deterministic`() {
+        val hill = sampleHills[0]
+        val y1 = VegetationUtil.getHillY(100f, hill)
+        val y2 = VegetationUtil.getHillY(100f, hill)
+        assertEquals(y1, y2, 0f)
     }
 
     // ===================== Helpers =====================

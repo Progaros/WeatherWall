@@ -70,9 +70,13 @@ class TreeRenderer {
      * Mirrors the fields from TerrainLayer.HillData that tree generation requires.
      */
     data class HillInfo(
-        val controlPoints: List<Float>,
+        val noiseSeed: Int,
+        val depthAmplitudeScale: Float,
         val depthFactor: Float,
-        val heightOffset: Float
+        val heightOffset: Float,
+        val hillFrequency: Float,
+        val hillRoughness: Float,
+        val hillAmplitude: Float
     )
 
     // ---- Pre-allocated Paint/Path objects (zero-allocation rendering) ----
@@ -128,19 +132,15 @@ class TreeRenderer {
 
     // ---- Screen dimensions (stored from generateTrees) ----
 
-    private var extendedWidth = 0f
-    private var extendedOffset = 0f
+    private var screenWidth = 0f
     private var height = 0f
 
     /**
      * Update render-time dimensions without regenerating tree positions.
-     * Called on height-only resizes so that draw-time coordinate mapping
-     * uses the current [extendedWidth]/[extendedOffset], producing a
-     * zoom-from-center effect.
+     * Called on height-only resizes.
      */
-    fun updateDimensions(extendedWidth: Float, extendedOffset: Float, height: Float) {
-        this.extendedWidth = extendedWidth
-        this.extendedOffset = extendedOffset
+    fun updateDimensions(screenWidth: Float, height: Float) {
+        this.screenWidth = screenWidth
         this.height = height
     }
 
@@ -178,10 +178,10 @@ class TreeRenderer {
     private fun darkenColor(color: Int, factor: Float = 0.65f): Int = ColorMath.darkenColor(color, factor)
 
     /**
-     * Interpolate hill Y at a given xRatio (0-1), same algorithm as TerrainLayer.getHillY().
+     * Evaluate hill Y at a world-space X position using noise.
      */
-    private fun getHillY(xRatio: Float, hill: HillInfo): Float =
-        VegetationUtil.getHillY(xRatio, hill)
+    private fun getHillY(worldX: Float, hill: HillInfo): Float =
+        VegetationUtil.getHillY(worldX, hill)
 
     // ========================================================================
     // Generation methods
@@ -190,41 +190,33 @@ class TreeRenderer {
     /**
      * Generate trees placed along hills.
      *
-     * @param hills Hill information (control points, depth, height offset) for tree placement.
-     * @param extendedWidth Extended canvas width for parallax content.
-     * @param extendedOffset Offset to center extended content on screen.
+     * @param hills Hill information (noise params, depth, height offset) for tree placement.
+     * @param screenWidth Actual visible screen width in pixels.
      * @param height Screen height in pixels.
      * @param randomSeed Seed for deterministic placement.
      */
     fun generateTrees(
         hills: List<HillInfo>,
-        extendedWidth: Float,
-        extendedOffset: Float,
+        screenWidth: Float,
         height: Float,
         randomSeed: Int
     ) {
         // Store dimensions for draw methods
-        this.extendedWidth = extendedWidth
-        this.extendedOffset = extendedOffset
+        this.screenWidth = screenWidth
         this.height = height
 
-        if (hills.isEmpty() || treeDensity <= 0 || extendedWidth <= 0) {
+        if (hills.isEmpty() || treeDensity <= 0 || screenWidth <= 0) {
             trees = emptyList()
             treesByDepth = emptyMap()
             return
         }
 
-        // Compute the generation world range (width-only, height-independent)
-        val screenWidth = extendedWidth - 2f * extendedOffset
-        val genWorldRange = RenderConstants.getGenerationWorldRange(screenWidth)
-        val halfWorld = genWorldRange / 2f
-
-        // Cell-indexed generation: each cell deterministically hosts 0 or 1 tree.
-        // At 100% density with baseTrees=200 across REFERENCE_EXTENDED_WIDTH,
-        // cell size ≈ REFERENCE_EXTENDED_WIDTH / 200 ≈ 9.5. Round to 10.
+        // Viewport-based generation: generate cells visible on screen + parallax padding.
+        // The world is infinite — cells extend in both directions deterministically.
+        val visibleHalf = RenderConstants.getVisibleWorldHalf(screenWidth)
         val treeCellSize = TREE_CELL_SIZE
         val indexRange = WorldViewportTransform.indexRangeForWorldRange(
-            -halfWorld, halfWorld, treeCellSize
+            -visibleHalf, visibleHalf, treeCellSize
         )
         // Density fraction: what fraction of cells actually produce a tree
         // Slider range is 0-200 (50 = normal, 200 = dense forest)
@@ -244,15 +236,16 @@ class TreeRenderer {
             val hillRandom = DeterministicLayout.random(randomSeed + 2000, section = 300, index = hillIndex)
 
             // Generate clearings (Lichtungen) for this hill layer
+            // Clearings use worldX ranges instead of ratios for infinite-world compatibility
             val numClearings = ((treeSparsity * 5).toInt() + if (hillRandom.nextFloat() < treeSparsity) 1 else 0)
                 .coerceIn(0, 6)
             val clearings = mutableListOf<Pair<Float, Float>>()
             for (c in 0 until numClearings) {
                 val clearingRandom = DeterministicLayout.random(randomSeed + 2000 + hillIndex, section = 301, index = c)
-                val clearingWidth = 0.05f + clearingRandom.nextFloat() * 0.15f * treeSparsity
-                val clearingStart = clearingRandom.nextFloat() * (1f - clearingWidth)
-                val clearingEnd = clearingStart + clearingWidth
-                clearings.add(clearingStart to clearingEnd)
+                val clearingHalfWidth = (0.05f + clearingRandom.nextFloat() * 0.15f * treeSparsity) *
+                    RenderConstants.REFERENCE_EXTENDED_WIDTH * 0.5f
+                val clearingCenter = (clearingRandom.nextFloat() - 0.5f) * RenderConstants.REFERENCE_EXTENDED_WIDTH
+                clearings.add((clearingCenter - clearingHalfWidth) to (clearingCenter + clearingHalfWidth))
             }
 
             // Place trees using stable world-cell indices
@@ -266,18 +259,15 @@ class TreeRenderer {
                 val worldX = cellIndex * treeCellSize +
                     (treeRandom.nextFloat() - 0.5f) * treeCellSize * 0.8f
 
-                // Derive hill-relative xRatio for terrain queries (0-1 along hill)
-                val xRatio = ((worldX / genWorldRange) + 0.5f).coerceIn(0f, 1f)
-
                 // Skip tree if it falls within a clearing (Lichtung)
-                val inClearing = clearings.any { (start, end) -> xRatio in start..end }
+                val inClearing = clearings.any { (start, end) -> worldX in start..end }
                 if (inClearing) continue
 
                 // Additional random skip for some extra variation
                 if (treeRandom.nextFloat() < treeSparsity * 0.3f) continue
 
-                // Get the hill surface Y at this X position
-                val groundY = getHillY(xRatio, hill)
+                // Get the hill surface Y at this world-space X position
+                val groundY = getHillY(worldX, hill)
 
                 // Tree spread controls vertical distribution DOWN from the hill line
                 val maxVerticalOffset = treeSpread * 0.15f
@@ -469,10 +459,8 @@ class TreeRenderer {
             return
         }
         // --- NEEDLE tree (conifer) rendering below ---
-        // World-space to screen projection
-        val screenWidthPx = extendedWidth - 2f * extendedOffset
-        val positionScale = RenderConstants.getPositionScale(screenWidthPx, height)
-        val x = screenWidthPx / 2f + tree.worldX * positionScale
+        // World-space to screen projection (1:1 mapping, no positionScale)
+        val x = screenWidth / 2f + tree.worldX
 
         // yRatio is the ground level where tree BASE sits
         val groundY = tree.yRatio * height
@@ -483,7 +471,6 @@ class TreeRenderer {
         // so it stays consistent regardless of segment count
         val baseTreeWidth = totalHeight * 0.25f * treeWidthScale
 
-        val screenWidth = ViewportCulling.screenWidth(extendedWidth, extendedOffset)
         val objectHalfWidth = baseTreeWidth * 1.6f
         if (!ViewportCulling.isVisibleHorizontally(
                 x = x,
@@ -510,8 +497,7 @@ class TreeRenderer {
 
         // TRAVELING WIND WAVE: Gusts move across the scene left-to-right
         // Spatial phase from world position for traveling wind wave
-        val genWorldRange = RenderConstants.getGenerationWorldRange(screenWidthPx)
-        val normalizedPos = (tree.worldX + genWorldRange / 2f) / genWorldRange
+        val normalizedPos = (tree.worldX / RenderConstants.REFERENCE_EXTENDED_WIDTH) + 0.5f
         val spatialPhase = normalizedPos * kotlin.math.PI.toFloat() * 1.0f
         val waveSpeed = 1.2f + baseWindStrength * 1.0f
 
@@ -575,7 +561,7 @@ class TreeRenderer {
 
             // Clip shadow to not extend beyond ground level
             canvas.save()
-            canvas.clipRect(0f, 0f, extendedWidth + extendedOffset * 2f, groundY + 10f)
+            canvas.clipRect(0f, 0f, screenWidth + screenWidth, groundY + 10f)
             canvas.drawPath(treePath, shadowPaint)
             canvas.restore()
         }
@@ -704,9 +690,7 @@ class TreeRenderer {
      * Crown fades out in late autumn and regrows in spring using season transition weights.
      */
     private fun drawLeafTree(canvas: Canvas, tree: TreeData, state: SimulationState, @Suppress("UNUSED_PARAMETER") treeIndex: Int) {
-        val screenWidth = ViewportCulling.screenWidth(extendedWidth, extendedOffset)
-        val positionScale = RenderConstants.getPositionScale(screenWidth, height)
-        val x = screenWidth / 2f + tree.worldX * positionScale
+        val x = screenWidth / 2f + tree.worldX
         val groundY = tree.yRatio * height
 
         val totalHeight = height * RenderConstants.TREE_HEIGHT_FACTOR * tree.scale * treeSizeScale
@@ -733,8 +717,7 @@ class TreeRenderer {
         val effectiveWind = (baseWindStrength + gustIntensity * 0.5f).coerceIn(0f, 1f) * windMultiplier
         val timeSec = state.timeSeconds
         val baseFreq = RenderConstants.TREE_SWAY_FREQUENCY * swaySpeed
-        val genWorldRange = RenderConstants.getGenerationWorldRange(screenWidth)
-        val normalizedPos = (tree.worldX + genWorldRange / 2f) / genWorldRange
+        val normalizedPos = (tree.worldX / RenderConstants.REFERENCE_EXTENDED_WIDTH) + 0.5f
         val spatialPhase = normalizedPos * kotlin.math.PI.toFloat() * 1.0f
         val waveSpeed = 1.2f + baseWindStrength * 1.0f
         val gustWavePhase = timeSec * waveSpeed - spatialPhase

@@ -81,19 +81,14 @@ class BushRenderer {
 
     // ---- Screen dimensions (stored from generateBushes) ----
 
-    private var extendedWidth = 0f
-    private var extendedOffset = 0f
+    private var screenWidth = 0f
     private var height = 0f
 
     /**
      * Update render-time dimensions without regenerating bush positions.
-     * Called on height-only resizes so that draw-time coordinate mapping
-     * uses the current [extendedWidth]/[extendedOffset], producing a
-     * zoom-from-center effect.
      */
-    fun updateDimensions(extendedWidth: Float, extendedOffset: Float, height: Float) {
-        this.extendedWidth = extendedWidth
-        this.extendedOffset = extendedOffset
+    fun updateDimensions(screenWidth: Float, height: Float) {
+        this.screenWidth = screenWidth
         this.height = height
     }
 
@@ -130,10 +125,10 @@ class BushRenderer {
     private fun darkenColor(color: Int, factor: Float = 0.65f): Int = ColorMath.darkenColor(color, factor)
 
     /**
-     * Interpolate hill Y at a given xRatio (0-1), same algorithm as TerrainLayer.getHillY().
+     * Evaluate hill Y at a world-space X position using noise.
      */
-    private fun getHillY(xRatio: Float, hill: TreeRenderer.HillInfo): Float =
-        VegetationUtil.getHillY(xRatio, hill)
+    private fun getHillY(worldX: Float, hill: TreeRenderer.HillInfo): Float =
+        VegetationUtil.getHillY(worldX, hill)
 
     // ========================================================================
     // Generation methods
@@ -142,40 +137,33 @@ class BushRenderer {
     /**
      * Generate bushes placed along hills, similar to trees but smaller and rounder.
      *
-     * @param hills Hill information (control points, depth, height offset) for bush placement.
-     * @param extendedWidth Extended canvas width for parallax content.
-     * @param extendedOffset Offset to center extended content on screen.
+     * @param hills Hill information (noise params, depth, height offset) for bush placement.
+     * @param screenWidth Actual visible screen width in pixels.
      * @param height Screen height in pixels.
      * @param randomSeed Seed for deterministic placement.
      */
     fun generateBushes(
         hills: List<TreeRenderer.HillInfo>,
-        extendedWidth: Float,
-        extendedOffset: Float,
+        screenWidth: Float,
         height: Float,
         randomSeed: Int
     ) {
         // Store dimensions for draw methods
-        this.extendedWidth = extendedWidth
-        this.extendedOffset = extendedOffset
+        this.screenWidth = screenWidth
         this.height = height
 
-        if (hills.isEmpty() || !bushesEnabled || bushDensity <= 0 || extendedWidth <= 0) {
+        if (hills.isEmpty() || !bushesEnabled || bushDensity <= 0 || screenWidth <= 0) {
             bushes = emptyList()
             bushesByDepth = emptyMap()
             return
         }
 
-        val screenWidth = extendedWidth - 2f * extendedOffset
-        val genWorldRange = RenderConstants.getGenerationWorldRange(screenWidth)
-        val halfWorld = genWorldRange / 2f
+        // Viewport-based generation: generate cells visible on screen + parallax padding.
+        val visibleHalf = RenderConstants.getVisibleWorldHalf(screenWidth)
 
-        // Cell-indexed generation: each cell deterministically hosts 0 or 1 bush.
-        // At 100% density with 80 base bushes across REFERENCE_EXTENDED_WIDTH,
-        // cell size ≈ 1902 / 80 ≈ 24.
         val bushCellSize = BUSH_CELL_SIZE
         val indexRange = WorldViewportTransform.indexRangeForWorldRange(
-            -halfWorld, halfWorld, bushCellSize
+            -visibleHalf, visibleHalf, bushCellSize
         )
         val densityFraction = (bushDensity / 100f).coerceIn(0f, 1f)
         if (densityFraction <= 0f) {
@@ -201,9 +189,8 @@ class BushRenderer {
                 val worldX = cellIndex * bushCellSize +
                     (bushRandom.nextFloat() - 0.5f) * bushCellSize * 0.8f
 
-                // Derive hill-relative xRatio for terrain queries
-                val xRatio = ((worldX / genWorldRange) + 0.5f).coerceIn(0f, 1f)
-                val groundY = getHillY(xRatio, hill)
+                // Get hill Y at world-space position using noise
+                val groundY = getHillY(worldX, hill)
 
                 // Bushes sit on or slightly below the hill line
                 val verticalOffset = bushRandom.nextFloat() * 0.06f
@@ -321,10 +308,8 @@ class BushRenderer {
      * @param ambientColor Pre-computed ambient tint color for the current time of day.
      */
     fun drawBush(canvas: Canvas, bush: BushData, state: SimulationState, ambientColor: Int) {
-        // World-space to screen projection
-        val screenWidthPx = extendedWidth - 2f * extendedOffset
-        val positionScale = RenderConstants.getPositionScale(screenWidthPx, height)
-        val x = screenWidthPx / 2f + bush.worldX * positionScale
+        // World-space to screen projection (1:1 mapping, no positionScale)
+        val x = screenWidth / 2f + bush.worldX
         val groundY = bush.yRatio * height
 
         // Bush size: smaller than trees
@@ -349,8 +334,7 @@ class BushRenderer {
         val swaySpeed = state.treeSwaySpeed
         val timeSec = state.timeSeconds
         // Use world position for spatial phase
-        val genWorldRange = RenderConstants.getGenerationWorldRange(screenWidthPx)
-        val normalizedPos = (bush.worldX + genWorldRange / 2f) / genWorldRange
+        val normalizedPos = (bush.worldX / RenderConstants.REFERENCE_EXTENDED_WIDTH) + 0.5f
         val sway = sin((timeSec * 1.5f * swaySpeed + normalizedPos * 3f).toDouble()).toFloat() * windStrength * bushWidth * 0.1f
 
         val centerY = groundY - bushHeight * 0.5f

@@ -40,10 +40,6 @@ class TerrainLayer(private val context: Context) : SceneLayer {
 
     private var width = 0f
     private var height = 0f
-    
-    // Extended canvas dimensions for parallax content
-    private var extendedWidth = 0f
-    private var extendedOffset = 0f  // Offset to center extended content
     private var lastGeneratedWidth = 0f
     private var lastGeneratedHeight = 0f
     
@@ -115,7 +111,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     
     // Data structures (immutable after creation)
     private data class HillData(
-        val controlPoints: List<Float>,
+        val noiseSeed: Int,
+        val depthAmplitudeScale: Float,
         val depthFactor: Float,
         val heightOffset: Float,
         val dayColor: Int
@@ -210,24 +207,6 @@ class TerrainLayer(private val context: Context) : SceneLayer {
 
 
     // Pseudo-random hash function for value noise
-    private fun hash(n: Int): Float {
-        var x = n
-        x = (x shr 13) xor x
-        x = (x * (x * x * 15731 + 789221) + 1376312589)
-        return (x and 0x7fffffff) / 2147483647.0f
-    }
-
-    // 1D value noise with smoothstep interpolation
-    private fun noise(x: Float, seed: Int): Float {
-        val i = x.toInt()
-        val f = x - i
-        val h1 = hash(i + seed)
-        val h2 = hash(i + 1 + seed)
-        // Smoothstep interpolation for smooth curves
-        val t = f * f * (3 - 2 * f)
-        return h1 + t * (h2 - h1)
-    }
-
     private fun darkenColor(color: Int, factor: Float = 0.65f): Int = ColorMath.darkenColor(color, factor)
     
     // Blend color towards brown for autumn
@@ -257,11 +236,16 @@ class TerrainLayer(private val context: Context) : SceneLayer {
      */
     private fun regenerateVegetation() {
         val currentHills = hills
-        if (currentHills.isEmpty() || extendedWidth <= 0f) return
-        val hillInfos = currentHills.map { TreeRenderer.HillInfo(it.controlPoints, it.depthFactor, it.heightOffset) }
-        treeRenderer.generateTrees(hillInfos, extendedWidth, extendedOffset, height, randomSeed)
+        if (currentHills.isEmpty() || width <= 0f) return
+        val hillInfos = currentHills.map {
+            TreeRenderer.HillInfo(
+                it.noiseSeed, it.depthAmplitudeScale, it.depthFactor, it.heightOffset,
+                hillFrequency, hillRoughness, hillAmplitude
+            )
+        }
+        treeRenderer.generateTrees(hillInfos, width, height, randomSeed)
         treeRenderer.generateTreeDecorations(randomSeed)
-        bushRenderer.generateBushes(hillInfos, extendedWidth, extendedOffset, height, randomSeed)
+        bushRenderer.generateBushes(hillInfos, width, height, randomSeed)
         bushRenderer.generateBushDecorations(randomSeed)
         generateSeasonalDecorations(currentHills)
     }
@@ -271,88 +255,38 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val newHills = ArrayList<HillData>(hillCount)
         
         for (i in 0 until hillCount) {
-            val hillRandom = DeterministicLayout.random(randomSeed + 1000, section = 200, index = i)
             // Base depth from 0 (background) to 1 (foreground)
             val baseDepth = i.toFloat() / hillCount.coerceAtLeast(1)
             
             // Apply hillDistance and hillDepthSpread:
             // - hillDistance (0-1): shifts all hills back (0=at camera, 1=near mountains)
             // - hillDepthSpread (0-1): controls spread along z-axis (0=flat, 1=deep)
-            // 
-            // At distance=0, spread=0.5: hills range from 0.5 to 1.0 (default behavior)
-            // At distance=0.5, spread=0.3: hills range from 0.35 to 0.65
-            // At distance=1, spread=0: all hills at depth 0 (very far, near mountains)
             val effectiveSpread = hillDepthSpread * (1f - hillDistance)
             val minDepth = 1f - hillDistance - effectiveSpread
             val maxDepth = 1f - hillDistance
             val depth = minDepth + baseDepth * (maxDepth - minDepth)
             
             // Parallax depth factor using normalized 0-1 range from RenderConstants
-            // - Background hills (depth=0): lower factor = less movement
-            // - Foreground hills (depth=1): higher factor = more movement  
-            // Range: PARALLAX_HILLS_MIN (0.50) to PARALLAX_HILLS_MAX (0.80)
             val depthFactor = RenderConstants.PARALLAX_HILLS_MIN + 
                 depth.coerceIn(0f, 1f) * (RenderConstants.PARALLAX_HILLS_MAX - RenderConstants.PARALLAX_HILLS_MIN)
             
             val heightOffset = hillStartY + baseDepth * (hillEndY - hillStartY)
             
             // Depth-based amplitude scaling: background hills have smaller amplitude
-            // depth=0 (background): 40% amplitude, depth=1 (foreground): 100% amplitude
             val depthAmplitudeScale = 0.4f + depth.coerceIn(0f, 1f) * 0.6f
             
-            // More points for smoother curves
-            // Scale control point count with generation world range for consistent
-            // curve resolution. More points needed when the world is wider so the
-            // hill doesn't look jagged at large extendedWidth.
-            val worldScale = RenderConstants.getGenerationWorldRange(width) / RenderConstants.REFERENCE_EXTENDED_WIDTH
-            val basePoints = RenderConstants.HILL_CURVE_POINTS_MIN + hillRandom.nextInt(RenderConstants.HILL_CURVE_POINTS_RANGE)
-            val numPoints = (basePoints * worldScale).toInt().coerceIn(80, 400)
-            val points = ArrayList<Float>()
-            
-            // Use Fractal Brownian Motion (fBm) for natural terrain
-            // This overlays multiple noise octaves: large hills + smaller bumps + fine details
+            // Noise seed for this hill (deterministic from hill index + randomSeed)
             val noiseSeed = i * 1337 + randomSeed
             
-            for (j in 0 until numPoints) {
-                // x position along the hill, scaled by frequency
-                val x = j.toFloat() / (numPoints - 1) * hillFrequency * 5.0f
-                
-                // Fractal Brownian Motion: 3-4 octaves
-                // Octave 1: Large rolling hills (base shape)
-                var noiseVal = noise(x, noiseSeed) * 1.0f
-                // Octave 2: Smaller bumps (double frequency, half amplitude)
-                noiseVal += noise(x * 2f, noiseSeed + 100) * 0.5f * hillRoughness
-                // Octave 3: Fine details (4x frequency, quarter amplitude)
-                noiseVal += noise(x * 4f, noiseSeed + 200) * 0.25f * hillRoughness
-                // Octave 4: Micro details (8x frequency, 1/8 amplitude)
-                noiseVal += noise(x * 8f, noiseSeed + 300) * 0.125f * hillRoughness
-                
-                // Normalize by sum of amplitudes: 1 + 0.5 + 0.25 + 0.125 = 1.875
-                val maxAmp = 1.0f + 0.5f * hillRoughness + 0.25f * hillRoughness + 0.125f * hillRoughness
-                noiseVal /= maxAmp
-                
-                // Map to hill height range - apply depth-based amplitude scaling
-                // Background hills have smaller amplitude to appear further away
-                val effectiveAmplitude = hillAmplitude * depthAmplitudeScale
-                // noiseVal is 0.0-1.0, center it and apply amplitude
-                // HILL_HEIGHT_RANGE is now 0.4, so at amplitude 2.0 we get 0.8 range!
-                val normalizedValue = (RenderConstants.HILL_BASE_HEIGHT + 
-                    (noiseVal - 0.5f) * RenderConstants.HILL_HEIGHT_RANGE * effectiveAmplitude)
-                    .coerceIn(0.05f, 0.75f)  // Allow taller hills reaching higher on screen
-                
-                points.add(normalizedValue)
-            }
-            
-            // Improved brightness calculation
+            // Brightness based on depth
             val brightness = 0.5f + depth * 0.5f
-            var dayColor = Color.rgb(
+            val dayColor = Color.rgb(
                 (Color.red(RenderConstants.HILL_BASE_COLOR) * brightness).toInt(),
                 (Color.green(RenderConstants.HILL_BASE_COLOR) * brightness).toInt(),
                 (Color.blue(RenderConstants.HILL_BASE_COLOR) * brightness).toInt()
             )
             
-            // Autumn tint is now applied at draw time for smooth season transitions
-            newHills.add(HillData(points, depthFactor, heightOffset, dayColor))
+            newHills.add(HillData(noiseSeed, depthAmplitudeScale, depthFactor, heightOffset, dayColor))
         }
         // Sort by depthFactor: most negative (background) draws first
         newHills.sortBy { it.depthFactor }
@@ -491,33 +425,45 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         }
     }
     
-    private fun getHillY(xRatio: Float, hill: HillData): Float {
-        return VegetationUtil.getHillY(xRatio, hill.controlPoints, hill.heightOffset)
+    /** Evaluate hill Y at world-space X using noise. */
+    private fun getHillY(worldX: Float, hill: HillData): Float {
+        return VegetationUtil.getHillYFromNoise(
+            worldX, hill.noiseSeed, hill.depthAmplitudeScale, hill.heightOffset,
+            hillFrequency, hillRoughness, hillAmplitude
+        )
     }
     
     /**
-     * Get hill Y position at given X ratio and depth factor.
+     * Get hill Y position at given world-space X and depth factor.
      * Used by ground events to follow terrain contour.
-     * @param xRatio X position as ratio of extended width (0.0 to 1.0)
+     * @param worldX World-space X position (0 = center)
      * @param depthFactor Depth layer to sample (matches hill depthFactor)
      * @return Y position as ratio of screen height (0.0=top, 1.0=bottom)
      */
+    fun getHillYAtWorldX(worldX: Float, depthFactor: Float): Float {
+        return getHillInfoAtWorldX(worldX, depthFactor).first
+    }
+
+    /**
+     * Legacy xRatio-based API — converts xRatio to worldX using current screen width.
+     * @param xRatio X position as ratio (0.0 to 1.0, 0.5 = center)
+     */
     fun getHillYAtPosition(xRatio: Float, depthFactor: Float): Float {
-        return getHillInfoAtPosition(xRatio, depthFactor).first
+        val worldX = (xRatio - 0.5f) * width
+        return getHillYAtWorldX(worldX, depthFactor)
     }
     
     /**
-     * Get full hill info (Y position and actual depthFactor) at given X ratio.
+     * Get full hill info (Y position and actual depthFactor) at given world-space X.
      * Finds the closest hill to the requested depth factor.
-     * @param xRatio X position as ratio of extended width (0.0 to 1.0)
+     * @param worldX World-space X position (0 = center)
      * @param requestedDepthFactor Approximate depth to find closest hill for
      * @return Pair of (Y ratio, actual hill depthFactor)
      */
-    fun getHillInfoAtPosition(xRatio: Float, requestedDepthFactor: Float): Pair<Float, Float> {
+    fun getHillInfoAtWorldX(worldX: Float, requestedDepthFactor: Float): Pair<Float, Float> {
         val currentHills = hills
-        if (currentHills.isEmpty()) return Pair(0.85f, requestedDepthFactor)  // Default ground level
+        if (currentHills.isEmpty()) return Pair(0.85f, requestedDepthFactor)
         
-        // Find the hill closest to the requested depth factor
         var closestHill: HillData? = null
         var closestDistance = Float.MAX_VALUE
         
@@ -529,8 +475,16 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             }
         }
         
-        return closestHill?.let { Pair(getHillY(xRatio, it), it.depthFactor) } 
+        return closestHill?.let { Pair(getHillY(worldX, it), it.depthFactor) } 
             ?: Pair(0.85f, requestedDepthFactor)
+    }
+
+    /**
+     * Legacy xRatio-based API — converts xRatio to worldX using current screen width.
+     */
+    fun getHillInfoAtPosition(xRatio: Float, requestedDepthFactor: Float): Pair<Float, Float> {
+        val worldX = (xRatio - 0.5f) * width
+        return getHillInfoAtWorldX(worldX, requestedDepthFactor)
     }
 
     /**
@@ -547,9 +501,6 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val sizeChanged = oldW != w || oldH != h
         width = w
         height = h
-        // Calculate extended width for parallax content
-        extendedWidth = RenderConstants.getExtendedWidth(w, h)
-        extendedOffset = RenderConstants.getExtendedOffset(w, extendedWidth)
 
         if (!sizeChanged) return
 
@@ -558,14 +509,12 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         cachedHillGradientAmbientBucket = -1
         cachedHillGradientSnow = -1
 
-        // Always keep sub-renderer dimensions in sync so draw-time
-        // position calculations use the current extendedWidth/extendedOffset.
-        treeRenderer.updateDimensions(extendedWidth, extendedOffset, h)
-        bushRenderer.updateDimensions(extendedWidth, extendedOffset, h)
+        // Always keep sub-renderer dimensions in sync
+        treeRenderer.updateDimensions(w, h)
+        bushRenderer.updateDimensions(w, h)
 
         val firstGenerate = lastGeneratedWidth <= 0f || lastGeneratedHeight <= 0f
-        // Only regenerate when WIDTH changes. Height-only changes produce a
-        // zoom-from-center effect via the updated extendedWidth/extendedOffset.
+        // Regenerate when width changes significantly (viewport-based generation)
         val widthChangedSignificantly = kotlin.math.abs(lastGeneratedWidth - w) > 1f
 
         if (firstGenerate || widthChangedSignificantly) {
@@ -862,26 +811,28 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private fun drawHill(canvas: Canvas, hillIndex: Int, hill: HillData, hillColor: Int) {
         hillPath.reset()
         
-        // Use extended width for hill drawing
-        // Hills span the full extended canvas width, centered on screen
-        val parallaxMargin = height * 0.3f  // Extra for parallax movement at bottom
+        // Evaluate hill noise at screen pixel positions.
+        // Hills span beyond visible area for parallax movement.
+        val parallaxMargin = height * 0.3f
+        val padding = height * 0.45f + width * 0.1f  // parallax + edge padding
+        val startX = -padding
+        val endX = width + padding
+        // Number of line segments: ~3px per step for smooth curves
+        val numSteps = ((endX - startX) / 3f).toInt().coerceIn(80, 800)
+        val stepX = (endX - startX) / numSteps
+        val bottomY = height + parallaxMargin
         
-        // Map hill points across the extended width, centered on screen
-        val startX = -extendedOffset - width * 0.1f  // Start before visible area
-        val endX = width + extendedOffset + width * 0.1f  // End after visible area
-        val stepX = (endX - startX) / (hill.controlPoints.size - 1)
-        val bottomY = height + parallaxMargin  // Extend below screen
-        
-        // Find the highest point in the hill for gradient
         var minY = bottomY
         hillPath.moveTo(startX, bottomY)
         
-        for (i in hill.controlPoints.indices) {
-            val x = startX + i * stepX
-            val yRatio = hill.heightOffset + 0.12f * (1f - hill.controlPoints[i])
+        for (i in 0..numSteps) {
+            val screenX = startX + i * stepX
+            // Convert screen X to world-space X (1:1 mapping, center = worldX 0)
+            val worldX = screenX - width / 2f
+            val yRatio = getHillY(worldX, hill)
             val y = yRatio * height
             if (y < minY) minY = y
-            hillPath.lineTo(x, y)
+            hillPath.lineTo(screenX, y)
         }
         
         hillPath.lineTo(endX, bottomY)
@@ -962,8 +913,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     }
     
     private fun drawSeasonalDecorations(canvas: Canvas, hillIndex: Int, hill: HillData, ambientColor: Int) {
-        val startX = -extendedOffset - width * 0.1f
-        val endX = width + extendedOffset + width * 0.1f
+        val padding = height * 0.45f + width * 0.1f
+        val startX = -padding
+        val endX = width + padding
         
         // Note: Snow is now integrated into the hill gradient (drawHill),
         // so we no longer draw floating snow patches here.
@@ -982,10 +934,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             for (flower in flowers) {
                 val x = startX + flower.xRatio * (endX - startX)
                 
-                // Get hill Y at flower position
-                val pointIndex = (flower.xRatio * (hill.controlPoints.size - 1)).toInt()
-                    .coerceIn(0, hill.controlPoints.size - 1)
-                val yRatio = hill.heightOffset + 0.12f * (1f - hill.controlPoints[pointIndex])
+                // Get hill Y at flower position using noise evaluation
+                val worldX = x - width / 2f
+                val yRatio = getHillY(worldX, hill)
                 val y = yRatio * height + flower.yOffset * height
                 
                 // Blend flower color with ambient for time-of-day consistency
@@ -1008,9 +959,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             for (leaf in leaves) {
                 val x = startX + leaf.xRatio * (endX - startX)
                 
-                val pointIndex = (leaf.xRatio * (hill.controlPoints.size - 1)).toInt()
-                    .coerceIn(0, hill.controlPoints.size - 1)
-                val yRatio = hill.heightOffset + 0.12f * (1f - hill.controlPoints[pointIndex])
+                val worldX = x - width / 2f
+                val yRatio = getHillY(worldX, hill)
                 val y = yRatio * height + leaf.yOffset * height
                 
                 val blendedColor = RenderConstants.blendWithAmbient(leaf.color, ambientColor, 0.15f)
@@ -1035,9 +985,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             for (mushroom in mushrooms) {
                 val x = startX + mushroom.xRatio * (endX - startX)
                 
-                val pointIndex = (mushroom.xRatio * (hill.controlPoints.size - 1)).toInt()
-                    .coerceIn(0, hill.controlPoints.size - 1)
-                val yRatio = hill.heightOffset + 0.12f * (1f - hill.controlPoints[pointIndex])
+                val worldX = x - width / 2f
+                val yRatio = getHillY(worldX, hill)
                 val y = yRatio * height + mushroom.yOffset * height
                 
                 val size = mushroom.size * height * (0.5f + mushroomAlpha * 0.5f)  // Grow as they appear
@@ -1074,13 +1023,16 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 }
                 if (frostAlpha > 3) {
                     frostPaint.color = Color.argb(frostAlpha, 220, 230, 255)
-                    // Draw frost as thin lines along hill contour
-                    val points = hill.controlPoints
-                    for (i in 0 until points.size - 1) {
-                        val x1 = startX + (i.toFloat() / (points.size - 1)) * (endX - startX)
-                        val x2 = startX + ((i + 1).toFloat() / (points.size - 1)) * (endX - startX)
-                        val y1 = (hill.heightOffset + 0.12f * (1f - points[i])) * height
-                        val y2 = (hill.heightOffset + 0.12f * (1f - points[i + 1])) * height
+                    // Draw frost as thin lines along hill contour using noise evaluation
+                    val frostSteps = ((endX - startX) / 4f).toInt().coerceIn(40, 400)
+                    val frostStepX = (endX - startX) / frostSteps
+                    for (i in 0 until frostSteps) {
+                        val x1 = startX + i * frostStepX
+                        val x2 = x1 + frostStepX
+                        val worldX1 = x1 - width / 2f
+                        val worldX2 = x2 - width / 2f
+                        val y1 = getHillY(worldX1, hill) * height
+                        val y2 = getHillY(worldX2, hill) * height
                         canvas.drawLine(x1, y1, x2, y2, frostPaint)
                     }
                 }
