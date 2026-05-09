@@ -18,10 +18,10 @@ import kotlin.random.Random
  * the rabbit is drawn at the correct layer relative to trees. The depthFactor is chosen from
  * values that will match actual hill depthFactors when getHillYAtPosition snaps to closest hill.
  */
-class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
+class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis(), viewportRatio: Float = 1.0f) : RandomEvent {
     override val layer = EventLayer.GROUND
     
-    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.03f)
+    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.03f, viewportRatio = viewportRatio)
     private val startX = traversal.startX
     private val direction = traversal.direction
     private val size = 0.5f + random.nextFloat() * 0.2f

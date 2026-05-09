@@ -14,14 +14,14 @@ import kotlin.random.Random
  * Dragonfly hovering and darting around near water/flowers.
  * Seasonal: Summer only - these insects thrive in warm weather.
  */
-class DragonflyEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
+class DragonflyEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis(), viewportRatio: Float = 1.0f) : RandomEvent {
     override val layer = EventLayer.MID_SKY
     
     // Distance for depth: 0.3-0.7 (dragonflies in mid-range)
     private val distance = 0.3f + random.nextFloat() * 0.4f
     private val sizeScale = 1.0f - distance * 0.4f
     
-    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.04f)
+    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.04f, viewportRatio = viewportRatio)
     private val direction = traversal.direction
     private val startY = 0.50f + random.nextFloat() * 0.20f  // Lower in the sky, near plants
     private val travelSpeed = 0.000035f + random.nextFloat() * 0.000018f

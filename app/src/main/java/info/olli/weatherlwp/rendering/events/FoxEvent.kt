@@ -19,10 +19,10 @@ import kotlin.random.Random
  * the fox is drawn at the correct layer relative to trees. The depthFactor is chosen from
  * values that will match actual hill depthFactors when getHillYAtPosition snaps to closest hill.
  */
-class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
+class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis(), viewportRatio: Float = 1.0f) : RandomEvent {
     override val layer = EventLayer.GROUND
     
-    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.04f)
+    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.04f, viewportRatio = viewportRatio)
     private val startX = traversal.startX
     private val direction = traversal.direction
     private val size = 0.7f + random.nextFloat() * 0.3f

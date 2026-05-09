@@ -116,7 +116,12 @@ class EventPreviewView @JvmOverloads constructor(
 
     private val backgroundColor: Int
         get() {
-            val phase = sin(animationTimeSeconds * 0.785f)
+            if (previewMode == PreviewMode.SMALL) {
+                // Inline circles: fixed daylight sky for consistent appearance
+                return Color.argb(140, 100, 180, 235)
+            }
+            // Large popup: cycle between day sky and night sky (~5s period)
+            val phase = sin(animationTimeSeconds * 1.257f)  // 2π/5 ≈ 1.257
             val t = ((phase + 1f) / 2f).coerceIn(0f, 1f)
             val r = (15 + (100 - 15) * t).toInt()
             val g = (15 + (180 - 15) * t).toInt()
@@ -241,25 +246,25 @@ class EventPreviewView @JvmOverloads constructor(
 
     private fun getFraming(type: EventType): PreviewFraming {
         val smallScale = when (type) {
-            EventType.DEER -> 0.55f
-            EventType.FOX -> 0.58f
-            EventType.RABBIT -> 0.60f
-            EventType.SQUIRREL -> 0.60f
-            EventType.DUCK -> 0.62f
-            EventType.FROG -> 0.63f
-            EventType.FISH -> 0.65f
-            EventType.BAT -> 0.60f
-            EventType.AIRPLANE -> 0.58f
-            EventType.BIRDS -> 0.60f
-            EventType.EAGLE -> 0.58f
-            EventType.OWL -> 0.58f
-            EventType.BALLOON -> 0.58f
-            EventType.SHOOTING_STAR -> 0.62f
-            EventType.UFO -> 0.58f
-            EventType.BUTTERFLY -> 0.62f
-            EventType.DRAGONFLY -> 0.60f
-            EventType.FIREFLIES -> 0.65f
-            EventType.SNOWFLAKE -> 0.68f
+            EventType.DEER -> 1.10f
+            EventType.FOX -> 1.15f
+            EventType.RABBIT -> 1.20f
+            EventType.SQUIRREL -> 1.20f
+            EventType.DUCK -> 1.25f
+            EventType.FROG -> 1.25f
+            EventType.FISH -> 1.30f
+            EventType.BAT -> 1.20f
+            EventType.AIRPLANE -> 1.15f
+            EventType.BIRDS -> 1.20f
+            EventType.EAGLE -> 1.15f
+            EventType.OWL -> 1.15f
+            EventType.BALLOON -> 1.15f
+            EventType.SHOOTING_STAR -> 1.25f
+            EventType.UFO -> 1.15f
+            EventType.BUTTERFLY -> 1.25f
+            EventType.DRAGONFLY -> 1.20f
+            EventType.FIREFLIES -> 1.30f
+            EventType.SNOWFLAKE -> 1.35f
         }
 
         val baseYOffset = when (type) {
@@ -273,7 +278,7 @@ class EventPreviewView @JvmOverloads constructor(
 
         return if (previewMode == PreviewMode.LARGE) {
             PreviewFraming(
-                scale = (smallScale * 2.05f).coerceAtMost(0.9f),
+                scale = (smallScale * 1.5f).coerceAtMost(1.8f),
                 yOffsetFactor = baseYOffset * 0.5f
             )
         } else {

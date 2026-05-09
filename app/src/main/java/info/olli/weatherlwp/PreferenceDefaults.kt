@@ -50,7 +50,7 @@ object PreferenceDefaults {
     const val CLOUD_RENDER_MODE = "cached"
     
     // === Tree/Terrain Settings ===
-    const val TREE_DENSITY = 50  // 0-100
+    const val TREE_DENSITY = 30  // 0-200 (30 = light coverage, 100 = normal, 200 = dense)
     const val TREE_SIZE_RANDOMNESS = 50  // 0-100 (natural variation)
     const val TREE_COLOR_VARIATION = 50  // 0-100 (moderate diversity)
     const val TREE_SWAY_SPEED = 100  // 0-300

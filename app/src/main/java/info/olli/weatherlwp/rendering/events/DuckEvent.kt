@@ -14,10 +14,10 @@ import kotlin.random.Random
  * Simple silhouette that walks left-to-right or right-to-left.
  * Best paired with lake or river features.
  */
-class DuckEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
+class DuckEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis(), viewportRatio: Float = 1.0f) : RandomEvent {
     override val layer = EventLayer.GROUND
 
-    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.03f)
+    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.03f, viewportRatio = viewportRatio)
     private val startX = traversal.startX
     private val direction = traversal.direction
 

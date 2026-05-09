@@ -15,7 +15,7 @@ import kotlin.random.Random
  * Butterfly with distinct wing shapes and natural erratic flight pattern.
  * Uses absolute time for deterministic position across preview/wallpaper.
  */
-class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
+class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis(), viewportRatio: Float = 1.0f) : RandomEvent {
     override val layer = EventLayer.MID_SKY  // Between mountains and terrain, near flowers
     
     // Distance for depth: 0.3-0.8 (butterflies mostly close, some farther)
@@ -23,7 +23,7 @@ class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
     private val sizeScale = 1.0f - distance * 0.4f  // 0.68-1.0 based on distance
     
     // Spawn fully off-screen and cross the full viewport before expiring.
-    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.04f)
+    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.04f, viewportRatio = viewportRatio)
     private val startY = 0.30f + random.nextFloat() * 0.18f  // 0.30-0.48: above terrain, visible in MID_SKY layer
     private val travelSpeed = 0.000028f + random.nextFloat() * 0.000016f
     override val durationMs = EventTraversal.durationMsForPath(

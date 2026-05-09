@@ -14,7 +14,7 @@ import kotlin.random.Random
  * Ground event for autumn/winter - majestic silhouette.
  * Seasonal: Autumn/Winter (cooler months when deer are more active)
  */
-class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
+class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis(), viewportRatio: Float = 1.0f) : RandomEvent {
     private companion object {
         // Precomputed fawn spot coordinates (x, y) to keep draw() allocation-free.
         private val FAWN_SPOT_COORDS = floatArrayOf(
@@ -31,12 +31,13 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
 
     override val layer = EventLayer.GROUND
     
-    // Depth: 0.4-0.8 (ground level parallax)
+    // Depth: mapped to hill parallax range for consistent terrain following
     private val depthValue = RenderConstants.getHillParallaxDepth(0.3f + random.nextFloat() * 0.5f)
+    override val depthFactor: Float = depthValue
     private val sizeScale = 1.0f - (depthValue - RenderConstants.PARALLAX_HILLS_MIN) * 0.3f
     
     // Starting position and movement
-    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.05f)
+    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.05f, viewportRatio = viewportRatio)
     private val startX = traversal.startX
     private val direction = traversal.direction
     

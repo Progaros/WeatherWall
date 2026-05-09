@@ -882,7 +882,7 @@ class TreeRenderer {
         val prevPineconeDens = pineconeDensity
 
         // Tree density: 0-200 percentage (50 = normal, 200 = dense forest)
-        treeDensity = settings.getInt("pref_tree_density", 50)
+        treeDensity = settings.getInt("pref_tree_density", PreferenceDefaults.TREE_DENSITY)
 
         // Leaf tree ratio: percentage of deciduous vs needle/conifer trees
         leafTreeRatio = settings.getInt("pref_leaf_tree_ratio", PreferenceDefaults.LEAF_TREE_RATIO)

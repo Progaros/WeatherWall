@@ -47,6 +47,9 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     // Extended canvas dimensions for parallax content
     private var extendedWidth = 0f
     private var extendedOffset = 0f
+    
+    // Ratio of visible viewport to extended world width (1.0 landscape, <1.0 portrait)
+    private var viewportRatio = 1.0f
 
     // Cached per-frame ambient color (computed in update, used by multiple draw methods)
     private var cachedAmbientColor = 0
@@ -171,6 +174,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         // Calculate extended width for parallax content
         extendedWidth = RenderConstants.getExtendedWidth(w, h)
         extendedOffset = RenderConstants.getExtendedOffset(w, extendedWidth)
+        viewportRatio = if (extendedWidth > 0f) (w / extendedWidth).coerceIn(0.1f, 1.0f) else 1.0f
 
         // Clear frame-scoped draw context and pooled entry references on geometry changes.
         // This prevents stale canvas/state/event references from surviving rotations.
@@ -249,6 +253,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     
     private fun spawnRandomEvent(state: SimulationState, currentEvents: MutableList<RandomEvent>, random: Random, spawnTime: Long) {
         val availableEvents = mutableListOf<(Long) -> RandomEvent?>()
+        val vr = viewportRatio
         
         // Check current season for seasonal restrictions
         val isSpring = currentSeason == "spring"
@@ -264,24 +269,24 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         
         // Butterflies: Spring & Summer only (warm weather insects)
         if (butterflyEnabled && !state.isNight && isWarmSeason) {
-            availableEvents.add { t -> ButterflyEvent(Random(t + 3), t) }
+            availableEvents.add { t -> ButterflyEvent(Random(t + 3), t, vr) }
         }
         
         // Dragonflies: Summer only (peak insect season)
         if (dragonflyEnabled && !state.isNight && isSummer) {
-            availableEvents.add { t -> DragonflyEvent(Random(t + 11), t) }
+            availableEvents.add { t -> DragonflyEvent(Random(t + 11), t, vr) }
         }
         
         val isRaining = state.weather == WeatherType.RAIN || state.weather == WeatherType.THUNDERSTORM || state.weather == WeatherType.SNOW
         if (balloonEnabled && !state.isNight && !isRaining) availableEvents.add { t -> HotAirBalloonEvent(Random(t + 4), t) }
         
         // Ground animals - some seasonal
-        if (rabbitEnabled) availableEvents.add { t -> RabbitEvent(Random(t + 5), t) }
-        if (foxEnabled) availableEvents.add { t -> FoxEvent(Random(t + 6), t) }
+        if (rabbitEnabled) availableEvents.add { t -> RabbitEvent(Random(t + 5), t, vr) }
+        if (foxEnabled) availableEvents.add { t -> FoxEvent(Random(t + 6), t, vr) }
         
         // Squirrels: Autumn primarily (gathering nuts), but can appear year-round
         if (squirrelEnabled && (isAutumn || random.nextFloat() < 0.3f)) {
-            availableEvents.add { t -> SquirrelEvent(Random(t + 12), t) }
+            availableEvents.add { t -> SquirrelEvent(Random(t + 12), t, vr) }
         }
         
         // Night events
@@ -307,7 +312,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         
         // Deer: Autumn/Winter primarily (more visible in sparse foliage)
         if (deerEnabled && !isRaining && (isAutumn || isWinter || random.nextFloat() < 0.2f)) {
-            availableEvents.add { t -> DeerEvent(Random(t + 15), t) }
+            availableEvents.add { t -> DeerEvent(Random(t + 15), t, vr) }
         }
         
         // Rare alien event - night only, very low chance
@@ -322,7 +327,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         
         // Ducks: Day, year-round (avoid storms)
         if (duckEnabled && !state.isNight && !isRaining) {
-            availableEvents.add { t -> DuckEvent(Random(t + 17), t) }
+            availableEvents.add { t -> DuckEvent(Random(t + 17), t, vr) }
         }
         
         // Frogs: Evening/dusk/warm nights, spring/summer
@@ -540,25 +545,26 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         val currentEvents = events.toMutableList()
         val random = Random(seed)
         
+        val vr = viewportRatio
         val eventTypes = listOf<() -> RandomEvent>(
             { AirplaneEvent(random, seed) },
             { BirdFlockEvent(random, seed) },
             { EagleEvent(random, seed) },
-            { ButterflyEvent(random, seed) },
-            { RabbitEvent(random, seed) },
-            { FoxEvent(random, seed) },
+            { ButterflyEvent(random, seed, vr) },
+            { RabbitEvent(random, seed, vr) },
+            { FoxEvent(random, seed, vr) },
             { ShootingStarEvent(random, seed) },
             { FireflyEvent(random, seed) },
             { OwlEvent(random, seed) },
             { HotAirBalloonEvent(random, seed) },
             { AlienEvent(random, seed) },
-            { SquirrelEvent(random, seed) },
-            { DragonflyEvent(random, seed) },
+            { SquirrelEvent(random, seed, vr) },
+            { DragonflyEvent(random, seed, vr) },
             { SnowflakeEvent(random, seed) },
             { BatEvent(random, seed) },
-            { DeerEvent(random, seed) },
+            { DeerEvent(random, seed, vr) },
             { FishJumpEvent(random, seed) },
-            { DuckEvent(random, seed) },
+            { DuckEvent(random, seed, vr) },
             { FrogEvent(random, seed) }
         )
         
@@ -578,25 +584,26 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         val currentEvents = events.toMutableList()
         val random = Random(seed)
         
+        val vr = viewportRatio
         val event: RandomEvent? = when (eventType) {
             "airplane" -> AirplaneEvent(random, seed)
             "birds" -> BirdFlockEvent(random, seed)
             "eagle" -> EagleEvent(random, seed)
-            "butterfly" -> ButterflyEvent(random, seed)
-            "rabbit" -> RabbitEvent(random, seed)
-            "fox" -> FoxEvent(random, seed)
+            "butterfly" -> ButterflyEvent(random, seed, vr)
+            "rabbit" -> RabbitEvent(random, seed, vr)
+            "fox" -> FoxEvent(random, seed, vr)
             "shootingstar" -> ShootingStarEvent(random, seed)
             "fireflies" -> FireflyEvent(random, seed)
             "owl" -> OwlEvent(random, seed)
             "balloon" -> HotAirBalloonEvent(random, seed)
             "alien" -> AlienEvent(random, seed)
-            "squirrel" -> SquirrelEvent(random, seed)
-            "dragonfly" -> DragonflyEvent(random, seed)
+            "squirrel" -> SquirrelEvent(random, seed, vr)
+            "dragonfly" -> DragonflyEvent(random, seed, vr)
             "snowflake" -> SnowflakeEvent(random, seed)
             "bat" -> BatEvent(random, seed)
-            "deer" -> DeerEvent(random, seed)
+            "deer" -> DeerEvent(random, seed, vr)
             "fish" -> FishJumpEvent(random, seed)
-            "duck" -> DuckEvent(random, seed)
+            "duck" -> DuckEvent(random, seed, vr)
             "frog" -> FrogEvent(random, seed)
             else -> null
         }

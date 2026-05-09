@@ -13,17 +13,17 @@ import kotlin.random.Random
  * Squirrel scurrying across the ground, stops occasionally to look around.
  * Seasonal: Autumn (gathering nuts for winter)
  */
-class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
+class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis(), viewportRatio: Float = 1.0f) : RandomEvent {
     override val layer = EventLayer.GROUND
     
     // Depth determines size and parallax (0.4-0.8 - squirrels stay in mid-foreground)
-    private val depthValue = 0.4f + random.nextFloat() * 0.4f
-    override val depthFactor = depthValue
+    private val normalizedDepth = 0.4f + random.nextFloat() * 0.4f
+    override val depthFactor = RenderConstants.getHillParallaxDepth(normalizedDepth)
     
-    private val sizeScale = 1.0f - depthValue * 0.3f
+    private val sizeScale = 1.0f - normalizedDepth * 0.3f
     
     // Direction: left or right
-    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.03f)
+    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.03f, viewportRatio = viewportRatio)
     private val direction = traversal.direction
     private val startX = traversal.startX
     
@@ -42,8 +42,8 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
     
     private val path = Path()
     
-    // Parallax depth - use centralized helper
-    private val parallaxDepth = RenderConstants.getHillParallaxDepth(depthValue)
+    // Parallax depth — same as depthFactor (already mapped through getHillParallaxDepth)
+    private val parallaxDepth = depthFactor
     
     // Stop and look behavior - squirrels pause periodically
     private val stopIntervalMs = 2000L + random.nextLong(1500)
@@ -73,7 +73,7 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val effectiveElapsedMs = getEffectiveElapsedMs(elapsedMs)
         val x = startX + direction * speed * effectiveElapsedMs
-        return hillHeightProvider?.invoke(x, depthValue) ?: baseY
+        return hillHeightProvider?.invoke(x, depthFactor) ?: baseY
     }
 
     override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
@@ -98,7 +98,7 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
         val effectiveElapsed = getEffectiveElapsedMs(elapsedMs)
         
         val x = startX + direction * speed * effectiveElapsed
-        val y = hillHeightProvider?.invoke(x, depthValue) ?: baseY
+        val y = hillHeightProvider?.invoke(x, depthFactor) ?: baseY
         
         val px = parallaxCalculator.getOffsetXForDepth(parallaxDepth)
         val py = parallaxCalculator.getOffsetYForDepth(parallaxDepth)

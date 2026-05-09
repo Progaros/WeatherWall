@@ -18,11 +18,15 @@ object EventTraversal {
         val distance: Float = abs(endX - startX)
     }
 
-    fun randomHorizontalPath(random: Random, margin: Float): HorizontalPath {
+    fun randomHorizontalPath(random: Random, margin: Float, viewportRatio: Float = 1.0f): HorizontalPath {
         require(margin > 0f && margin < 0.5f) { "margin must be between 0 and 0.5" }
+        val vr = viewportRatio.coerceIn(0.1f, 1.0f)
+        // Viewport edges in extended-width ratio space (centered)
+        val viewLeft = (1f - vr) / 2f
+        val viewRight = (1f + vr) / 2f
         val direction = if (random.nextBoolean()) 1f else -1f
-        val startX = if (direction > 0f) -margin else 1f + margin
-        val endX = if (direction > 0f) 1f + margin else -margin
+        val startX = if (direction > 0f) viewLeft - margin else viewRight + margin
+        val endX = if (direction > 0f) viewRight + margin else viewLeft - margin
         return HorizontalPath(startX = startX, endX = endX, direction = direction)
     }
 
