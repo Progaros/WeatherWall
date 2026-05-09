@@ -72,7 +72,6 @@ class PreferenceDefaultsTest {
             "pref_cloud_opacity" to PreferenceDefaults.CLOUD_OPACITY,
             "pref_cloud_stretch" to PreferenceDefaults.CLOUD_STRETCH,
             "pref_cloud_density" to PreferenceDefaults.CLOUD_DENSITY,
-            "pref_cloud_render_mode" to PreferenceDefaults.CLOUD_RENDER_MODE,
             
             // Tree/Terrain settings
             "pref_tree_density" to PreferenceDefaults.TREE_DENSITY,

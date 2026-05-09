@@ -47,7 +47,6 @@ object PreferenceDefaults {
     const val CLOUD_OPACITY = 60  // 10-100, clearly visible clouds
     const val CLOUD_STRETCH = 300  // stretch factor
     const val CLOUD_DENSITY = 100  // 50-300
-    const val CLOUD_RENDER_MODE = "cached"
     
     // === Tree/Terrain Settings ===
     const val TREE_DENSITY = 30  // 0-200 (30 = light coverage, 100 = normal, 200 = dense)

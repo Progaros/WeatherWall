@@ -99,18 +99,6 @@
         <item>winter</item>
     </string-array>
     
-    <!-- Cloud rendering mode options -->
-    <string-array name="cloud_render_mode_options">
-        <item>Cached Bitmaps (Default)</item>
-        <item>Tiled Texture (Fast)</item>
-        <item>AGSL Shader (Android 13+)</item>
-    </string-array>
-    <string-array name="cloud_render_mode_values">
-        <item>cached</item>
-        <item>tiled</item>
-        <item>shader</item>
-    </string-array>
-    
     <!-- Parallax sensor mode options -->
     <string-array name="parallax_sensor_mode_entries">
         <item>Rotation Vector (Robust)</item>

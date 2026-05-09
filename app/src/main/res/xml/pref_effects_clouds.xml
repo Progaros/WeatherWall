@@ -43,13 +43,6 @@
             app:showSeekBarValue="true"
             app:updatesContinuously="true" />
 
-        <ListPreference
-            android:key="pref_cloud_render_mode"
-            android:title="Cloud Render Mode"
-            android:summary="Drawing method (Cached=detailed default, Tiled=fast stylized, Shader=GPU)"
-            android:entries="@array/cloud_render_mode_options"
-            android:entryValues="@array/cloud_render_mode_values"
-            android:defaultValue="cached" />
     </PreferenceCategory>
 
 </PreferenceScreen>
