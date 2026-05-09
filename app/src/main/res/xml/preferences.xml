@@ -16,8 +16,8 @@
         <SeekBarPreference
             android:key="pref_mountain_density"
             android:title="Mountain Density"
-            android:summary="Mountain coverage (0=none, 100=dense)"
-            android:defaultValue="100"
+            android:summary="Mountain coverage (0=none, 50=normal, 100=dense)"
+            android:defaultValue="50"
             android:max="100"
             app:min="0"
             app:showSeekBarValue="true"

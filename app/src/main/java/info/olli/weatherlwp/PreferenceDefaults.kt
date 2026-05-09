@@ -58,7 +58,7 @@ object PreferenceDefaults {
     const val HILL_FREQUENCY = 170  // 25-200 (denser hill pattern)
     
     // === Mountain Settings ===
-    const val MOUNTAIN_DENSITY = 100  // 0-100 (dense by default for rich scene)
+    const val MOUNTAIN_DENSITY = 50  // 0-100 (50 = normal, matches old 100 with halved cell size)
     const val MOUNTAIN_HEIGHT = 100  // 25-200 (100% = normal scale)
     const val MOUNTAIN_WIDTH = 100   // 50-200 (100% = normal scale)
     const val MOUNTAIN_BOTTOM_OFFSET = 0  // -30 to 30

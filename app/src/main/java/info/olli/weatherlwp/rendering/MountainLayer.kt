@@ -115,8 +115,16 @@ class MountainLayer(private val context: Context) : SceneLayer {
     private fun quantizeAmbientColor(color: Int): Int = ColorMath.quantizeColor(color)
     
     companion object {
-        /** World-space cell size for mountain placement. */
-        const val MOUNTAIN_CELL_SIZE = 220f
+        /**
+         * World-space cell size for mountain placement.
+         * Halved from 220 to create more potential slots so that density 50
+         * produces the same count as old density 100, and the full slider
+         * range (0-100) remains useful.
+         */
+        const val MOUNTAIN_CELL_SIZE = 110f
+
+        /** Golden ratio for low-discrepancy depth scatter. */
+        const val PHI = 0.618033988749895f
     }
 
     private fun generateMountains() {
@@ -147,8 +155,12 @@ class MountainLayer(private val context: Context) : SceneLayer {
             val worldX = index * MOUNTAIN_CELL_SIZE +
                 (itemRandom.nextFloat() - 0.5f) * MOUNTAIN_CELL_SIZE * 0.6f
 
-            // Depth: deterministic per index (0 = far, 1 = near)
-            val depth = itemRandom.nextFloat()
+            // Depth: golden-ratio scatter ensures even distribution across z-layers
+            // regardless of which cells survive density gating. Avoids the problem
+            // where low density randomly clusters all mountains at the same depth.
+            val baseDepth = ((index.toFloat() * PHI) % 1f).let { if (it < 0f) it + 1f else it }
+            val depthJitter = (itemRandom.nextFloat() - 0.5f) * 0.15f
+            val depth = (baseDepth + depthJitter).coerceIn(0f, 1f)
 
             // Parallax factor based on depth using centralized constants
             val depthFactor = RenderConstants.PARALLAX_MOUNTAIN_MIN +
