@@ -12,6 +12,7 @@ import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
+import info.olli.weatherlwp.util.WaterColorUtil
 import kotlin.math.sin
 
 /**
@@ -81,14 +82,15 @@ class LakeLayer(private val context: Context) : SceneLayer {
     // Animation
     private var shimmerPhase = 0f
 
-    // Lake colour palette
-    private val WATER_DAY = Color.rgb(60, 120, 170)
-    private val WATER_DAWN = Color.rgb(130, 115, 135)
-    private val WATER_DUSK = Color.rgb(110, 75, 85)
-    private val WATER_NIGHT = Color.rgb(15, 25, 45)
-    private val WATER_DEEP = Color.rgb(25, 50, 80)
-    private val ICE_COLOR = Color.rgb(195, 215, 235)
-    private val FROZEN_THRESHOLD = 0.05f
+    // Lake water palette
+    private val waterPalette = WaterColorUtil.WaterPalette(
+        day   = Color.rgb(60, 120, 170),
+        dawn  = Color.rgb(130, 115, 135),
+        dusk  = Color.rgb(110, 75, 85),
+        night = Color.rgb(15, 25, 45),
+        deep  = Color.rgb(25, 50, 80),
+        ice   = Color.rgb(195, 215, 235)
+    )
 
     override fun resize(w: Float, h: Float) {
         width = w
@@ -137,11 +139,9 @@ class LakeLayer(private val context: Context) : SceneLayer {
         // Lake shows even with very low water level (it holds water)
         val effectiveLevel = (waterLevel * 1.5f + 0.3f).coerceIn(0.3f, 1f)
 
-        val isFrozen = state.snowLevel > FROZEN_THRESHOLD && state.temperatureCelsius.let {
-            !it.isNaN() && it < 0f
-        }
+        val isFrozen = WaterColorUtil.isFrozen(state, waterPalette.frozenThreshold)
 
-        val waterColor = getWaterColor(state, isFrozen)
+        val waterColor = WaterColorUtil.getWaterColor(state, isFrozen, waterPalette)
         val provider = terrainYProvider ?: return
 
         val px = parallaxCalculator.getOffsetXForDepth(depthFactor)
@@ -234,7 +234,7 @@ class LakeLayer(private val context: Context) : SceneLayer {
             cachedSimpleGradient = LinearGradient(
                 0f, cy - h, 0f, cy + h,
                 Color.argb(alphaInt, Color.red(color), Color.green(color), Color.blue(color)),
-                Color.argb(alphaInt, Color.red(WATER_DEEP), Color.green(WATER_DEEP), Color.blue(WATER_DEEP)),
+                Color.argb(alphaInt, Color.red(waterPalette.deep), Color.green(waterPalette.deep), Color.blue(waterPalette.deep)),
                 Shader.TileMode.CLAMP
             )
             cachedSimpleGradientKey = key
@@ -312,7 +312,7 @@ class LakeLayer(private val context: Context) : SceneLayer {
             cachedSegmentGradient = LinearGradient(
                 0f, surfaceY, 0f, bottomY,
                 Color.argb(alphaInt, Color.red(color), Color.green(color), Color.blue(color)),
-                Color.argb(alphaInt, Color.red(WATER_DEEP), Color.green(WATER_DEEP), Color.blue(WATER_DEEP)),
+                Color.argb(alphaInt, Color.red(waterPalette.deep), Color.green(waterPalette.deep), Color.blue(waterPalette.deep)),
                 Shader.TileMode.CLAMP
             )
             cachedSegmentGradientKey = key
@@ -359,15 +359,7 @@ class LakeLayer(private val context: Context) : SceneLayer {
 
     // ========================= Color Helpers =========================
 
-    private fun getWaterColor(state: SimulationState, isFrozen: Boolean): Int {
-        if (isFrozen) return ICE_COLOR
-        return when {
-            state.isNight -> WATER_NIGHT
-            state.isDawn -> RenderConstants.lerpColor(WATER_NIGHT, WATER_DAWN, 0.5f)
-            state.isDusk -> RenderConstants.lerpColor(WATER_DAY, WATER_DUSK, 0.5f)
-            else -> WATER_DAY
-        }
-    }
+
 
     // ========================= Settings =========================
 

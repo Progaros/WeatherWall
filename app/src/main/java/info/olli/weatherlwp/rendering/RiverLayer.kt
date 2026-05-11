@@ -12,6 +12,7 @@ import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
+import info.olli.weatherlwp.util.WaterColorUtil
 import kotlin.math.sin
 
 /**
@@ -104,14 +105,15 @@ class RiverLayer(private val context: Context) : SceneLayer {
     // Animation phase
     private var flowPhase = 0f
 
-    // River base color palette
-    private val WATER_DAY = Color.rgb(70, 130, 180)     // Steel blue
-    private val WATER_DAWN = Color.rgb(140, 120, 140)    // Muted lavender
-    private val WATER_DUSK = Color.rgb(120, 80, 90)      // Dark rose
-    private val WATER_NIGHT = Color.rgb(20, 30, 50)      // Deep dark blue
-    private val WATER_DEEP = Color.rgb(30, 60, 90)       // Darker shade for depth
-    private val ICE_COLOR = Color.rgb(200, 220, 240)      // Icy surface color
-    private val FROZEN_THRESHOLD = 0.05f                  // Snow level above which river freezes
+    // River water palette
+    private val waterPalette = WaterColorUtil.WaterPalette(
+        day   = Color.rgb(70, 130, 180),   // Steel blue
+        dawn  = Color.rgb(140, 120, 140),  // Muted lavender
+        dusk  = Color.rgb(120, 80, 90),    // Dark rose
+        night = Color.rgb(20, 30, 50),     // Deep dark blue
+        deep  = Color.rgb(30, 60, 90),     // Darker shade for depth
+        ice   = Color.rgb(200, 220, 240)   // Icy surface color
+    )
 
     override fun resize(w: Float, h: Float) {
         width = w
@@ -138,12 +140,10 @@ class RiverLayer(private val context: Context) : SceneLayer {
         if (drawViaCallback) return
 
         // Determine if river should be frozen
-        val isFrozen = state.snowLevel > FROZEN_THRESHOLD && state.temperatureCelsius.let {
-            !it.isNaN() && it < 0f
-        }
+        val isFrozen = WaterColorUtil.isFrozen(state, waterPalette.frozenThreshold)
 
         // Get water color based on time of day
-        val waterColor = getWaterColor(state, isFrozen)
+        val waterColor = WaterColorUtil.getWaterColor(state, isFrozen, waterPalette)
 
         // Get available hill layers from terrain
         val depthFactors = hillDepthProvider?.invoke() ?: emptyList()
@@ -246,10 +246,8 @@ class RiverLayer(private val context: Context) : SceneLayer {
 
         val provider = terrainYProvider ?: return
 
-        val isFrozen = state.snowLevel > FROZEN_THRESHOLD && state.temperatureCelsius.let {
-            !it.isNaN() && it < 0f
-        }
-        val waterColor = getWaterColor(state, isFrozen)
+        val isFrozen = WaterColorUtil.isFrozen(state, waterPalette.frozenThreshold)
+        val waterColor = WaterColorUtil.getWaterColor(state, isFrozen, waterPalette)
 
         val layerProgress = layerIndex.toFloat() / totalLayers.coerceAtLeast(1)
         val layerWidthFactor = 0.3f + layerProgress * 0.7f
@@ -484,7 +482,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
             cachedWavyGradient = LinearGradient(
                 0f, top, 0f, bottom,
                 Color.argb(alphaMultiplier, Color.red(color), Color.green(color), Color.blue(color)),
-                Color.argb(alphaMultiplier, Color.red(WATER_DEEP), Color.green(WATER_DEEP), Color.blue(WATER_DEEP)),
+                Color.argb(alphaMultiplier, Color.red(waterPalette.deep), Color.green(waterPalette.deep), Color.blue(waterPalette.deep)),
                 Shader.TileMode.CLAMP
             )
             cachedWavyGradientKey = wavyKey
@@ -510,7 +508,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
 
         // Sky reflection color (lighter/bluer version of water)
         val reflectionColor = if (isFrozen) {
-            ICE_COLOR
+            waterPalette.ice
         } else {
             val skyInfluence = 0.3f
             RenderConstants.lerpColor(color, getSkyReflectionColor(state), skyInfluence)
@@ -531,7 +529,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
                     Color.argb(alphaMultiplier,
                         Color.red(color), Color.green(color), Color.blue(color)),
                     Color.argb(alphaMultiplier,
-                        Color.red(WATER_DEEP), Color.green(WATER_DEEP), Color.blue(WATER_DEEP))
+                        Color.red(waterPalette.deep), Color.green(waterPalette.deep), Color.blue(waterPalette.deep))
                 ),
                 floatArrayOf(0f, 0.4f, 1f),
                 Shader.TileMode.CLAMP
@@ -628,16 +626,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
 
     // ========================= Color Helpers =========================
 
-    private fun getWaterColor(state: SimulationState, isFrozen: Boolean): Int {
-        if (isFrozen) return ICE_COLOR
 
-        return when {
-            state.isNight -> WATER_NIGHT
-            state.isDawn -> RenderConstants.lerpColor(WATER_NIGHT, WATER_DAWN, 0.5f)
-            state.isDusk -> RenderConstants.lerpColor(WATER_DAY, WATER_DUSK, 0.5f)
-            else -> WATER_DAY
-        }
-    }
 
     private fun getSkyReflectionColor(state: SimulationState): Int {
         return when {

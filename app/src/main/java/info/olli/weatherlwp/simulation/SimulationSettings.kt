@@ -54,7 +54,7 @@ data class SimulationSettings(
     val debugWeatherOverride: String? = null,
 
     // Raw immutable preference snapshot for rendering-layer settings
-    val snapshot: Map<String, Any?> = emptyMap()
+    internal val snapshot: Map<String, Any?> = emptyMap()
 ) {
     // Legacy compatibility
     val shadowsEnabled: Boolean
