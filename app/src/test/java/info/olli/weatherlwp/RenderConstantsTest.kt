@@ -340,10 +340,10 @@ class RenderConstantsTest {
     }
 
     @Test
-    fun `getHeightScale in landscape uses width as effective height`() {
-        // 1920×1080 landscape: width > height, so uses width (1920) → scale = 1.0
+    fun `getHeightScale in landscape uses height not width`() {
+        // 1920×1080 landscape: viewport model uses screenHeight → scale = 1080/1920 = 0.5625
         val scale = info.olli.weatherlwp.rendering.RenderConstants.getHeightScale(1080f, 1920f)
-        assertEquals(1.0f, scale, 0.001f)
+        assertEquals(1080f / 1920f, scale, 0.001f)
     }
 
     @Test
@@ -485,11 +485,13 @@ class RenderConstantsTest {
     }
 
     @Test
-    fun `getPositionScale reduces on narrow screens`() {
+    fun `getPositionScale equals heightScale`() {
+        // With the viewport model, positionScale == heightScale (no width correction)
         val scaleRef = info.olli.weatherlwp.rendering.RenderConstants.getPositionScale(1080f, 1920f)
         val scaleNarrow = info.olli.weatherlwp.rendering.RenderConstants.getPositionScale(540f, 1920f)
-        assertTrue("Narrow screen should reduce position scale", scaleNarrow < scaleRef)
-        assertEquals(0.5f, scaleNarrow, 0.001f)
+        // Both should equal getHeightScale(1920) = 1.0
+        assertEquals(scaleRef, scaleNarrow, 0.001f)
+        assertEquals(1.0f, scaleRef, 0.001f)
     }
 
     @Test
@@ -514,9 +516,10 @@ class RenderConstantsTest {
 
     @Test
     fun `getPositionScale clamps at MIN_HEIGHT_SCALE`() {
-        // Very narrow screen: widthCorrection = 0.3, raw result = 0.3
-        // But MIN_HEIGHT_SCALE (0.5) applies as floor
+        // Very narrow screen: positionScale = heightScale = height/1920
+        // For height=1920: scale=1.0 (above MIN)
+        // positionScale should never go below MIN_HEIGHT_SCALE
         val scale = info.olli.weatherlwp.rendering.RenderConstants.getPositionScale(100f, 1920f)
-        assertEquals(info.olli.weatherlwp.rendering.RenderConstants.MIN_HEIGHT_SCALE, scale, 0.001f)
+        assertEquals(1.0f, scale, 0.001f)
     }
 }

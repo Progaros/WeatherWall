@@ -20,6 +20,18 @@ import kotlin.random.Random
  * Events spawn randomly and update/draw until they leave the screen.
  * 
  * Event classes are in the events/ package for better organization.
+ *
+ * ## World-space migration status
+ *
+ * Layer-level depth snapping uses [hillInfoWorldProvider] (world-space, primary)
+ * with fallback to the deprecated [hillInfoProvider] (xRatio-based).
+ *
+ * Individual [RandomEvent] implementations (DuckEvent, FrogEvent, DeerEvent, etc.)
+ * still use xRatio-based positions internally and receive the legacy
+ * [hillHeightProvider] for terrain following via [RandomEvent.getCurrentYRatio].
+ *
+ * TODO: Migrate individual RandomEvent implementations to world-space coordinates
+ *       and replace HillHeightProvider with HillHeightWorldProvider in their APIs.
  */
 class RandomEventLayer(private val context: Context) : SceneLayer {
     override val layerType = LayerType.RANDOM_EVENTS
@@ -60,13 +72,21 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
      * Hill height provider for ground events to follow terrain contour.
      * Set by TerrainLayer to provide hill Y at given X and depth.
      */
+    @Deprecated("Use hillHeightWorldProvider (worldX-based) instead")
     var hillHeightProvider: HillHeightProvider? = null
+
+    /** World-space hill height provider for ground events. */
+    var hillHeightWorldProvider: HillHeightWorldProvider? = null
     
     /**
      * Hill info provider that returns the actual hill depthFactor for a given requested depth.
      * Used to snap event depth to actual hill layers for correct draw ordering.
      */
+    @Deprecated("Use hillInfoWorldProvider (worldX-based) instead")
     var hillInfoProvider: ((xRatio: Float, requestedDepthFactor: Float) -> Float)? = null
+
+    /** World-space hill info provider. Returns actual hill depthFactor for given worldX and requested depth. */
+    var hillInfoWorldProvider: ((worldX: Float, requestedDepthFactor: Float) -> Float)? = null
     
     // Reusable ground-event entries to avoid per-frame Pair/lambda allocation.
     private val groundEventResults = ArrayList<TerrainLayer.GroundEventDrawEntry>(32)
@@ -116,6 +136,8 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
                     groundDrawAmbientColor,
                     extendedOffset,
                     groundDrawAbsoluteTimeMs,
+                    // Events internally use xRatio-based positions (legacy boundary)
+                    @Suppress("DEPRECATION")
                     hillHeightProvider
                 )
             } catch (e: Exception) {
@@ -376,7 +398,8 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
                                  minDepth: Float, maxDepth: Float) {
         drawFilteredEvents(canvas, state, parallaxCalculator) { event ->
             if (event.layer != EventLayer.GROUND) return@drawFilteredEvents false
-            val effectiveDepth = hillInfoProvider?.invoke(0.5f, event.depthFactor)
+            val effectiveDepth = hillInfoWorldProvider?.invoke(0f, event.depthFactor)
+                ?: @Suppress("DEPRECATION") hillInfoProvider?.invoke(0.5f, event.depthFactor)
                 ?: event.depthFactor
             effectiveDepth >= minDepth && effectiveDepth < maxDepth
         }
@@ -413,10 +436,14 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         for (event in currentEvents) {
             if (event.layer == EventLayer.GROUND) {
                 // Snap event's depthFactor to the actual hill it visually sits on
-                val effectiveDepth = hillInfoProvider?.invoke(0.5f, event.depthFactor)
+                val effectiveDepth = hillInfoWorldProvider?.invoke(0f, event.depthFactor)
+                    ?: @Suppress("DEPRECATION") hillInfoProvider?.invoke(0.5f, event.depthFactor)
                     ?: event.depthFactor
                 if (effectiveDepth >= minDepth && effectiveDepth < maxDepth) {
                     // Get the event's current Y position for depth sorting
+                    // Events internally use xRatio-based positions, so we pass the legacy
+                    // hillHeightProvider here. Full event migration to worldX is a future task.
+                    @Suppress("DEPRECATION")
                     val eventY = event.getCurrentYRatio(groundDrawAbsoluteTimeMs, hillHeightProvider)
                     val entry = groundEventEntryPool[resultCount]
                     entry.bind(event, eventY)
@@ -479,6 +506,8 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
                     event.draw(
                         canvas, paint, strokePaint, parallaxCalculator, extendedWidth, height,
                         state.timeSeconds, ambientColor, extendedOffset, state.absoluteTimeMs,
+                        // Events internally use xRatio-based positions (legacy boundary)
+                        @Suppress("DEPRECATION")
                         if (event.layer == EventLayer.GROUND) hillHeightProvider else null
                     )
                 } catch (e: Exception) {

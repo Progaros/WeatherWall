@@ -478,7 +478,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         isBackLayer: Boolean,
         parallaxCalculator: ParallaxCalculator
     ) {
-        val cloudZoomScale = RenderConstants.getHeightScale(height, width)
+        val transform = WorldViewportTransform(width, height, RenderConstants.getHeightScale(height, width))
         var i = 0
         while (i < groups.size) {
             val group = groups[i]
@@ -487,8 +487,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
 
             val px = parallaxCalculator.getOffsetXForDepth(group.depthFactor)
             val py = parallaxCalculator.getOffsetYForDepth(group.depthFactor)
-            // World-space to screen projection with height-based zoom
-            val screenX = width / 2f + group.currentWorldX * cloudZoomScale + px
+            // World-space to screen projection via canonical transform + sensor parallax
+            val screenX = transform.worldToScreenX(group.currentWorldX) + px
             val screenY = group.y * height + py
 
             val groupWidthPx = (group.groupWidth * minDim).toInt()
@@ -506,8 +506,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
             val paddedHeight = groupHeightPx + paddingY * 2
 
             // Viewport culling using actual padded dimensions (accounting for zoom scale)
-            val halfW = paddedWidth / 2f * cloudZoomScale
-            val halfH = paddedHeight / 2f * cloudZoomScale
+            val halfW = paddedWidth / 2f * transform.heightScale
+            val halfH = paddedHeight / 2f * transform.heightScale
             if (screenX + halfW < 0f || screenX - halfW > width) continue
             if (screenY + halfH < 0f || screenY - halfH > height) continue
 
@@ -534,7 +534,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
                 // Scale clouds proportionally to scene zoom so they don't shrink relative to other elements
                 canvas.save()
                 canvas.translate(screenX, screenY)
-                canvas.scale(cloudZoomScale, cloudZoomScale)
+                canvas.scale(transform.heightScale, transform.heightScale)
                 canvas.drawBitmap(bitmap, -paddedWidth / 2f, -paddedHeight / 2f, drawPaint)
                 canvas.restore()
             }

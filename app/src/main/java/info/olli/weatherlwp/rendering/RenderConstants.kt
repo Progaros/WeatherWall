@@ -23,41 +23,30 @@ object RenderConstants {
     const val MIN_HEIGHT_SCALE = 0.5f
     
     /**
-     * Calculate height scale for the current screen.
-     * Elements sized relative to reference height should be multiplied by this.
+     * Calculate height scale (pixels per world unit) for the current screen.
      *
-     * When [screenWidth] is provided and is larger than [screenHeight] (landscape),
-     * the larger dimension is used so that the zoom-out effect only applies in
-     * portrait orientation where the height is the constraining axis.
+     * This is the uniform scale factor used by the viewport model:
+     *   `screenX = screenWidth/2 + worldX * heightScale`
+     *
+     * Using screenHeight directly (not max) means landscape mode correctly
+     * shows a wider slice of the world rather than stretching. The wider
+     * viewport is filled by cell-based generation over the visible range.
      *
      * @param screenHeight The actual screen height
-     * @param screenWidth  Optional screen width; when > screenHeight, prevents landscape zoom-out
-     * @return Scale factor (1.0 at 1920px, 0.5 at 960px, clamped to MIN_HEIGHT_SCALE)
+     * @param screenWidth  Ignored (kept for API compat). Use screenHeight only.
+     * @return Scale factor (1.0 at 1920px, clamped to MIN_HEIGHT_SCALE)
      */
-    fun getHeightScale(screenHeight: Float, screenWidth: Float = 0f): Float {
-        val effectiveHeight = if (screenWidth > screenHeight) screenWidth else screenHeight
-        return (effectiveHeight / REFERENCE_HEIGHT).coerceAtLeast(MIN_HEIGHT_SCALE)
+    fun getHeightScale(screenHeight: Float, @Suppress("UNUSED_PARAMETER") screenWidth: Float = 0f): Float {
+        return (screenHeight / REFERENCE_HEIGHT).coerceAtLeast(MIN_HEIGHT_SCALE)
     }
 
     /**
-     * Position-mapping scale for world-to-screen projection.
-     *
-     * On screens narrower than the reference width (1080px), reduces the
-     * spread factor so content remains visible at viewport edges instead
-     * of being pushed off-screen by the zoom effect.
-     *
-     * Use this for worldX → screenX projections. For element sizing,
-     * use [getHeightScale] instead.
-     *
-     * @param screenWidth  The actual visible screen width
-     * @param screenHeight The actual visible screen height
-     * @return Scale factor adjusted for both height zoom and viewport width
+     * @deprecated Use [getHeightScale] directly. This was a legacy compatibility shim
+     * that is now identical to getHeightScale. No production code should call this.
      */
+    @Deprecated("Use getHeightScale(screenHeight) directly", ReplaceWith("getHeightScale(screenHeight)"))
     fun getPositionScale(screenWidth: Float, screenHeight: Float): Float {
-        val rawScale = getHeightScale(screenHeight, screenWidth)
-        val referenceWidth = REFERENCE_HEIGHT * REFERENCE_ASPECT_RATIO
-        val widthCorrection = (screenWidth / referenceWidth).coerceIn(0.3f, 1.0f)
-        return (rawScale * widthCorrection).coerceAtLeast(MIN_HEIGHT_SCALE)
+        return getHeightScale(screenHeight)
     }
     
     /** Reference aspect ratio for world-space calculations (9:16 portrait) */
@@ -80,20 +69,20 @@ object RenderConstants {
      * around center need to be generated. Includes generous parallax padding
      * so content is available even at maximum tilt/scroll offset.
      *
-     * The heightScale zoom factor is applied: shorter screens (smaller heightScale)
-     * see a wider world range (zoom out), taller screens see less (zoom in).
+     * With the viewport model: heightScale = screenHeight / REFERENCE_HEIGHT,
+     * so visibleHalf = screenWidth / (2 * heightScale). In landscape mode this
+     * is wider because heightScale is smaller, correctly filling the screen.
      *
      * @param screenWidth The actual visible screen width
      * @param screenHeight The actual visible screen height (used for zoom)
      * @return World-space half-width that covers viewport + parallax padding
      */
     fun getVisibleWorldHalf(screenWidth: Float, screenHeight: Float = REFERENCE_HEIGHT): Float {
-        val heightScale = getHeightScale(screenHeight, screenWidth)
+        val heightScale = getHeightScale(screenHeight)
         // Visible half in world-space, accounting for zoom
         val visibleHalf = screenWidth / (2f * heightScale)
-        // Parallax padding: covers maximum parallax shift
-        // Use 0.45 * reference height as a generous fixed bound
-        val parallaxPad = REFERENCE_HEIGHT * 0.45f
+        // Parallax padding: covers maximum parallax shift in world units
+        val parallaxPad = REFERENCE_HEIGHT * 0.45f / heightScale
         return visibleHalf + parallaxPad
     }
 
@@ -136,8 +125,8 @@ object RenderConstants {
      * @return The extended width for draw-time position mapping
      */
     fun getExtendedWidth(screenWidth: Float, screenHeight: Float): Float {
-        val positionScale = getPositionScale(screenWidth, screenHeight)
-        return getGenerationWorldRange(screenWidth) * positionScale
+        val heightScale = getHeightScale(screenHeight)
+        return getGenerationWorldRange(screenWidth) * heightScale
     }
 
     /**

@@ -84,12 +84,16 @@ class BushRenderer {
     private var screenWidth = 0f
     private var height = 0f
 
+    /** Cached world-to-screen transform, rebuilt on dimension change. */
+    private var cachedTransform = WorldViewportTransform(0f, 0f, 1f)
+
     /**
      * Update render-time dimensions without regenerating bush positions.
      */
     fun updateDimensions(screenWidth: Float, height: Float) {
         this.screenWidth = screenWidth
         this.height = height
+        cachedTransform = WorldViewportTransform(screenWidth, height, RenderConstants.getHeightScale(height, screenWidth))
     }
 
     // ---- Season state (set by TerrainLayer before each draw frame) ----
@@ -308,9 +312,8 @@ class BushRenderer {
      * @param ambientColor Pre-computed ambient tint color for the current time of day.
      */
     fun drawBush(canvas: Canvas, bush: BushData, state: SimulationState, ambientColor: Int) {
-        // World-space to screen projection with height-based zoom
-        val heightScale = RenderConstants.getHeightScale(height, screenWidth)
-        val x = screenWidth / 2f + bush.worldX * heightScale
+        // World-space to screen projection via cached transform
+        val x = cachedTransform.worldToScreenX(bush.worldX)
         val groundY = bush.yRatio * height
 
         // Bush size: smaller than trees

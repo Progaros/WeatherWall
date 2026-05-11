@@ -12,11 +12,16 @@ import kotlin.math.floor
  *
  * Screen projection at draw time:
  * ```
- * screenX = screenWidth / 2 + worldX * heightScale * parallax
+ * screenX = screenWidth / 2 + worldX * heightScale
  * ```
  *
- * [heightScale] controls the zoom level: taller screens spread objects
- * farther from center; shorter screens compress them.
+ * [heightScale] controls the zoom level (pixels per world unit): taller
+ * screens spread objects farther from center; shorter screens compress them.
+ *
+ * Parallax is handled exclusively via canvas.translate() at the call site,
+ * which shifts the effective camera center per depth layer. This preserves
+ * intra-layer spacing: two objects in the same layer always have screen
+ * distance = (worldX2 - worldX1) * heightScale, regardless of depth.
  */
 data class WorldViewportTransform(
     val screenWidth: Float,
@@ -29,28 +34,37 @@ data class WorldViewportTransform(
     /**
      * Convert a world-space x coordinate to screen pixels.
      *
+     * Parallax depth is NOT applied here — it is handled by
+     * canvas.translate() at the call site (camera-center model).
+     *
      * @param worldX Position in world-space (0 = center).
-     * @param parallax Parallax depth multiplier (higher = more movement).
      */
-    fun worldToScreenX(worldX: Float, parallax: Float = 1f): Float {
-        return centerX + worldX * heightScale * parallax
+    fun worldToScreenX(worldX: Float): Float {
+        return centerX + worldX * heightScale
     }
 
     /**
-     * Return the visible world-x range for the given parallax depth.
+     * Convert a screen-pixel x coordinate back to world-space.
+     *
+     * Inverse of [worldToScreenX]:
+     * `worldX = (screenX - centerX) / heightScale`
+     */
+    fun screenToWorldX(screenX: Float): Float {
+        return (screenX - centerX) / heightScale
+    }
+
+    /**
+     * Return the visible world-x range for the current viewport.
      *
      * Objects whose worldX falls inside this range (plus padding) are
      * potentially visible on screen.
      *
-     * @param parallax Parallax depth multiplier.
      * @param paddingWorld Extra world-space padding on each side.
      */
     fun visibleWorldRangeX(
-        parallax: Float = 1f,
         paddingWorld: Float = 0f
     ): ClosedFloatingPointRange<Float> {
-        val effectiveScale = (heightScale * parallax).coerceAtLeast(0.001f)
-        val half = screenWidth / (2f * effectiveScale)
+        val half = screenWidth / (2f * heightScale.coerceAtLeast(0.001f))
         return (-half - paddingWorld)..(half + paddingWorld)
     }
 

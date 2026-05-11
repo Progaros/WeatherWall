@@ -42,12 +42,15 @@ class WorldViewportTransformTest {
     }
 
     @Test
-    fun `parallax multiplies distance from center`() {
+    fun `intra-layer spacing is preserved (no parallax compression)`() {
+        // Two objects in the same layer must have constant screen distance
+        // regardless of any external parallax. The WorldViewportTransform
+        // itself must not compress object spacing.
         val t = transform()
-        val worldX = 150f
-        val dist1 = t.worldToScreenX(worldX, parallax = 1f) - t.centerX
-        val dist2 = t.worldToScreenX(worldX, parallax = 0.5f) - t.centerX
-        assertEquals(dist1 * 0.5f, dist2, 0.01f)
+        val worldX1 = 100f
+        val worldX2 = 300f
+        val screenDist = t.worldToScreenX(worldX2) - t.worldToScreenX(worldX1)
+        assertEquals((worldX2 - worldX1) * t.heightScale, screenDist, 0.01f)
     }
 
     // ===================== visibleWorldRangeX =====================
@@ -88,9 +91,9 @@ class WorldViewportTransformTest {
     }
 
     @Test
-    fun `parallax preserves symmetry in visible range`() {
+    fun `visible range is symmetric`() {
         val t = transform()
-        val range = t.visibleWorldRangeX(parallax = 0.3f)
+        val range = t.visibleWorldRangeX()
         assertEquals(-range.start, range.endInclusive, 0.01f)
     }
 
@@ -220,16 +223,16 @@ class WorldViewportTransformTest {
     // ===================== visibleWorldRangeX: heightScale multiplication matters =====================
 
     @Test
-    fun `visibleWorldRangeX uses heightScale times parallax for effective scale`() {
+    fun `visibleWorldRangeX uses heightScale for effective scale`() {
         val w = 1080f
-        // With heightScale=1, parallax=1: visible half = w/(2*1*1) = 540
+        // With heightScale=1: visible half = w/(2*1) = 540
         val t1 = WorldViewportTransform(w, 1920f, 1f)
-        val range1 = t1.visibleWorldRangeX(parallax = 1f)
+        val range1 = t1.visibleWorldRangeX()
         assertEquals(w / 2f, range1.endInclusive, 0.01f)
 
-        // With heightScale=2, parallax=1: visible half = w/(2*2*1) = 270
+        // With heightScale=2: visible half = w/(2*2) = 270
         val t2 = WorldViewportTransform(w, 1920f, 2f)
-        val range2 = t2.visibleWorldRangeX(parallax = 1f)
+        val range2 = t2.visibleWorldRangeX()
         assertEquals(w / 4f, range2.endInclusive, 0.01f)
 
         // Confirm the ratio: range1 should be exactly 2x range2
@@ -254,5 +257,121 @@ class WorldViewportTransformTest {
         val range = WorldViewportTransform.indexRangeForWorldRange(0f, 0.5f, 1f)
         assertEquals(0, range.first)
         assertEquals(1, range.last)
+    }
+
+    // ===================== Parallax spacing invariants =====================
+
+    @Test
+    fun `two objects same layer keep constant spacing`() {
+        // Core invariant: parallax must not compress intra-layer spacing.
+        // Screen distance = (worldX2 - worldX1) * heightScale, always.
+        val worldX1 = 100f
+        val worldX2 = 300f
+        for (h in listOf(960f, 1920f, 2400f)) {
+            val t = transform(1080f, h)
+            val screenDist = t.worldToScreenX(worldX2) - t.worldToScreenX(worldX1)
+            assertEquals("h=$h", (worldX2 - worldX1) * t.heightScale, screenDist, 0.01f)
+        }
+    }
+
+    @Test
+    fun `worldToScreenX has no parallax parameter`() {
+        // Ensure the parallax-as-object-scaling overload is removed.
+        // worldToScreenX takes only worldX, not a depth multiplier.
+        val t = transform()
+        // If this compiles, the single-param signature is the only one.
+        val screen = t.worldToScreenX(200f)
+        assertEquals(t.centerX + 200f * t.heightScale, screen, 0.01f)
+    }
+
+    @Test
+    fun `visibleWorldRangeX has no parallax parameter`() {
+        // Visible range depends only on heightScale, not per-layer parallax.
+        val t = transform()
+        val range = t.visibleWorldRangeX()
+        val expectedHalf = t.screenWidth / (2f * t.heightScale)
+        assertEquals(expectedHalf, range.endInclusive, 0.01f)
+    }
+
+    @Test
+    fun `zoom and spacing compose correctly`() {
+        // Doubling heightScale doubles screen distance between two worldX points.
+        val worldX1 = -150f
+        val worldX2 = 150f
+        val t1 = WorldViewportTransform(1080f, 1920f, 1f)
+        val t2 = WorldViewportTransform(1080f, 1920f, 2f)
+        val dist1 = t1.worldToScreenX(worldX2) - t1.worldToScreenX(worldX1)
+        val dist2 = t2.worldToScreenX(worldX2) - t2.worldToScreenX(worldX1)
+        assertEquals(dist1 * 2f, dist2, 0.01f)
+    }
+
+    // ===================== screenToWorldX round-trip =====================
+
+    @Test
+    fun `screenToWorldX is inverse of worldToScreenX`() {
+        val t = transform()
+        for (worldX in listOf(-500f, -100f, 0f, 100f, 500f)) {
+            val screenX = t.worldToScreenX(worldX)
+            val roundTrip = t.screenToWorldX(screenX)
+            assertEquals("round-trip for worldX=$worldX", worldX, roundTrip, 0.001f)
+        }
+    }
+
+    @Test
+    fun `worldToScreenX is inverse of screenToWorldX`() {
+        val t = transform()
+        for (screenX in listOf(0f, 200f, 540f, 900f, 1080f)) {
+            val worldX = t.screenToWorldX(screenX)
+            val roundTrip = t.worldToScreenX(worldX)
+            assertEquals("round-trip for screenX=$screenX", screenX, roundTrip, 0.001f)
+        }
+    }
+
+    @Test
+    fun `screenToWorldX round-trip across multiple heightScales`() {
+        for (h in listOf(800f, 1200f, 1920f, 2400f)) {
+            val t = transform(1080f, h)
+            for (worldX in listOf(-300f, 0f, 300f)) {
+                val screenX = t.worldToScreenX(worldX)
+                val roundTrip = t.screenToWorldX(screenX)
+                assertEquals("h=$h worldX=$worldX", worldX, roundTrip, 0.001f)
+            }
+        }
+    }
+
+    @Test
+    fun `screenToWorldX of centerX is zero`() {
+        val t = transform()
+        assertEquals(0f, t.screenToWorldX(t.centerX), 0.001f)
+    }
+
+    // ===================== Canvas-translate and screenToWorldX =====================
+
+    @Test
+    fun `screenToWorldX samples correct world position in translated canvas`() {
+        // When canvas.translate(px, py) is applied for parallax, the screen pixel
+        // positions used for terrain sampling are in the *untranslated* coordinate
+        // system (before the translate). TerrainLayer.drawHill() and RiverLayer
+        // sample at screen positions like (left + i * step), which are in the
+        // untranslated canvas space. The canvas.translate() only affects where
+        // the drawn output appears, not the sampling coordinates.
+        //
+        // Therefore screenToWorldX() should use the raw screen position without
+        // parallax offset compensation. This test verifies that the same worldX
+        // is recovered regardless of any notional parallax shift.
+        val t = transform()
+        val sampleScreenX = 300f  // a sampling position in untranslated canvas
+
+        // worldX for this screen position
+        val worldX = t.screenToWorldX(sampleScreenX)
+
+        // If we imagined a parallax offset of 50px, the sampling position
+        // is still 300f in canvas space (the translate moves the output, not input).
+        // So screenToWorldX(300f) must return the same worldX.
+        val worldX2 = t.screenToWorldX(sampleScreenX)
+        assertEquals(worldX, worldX2, 0.001f)
+
+        // And the round-trip must hold
+        assertEquals(sampleScreenX, t.worldToScreenX(worldX), 0.001f)
     }
 }

@@ -23,7 +23,16 @@ enum class EventLayer {
  * @param depthFactor Depth layer to sample (0.0=background to 1.0=foreground)
  * @return Y position as ratio of screen height (0.0=top, 1.0=bottom)
  */
+@Deprecated("Use HillHeightWorldProvider (worldX-based) instead", replaceWith = ReplaceWith("HillHeightWorldProvider"))
 typealias HillHeightProvider = (xRatio: Float, depthFactor: Float) -> Float
+
+/**
+ * World-space provider for hill Y position.
+ * @param worldX World-space X position (0 = center)
+ * @param depthFactor Depth layer to sample (0.0=background to 1.0=foreground)
+ * @return Y position as ratio of screen height (0.0=top, 1.0=bottom)
+ */
+typealias HillHeightWorldProvider = (worldX: Float, depthFactor: Float) -> Float
 
 /**
  * Info about a hill position, including both Y and the actual hill's depthFactor.
@@ -42,7 +51,16 @@ data class HillInfo(
  * @param requestedDepthFactor Approximate depth to find closest hill for
  * @return HillInfo with Y position and actual hill depthFactor
  */
+@Deprecated("Use HillInfoWorldProvider (worldX-based) instead", replaceWith = ReplaceWith("HillInfoWorldProvider"))
 typealias HillInfoProvider = (xRatio: Float, requestedDepthFactor: Float) -> HillInfo
+
+/**
+ * World-space provider for full hill info.
+ * @param worldX World-space X position (0 = center)
+ * @param requestedDepthFactor Approximate depth to find closest hill for
+ * @return HillInfo with Y position and actual hill depthFactor
+ */
+typealias HillInfoWorldProvider = (worldX: Float, requestedDepthFactor: Float) -> HillInfo
 
 /**
  * Base interface for random events.

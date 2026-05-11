@@ -38,7 +38,11 @@ class LakeLayer(private val context: Context) : SceneLayer {
     }
 
     /** Callback to query terrain Y position at a given (xRatio, depthFactor). */
+    @Deprecated("Use terrainYWorldProvider (worldX-based) instead")
     var terrainYProvider: ((xRatio: Float, depthFactor: Float) -> Float)? = null
+
+    /** World-space callback to query terrain Y position at a given (worldX, depthFactor). */
+    var terrainYWorldProvider: ((worldX: Float, depthFactor: Float) -> Float)? = null
 
     /** Callback to get the sorted list of hill depth factors. */
     var hillDepthProvider: (() -> List<Float>)? = null
@@ -142,7 +146,14 @@ class LakeLayer(private val context: Context) : SceneLayer {
         val isFrozen = WaterColorUtil.isFrozen(state, waterPalette.frozenThreshold)
 
         val waterColor = WaterColorUtil.getWaterColor(state, isFrozen, waterPalette)
-        val provider = terrainYProvider ?: return
+        val worldProvider = terrainYWorldProvider
+        @Suppress("DEPRECATION")
+        val legacyProvider = terrainYProvider
+        if (worldProvider == null && legacyProvider == null) return
+
+        val transform = if (worldProvider != null)
+            WorldViewportTransform(width, height, RenderConstants.getHeightScale(height, width))
+        else null
 
         val px = parallaxCalculator.getOffsetXForDepth(depthFactor)
         val py = parallaxCalculator.getOffsetYForDepth(depthFactor)
@@ -161,8 +172,13 @@ class LakeLayer(private val context: Context) : SceneLayer {
         var minTerrainY = Float.MAX_VALUE
         var maxTerrainY = Float.MIN_VALUE
         for (i in 0..numSamples) {
-            val xRatio = ((lakeLeft + (lakeRight - lakeLeft) * i.toFloat() / numSamples) + extendedOffset) / extendedWidth
-            val terrainY = provider(xRatio.coerceIn(0f, 1f), depthFactor) * height
+            val screenX = lakeLeft + (lakeRight - lakeLeft) * i.toFloat() / numSamples
+            val terrainY = if (worldProvider != null && transform != null) {
+                worldProvider(transform.screenToWorldX(screenX), depthFactor) * height
+            } else {
+                val xRatio = ((screenX + extendedOffset) / extendedWidth).coerceIn(0f, 1f)
+                legacyProvider!!.invoke(xRatio, depthFactor) * height
+            }
             terrainYsArray[i] = terrainY
             if (terrainY < minTerrainY) minTerrainY = terrainY
             if (terrainY > maxTerrainY) maxTerrainY = terrainY

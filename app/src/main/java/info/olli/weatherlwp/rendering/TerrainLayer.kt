@@ -159,7 +159,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     
     // Pre-generated flower positions (per hill)
     private data class FlowerData(
-        val xRatio: Float,
+        val worldX: Float,
         val yOffset: Float,
         val color: Int,
         val size: Float
@@ -168,7 +168,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     
     // Pre-generated fallen leaf positions (per hill)
     private data class FallenLeafData(
-        val xRatio: Float,
+        val worldX: Float,
         val yOffset: Float,
         val color: Int,
         val size: Float,
@@ -178,7 +178,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     
     // Pre-generated mushroom positions (per hill)
     private data class MushroomData(
-        val xRatio: Float,
+        val worldX: Float,
         val yOffset: Float,
         val capColor: Int,
         val size: Float
@@ -187,8 +187,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     
     // Pre-generated snow patch positions (per hill)
     private data class SnowPatchData(
-        val startXRatio: Float,
-        val endXRatio: Float,
+        val startWorldX: Float,
+        val endWorldX: Float,
         val alpha: Int
     )
     @Volatile private var snowByHill: Map<Int, List<SnowPatchData>> = emptyMap()
@@ -303,6 +303,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // Visibility/opacity is controlled at draw time using season blend factors,
         // enabling smooth transitions between seasons.
         
+        // World-space generation range: covers visible viewport + parallax padding
+        val worldHalf = RenderConstants.getVisibleWorldHalf(width, height)
+        
         // Generate spring flowers (always, visibility controlled at draw time)
         if (springFlowersEnabled) {
             val flowerColors = intArrayOf(
@@ -320,12 +323,12 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 val hillFlowers = mutableListOf<FlowerData>()
                 for (f in 0 until flowersPerHill) {
                     val flowerRandom = DeterministicLayout.random(randomSeed + 6000 + index, section = 600, index = f)
-                    val xRatio = flowerRandom.nextFloat()
+                    val worldX = (flowerRandom.nextFloat() - 0.5f) * worldHalf * 2f
                     val maxVerticalOffset = springFlowerSpread * 0.12f
                     // Store normalized vertical offset (height-independent)
                     val verticalOffset = flowerRandom.nextFloat() * maxVerticalOffset
                     hillFlowers.add(FlowerData(
-                        xRatio = xRatio,
+                        worldX = worldX,
                         yOffset = verticalOffset,
                         color = flowerColors[flowerRandom.nextInt(flowerColors.size)],
                         size = 0.002f + flowerRandom.nextFloat() * 0.003f
@@ -347,11 +350,11 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 val hillSnow = mutableListOf<SnowPatchData>()
                 for (p in 0 until patchesPerHill) {
                     val snowRandom = DeterministicLayout.random(randomSeed + 7000 + index, section = 700, index = p)
-                    val startX = snowRandom.nextFloat() * 0.9f
-                    val width = 0.05f + snowRandom.nextFloat() * 0.1f * (winterSnowCoverage / 50f)
+                    val startWX = (snowRandom.nextFloat() - 0.5f) * worldHalf * 2f * 0.9f
+                    val patchWidth = (0.05f + snowRandom.nextFloat() * 0.1f * (winterSnowCoverage / 50f)) * worldHalf * 2f
                     hillSnow.add(SnowPatchData(
-                        startXRatio = startX,
-                        endXRatio = (startX + width).coerceAtMost(1f),
+                        startWorldX = startWX,
+                        endWorldX = startWX + patchWidth,
                         alpha = 150 + snowRandom.nextInt(80)
                     ))
                 }
@@ -380,7 +383,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 for (l in 0 until leavesPerHill) {
                     val leafRandom = DeterministicLayout.random(randomSeed + 8000 + index, section = 800, index = l)
                     hillLeaves.add(FallenLeafData(
-                        xRatio = leafRandom.nextFloat(),
+                        worldX = (leafRandom.nextFloat() - 0.5f) * worldHalf * 2f,
                         yOffset = leafRandom.nextFloat() * 0.08f,
                         color = leafColors[leafRandom.nextInt(leafColors.size)],
                         size = 0.003f + leafRandom.nextFloat() * 0.004f,
@@ -411,7 +414,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 for (m in 0 until mushroomsPerHill) {
                     val mushRandom = DeterministicLayout.random(randomSeed + 9000 + index, section = 900, index = m)
                     hillMushrooms.add(MushroomData(
-                        xRatio = mushRandom.nextFloat(),
+                        worldX = (mushRandom.nextFloat() - 0.5f) * worldHalf * 2f,
                         yOffset = mushRandom.nextFloat() * 0.04f,
                         capColor = capColors[mushRandom.nextInt(capColors.size)],
                         size = 0.004f + mushRandom.nextFloat() * 0.005f
@@ -448,9 +451,11 @@ class TerrainLayer(private val context: Context) : SceneLayer {
      * Legacy xRatio-based API — converts xRatio to worldX using current screen width and heightScale.
      * @param xRatio X position as ratio (0.0 to 1.0, 0.5 = center)
      */
+    @Deprecated("Use getHillYAtWorldX(worldX, depthFactor) instead")
     fun getHillYAtPosition(xRatio: Float, depthFactor: Float): Float {
-        val heightScale = RenderConstants.getHeightScale(height, width)
-        val worldX = (xRatio - 0.5f) * width / heightScale
+        val transform = WorldViewportTransform(width, height, RenderConstants.getHeightScale(height, width))
+        val screenX = xRatio * width
+        val worldX = (screenX - transform.centerX) / transform.heightScale
         return getHillYAtWorldX(worldX, depthFactor)
     }
     
@@ -483,9 +488,11 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     /**
      * Legacy xRatio-based API — converts xRatio to worldX using current screen width and heightScale.
      */
+    @Deprecated("Use getHillInfoAtWorldX(worldX, requestedDepthFactor) instead")
     fun getHillInfoAtPosition(xRatio: Float, requestedDepthFactor: Float): Pair<Float, Float> {
-        val heightScale = RenderConstants.getHeightScale(height, width)
-        val worldX = (xRatio - 0.5f) * width / heightScale
+        val transform = WorldViewportTransform(width, height, RenderConstants.getHeightScale(height, width))
+        val screenX = xRatio * width
+        val worldX = (screenX - transform.centerX) / transform.heightScale
         return getHillInfoAtWorldX(worldX, requestedDepthFactor)
     }
 
@@ -816,7 +823,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         // Evaluate hill noise at screen pixel positions.
         // Hills span beyond visible area for parallax movement.
-        val heightScale = RenderConstants.getHeightScale(height, width)
+        val transform = WorldViewportTransform(width, height, RenderConstants.getHeightScale(height, width))
         val parallaxMargin = height * 0.3f
         val padding = height * 0.45f + width * 0.1f  // parallax + edge padding
         val startX = -padding
@@ -832,7 +839,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         for (i in 0..numSteps) {
             val screenX = startX + i * stepX
             // Convert screen X to world-space X (inverse of zoom transform)
-            val worldX = (screenX - width / 2f) / heightScale
+            val worldX = (screenX - transform.centerX) / transform.heightScale
             val yRatio = getHillY(worldX, hill)
             val y = yRatio * height
             if (y < minY) minY = y
@@ -917,10 +924,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     }
     
     private fun drawSeasonalDecorations(canvas: Canvas, hillIndex: Int, hill: HillData, ambientColor: Int) {
-        val padding = height * 0.45f + width * 0.1f
-        val startX = -padding
-        val endX = width + padding
-        val heightScale = RenderConstants.getHeightScale(height, width)
+        val transform = WorldViewportTransform(width, height, RenderConstants.getHeightScale(height, width))
         
         // Note: Snow is now integrated into the hill gradient (drawHill),
         // so we no longer draw floating snow patches here.
@@ -937,11 +941,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             flowersByHill[hillIndex]?.let { flowers ->
             flowerPaint.alpha = (255 * flowerAlpha).toInt()
             for (flower in flowers) {
-                val x = startX + flower.xRatio * (endX - startX)
+                val x = transform.worldToScreenX(flower.worldX)
                 
-                // Get hill Y at flower position using noise evaluation
-                val worldX = (x - width / 2f) / heightScale
-                val yRatio = getHillY(worldX, hill)
+                // Get hill Y at flower position using world-space coordinate directly
+                val yRatio = getHillY(flower.worldX, hill)
                 val y = yRatio * height + flower.yOffset * height
                 
                 // Blend flower color with ambient for time-of-day consistency
@@ -962,10 +965,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         fallenLeavesByHill[hillIndex]?.let { leaves ->
             leafPaint.alpha = (255 * leafAlpha).toInt()
             for (leaf in leaves) {
-                val x = startX + leaf.xRatio * (endX - startX)
+                val x = transform.worldToScreenX(leaf.worldX)
                 
-                val worldX = (x - width / 2f) / heightScale
-                val yRatio = getHillY(worldX, hill)
+                val yRatio = getHillY(leaf.worldX, hill)
                 val y = yRatio * height + leaf.yOffset * height
                 
                 val blendedColor = RenderConstants.blendWithAmbient(leaf.color, ambientColor, 0.15f)
@@ -988,10 +990,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         if (mushroomAlpha > 0.01f) {
         mushroomsByHill[hillIndex]?.let { mushrooms ->
             for (mushroom in mushrooms) {
-                val x = startX + mushroom.xRatio * (endX - startX)
+                val x = transform.worldToScreenX(mushroom.worldX)
                 
-                val worldX = (x - width / 2f) / heightScale
-                val yRatio = getHillY(worldX, hill)
+                val yRatio = getHillY(mushroom.worldX, hill)
                 val y = yRatio * height + mushroom.yOffset * height
                 
                 val size = mushroom.size * height * (0.5f + mushroomAlpha * 0.5f)  // Grow as they appear
@@ -1029,13 +1030,17 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 if (frostAlpha > 3) {
                     frostPaint.color = Color.argb(frostAlpha, 220, 230, 255)
                     // Draw frost as thin lines along hill contour using noise evaluation
-                    val frostSteps = ((endX - startX) / 4f).toInt().coerceIn(40, 400)
-                    val frostStepX = (endX - startX) / frostSteps
+                    // Pixel-walking loop: walk screen pixels, convert to world for noise
+                    val frostPadding = height * 0.45f + width * 0.1f
+                    val frostStartX = -frostPadding
+                    val frostEndX = width + frostPadding
+                    val frostSteps = ((frostEndX - frostStartX) / 4f).toInt().coerceIn(40, 400)
+                    val frostStepX = (frostEndX - frostStartX) / frostSteps
                     for (i in 0 until frostSteps) {
-                        val x1 = startX + i * frostStepX
+                        val x1 = frostStartX + i * frostStepX
                         val x2 = x1 + frostStepX
-                        val worldX1 = (x1 - width / 2f) / heightScale
-                        val worldX2 = (x2 - width / 2f) / heightScale
+                        val worldX1 = (x1 - transform.centerX) / transform.heightScale
+                        val worldX2 = (x2 - transform.centerX) / transform.heightScale
                         val y1 = getHillY(worldX1, hill) * height
                         val y2 = getHillY(worldX2, hill) * height
                         canvas.drawLine(x1, y1, x2, y2, frostPaint)

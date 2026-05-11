@@ -355,8 +355,9 @@ class WorldCoordinateModelTest {
     fun `getVisibleWorldHalf at reference height matches expected`() {
         val w = 1080f
         val half = RenderConstants.getVisibleWorldHalf(w, RenderConstants.REFERENCE_HEIGHT)
-        // At reference height, heightScale=1, so visibleHalf = w/(2*1) + parallaxPad
-        val expected = w / 2f + RenderConstants.REFERENCE_HEIGHT * 0.45f
+        // At reference height, heightScale=1, so visibleHalf = w/(2*1) + parallaxPad/1
+        val heightScale = RenderConstants.getHeightScale(RenderConstants.REFERENCE_HEIGHT)
+        val expected = w / (2f * heightScale) + RenderConstants.REFERENCE_HEIGHT * 0.45f / heightScale
         assertEquals(expected, half, 0.01f)
     }
 
@@ -367,15 +368,13 @@ class WorldCoordinateModelTest {
         val h2 = 1920f
         val half1 = RenderConstants.getVisibleWorldHalf(w, h1)
         val half2 = RenderConstants.getVisibleWorldHalf(w, h2)
-        // The viewport half (excluding parallax pad) should scale inversely
-        val pad = RenderConstants.REFERENCE_HEIGHT * 0.45f
-        val viewport1 = half1 - pad
-        val viewport2 = half2 - pad
-        // Use getHeightScale with both args to match what getVisibleWorldHalf does
-        val scale1 = RenderConstants.getHeightScale(h1, w)
-        val scale2 = RenderConstants.getHeightScale(h2, w)
-        // viewport = screenWidth / (2 * heightScale), so viewport1/viewport2 = scale2/scale1
-        assertEquals(scale2 / scale1, viewport1 / viewport2, 0.01f)
+        // Both viewport and padding scale inversely with heightScale, so
+        // the entire half value scales inversely.
+        val scale1 = RenderConstants.getHeightScale(h1)
+        val scale2 = RenderConstants.getHeightScale(h2)
+        // half = (w/2 + REFERENCE_HEIGHT*0.45) / heightScale
+        // half1/half2 = scale2/scale1
+        assertEquals(scale2 / scale1, half1 / half2, 0.02f)
     }
 
     @Test
@@ -402,5 +401,114 @@ class WorldCoordinateModelTest {
         val distTall = screenTall - w / 2f
         val distShort = screenShort - w / 2f
         assertTrue("shorter height compresses toward center", distShort < distTall)
+    }
+
+    // ===================== REGRESSION: Landscape viewport zoom =====================
+
+    @Test
+    fun `landscape heightScale is smaller than portrait`() {
+        // Core viewport fix: landscape (1920x1080) uses height=1080
+        // not max(1920,1080)=1920. This gives a smaller heightScale,
+        // which means a wider visible world range.
+        val portraitScale = RenderConstants.getHeightScale(1920f, 1080f)
+        val landscapeScale = RenderConstants.getHeightScale(1080f, 1920f)
+        assertTrue("landscape heightScale should be smaller (more zoom-out)",
+            landscapeScale < portraitScale)
+        assertEquals(1080f / 1920f, landscapeScale, 0.001f)
+        assertEquals(1.0f, portraitScale, 0.001f)
+    }
+
+    @Test
+    fun `landscape sees wider visible world half than portrait`() {
+        // Same physical screen rotated: 1080x1920 portrait vs 1920x1080 landscape
+        val portraitHalf = RenderConstants.getVisibleWorldHalf(1080f, 1920f)
+        val landscapeHalf = RenderConstants.getVisibleWorldHalf(1920f, 1080f)
+        assertTrue("landscape should see wider world",
+            landscapeHalf > portraitHalf)
+        // Landscape is significantly wider (not just slightly)
+        assertTrue("landscape visible half should be at least 2x portrait",
+            landscapeHalf > portraitHalf * 2f)
+    }
+
+    @Test
+    fun `landscape generates more cell indices than portrait`() {
+        // Trees should fill the wider landscape viewport
+        val cellSize = TreeRenderer.TREE_CELL_SIZE
+        val portraitHalf = RenderConstants.getVisibleWorldHalf(1080f, 1920f)
+        val landscapeHalf = RenderConstants.getVisibleWorldHalf(1920f, 1080f)
+        val rangePortrait = WorldViewportTransform.indexRangeForWorldRange(
+            -portraitHalf, portraitHalf, cellSize
+        )
+        val rangeLandscape = WorldViewportTransform.indexRangeForWorldRange(
+            -landscapeHalf, landscapeHalf, cellSize
+        )
+        assertTrue("landscape should generate more tree cells",
+            (rangeLandscape.last - rangeLandscape.first) >
+                (rangePortrait.last - rangePortrait.first))
+    }
+
+    @Test
+    fun `landscape portrait share common cell indices (boundary continuity)`() {
+        // All portrait cells must also appear in landscape range
+        val cellSize = MountainLayer.MOUNTAIN_CELL_SIZE
+        val portraitHalf = RenderConstants.getVisibleWorldHalf(1080f, 1920f)
+        val landscapeHalf = RenderConstants.getVisibleWorldHalf(1920f, 1080f)
+        val rangePortrait = WorldViewportTransform.indexRangeForWorldRange(
+            -portraitHalf, portraitHalf, cellSize
+        )
+        val rangeLandscape = WorldViewportTransform.indexRangeForWorldRange(
+            -landscapeHalf, landscapeHalf, cellSize
+        )
+        for (idx in rangePortrait) {
+            assertTrue("portrait cell $idx missing in landscape",
+                idx in rangeLandscape)
+        }
+    }
+
+    @Test
+    fun `landscape worldX at screen edges covers full screen width`() {
+        // In landscape (1920x1080): heightScale = 1080/1920 = 0.5625
+        // screenX = w/2 + worldX * heightScale
+        // For worldX to reach x=0: worldX = -w/2 / heightScale = -1920 / (2*0.5625) = -1706.7
+        // This world range should be within the visible half
+        val w = 1920f
+        val h = 1080f
+        val heightScale = RenderConstants.getHeightScale(h, w)
+        val worldXLeftEdge = -w / (2f * heightScale)
+        val worldXRightEdge = w / (2f * heightScale)
+        val visibleHalf = RenderConstants.getVisibleWorldHalf(w, h)
+        assertTrue("left edge world coord within visible half",
+            kotlin.math.abs(worldXLeftEdge) < visibleHalf)
+        assertTrue("right edge world coord within visible half",
+            kotlin.math.abs(worldXRightEdge) < visibleHalf)
+    }
+
+    @Test
+    fun `viewport model matches heightScale world-to-screen mapping`() {
+        // Verify Viewport + WorldToScreenMapper produces same screen X
+        // as the legacy heightScale formula: screenX = w/2 + worldX * heightScale
+        val w = 1920
+        val h = 1080
+        val heightScale = RenderConstants.getHeightScale(h.toFloat(), w.toFloat())
+        val worldH = RenderConstants.REFERENCE_HEIGHT
+        val vp = Viewport(w, h, centerWorldX = 0f, centerWorldY = 0.5f, worldHeight = worldH)
+        val mapper = WorldToScreenMapper(vp)
+
+        for (worldX in listOf(-500f, -200f, 0f, 200f, 500f)) {
+            val legacyScreenX = w / 2f + worldX * heightScale
+            val viewportScreenX = mapper.x(worldX)
+            assertEquals("viewport and legacy disagree at worldX=$worldX",
+                legacyScreenX, viewportScreenX, 0.5f)
+        }
+    }
+
+    @Test
+    fun `heightScale equals viewport pixelsPerUnit at REFERENCE_HEIGHT worldHeight`() {
+        for ((w, h) in listOf(1080 to 1920, 1920 to 1080, 720 to 1280, 1440 to 2560)) {
+            val heightScale = RenderConstants.getHeightScale(h.toFloat(), w.toFloat())
+            val vp = Viewport(w, h, worldHeight = RenderConstants.REFERENCE_HEIGHT)
+            assertEquals("pixelsPerUnit mismatch at ${w}x${h}",
+                heightScale, vp.pixelsPerUnit, 0.001f)
+        }
     }
 }

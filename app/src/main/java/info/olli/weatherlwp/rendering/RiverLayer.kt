@@ -40,7 +40,11 @@ class RiverLayer(private val context: Context) : SceneLayer {
     }
 
     /** Callback to query terrain Y position at a given (xRatio, depthFactor). */
+    @Deprecated("Use terrainYWorldProvider (worldX-based) instead")
     var terrainYProvider: ((xRatio: Float, depthFactor: Float) -> Float)? = null
+
+    /** World-space callback to query terrain Y position at a given (worldX, depthFactor). */
+    var terrainYWorldProvider: ((worldX: Float, depthFactor: Float) -> Float)? = null
 
     /** Callback to get the sorted list of hill depth factors. */
     var hillDepthProvider: (() -> List<Float>)? = null
@@ -147,13 +151,20 @@ class RiverLayer(private val context: Context) : SceneLayer {
 
         // Get available hill layers from terrain
         val depthFactors = hillDepthProvider?.invoke() ?: emptyList()
-        val provider = terrainYProvider
+        val worldProvider = terrainYWorldProvider
+        @Suppress("DEPRECATION")
+        val legacyProvider = terrainYProvider
 
-        if (depthFactors.isEmpty() || provider == null) {
+        if (depthFactors.isEmpty() || (worldProvider == null && legacyProvider == null)) {
             // Fallback: simple horizontal river near bottom
             drawFallbackRiver(canvas, state, parallaxCalculator, waterLevel, waterColor, isFrozen)
             return
         }
+
+        // Build transform for world-space sampling
+        val transform = if (worldProvider != null)
+            WorldViewportTransform(width, height, RenderConstants.getHeightScale(height, width))
+        else null
 
         // Draw water at each hill depth layer (back to front)
         // Water appears in valley portions of each hill, getting wider toward foreground
@@ -184,8 +195,13 @@ class RiverLayer(private val context: Context) : SceneLayer {
             var minTerrainY = Float.MAX_VALUE
             var maxTerrainY = Float.MIN_VALUE
             for (i in 0..numSamples) {
-                val xRatio = i.toFloat() / numSamples
-                val terrainY = provider(xRatio, depth) * height
+                val screenX = left + i.toFloat() / numSamples * totalW
+                val terrainY = if (worldProvider != null && transform != null) {
+                    worldProvider(transform.screenToWorldX(screenX), depth) * height
+                } else {
+                    val xRatio = i.toFloat() / numSamples
+                    legacyProvider!!.invoke(xRatio, depth) * height
+                }
                 terrainYsArray[i] = terrainY
                 if (terrainY < minTerrainY) minTerrainY = terrainY
                 if (terrainY > maxTerrainY) maxTerrainY = terrainY
@@ -244,7 +260,14 @@ class RiverLayer(private val context: Context) : SceneLayer {
         val waterLevel = state.riverLevel
         if (waterLevel < 0.01f) return
 
-        val provider = terrainYProvider ?: return
+        val worldProvider = terrainYWorldProvider
+        @Suppress("DEPRECATION")
+        val legacyProvider = terrainYProvider
+        if (worldProvider == null && legacyProvider == null) return
+
+        val transform = if (worldProvider != null)
+            WorldViewportTransform(width, height, RenderConstants.getHeightScale(height, width))
+        else null
 
         val isFrozen = WaterColorUtil.isFrozen(state, waterPalette.frozenThreshold)
         val waterColor = WaterColorUtil.getWaterColor(state, isFrozen, waterPalette)
@@ -273,8 +296,12 @@ class RiverLayer(private val context: Context) : SceneLayer {
         var maxTerrainY = Float.MIN_VALUE
         for (i in 0..numSamples) {
             val screenX = left + i * sampleStepX
-            val xRatio = ((screenX - left) / totalW).coerceIn(0f, 1f)
-            val terrainY = provider(xRatio, depthFactor) * height
+            val terrainY = if (worldProvider != null && transform != null) {
+                worldProvider(transform.screenToWorldX(screenX), depthFactor) * height
+            } else {
+                val xRatio = ((screenX - left) / totalW).coerceIn(0f, 1f)
+                legacyProvider!!.invoke(xRatio, depthFactor) * height
+            }
             terrainYsArray[i] = terrainY
             if (terrainY < minTerrainY) minTerrainY = terrainY
             if (terrainY > maxTerrainY) maxTerrainY = terrainY

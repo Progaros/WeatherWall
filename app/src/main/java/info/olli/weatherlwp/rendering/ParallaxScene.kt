@@ -128,18 +128,30 @@ class ParallaxScene(
         }
         
         // Set up hill height provider so ground events can follow terrain contour
+        @Suppress("DEPRECATION")
         randomEventLayer.hillHeightProvider = { xRatio, depthFactor ->
             terrainLayer.getHillYAtPosition(xRatio, depthFactor)
         }
+        randomEventLayer.hillHeightWorldProvider = { worldX, depthFactor ->
+            terrainLayer.getHillYAtWorldX(worldX, depthFactor)
+        }
         
         // Set up hill info provider so events snap to actual hill depths for correct draw ordering
+        @Suppress("DEPRECATION")
         randomEventLayer.hillInfoProvider = { _, requestedDepthFactor ->
             terrainLayer.getHillInfoAtPosition(0.5f, requestedDepthFactor).second
         }
+        randomEventLayer.hillInfoWorldProvider = { worldX, requestedDepthFactor ->
+            terrainLayer.getHillInfoAtWorldX(worldX, requestedDepthFactor).second
+        }
         
         // Wire river layer to terrain data so water flows through valleys
+        @Suppress("DEPRECATION")
         riverLayer.terrainYProvider = { xRatio, depthFactor ->
             terrainLayer.getHillYAtPosition(xRatio, depthFactor)
+        }
+        riverLayer.terrainYWorldProvider = { worldX, depthFactor ->
+            terrainLayer.getHillYAtWorldX(worldX, depthFactor)
         }
         riverLayer.hillDepthProvider = {
             terrainLayer.getHillDepthFactors()
@@ -156,8 +168,12 @@ class ParallaxScene(
         riverLayer.drawViaCallback = true
         
         // Wire lake layer to terrain data
+        @Suppress("DEPRECATION")
         lakeLayer.terrainYProvider = { xRatio, depthFactor ->
             terrainLayer.getHillYAtPosition(xRatio, depthFactor)
+        }
+        lakeLayer.terrainYWorldProvider = { worldX, depthFactor ->
+            terrainLayer.getHillYAtWorldX(worldX, depthFactor)
         }
         lakeLayer.hillDepthProvider = {
             terrainLayer.getHillDepthFactors()
@@ -572,10 +588,19 @@ class ParallaxScene(
         terrainLayer.groundEventDrawer = null
         terrainLayer.riverDrawer = null
         terrainLayer.lakeDrawer = null
+        @Suppress("DEPRECATION")
         randomEventLayer.hillHeightProvider = null
+        randomEventLayer.hillHeightWorldProvider = null
+        @Suppress("DEPRECATION")
+        randomEventLayer.hillInfoProvider = null
+        randomEventLayer.hillInfoWorldProvider = null
+        @Suppress("DEPRECATION")
         riverLayer.terrainYProvider = null
+        riverLayer.terrainYWorldProvider = null
         riverLayer.hillDepthProvider = null
+        @Suppress("DEPRECATION")
         lakeLayer.terrainYProvider = null
+        lakeLayer.terrainYWorldProvider = null
         lakeLayer.hillDepthProvider = null
 
         // Drop frame-scoped references to avoid retaining canvas/state snapshots.

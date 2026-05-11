@@ -249,7 +249,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
         val transform = WorldViewportTransform(width, height, RenderConstants.getHeightScale(height, width))
 
         for ((mountainIdx, mountain) in currentMountains.withIndex()) {
-            val peakCenterX = transform.worldToScreenX(mountain.worldX, mountain.depthFactor)
+            val peakCenterX = transform.worldToScreenX(mountain.worldX)
             val halfWidthPx = height * mountain.width * 0.25f
             if (!ViewportCulling.isVisibleHorizontally(
                     x = peakCenterX,
@@ -267,7 +267,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
             canvas.save()
             canvas.translate(px, py)
             
-            drawMountain(canvas, mountainIdx, mountain, state, bucketedAmbientColor)
+            drawMountain(canvas, mountainIdx, mountain, state, bucketedAmbientColor, transform)
             
             canvas.restore()
         }
@@ -313,13 +313,13 @@ class MountainLayer(private val context: Context) : SceneLayer {
     }
     
     @Suppress("UNUSED_PARAMETER")
-    private fun drawMountain(canvas: Canvas, mountainIdx: Int, mountain: MountainData, state: SimulationState, ambientColor: Int) {
+    private fun drawMountain(canvas: Canvas, mountainIdx: Int, mountain: MountainData, state: SimulationState, ambientColor: Int, transform: WorldViewportTransform) {
         pathLeft.reset()
         pathRight.reset()
         
-        // Convert world-space coordinate to screen pixels (heightScale zoom applied)
-        val heightScale = RenderConstants.getHeightScale(height, width)
-        val peakCenterX = width / 2f + mountain.worldX * heightScale * mountain.depthFactor
+        // Convert world-space coordinate to screen pixels via canonical transform
+        // Parallax depth is handled by canvas.translate at draw() call site
+        val peakCenterX = transform.worldToScreenX(mountain.worldX)
         // Apply bottom offset to shift mountains up
         val offsetPx = mountainBottomOffset * height
         val peakY = height * (1f - mountain.height) - offsetPx
