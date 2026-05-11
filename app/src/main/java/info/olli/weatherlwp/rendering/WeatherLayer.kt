@@ -324,7 +324,7 @@ class WeatherLayer : SceneLayer {
         // Base speed scaled by layer
         p.speed = (1.5f + Random.nextFloat() * 2f) * layerScale
         // Size relative to screen height, also scaled by layer
-        val heightScale = RenderConstants.getHeightScale(screenHeight.toFloat())
+        val heightScale = RenderConstants.getHeightScale(screenHeight.toFloat(), screenWidth.toFloat())
         p.size = (3f + Random.nextFloat() * 5f) * heightScale * layerScale
         // Alpha reduced for back layers
         p.alpha = ((180 + Random.nextInt(75)) * layerScale).toInt().coerceIn(60, 255)
@@ -356,14 +356,14 @@ class WeatherLayer : SceneLayer {
     }
 
     private fun configureSnowPointPaints() {
-        val heightScale = RenderConstants.getHeightScale(screenHeight.toFloat()).coerceAtLeast(0.35f)
+        val heightScale = RenderConstants.getHeightScale(screenHeight.toFloat(), screenWidth.toFloat()).coerceAtLeast(0.35f)
         snowPaintSmall.strokeWidth = (1.2f * heightScale).coerceAtLeast(0.8f)
         snowPaintMedium.strokeWidth = (1.8f * heightScale).coerceAtLeast(1.1f)
         snowPaintLarge.strokeWidth = (2.5f * heightScale).coerceAtLeast(1.5f)
     }
 
     private fun configureRainLinePaints() {
-        val heightScale = RenderConstants.getHeightScale(screenHeight.toFloat()).coerceAtLeast(0.35f)
+        val heightScale = RenderConstants.getHeightScale(screenHeight.toFloat(), screenWidth.toFloat()).coerceAtLeast(0.35f)
         rainPaintFar.strokeWidth = (1.1f * heightScale).coerceAtLeast(0.75f)
         rainPaintMedium.strokeWidth = (1.6f * heightScale).coerceAtLeast(1.05f)
         rainPaintNear.strokeWidth = (2.2f * heightScale).coerceAtLeast(1.4f)

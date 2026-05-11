@@ -262,7 +262,7 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
         if (!initialized || screenWidth != width || screenHeight != height) {
             screenWidth = width
             screenHeight = height
-            heightScale = RenderConstants.getHeightScale(screenHeight.toFloat())
+            heightScale = RenderConstants.getHeightScale(screenHeight.toFloat(), screenWidth.toFloat())
             initParticles()
             initialized = true
         }
@@ -405,7 +405,7 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
             if (!initialized || screenWidth != canvas.width || screenHeight != canvas.height) {
                 screenWidth = canvas.width
                 screenHeight = canvas.height
-                heightScale = RenderConstants.getHeightScale(screenHeight.toFloat())
+                heightScale = RenderConstants.getHeightScale(screenHeight.toFloat(), screenWidth.toFloat())
                 initParticles()
                 initialized = true
             }
@@ -433,7 +433,7 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
             if (!initialized || screenWidth != canvas.width || screenHeight != canvas.height) {
                 screenWidth = canvas.width
                 screenHeight = canvas.height
-                heightScale = RenderConstants.getHeightScale(screenHeight.toFloat())
+                heightScale = RenderConstants.getHeightScale(screenHeight.toFloat(), screenWidth.toFloat())
                 initParticles()
                 initialized = true
             }
@@ -468,7 +468,7 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
             if (!initialized || screenWidth != canvas.width || screenHeight != canvas.height) {
                 screenWidth = canvas.width
                 screenHeight = canvas.height
-                heightScale = RenderConstants.getHeightScale(screenHeight.toFloat())
+                heightScale = RenderConstants.getHeightScale(screenHeight.toFloat(), screenWidth.toFloat())
                 initParticles()
                 initialized = true
             }
@@ -1227,7 +1227,7 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
         if (screenWidth != newW || screenHeight != newH || !initialized) {
             screenWidth = newW
             screenHeight = newH
-            heightScale = RenderConstants.getHeightScale(h)
+            heightScale = RenderConstants.getHeightScale(h, w)
             initParticles()
             initialized = true
         }

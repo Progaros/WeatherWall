@@ -460,7 +460,7 @@ class TreeRenderer {
         }
         // --- NEEDLE tree (conifer) rendering below ---
         // World-space to screen projection with height-based zoom
-        val heightScale = RenderConstants.getHeightScale(height)
+        val heightScale = RenderConstants.getHeightScale(height, screenWidth)
         val x = screenWidth / 2f + tree.worldX * heightScale
 
         // yRatio is the ground level where tree BASE sits
@@ -691,7 +691,7 @@ class TreeRenderer {
      * Crown fades out in late autumn and regrows in spring using season transition weights.
      */
     private fun drawLeafTree(canvas: Canvas, tree: TreeData, state: SimulationState, @Suppress("UNUSED_PARAMETER") treeIndex: Int) {
-        val heightScale = RenderConstants.getHeightScale(height)
+        val heightScale = RenderConstants.getHeightScale(height, screenWidth)
         val x = screenWidth / 2f + tree.worldX * heightScale
         val groundY = tree.yRatio * height
 

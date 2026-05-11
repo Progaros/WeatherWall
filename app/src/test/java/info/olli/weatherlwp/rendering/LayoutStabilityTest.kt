@@ -67,8 +67,10 @@ class LayoutStabilityTest {
         // extendedWidth = genWorldRange * heightScale
         // Taller canvas → larger heightScale → wider extendedWidth
         assertTrue(extendedTall > extendedRef)
-        // At min height (960 → heightScale 0.5): exactly half of reference
-        assertEquals(extendedRef * 0.5f, extendedShort, 1f)
+        // At 1080×960 (landscape): heightScale = max(1080,960)/1920 = 0.5625
+        val expectedScale = RenderConstants.getHeightScale(960f, 1080f)
+        val refScale = RenderConstants.getHeightScale(1920f, 1080f)
+        assertEquals(extendedRef * (expectedScale / refScale), extendedShort, 1f)
     }
 
     @Test

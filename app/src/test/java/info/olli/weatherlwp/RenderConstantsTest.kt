@@ -340,6 +340,20 @@ class RenderConstantsTest {
     }
 
     @Test
+    fun `getHeightScale in landscape uses width as effective height`() {
+        // 1920×1080 landscape: width > height, so uses width (1920) → scale = 1.0
+        val scale = info.olli.weatherlwp.rendering.RenderConstants.getHeightScale(1080f, 1920f)
+        assertEquals(1.0f, scale, 0.001f)
+    }
+
+    @Test
+    fun `getHeightScale in portrait ignores width`() {
+        // 1080×1920 portrait: height > width, so uses height (1920) → scale = 1.0
+        val scale = info.olli.weatherlwp.rendering.RenderConstants.getHeightScale(1920f, 1080f)
+        assertEquals(1.0f, scale, 0.001f)
+    }
+
+    @Test
     fun `getExtendedWidth is wider than screen`() {
         val extended = info.olli.weatherlwp.rendering.RenderConstants.getExtendedWidth(1080f, 1920f)
         assertTrue(extended > 1080f)
@@ -480,10 +494,14 @@ class RenderConstantsTest {
 
     @Test
     fun `getPositionScale does not boost on wide screens`() {
-        // Width correction is capped at 1.0 — wide screens should not spread elements further
-        val scaleRef = info.olli.weatherlwp.rendering.RenderConstants.getPositionScale(1080f, 1920f)
+        // Width correction is capped at 1.0 — wide screens should not spread
+        // elements beyond what heightScale alone dictates
         val scaleWide = info.olli.weatherlwp.rendering.RenderConstants.getPositionScale(2160f, 1920f)
-        assertEquals("Wide screen should not increase position scale", scaleRef, scaleWide, 0.001f)
+        // In landscape (2160×1920), heightScale uses max(2160,1920)/1920 = 1.125
+        // widthCorrection = min(2160/1080, 1.0) = 1.0 (capped)
+        // positionScale = 1.125 * 1.0 = 1.125
+        val expectedHeightScale = info.olli.weatherlwp.rendering.RenderConstants.getHeightScale(1920f, 2160f)
+        assertEquals("Wide screen should not boost beyond heightScale", expectedHeightScale, scaleWide, 0.001f)
     }
 
     @Test

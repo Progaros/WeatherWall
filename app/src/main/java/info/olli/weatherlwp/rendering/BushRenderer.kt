@@ -309,7 +309,7 @@ class BushRenderer {
      */
     fun drawBush(canvas: Canvas, bush: BushData, state: SimulationState, ambientColor: Int) {
         // World-space to screen projection with height-based zoom
-        val heightScale = RenderConstants.getHeightScale(height)
+        val heightScale = RenderConstants.getHeightScale(height, screenWidth)
         val x = screenWidth / 2f + bush.worldX * heightScale
         val groundY = bush.yRatio * height
 

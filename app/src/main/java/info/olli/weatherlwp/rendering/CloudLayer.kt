@@ -478,7 +478,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         isBackLayer: Boolean,
         parallaxCalculator: ParallaxCalculator
     ) {
-        val cloudZoomScale = RenderConstants.getHeightScale(height)
+        val cloudZoomScale = RenderConstants.getHeightScale(height, width)
         var i = 0
         while (i < groups.size) {
             val group = groups[i]

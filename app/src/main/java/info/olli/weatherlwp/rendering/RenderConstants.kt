@@ -25,12 +25,18 @@ object RenderConstants {
     /**
      * Calculate height scale for the current screen.
      * Elements sized relative to reference height should be multiplied by this.
-     * 
+     *
+     * When [screenWidth] is provided and is larger than [screenHeight] (landscape),
+     * the larger dimension is used so that the zoom-out effect only applies in
+     * portrait orientation where the height is the constraining axis.
+     *
      * @param screenHeight The actual screen height
+     * @param screenWidth  Optional screen width; when > screenHeight, prevents landscape zoom-out
      * @return Scale factor (1.0 at 1920px, 0.5 at 960px, clamped to MIN_HEIGHT_SCALE)
      */
-    fun getHeightScale(screenHeight: Float): Float {
-        return (screenHeight / REFERENCE_HEIGHT).coerceAtLeast(MIN_HEIGHT_SCALE)
+    fun getHeightScale(screenHeight: Float, screenWidth: Float = 0f): Float {
+        val effectiveHeight = if (screenWidth > screenHeight) screenWidth else screenHeight
+        return (effectiveHeight / REFERENCE_HEIGHT).coerceAtLeast(MIN_HEIGHT_SCALE)
     }
 
     /**
@@ -48,7 +54,7 @@ object RenderConstants {
      * @return Scale factor adjusted for both height zoom and viewport width
      */
     fun getPositionScale(screenWidth: Float, screenHeight: Float): Float {
-        val rawScale = getHeightScale(screenHeight)
+        val rawScale = getHeightScale(screenHeight, screenWidth)
         val referenceWidth = REFERENCE_HEIGHT * REFERENCE_ASPECT_RATIO
         val widthCorrection = (screenWidth / referenceWidth).coerceIn(0.3f, 1.0f)
         return (rawScale * widthCorrection).coerceAtLeast(MIN_HEIGHT_SCALE)
@@ -82,7 +88,7 @@ object RenderConstants {
      * @return World-space half-width that covers viewport + parallax padding
      */
     fun getVisibleWorldHalf(screenWidth: Float, screenHeight: Float = REFERENCE_HEIGHT): Float {
-        val heightScale = getHeightScale(screenHeight)
+        val heightScale = getHeightScale(screenHeight, screenWidth)
         // Visible half in world-space, accounting for zoom
         val visibleHalf = screenWidth / (2f * heightScale)
         // Parallax padding: covers maximum parallax shift

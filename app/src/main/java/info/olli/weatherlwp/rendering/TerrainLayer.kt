@@ -449,7 +449,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
      * @param xRatio X position as ratio (0.0 to 1.0, 0.5 = center)
      */
     fun getHillYAtPosition(xRatio: Float, depthFactor: Float): Float {
-        val heightScale = RenderConstants.getHeightScale(height)
+        val heightScale = RenderConstants.getHeightScale(height, width)
         val worldX = (xRatio - 0.5f) * width / heightScale
         return getHillYAtWorldX(worldX, depthFactor)
     }
@@ -484,7 +484,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
      * Legacy xRatio-based API — converts xRatio to worldX using current screen width and heightScale.
      */
     fun getHillInfoAtPosition(xRatio: Float, requestedDepthFactor: Float): Pair<Float, Float> {
-        val heightScale = RenderConstants.getHeightScale(height)
+        val heightScale = RenderConstants.getHeightScale(height, width)
         val worldX = (xRatio - 0.5f) * width / heightScale
         return getHillInfoAtWorldX(worldX, requestedDepthFactor)
     }
@@ -816,7 +816,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         // Evaluate hill noise at screen pixel positions.
         // Hills span beyond visible area for parallax movement.
-        val heightScale = RenderConstants.getHeightScale(height)
+        val heightScale = RenderConstants.getHeightScale(height, width)
         val parallaxMargin = height * 0.3f
         val padding = height * 0.45f + width * 0.1f  // parallax + edge padding
         val startX = -padding
@@ -920,7 +920,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val padding = height * 0.45f + width * 0.1f
         val startX = -padding
         val endX = width + padding
-        val heightScale = RenderConstants.getHeightScale(height)
+        val heightScale = RenderConstants.getHeightScale(height, width)
         
         // Note: Snow is now integrated into the hill gradient (drawHill),
         // so we no longer draw floating snow patches here.

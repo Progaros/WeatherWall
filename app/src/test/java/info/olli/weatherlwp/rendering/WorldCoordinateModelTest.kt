@@ -371,8 +371,9 @@ class WorldCoordinateModelTest {
         val pad = RenderConstants.REFERENCE_HEIGHT * 0.45f
         val viewport1 = half1 - pad
         val viewport2 = half2 - pad
-        val scale1 = RenderConstants.getHeightScale(h1)
-        val scale2 = RenderConstants.getHeightScale(h2)
+        // Use getHeightScale with both args to match what getVisibleWorldHalf does
+        val scale1 = RenderConstants.getHeightScale(h1, w)
+        val scale2 = RenderConstants.getHeightScale(h2, w)
         // viewport = screenWidth / (2 * heightScale), so viewport1/viewport2 = scale2/scale1
         assertEquals(scale2 / scale1, viewport1 / viewport2, 0.01f)
     }
