@@ -340,4 +340,66 @@ class WorldCoordinateModelTest {
         // Added indices on the RIGHT
         assertTrue("wider range should add right indices", wide.last > narrow.last)
     }
+
+    // ===================== Height-based zoom (getVisibleWorldHalf) =====================
+
+    @Test
+    fun `getVisibleWorldHalf expands when height decreases`() {
+        val w = 1080f
+        val tallHalf = RenderConstants.getVisibleWorldHalf(w, 2400f)
+        val shortHalf = RenderConstants.getVisibleWorldHalf(w, 960f)
+        assertTrue("shorter height should give wider world half", shortHalf > tallHalf)
+    }
+
+    @Test
+    fun `getVisibleWorldHalf at reference height matches expected`() {
+        val w = 1080f
+        val half = RenderConstants.getVisibleWorldHalf(w, RenderConstants.REFERENCE_HEIGHT)
+        // At reference height, heightScale=1, so visibleHalf = w/(2*1) + parallaxPad
+        val expected = w / 2f + RenderConstants.REFERENCE_HEIGHT * 0.45f
+        assertEquals(expected, half, 0.01f)
+    }
+
+    @Test
+    fun `getVisibleWorldHalf scales inversely with heightScale`() {
+        val w = 1080f
+        val h1 = 960f
+        val h2 = 1920f
+        val half1 = RenderConstants.getVisibleWorldHalf(w, h1)
+        val half2 = RenderConstants.getVisibleWorldHalf(w, h2)
+        // The viewport half (excluding parallax pad) should scale inversely
+        val pad = RenderConstants.REFERENCE_HEIGHT * 0.45f
+        val viewport1 = half1 - pad
+        val viewport2 = half2 - pad
+        val scale1 = RenderConstants.getHeightScale(h1)
+        val scale2 = RenderConstants.getHeightScale(h2)
+        // viewport = screenWidth / (2 * heightScale), so viewport1/viewport2 = scale2/scale1
+        assertEquals(scale2 / scale1, viewport1 / viewport2, 0.01f)
+    }
+
+    @Test
+    fun `shorter screen generates more cell indices (zoom-out)`() {
+        val w = 1080f
+        val cellSize = TreeRenderer.TREE_CELL_SIZE
+        val tallHalf = RenderConstants.getVisibleWorldHalf(w, 2400f)
+        val shortHalf = RenderConstants.getVisibleWorldHalf(w, 960f)
+        val rangeTall = WorldViewportTransform.indexRangeForWorldRange(-tallHalf, tallHalf, cellSize)
+        val rangeShort = WorldViewportTransform.indexRangeForWorldRange(-shortHalf, shortHalf, cellSize)
+        assertTrue("shorter screen sees more cells",
+            (rangeShort.last - rangeShort.first) >= (rangeTall.last - rangeTall.first))
+    }
+
+    @Test
+    fun `height zoom compresses elements toward center on short screen`() {
+        val w = 1080f
+        val worldX = 300f
+        val tallScale = RenderConstants.getHeightScale(2400f)
+        val shortScale = RenderConstants.getHeightScale(960f)
+        val screenTall = w / 2f + worldX * tallScale
+        val screenShort = w / 2f + worldX * shortScale
+        // On shorter screen, element is closer to center
+        val distTall = screenTall - w / 2f
+        val distShort = screenShort - w / 2f
+        assertTrue("shorter height compresses toward center", distShort < distTall)
+    }
 }

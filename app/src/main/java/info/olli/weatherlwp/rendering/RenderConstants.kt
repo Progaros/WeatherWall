@@ -74,12 +74,17 @@ object RenderConstants {
      * around center need to be generated. Includes generous parallax padding
      * so content is available even at maximum tilt/scroll offset.
      *
+     * The heightScale zoom factor is applied: shorter screens (smaller heightScale)
+     * see a wider world range (zoom out), taller screens see less (zoom in).
+     *
      * @param screenWidth The actual visible screen width
+     * @param screenHeight The actual visible screen height (used for zoom)
      * @return World-space half-width that covers viewport + parallax padding
      */
-    fun getVisibleWorldHalf(screenWidth: Float): Float {
-        // Visible half in world-space (1:1 mapping, no positionScale)
-        val visibleHalf = screenWidth / 2f
+    fun getVisibleWorldHalf(screenWidth: Float, screenHeight: Float = REFERENCE_HEIGHT): Float {
+        val heightScale = getHeightScale(screenHeight)
+        // Visible half in world-space, accounting for zoom
+        val visibleHalf = screenWidth / (2f * heightScale)
         // Parallax padding: covers maximum parallax shift
         // Use 0.45 * reference height as a generous fixed bound
         val parallaxPad = REFERENCE_HEIGHT * 0.45f

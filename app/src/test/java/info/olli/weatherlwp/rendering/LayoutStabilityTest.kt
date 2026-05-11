@@ -137,4 +137,113 @@ class LayoutStabilityTest {
             RenderConstants.getExtendedWidth(1080f, 800f), 1080f, 800f)
         assertEquals(scale1, scale2, 0.01f)
     }
+
+    // ===================== DeterministicLayout.mix golden-value tests =====================
+    // These pin the exact hash output so that bit-level mutations
+    // (shift direction, xor→and, mul→div, add→sub) are caught.
+
+    @Test
+    fun `deterministic layout mix produces known golden value`() {
+        // Pin a known output — any mutation to the hash arithmetic will change this
+        val result = DeterministicLayout.mix(42, 100, 7)
+        assertEquals("golden value for (42,100,7)", -8149335812245885045L, result)
+    }
+
+    @Test
+    fun `deterministic layout mix golden value for different section`() {
+        val result = DeterministicLayout.mix(42, 200, 7)
+        // Different section must produce different output
+        assertNotEquals(DeterministicLayout.mix(42, 100, 7), result)
+        // Pin exact value
+        assertEquals("golden value for (42,200,7)", -2762775937761742965L, result)
+    }
+
+    @Test
+    fun `deterministic layout mix varies by baseSeed`() {
+        val a = DeterministicLayout.mix(1, 100, 7)
+        val b = DeterministicLayout.mix(2, 100, 7)
+        assertNotEquals("different baseSeed → different hash", a, b)
+    }
+
+    // ===================== ViewportCulling boundary-precise tests =====================
+
+    @Test
+    fun `maxParallaxShift returns non-zero positive value`() {
+        val shift = ViewportCulling.maxParallaxShift(1920f)
+        assertTrue("maxParallaxShift should be positive", shift > 0f)
+        assertEquals("maxParallaxShift = 0.45 * height", 1920f * 0.45f, shift, 0.01f)
+    }
+
+    @Test
+    fun `viewport culling boundary - object exactly at left margin edge`() {
+        // margin = objectHalfWidth + maxParallaxShift + extraMargin
+        // = 30 + 1920*0.45 + 10 = 30 + 864 + 10 = 904
+        // Object at x = -904 should be exactly on the boundary (visible)
+        val margin = 30f + 1920f * 0.45f + 10f
+        val exactlyOnEdge = ViewportCulling.isVisibleHorizontally(
+            x = -margin,
+            objectHalfWidth = 30f,
+            screenWidth = 1080f,
+            height = 1920f,
+            extraMargin = 10f
+        )
+        assertTrue("object at exact left margin should be visible", exactlyOnEdge)
+
+        // Object 1px beyond should be invisible
+        val justBeyond = ViewportCulling.isVisibleHorizontally(
+            x = -margin - 1f,
+            objectHalfWidth = 30f,
+            screenWidth = 1080f,
+            height = 1920f,
+            extraMargin = 10f
+        )
+        assertFalse("object just past left margin should be culled", justBeyond)
+    }
+
+    @Test
+    fun `viewport culling boundary - object exactly at right margin edge`() {
+        val margin = 30f + 1920f * 0.45f + 10f
+        val rightEdge = 1080f + margin
+        val exactlyOnEdge = ViewportCulling.isVisibleHorizontally(
+            x = rightEdge,
+            objectHalfWidth = 30f,
+            screenWidth = 1080f,
+            height = 1920f,
+            extraMargin = 10f
+        )
+        assertTrue("object at exact right margin should be visible", exactlyOnEdge)
+
+        val justBeyond = ViewportCulling.isVisibleHorizontally(
+            x = rightEdge + 1f,
+            objectHalfWidth = 30f,
+            screenWidth = 1080f,
+            height = 1920f,
+            extraMargin = 10f
+        )
+        assertFalse("object just past right margin should be culled", justBeyond)
+    }
+
+    @Test
+    fun `viewport culling - extraMargin 0 still includes parallax shift`() {
+        // With extraMargin=0, margin = objectHalfWidth + maxParallaxShift
+        val shift = ViewportCulling.maxParallaxShift(1920f)
+        val halfW = 10f
+        val margin = halfW + shift
+        // Object at x = -margin should be visible
+        assertTrue(ViewportCulling.isVisibleHorizontally(
+            x = -margin,
+            objectHalfWidth = halfW,
+            screenWidth = 1080f,
+            height = 1920f,
+            extraMargin = 0f
+        ))
+        // Object further should not be
+        assertFalse(ViewportCulling.isVisibleHorizontally(
+            x = -margin - 1f,
+            objectHalfWidth = halfW,
+            screenWidth = 1080f,
+            height = 1920f,
+            extraMargin = 0f
+        ))
+    }
 }

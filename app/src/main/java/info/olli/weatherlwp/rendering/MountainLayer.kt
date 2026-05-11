@@ -125,7 +125,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
 
     private fun generateMountains() {
         // Viewport-based generation: generate cells visible on screen + parallax padding.
-        val visibleHalf = RenderConstants.getVisibleWorldHalf(width)
+        val visibleHalf = RenderConstants.getVisibleWorldHalf(width, height)
 
         // Determine index range: mountains are placed at stable world cells
         val indexRange = WorldViewportTransform.indexRangeForWorldRange(
@@ -201,9 +201,10 @@ class MountainLayer(private val context: Context) : SceneLayer {
         cachedHazeHeight = 0f
 
         val firstGenerate = lastGeneratedWidth <= 0f || lastGeneratedHeight <= 0f
-        // Regenerate when WIDTH changes (viewport-based generation)
+        // Regenerate when size changes (viewport-based generation depends on both width and height)
         val widthChangedSignificantly = kotlin.math.abs(lastGeneratedWidth - w) > 1f
-        if (firstGenerate || widthChangedSignificantly) {
+        val heightChangedSignificantly = kotlin.math.abs(lastGeneratedHeight - h) > 1f
+        if (firstGenerate || widthChangedSignificantly || heightChangedSignificantly) {
             generateMountains()
             lastGeneratedWidth = w
             lastGeneratedHeight = h
@@ -244,8 +245,8 @@ class MountainLayer(private val context: Context) : SceneLayer {
             cachedSnowGradients.clear()
         }
         
-        // Build transform for world-to-screen projection (no positionScale, use depthFactor for perspective)
-        val transform = WorldViewportTransform(width, height, 1f)
+        // Build transform for world-to-screen projection with height-based zoom
+        val transform = WorldViewportTransform(width, height, RenderConstants.getHeightScale(height))
 
         for ((mountainIdx, mountain) in currentMountains.withIndex()) {
             val peakCenterX = transform.worldToScreenX(mountain.worldX, mountain.depthFactor)
@@ -316,8 +317,9 @@ class MountainLayer(private val context: Context) : SceneLayer {
         pathLeft.reset()
         pathRight.reset()
         
-        // Convert world-space coordinate to screen pixels
-        val peakCenterX = width / 2f + mountain.worldX * mountain.depthFactor
+        // Convert world-space coordinate to screen pixels (heightScale zoom applied)
+        val heightScale = RenderConstants.getHeightScale(height)
+        val peakCenterX = width / 2f + mountain.worldX * heightScale * mountain.depthFactor
         // Apply bottom offset to shift mountains up
         val offsetPx = mountainBottomOffset * height
         val peakY = height * (1f - mountain.height) - offsetPx

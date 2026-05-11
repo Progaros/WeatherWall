@@ -165,10 +165,10 @@ class VegetationDensityTest {
         )
     }
 
-    // ===================== Height-only resize does not change tree count =====================
+    // ===================== Height change affects visible world range (zoom) =====================
 
     @Test
-    fun `height-only change does not affect tree count`() {
+    fun `shorter height generates more trees (wider visible world due to zoom-out)`() {
         val w = 1080f
 
         val r1 = TreeRenderer()
@@ -179,10 +179,11 @@ class VegetationDensityTest {
         r2.reloadSettings(settingsWithTreeDensity(50))
         r2.generateTrees(sampleHills, w, 2400f, seed)
 
-        // Same width → same visible world range → same cell count
-        assertEquals(
-            "height-only resize should not change tree count",
-            treeCount(r1), treeCount(r2)
+        // Shorter height (1920) → larger visible world (zoom out) → more trees
+        // Taller height (2400) → smaller visible world (zoom in) → fewer trees
+        assertTrue(
+            "shorter height should generate more trees (wider visible world)",
+            treeCount(r1) >= treeCount(r2)
         )
     }
 

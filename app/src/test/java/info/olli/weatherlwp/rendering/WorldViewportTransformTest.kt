@@ -216,4 +216,43 @@ class WorldViewportTransformTest {
         assertEquals("tall symmetric", -idxTall.first, idxTall.last)
         assertEquals("short symmetric", -idxShort.first, idxShort.last)
     }
+
+    // ===================== visibleWorldRangeX: heightScale multiplication matters =====================
+
+    @Test
+    fun `visibleWorldRangeX uses heightScale times parallax for effective scale`() {
+        val w = 1080f
+        // With heightScale=1, parallax=1: visible half = w/(2*1*1) = 540
+        val t1 = WorldViewportTransform(w, 1920f, 1f)
+        val range1 = t1.visibleWorldRangeX(parallax = 1f)
+        assertEquals(w / 2f, range1.endInclusive, 0.01f)
+
+        // With heightScale=2, parallax=1: visible half = w/(2*2*1) = 270
+        val t2 = WorldViewportTransform(w, 1920f, 2f)
+        val range2 = t2.visibleWorldRangeX(parallax = 1f)
+        assertEquals(w / 4f, range2.endInclusive, 0.01f)
+
+        // Confirm the ratio: range1 should be exactly 2x range2
+        assertEquals(range1.endInclusive / range2.endInclusive, 2f, 0.01f)
+    }
+
+    // ===================== indexRangeForWorldRange: require positive cellSize =====================
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `indexRangeForWorldRange throws on zero cellSize`() {
+        WorldViewportTransform.indexRangeForWorldRange(-100f, 100f, 0f)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `indexRangeForWorldRange throws on negative cellSize`() {
+        WorldViewportTransform.indexRangeForWorldRange(-100f, 100f, -10f)
+    }
+
+    @Test
+    fun `indexRangeForWorldRange single cell boundary`() {
+        // A range [0, 0.5] with cellSize=1 should include index 0 and 1
+        val range = WorldViewportTransform.indexRangeForWorldRange(0f, 0.5f, 1f)
+        assertEquals(0, range.first)
+        assertEquals(1, range.last)
+    }
 }

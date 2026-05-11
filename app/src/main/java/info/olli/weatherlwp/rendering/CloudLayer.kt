@@ -204,7 +204,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
     
     private fun createCloudGroup(random: Random, isBackLayer: Boolean): CloudGroup {
         // Generate world-space position: clouds distributed across visible range + padding
-        val visibleHalf = RenderConstants.getVisibleWorldHalf(width.coerceAtLeast(1f))
+        val visibleHalf = RenderConstants.getVisibleWorldHalf(width.coerceAtLeast(1f), height.coerceAtLeast(1f))
         val worldX = (random.nextFloat() - 0.5f) * visibleHalf * 2f
         val y = RenderConstants.CLOUD_Y_MIN + random.nextFloat() * RenderConstants.CLOUD_Y_RANGE
         
@@ -399,7 +399,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         
         // Update each cloud group's position in world-space
         // Movement in world-space units per second
-        val wrapRange = RenderConstants.getVisibleWorldHalf(width.coerceAtLeast(1f)) * 2f
+        val wrapRange = RenderConstants.getVisibleWorldHalf(width.coerceAtLeast(1f), height.coerceAtLeast(1f)) * 2f
         for (group in currentGroups) {
             // Move cloud in world-space units
             val movement = deltaSec * group.speed * effectiveSpeed * RenderConstants.CLOUD_MOVEMENT_SCALE * dirX * wrapRange
@@ -487,8 +487,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
 
             val px = parallaxCalculator.getOffsetXForDepth(group.depthFactor)
             val py = parallaxCalculator.getOffsetYForDepth(group.depthFactor)
-            // World-space to screen projection (1:1, no positionScale)
-            val screenX = width / 2f + group.currentWorldX + px
+            // World-space to screen projection with height-based zoom
+            val screenX = width / 2f + group.currentWorldX * cloudZoomScale + px
             val screenY = group.y * height + py
 
             val groupWidthPx = (group.groupWidth * minDim).toInt()

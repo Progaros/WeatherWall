@@ -159,7 +159,7 @@ class BushRenderer {
         }
 
         // Viewport-based generation: generate cells visible on screen + parallax padding.
-        val visibleHalf = RenderConstants.getVisibleWorldHalf(screenWidth)
+        val visibleHalf = RenderConstants.getVisibleWorldHalf(screenWidth, height)
 
         val bushCellSize = BUSH_CELL_SIZE
         val indexRange = WorldViewportTransform.indexRangeForWorldRange(
@@ -308,8 +308,9 @@ class BushRenderer {
      * @param ambientColor Pre-computed ambient tint color for the current time of day.
      */
     fun drawBush(canvas: Canvas, bush: BushData, state: SimulationState, ambientColor: Int) {
-        // World-space to screen projection (1:1 mapping, no positionScale)
-        val x = screenWidth / 2f + bush.worldX
+        // World-space to screen projection with height-based zoom
+        val heightScale = RenderConstants.getHeightScale(height)
+        val x = screenWidth / 2f + bush.worldX * heightScale
         val groundY = bush.yRatio * height
 
         // Bush size: smaller than trees
