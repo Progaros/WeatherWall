@@ -151,30 +151,20 @@ data class SimulationState(
      *  1.0 = Day
      *  
      * Use this to blend between day/night color palettes with natural transitions.
+     * Derives phase from timeOfDayHours and sun times for consistency with copy().
      */
     fun getAtmospherePhase(): Float {
         val hour = timeOfDayHours
         val goldenHourDuration = 0.75f  // ~45 mins
         val blueHourDuration = 0.5f     // ~30 mins
-        
+
         return when {
-            // Day: after morning golden hour, before evening golden hour
-            hour > (sunriseHours + goldenHourDuration) && 
+            hour > (sunriseHours + goldenHourDuration) &&
             hour < (sunsetHours - goldenHourDuration) -> 1.0f
-            
-            // Golden Hour at sunrise (0 to 45min after sunrise)
             hour in sunriseHours..(sunriseHours + goldenHourDuration) -> 0.0f
-            
-            // Golden Hour at sunset (45min before to sunset)
             hour in (sunsetHours - goldenHourDuration)..sunsetHours -> 0.0f
-            
-            // Blue Hour before sunrise (30min before to sunrise)
             hour in (sunriseHours - blueHourDuration)..sunriseHours -> -0.5f
-            
-            // Blue Hour after sunset (sunset to 30min after)
             hour in sunsetHours..(sunsetHours + blueHourDuration) -> -0.5f
-            
-            // Night
             else -> -1.0f
         }
     }

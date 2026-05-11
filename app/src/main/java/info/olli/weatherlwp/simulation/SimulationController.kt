@@ -5,8 +5,6 @@ import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.weather.WeatherRepository
 import info.olli.weatherlwp.weather.WeatherType
 import info.olli.weatherlwp.util.SeasonHelper
-import kotlin.math.sin
-import kotlin.random.Random
 
 /**
  * Main controller for the simulation.
@@ -19,6 +17,7 @@ class SimulationController(private val context: Context) {
     private val clock = SimulationClock()
     @Volatile private var settings = SimulationSettings.fromSnapshot(emptyMap<String, Any?>())
     private val weatherHistory = WeatherHistory(context)
+    private val windSimulator = WindSimulator()
     
     private var screenWidth = 1080f
     private var screenHeight = 1920f
@@ -27,18 +26,8 @@ class SimulationController(private val context: Context) {
     private var lastSmoothedTime = 0f
     private var timeInitialized = false  // Skip smoothing on first frame
     
-    // Wind gust simulation
-    private var gustPhase = 0f
-    private var nextGustTime = 0L
-    private var gustIntensity = 0f
-    private var gustDecay = 0f
+    // Frame delta tracking
     private var lastUpdateMs = 0L
-    private var targetGust = 0f      // Target gust intensity to ramp towards
-    private var smoothedGust = 0f    // Smoothed output for gradual transitions
-    
-    // Smooth wind transitions (prevent jumping when weather data changes)
-    private var smoothedWindStrength = 0.5f
-    private var smoothedWindDirection = 0f
 
     init {
         val snapshot = PreferenceManager.getDefaultSharedPreferences(context).all
@@ -75,6 +64,7 @@ class SimulationController(private val context: Context) {
      */
     fun resetTiming() {
         lastUpdateMs = 0L
+        windSimulator.reset()
         // Reset time smoothing so sun/moon position initializes immediately without jumping
         timeInitialized = false
     }
@@ -113,7 +103,7 @@ class SimulationController(private val context: Context) {
         lastUpdateMs = currentMs
         val deltaSec = deltaMs / 1000f
         
-        val windGust = calculateWindGust(effectiveWind, deltaMs)
+        val windGust = windSimulator.calculateWindGust(effectiveWind, deltaMs)
         
         // Get extended weather data from repository
         val extendedData = WeatherRepository.getExtendedData(context)
@@ -131,8 +121,8 @@ class SimulationController(private val context: Context) {
         val rawWindDirection = extendedData.windDirection.toFloat()
         
         // Smooth wind values to prevent tree jumping on weather updates
-        val smoothedWind = smoothWindStrength(effectiveWind, deltaSec)
-        val smoothedDir = smoothWindDirection(rawWindDirection, deltaSec)
+        val smoothedWind = windSimulator.smoothStrength(effectiveWind, deltaSec)
+        val smoothedDir = windSimulator.smoothDirection(rawWindDirection, deltaSec)
         
         // Calculate effective precipitation intensity based on weather type and probability
         val precipIntensity = when (effectiveWeather) {
@@ -237,66 +227,6 @@ class SimulationController(private val context: Context) {
     }
     
     /**
-     * Calculate dynamic wind gusts with smooth ramp-up and decay.
-     * - Low wind: gentle gusts every 4-6 seconds
-     * - High wind: strong gusts every 1-2 seconds
-     * - Gusts ramp up gradually for natural feel
-     */
-    private fun calculateWindGust(baseWind: Float, deltaMs: Long): Float {
-        val currentMs = System.currentTimeMillis()
-        // Cap deltaSec to 100ms to prevent explosion after visibility changes
-        val deltaSec = (deltaMs / 1000f).coerceIn(0f, 0.1f)
-        
-        // No gusts in calm conditions - fixes "constant shaking" at low wind
-        if (baseWind < 0.15f) {
-            targetGust = 0f
-            smoothedGust = (smoothedGust - deltaSec * 0.5f).coerceAtLeast(0f)  // Decay quickly
-            gustIntensity = smoothedGust
-            return smoothedGust
-        }
-        
-        // Decay target gust intensity (this is what we're ramping towards)
-        targetGust = (targetGust - gustDecay * deltaSec).coerceIn(0f, 1f)
-        
-        // Check if it's time for a new gust
-        if (currentMs >= nextGustTime) {
-            // Gust interval: 1-2s at high wind, 4-7s at low wind
-            val minInterval = (1000 + (1 - baseWind) * 3000).toLong()  // 1000-4000ms
-            val maxInterval = (2000 + (1 - baseWind) * 5000).toLong()  // 2000-7000ms
-            val interval = minInterval + (Random.nextDouble() * (maxInterval - minInterval)).toLong()
-            nextGustTime = currentMs + interval
-            
-            // Gust intensity: proportional to base wind (no fixed floor)
-            // At low wind (0.2): small gusts 0.1-0.25
-            // At high wind (0.8): strong gusts 0.5-0.8
-            val minGust = baseWind * 0.5f
-            val maxGust = baseWind * 0.3f + baseWind * 0.7f
-            targetGust = minGust + Random.nextFloat() * (maxGust - minGust)
-            
-            // Decay rate: faster at higher wind (gusts are shorter but more frequent)
-            gustDecay = 0.3f + baseWind * 0.5f  // 0.3-0.8 intensity per second
-        }
-        
-        // Smooth the gust output: ramp up quickly (0.3s) but decay follows target
-        // This prevents instant jumps when a new gust starts
-        val rampSpeed = 3.0f  // How fast to approach target (higher = faster ramp)
-        val diff = targetGust - smoothedGust
-        if (diff > 0) {
-            // Ramping up: approach target smoothly
-            smoothedGust += diff * rampSpeed * deltaSec
-            if (smoothedGust > targetGust) smoothedGust = targetGust
-        } else {
-            // Decaying: follow target directly (already smooth from targetGust decay)
-            smoothedGust = targetGust
-        }
-        
-        // Ensure output stays in valid range
-        smoothedGust = smoothedGust.coerceIn(0f, 1f)
-        gustIntensity = smoothedGust
-        return smoothedGust
-    }
-    
-    /**
      * Smooth time transitions to prevent color jumps when using time slider.
      * On first call (wallpaper load), skip smoothing to avoid sun/moon jumping.
      *
@@ -333,38 +263,6 @@ class SimulationController(private val context: Context) {
         
         lastSmoothedTime = lastSmoothedTime + (rawTime - lastSmoothedTime) * lerpFactor
         return lastSmoothedTime
-    }
-    
-    /**
-     * Smooth wind strength to prevent tree jumps when weather data updates.
-     */
-    private fun smoothWindStrength(targetStrength: Float, deltaSec: Float): Float {
-        // Smooth approach: ~1.5 seconds to reach target
-        val smoothFactor = 0.7f * deltaSec
-        smoothedWindStrength += (targetStrength - smoothedWindStrength) * smoothFactor.coerceIn(0f, 1f)
-        return smoothedWindStrength
-    }
-    
-    /**
-     * Smooth wind direction, handling 0/360 wraparound properly.
-     */
-    private fun smoothWindDirection(targetDirection: Float, deltaSec: Float): Float {
-        // Calculate shortest angular distance (handle wraparound)
-        var delta = targetDirection - smoothedWindDirection
-        
-        // Normalize to -180..180
-        while (delta > 180f) delta -= 360f
-        while (delta < -180f) delta += 360f
-        
-        // Smooth approach: ~2 seconds to reach target direction
-        val smoothFactor = 0.5f * deltaSec
-        smoothedWindDirection += delta * smoothFactor.coerceIn(0f, 1f)
-        
-        // Normalize result to 0..360
-        while (smoothedWindDirection < 0f) smoothedWindDirection += 360f
-        while (smoothedWindDirection >= 360f) smoothedWindDirection -= 360f
-        
-        return smoothedWindDirection
     }
     
     /**

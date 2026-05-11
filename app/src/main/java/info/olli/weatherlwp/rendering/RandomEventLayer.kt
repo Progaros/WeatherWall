@@ -360,23 +360,8 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
      */
     fun drawGroundEventsBeforeDepth(canvas: Canvas, state: SimulationState, 
                                      parallaxCalculator: ParallaxCalculator, maxDepth: Float) {
-        if (width <= 0 || height <= 0 || !eventsEnabled) return
-        
-        val currentEvents = events
-        if (currentEvents.isEmpty()) return
-        
-        val ambientColor = cachedAmbientColor
-        
-        for (event in currentEvents) {
-            if (event.layer == EventLayer.GROUND && event.depthFactor < maxDepth) {
-                try {
-                    event.draw(canvas, paint, strokePaint, parallaxCalculator, extendedWidth, height, 
-                        state.timeSeconds, ambientColor, extendedOffset, state.absoluteTimeMs,
-                        if (event.layer == EventLayer.GROUND) hillHeightProvider else null)
-                } catch (e: Exception) {
-                    android.util.Log.e("RandomEventLayer", "Error drawing event ${event.javaClass.simpleName}", e)
-                }
-            }
+        drawFilteredEvents(canvas, state, parallaxCalculator) { event ->
+            event.layer == EventLayer.GROUND && event.depthFactor < maxDepth
         }
     }
     
@@ -389,27 +374,11 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     fun drawGroundEventsInRange(canvas: Canvas, state: SimulationState, 
                                  parallaxCalculator: ParallaxCalculator, 
                                  minDepth: Float, maxDepth: Float) {
-        if (width <= 0 || height <= 0 || !eventsEnabled) return
-        
-        val currentEvents = events
-        if (currentEvents.isEmpty()) return
-        
-        val ambientColor = cachedAmbientColor
-        
-        for (event in currentEvents) {
-            if (event.layer == EventLayer.GROUND) {
-                val effectiveDepth = hillInfoProvider?.invoke(0.5f, event.depthFactor)
-                    ?: event.depthFactor
-                if (effectiveDepth >= minDepth && effectiveDepth < maxDepth) {
-                    try {
-                        event.draw(canvas, paint, strokePaint, parallaxCalculator, extendedWidth, height, 
-                            state.timeSeconds, ambientColor, extendedOffset, state.absoluteTimeMs,
-                            hillHeightProvider)
-                    } catch (e: Exception) {
-                        android.util.Log.e("RandomEventLayer", "Error drawing event ${event.javaClass.simpleName}", e)
-                    }
-                }
-            }
+        drawFilteredEvents(canvas, state, parallaxCalculator) { event ->
+            if (event.layer != EventLayer.GROUND) return@drawFilteredEvents false
+            val effectiveDepth = hillInfoProvider?.invoke(0.5f, event.depthFactor)
+                ?: event.depthFactor
+            effectiveDepth >= minDepth && effectiveDepth < maxDepth
         }
     }
     
@@ -475,44 +444,44 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
      */
     fun drawGroundEventsAfterDepth(canvas: Canvas, state: SimulationState, 
                                     parallaxCalculator: ParallaxCalculator, minDepth: Float) {
-        if (width <= 0 || height <= 0 || !eventsEnabled) return
-        
-        val currentEvents = events
-        if (currentEvents.isEmpty()) return
-        
-        val ambientColor = cachedAmbientColor
-        
-        for (event in currentEvents) {
-            if (event.layer == EventLayer.GROUND && event.depthFactor >= minDepth) {
-                try {
-                    event.draw(canvas, paint, strokePaint, parallaxCalculator, extendedWidth, height, 
-                        state.timeSeconds, ambientColor, extendedOffset, state.absoluteTimeMs,
-                        hillHeightProvider)
-                } catch (e: Exception) {
-                    android.util.Log.e("RandomEventLayer", "Error drawing event ${event.javaClass.simpleName}", e)
-                }
-            }
+        drawFilteredEvents(canvas, state, parallaxCalculator) { event ->
+            event.layer == EventLayer.GROUND && event.depthFactor >= minDepth
         }
     }
     
     private fun drawEventsByLayer(canvas: Canvas, state: SimulationState, 
                                    parallaxCalculator: ParallaxCalculator, targetLayer: EventLayer) {
+        drawFilteredEvents(canvas, state, parallaxCalculator) { event ->
+            event.layer == targetLayer
+        }
+    }
+
+    /**
+     * Shared event drawing logic: iterates events matching [predicate] and draws each
+     * with error handling. Eliminates repeated try-catch iteration boilerplate.
+     */
+    private inline fun drawFilteredEvents(
+        canvas: Canvas,
+        state: SimulationState,
+        parallaxCalculator: ParallaxCalculator,
+        predicate: (RandomEvent) -> Boolean
+    ) {
         if (width <= 0 || height <= 0 || !eventsEnabled) return
-        
+
         val currentEvents = events
         if (currentEvents.isEmpty()) return
-        
+
         val ambientColor = cachedAmbientColor
-        
+
         for (event in currentEvents) {
-            if (event.layer == targetLayer) {
+            if (predicate(event)) {
                 try {
-                    // Pass extendedWidth so events can span the full parallax area
-                    event.draw(canvas, paint, strokePaint, parallaxCalculator, extendedWidth, height, 
+                    event.draw(
+                        canvas, paint, strokePaint, parallaxCalculator, extendedWidth, height,
                         state.timeSeconds, ambientColor, extendedOffset, state.absoluteTimeMs,
-                        if (targetLayer == EventLayer.GROUND) hillHeightProvider else null)
+                        if (event.layer == EventLayer.GROUND) hillHeightProvider else null
+                    )
                 } catch (e: Exception) {
-                    // Log but don't crash - one bad event shouldn't break the layer
                     android.util.Log.e("RandomEventLayer", "Error drawing event ${event.javaClass.simpleName}", e)
                 }
             }

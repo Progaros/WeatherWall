@@ -90,38 +90,14 @@ data class SimulationSettings(
         return if (useRealWeather) realWeather else manualWeather
     }
 
-    fun getBoolean(key: String, default: Boolean): Boolean {
-        val value = snapshot[key]
-        return when (value) {
-            is Boolean -> value
-            is String -> value.equals("true", ignoreCase = true)
-            else -> default
-        }
-    }
+    fun getBoolean(key: String, default: Boolean): Boolean =
+        Companion.coerceBoolean(snapshot[key], default)
 
-    fun getInt(key: String, default: Int): Int {
-        val value = snapshot[key]
-        return when (value) {
-            is Int -> value
-            is Long -> value.toInt()
-            is Float -> value.toInt()
-            is Double -> value.toInt()
-            is String -> value.toIntOrNull() ?: default
-            else -> default
-        }
-    }
+    fun getInt(key: String, default: Int): Int =
+        Companion.coerceInt(snapshot[key], default)
 
-    fun getLong(key: String, default: Long): Long {
-        val value = snapshot[key]
-        return when (value) {
-            is Long -> value
-            is Int -> value.toLong()
-            is Float -> value.toLong()
-            is Double -> value.toLong()
-            is String -> value.toLongOrNull() ?: default
-            else -> default
-        }
-    }
+    fun getLong(key: String, default: Long): Long =
+        Companion.coerceLong(snapshot[key], default)
 
     fun getString(key: String, default: String): String {
         val value = snapshot[key]
@@ -137,6 +113,36 @@ data class SimulationSettings(
     }
 
     companion object {
+        /** Coerce a snapshot value to Boolean. Shared by instance and factory methods. */
+        internal fun coerceBoolean(value: Any?, default: Boolean): Boolean =
+            when (value) {
+                is Boolean -> value
+                is String -> value.equals("true", ignoreCase = true)
+                else -> default
+            }
+
+        /** Coerce a snapshot value to Int. Shared by instance and factory methods. */
+        internal fun coerceInt(value: Any?, default: Int): Int =
+            when (value) {
+                is Int -> value
+                is Long -> value.toInt()
+                is Float -> value.toInt()
+                is Double -> value.toInt()
+                is String -> value.toIntOrNull() ?: default
+                else -> default
+            }
+
+        /** Coerce a snapshot value to Long. Shared by instance and factory methods. */
+        internal fun coerceLong(value: Any?, default: Long): Long =
+            when (value) {
+                is Long -> value
+                is Int -> value.toLong()
+                is Float -> value.toLong()
+                is Double -> value.toLong()
+                is String -> value.toLongOrNull() ?: default
+                else -> default
+            }
+
         fun fromSnapshot(sourceSnapshot: Map<String, *>): SimulationSettings {
             val snapshot = HashMap<String, Any?>(sourceSnapshot.size)
             for ((key, value) in sourceSnapshot) {
@@ -144,21 +150,10 @@ data class SimulationSettings(
             }
 
             fun snapBoolean(key: String, default: Boolean): Boolean =
-                when (val value = snapshot[key]) {
-                    is Boolean -> value
-                    is String -> value.equals("true", ignoreCase = true)
-                    else -> default
-                }
+                coerceBoolean(snapshot[key], default)
 
             fun snapInt(key: String, default: Int): Int =
-                when (val value = snapshot[key]) {
-                    is Int -> value
-                    is Long -> value.toInt()
-                    is Float -> value.toInt()
-                    is Double -> value.toInt()
-                    is String -> value.toIntOrNull() ?: default
-                    else -> default
-                }
+                coerceInt(snapshot[key], default)
 
             fun snapString(key: String, default: String): String =
                 (snapshot[key] as? String) ?: default
