@@ -112,6 +112,7 @@ tasks.register<JavaExec>("pitest") {
         setArgs(listOf(
             "--reportDir", File(buildDir, "reports/pitest").absolutePath,
             "--targetClasses", "info.olli.weatherlwp.rendering.*,info.olli.weatherlwp.simulation.*,info.olli.weatherlwp.util.*,info.olli.weatherlwp.parallax.*,info.olli.weatherlwp.weather.*",
+            "--excludedClasses", "*Test,*Test$*",
             "--targetTests", "info.olli.weatherlwp.*",
             "--sourceDirs", file("src/main/java").absolutePath,
             "--classPath", allClasspath,

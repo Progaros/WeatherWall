@@ -426,4 +426,99 @@ class SeasonHelperTest {
         assertNotNull(blend)
         assertTrue(blend.primarySeason in TerrainSeason.values())
     }
+
+    // ============== smoothStep precision tests (kills math mutations) ==============
+
+    @Test
+    fun `transition progress uses smoothstep easing`() {
+        // 3 days into summer (June 4) with 14-day transition
+        // rawProgress = 3/14, smoothStep(3/14) = (3/14)^2 * (3 - 2*(3/14))
+        val cal = java.util.Calendar.getInstance()
+        cal.set(2024, java.util.Calendar.JUNE, 4, 12, 0, 0)
+        cal.set(java.util.Calendar.MILLISECOND, 0)
+        val blend = SeasonHelper.getSeasonBlendForDate(cal, 14)
+
+        assertEquals(TerrainSeason.SUMMER, blend.primarySeason)
+        assertEquals(TerrainSeason.SPRING, blend.previousSeason)
+
+        // Expected: smoothStep(3/14) ≈ 0.1181
+        val raw = 3f / 14f
+        val expected = raw * raw * (3f - 2f * raw)
+        assertEquals("transition progress should match smoothstep",
+            expected, blend.transitionProgress, 0.01f)
+        assertTrue("progress should be non-zero", blend.transitionProgress > 0f)
+    }
+
+    @Test
+    fun `transition progress at 10 days uses smoothstep`() {
+        // 10 days into autumn (Sep 11) with 14-day transition
+        val cal = java.util.Calendar.getInstance()
+        cal.set(2024, java.util.Calendar.SEPTEMBER, 11, 12, 0, 0)
+        cal.set(java.util.Calendar.MILLISECOND, 0)
+        val blend = SeasonHelper.getSeasonBlendForDate(cal, 14)
+
+        assertEquals(TerrainSeason.AUTUMN, blend.primarySeason)
+        assertEquals(TerrainSeason.SUMMER, blend.previousSeason)
+
+        val raw = 10f / 14f
+        val expected = raw * raw * (3f - 2f * raw)
+        assertEquals("transition progress at 10 days",
+            expected, blend.transitionProgress, 0.01f)
+    }
+
+    // ============== isTransitioning boundary test ==============
+
+    @Test
+    fun `SeasonBlend with progress 1 and different seasons is not transitioning`() {
+        // Directly construct a blend with progress=1.0 but different seasons
+        val blend = SeasonHelper.SeasonBlend(
+            TerrainSeason.SUMMER,
+            TerrainSeason.SPRING,
+            1.0f
+        )
+        assertFalse("progress=1.0 should not be transitioning even with different seasons",
+            blend.isTransitioning)
+    }
+
+    @Test
+    fun `SeasonBlend with progress less than 1 and different seasons is transitioning`() {
+        val blend = SeasonHelper.SeasonBlend(
+            TerrainSeason.SUMMER,
+            TerrainSeason.SPRING,
+            0.99f
+        )
+        assertTrue("progress<1.0 with different seasons should be transitioning",
+            blend.isTransitioning)
+    }
+
+    // ============== getSeasonBlendForDate Calendar.set mutations ==============
+
+    @Test
+    fun `season blend for Dec 5 transitions from autumn to winter`() {
+        val cal = java.util.Calendar.getInstance()
+        cal.set(2024, java.util.Calendar.DECEMBER, 5, 12, 0, 0)
+        cal.set(java.util.Calendar.MILLISECOND, 0)
+        val blend = SeasonHelper.getSeasonBlendForDate(cal, 14)
+
+        assertEquals(TerrainSeason.WINTER, blend.primarySeason)
+        assertEquals(TerrainSeason.AUTUMN, blend.previousSeason)
+        assertTrue("Should be transitioning at Dec 5", blend.isTransitioning)
+
+        val raw = 4f / 14f
+        val expected = raw * raw * (3f - 2f * raw)
+        assertEquals("progress at Dec 5", expected, blend.transitionProgress, 0.02f)
+    }
+
+    @Test
+    fun `getEffectiveSeasonBlend dayOfYearOverride boundary 0 means disabled`() {
+        val blend = SeasonHelper.getEffectiveSeasonBlend(
+            debugEnabled = true,
+            seasonOverride = "auto",
+            transitionDays = 14,
+            dayOfYearOverride = 0
+        )
+        // dayOfYearOverride=0 should use current calendar, not override
+        assertNotNull(blend)
+        assertTrue(blend.primarySeason in TerrainSeason.values())
+    }
 }

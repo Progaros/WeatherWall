@@ -1,6 +1,7 @@
 package info.olli.weatherlwp.parallax
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -518,5 +519,632 @@ class ParallaxCalculatorTest {
         val calculator = ParallaxCalculator()
         // Default max offset should be 20% (increased from 15%)
         assertEquals("Default max offset percent should be 20%", 20f, calculator.maxOffsetPercent, 0.01f)
+    }
+
+    // ============== Property readback tests (kills getter return-value mutations) ==============
+
+    @Test
+    fun `edgeEasing readback matches set value`() {
+        val calculator = ParallaxCalculator()
+        calculator.edgeEasing = 0.75f
+        assertEquals(0.75f, calculator.edgeEasing, 0.001f)
+    }
+
+    @Test
+    fun `returnSpeedUnlocked readback when set to false`() {
+        val calculator = ParallaxCalculator()
+        calculator.returnSpeedUnlocked = false
+        assertFalse("returnSpeedUnlocked should read back false", calculator.returnSpeedUnlocked)
+    }
+
+    // ============== reset clears pending tilt ==============
+
+    @Test
+    fun `reset clears pending tilt so next update does not move`() {
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 10f
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.smoothing = 0f
+
+        // Apply tilt
+        calculator.updateFromSensor(1.0f, 0.5f)
+        calculator.update(16)
+        assertTrue("Should have moved", calculator.getOffsetX() > 0f)
+
+        // Reset and update without new sensor data
+        calculator.reset()
+        calculator.update(16)
+
+        // Position should be at or near zero after reset
+        assertEquals("After reset, X should be 0", 0f, calculator.getOffsetX(), 0.1f)
+        assertEquals("After reset, Y should be 0", 0f, calculator.getOffsetY(), 0.1f)
+    }
+
+    // ============== movementMultiplier / depth precision ==============
+
+    @Test
+    fun `depth factor 0 gives zero offset with default perspective`() {
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 10f
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.depthSeparation = 1.0f
+        calculator.perspective = 1.0f // background-heavy: mult = (1-d)*depthSep
+
+        calculator.updateFromSensor(1.0f, 0f)
+        repeat(100) { calculator.update(16) }
+
+        // depth=1.0 with perspective=1.0: mult = foregroundHeavy(1)*0 + backgroundHeavy(0)*1 = 0
+        // Wait, let me re-check: mixed = d + (1-d - d)*perspective = d + (1-2d)*perspective
+        // At d=1: mixed = 1 + (1-2)*1 = 1 + (-1) = 0
+        val (dx, _) = calculator.getOffsetForDepth(1.0f)
+        assertEquals("Depth=1 with perspective=1 should give 0 offset", 0f, dx, 0.1f)
+    }
+
+    @Test
+    fun `depth factor 0 with perspective 1 gives full offset`() {
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 10f
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.depthSeparation = 1.0f
+        calculator.perspective = 1.0f
+
+        calculator.updateFromSensor(1.0f, 0f)
+        repeat(100) { calculator.update(16) }
+
+        val baseX = calculator.getOffsetX()
+        // depth=0 with perspective=1: mixed = 0 + (1-0)*1 = 1, mult = 1*depthSep = 1
+        val (dx, _) = calculator.getOffsetForDepth(0.0f)
+
+        // Offset should be proportional to base offset
+        assertTrue("Depth=0 should give significant offset", kotlin.math.abs(dx) > 50f)
+    }
+
+    @Test
+    fun `perspective 0 reverses depth direction`() {
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 10f
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.depthSeparation = 1.0f
+        calculator.perspective = 0.0f // foreground-heavy: mult = d * depthSep
+
+        calculator.updateFromSensor(1.0f, 0f)
+        repeat(100) { calculator.update(16) }
+
+        // depth=0 with perspective=0: mixed = 0, mult = 0
+        val (dx0, _) = calculator.getOffsetForDepth(0.0f)
+        // depth=1 with perspective=0: mixed = 1, mult = 1
+        val (dx1, _) = calculator.getOffsetForDepth(1.0f)
+
+        assertEquals("Depth=0 with perspective=0 should give 0", 0f, dx0, 0.1f)
+        assertTrue("Depth=1 with perspective=0 should give full offset", kotlin.math.abs(dx1) > 50f)
+    }
+
+    // ============== getEffectiveMaxOffset precision ==============
+
+    @Test
+    fun `effective max offset uses percent when set`() {
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 5f // 5% of 1920 = 96px
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.smoothing = 0f
+
+        calculator.updateFromSensor(1.0f, 0f)
+        repeat(100) { calculator.update(16) }
+
+        val x = calculator.getOffsetX()
+        // Should be bounded by ~96px (with tan curve it might be slightly different)
+        assertTrue("Offset should be positive", x > 0f)
+        assertTrue("Offset should not exceed 5% of height significantly", x < 120f)
+    }
+
+    @Test
+    fun `effective max offset falls back to legacy px when percent is 0`() {
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 0f
+        calculator.maxOffsetPx = 50f
+        calculator.setCanvasSize(1080f, 1920f) // scaleFactor = 1.0
+        calculator.smoothing = 0f
+
+        calculator.updateFromSensor(1.0f, 0f)
+        repeat(100) { calculator.update(16) }
+
+        val x = calculator.getOffsetX()
+        assertTrue("Should use legacy maxOffsetPx", x > 30f)
+        assertTrue("Should be bounded by maxOffsetPx * scaleFactor", x < 65f)
+    }
+
+    // ============== isMovingAwayFromCenter ==============
+
+    @Test
+    fun `edge easing does not slow return toward center`() {
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 10f
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.edgeEasing = 1.0f
+        calculator.returnSpeed = 0f
+        calculator.smoothing = 0f
+
+        // Move to right edge
+        calculator.updateFromSensor(1.0f, 0f)
+        repeat(100) { calculator.update(16) }
+        val xAtEdge = calculator.getOffsetX()
+        assertTrue("Should be at right edge", xAtEdge > 100f)
+
+        // Now move back toward center - edge easing should NOT slow this
+        calculator.updateFromSensor(-0.3f, 0f)
+        calculator.update(16)
+        val xAfter = calculator.getOffsetX()
+
+        // Moving toward center from positive → target is negative,
+        // target magnitude < current magnitude → not moving away → no easing
+        assertTrue("Should move toward center without easing slowdown",
+            xAfter < xAtEdge)
+    }
+
+    // ============== Edge easing multiplier boundary ==============
+
+    @Test
+    fun `edge easing at center gives full movement`() {
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 10f
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.edgeEasing = 1.0f
+        calculator.smoothing = 0f
+
+        // Start from center (default) and apply small tilt
+        calculator.updateFromSensor(0.1f, 0f)
+        calculator.update(16)
+
+        // At center, edge easing multiplier should be ~1.0 (full speed)
+        val x = calculator.getOffsetX()
+        assertTrue("Should move from center despite edge easing", x > 0f)
+    }
+
+    @Test
+    fun `depthSeparation 0 gives zero offset for all depths`() {
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 10f
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.depthSeparation = 0.0f
+
+        calculator.updateFromSensor(1.0f, 0f)
+        repeat(100) { calculator.update(16) }
+
+        val (dx, _) = calculator.getOffsetForDepth(0.5f)
+        assertEquals("Zero depthSeparation should give zero depth offset", 0f, dx, 0.1f)
+    }
+
+    @Test
+    fun `curvedOffset boundary - zero position gives zero output`() {
+        val calculator = ParallaxCalculator()
+        calculator.setCanvasSize(1080f, 1920f)
+
+        // With no tilt, offsets for any depth should be zero
+        val (x, y) = calculator.getOffsetForDepth(0.5f)
+        assertEquals(0f, x, 0.001f)
+        assertEquals(0f, y, 0.001f)
+    }
+
+    // ============== Default canvas orientation (kills init mul→div L99) ==============
+
+    @Test
+    fun `default canvas is portrait orientation`() {
+        // Without setCanvasSize, canvasWidth = 1920*0.5625 = 1080 < canvasHeight = 1920
+        // so it should behave as portrait: horizontalComp = aspectRatio, verticalComp = 1
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 10f
+        calculator.smoothing = 0f
+        calculator.aspectRatioCompensation = 2.0f // 2x horizontal
+
+        calculator.updateFromSensor(0.5f, 0.5f)
+        repeat(100) { calculator.update(16) }
+
+        val x = kotlin.math.abs(calculator.getOffsetX())
+        val y = kotlin.math.abs(calculator.getOffsetY())
+
+        // In portrait: horizontalComp=2.0, verticalComp=1.0
+        // X should be ~2x of Y (then circular clamping normalizes, but ratio should hold)
+        assertTrue("In portrait, X should be larger than Y with aspectRatio>1 (x=$x, y=$y)",
+            x > y * 1.3f)
+    }
+
+    // ============== maxOffsetPercent vs pixel fallback (kills L354 condition removal) ==============
+
+    @Test
+    fun `maxOffsetPercent controls movement when maxOffsetPx is zero`() {
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 10f
+        calculator.maxOffsetPx = 0f // Disable legacy fallback
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.smoothing = 0f
+
+        calculator.updateFromSensor(1.0f, 0f)
+        repeat(100) { calculator.update(16) }
+
+        val x = calculator.getOffsetX()
+        // With percent=10%: effectiveMaxOffset = 1920 * 0.1 = 192
+        // With mutation (always uses legacy): effectiveMaxOffset = 0 → NO movement
+        assertTrue("With maxOffsetPercent=10 and maxOffsetPx=0, should still move", x > 100f)
+    }
+
+    @Test
+    fun `maxOffsetPercent gives proportional offset to height`() {
+        // Small percent
+        val calc1 = ParallaxCalculator()
+        calc1.strength = 1.0f
+        calc1.maxOffsetPercent = 2f // 2% = 38px
+        calc1.maxOffsetPx = 0f
+        calc1.setCanvasSize(1080f, 1920f)
+        calc1.smoothing = 0f
+        calc1.updateFromSensor(1.0f, 0f)
+        repeat(100) { calc1.update(16) }
+        val x2pct = calc1.getOffsetX()
+
+        // Large percent
+        val calc2 = ParallaxCalculator()
+        calc2.strength = 1.0f
+        calc2.maxOffsetPercent = 20f // 20% = 384px
+        calc2.maxOffsetPx = 0f
+        calc2.setCanvasSize(1080f, 1920f)
+        calc2.smoothing = 0f
+        calc2.updateFromSensor(1.0f, 0f)
+        repeat(100) { calc2.update(16) }
+        val x20pct = calc2.getOffsetX()
+
+        // 20% should give ~10x the offset of 2%
+        assertTrue("Higher percent should give much larger offset (2%=$x2pct, 20%=$x20pct)",
+            x20pct > x2pct * 5f)
+    }
+
+    // ============== Edge easing with returnSpeedUnlocked=false (kills L278 mutations) ==============
+
+    @Test
+    fun `returnSpeedUnlocked false slows return near edge with easing`() {
+        // With returnSpeedUnlocked=false, edge easing ALSO affects return-to-center
+        val calcUnlocked = ParallaxCalculator()
+        calcUnlocked.strength = 1.0f
+        calcUnlocked.maxOffsetPercent = 10f
+        calcUnlocked.setCanvasSize(1080f, 1920f)
+        calcUnlocked.edgeEasing = 1.0f
+        calcUnlocked.returnSpeed = 0.5f
+        calcUnlocked.returnSpeedUnlocked = true
+
+        calcUnlocked.updateFromSensor(1.0f, 0f)
+        repeat(100) { calcUnlocked.update(16) }
+        calcUnlocked.updateFromSensor(0f, 0f)
+        repeat(30) { calcUnlocked.update(16) }
+        val xUnlocked = calcUnlocked.getOffsetX()
+
+        val calcLocked = ParallaxCalculator()
+        calcLocked.strength = 1.0f
+        calcLocked.maxOffsetPercent = 10f
+        calcLocked.setCanvasSize(1080f, 1920f)
+        calcLocked.edgeEasing = 1.0f
+        calcLocked.returnSpeed = 0.5f
+        calcLocked.returnSpeedUnlocked = false
+
+        calcLocked.updateFromSensor(1.0f, 0f)
+        repeat(100) { calcLocked.update(16) }
+        calcLocked.updateFromSensor(0f, 0f)
+        repeat(30) { calcLocked.update(16) }
+        val xLocked = calcLocked.getOffsetX()
+
+        // Unlocked return should be faster (closer to center)
+        assertTrue("Unlocked return should be closer to center (unlocked=$xUnlocked, locked=$xLocked)",
+            kotlin.math.abs(xUnlocked) <= kotlin.math.abs(xLocked))
+    }
+
+    // ============== Smoothing affects convergence speed (kills L258, L262 mutations) ==============
+
+    @Test
+    fun `high smoothing slows convergence`() {
+        val calcFast = ParallaxCalculator()
+        calcFast.strength = 1.0f
+        calcFast.maxOffsetPercent = 10f
+        calcFast.setCanvasSize(1080f, 1920f)
+        calcFast.smoothing = 0.1f
+        calcFast.returnSpeed = 0f
+
+        calcFast.updateFromSensor(1.0f, 0f)
+        calcFast.update(16) // Just 1 frame
+        val xFast = calcFast.getOffsetX()
+
+        val calcSlow = ParallaxCalculator()
+        calcSlow.strength = 1.0f
+        calcSlow.maxOffsetPercent = 10f
+        calcSlow.setCanvasSize(1080f, 1920f)
+        calcSlow.smoothing = 0.9f
+        calcSlow.returnSpeed = 0f
+
+        calcSlow.updateFromSensor(1.0f, 0f)
+        calcSlow.update(16) // Just 1 frame
+        val xSlow = calcSlow.getOffsetX()
+
+        // Low smoothing should converge faster after 1 frame
+        assertTrue("Lower smoothing should converge faster after 1 frame (fast=$xFast, slow=$xSlow)",
+            xFast > xSlow)
+    }
+
+    // ============== Tilt noise deadzone (kills L197-198 conditional mutations) ==============
+
+    @Test
+    fun `tiny tilt below noise deadzone produces no movement`() {
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 10f
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.smoothing = 0f
+        calculator.returnSpeed = 0f
+
+        // Tilt below deadzone (0.06)
+        calculator.updateFromSensor(0.03f, 0.03f)
+        repeat(100) { calculator.update(16) }
+
+        assertEquals("Tilt below deadzone should not move X", 0f, calculator.getOffsetX(), 0.5f)
+        assertEquals("Tilt below deadzone should not move Y", 0f, calculator.getOffsetY(), 0.5f)
+    }
+
+    @Test
+    fun `tilt above noise deadzone produces movement`() {
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 10f
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.smoothing = 0f
+        calculator.returnSpeed = 0f
+
+        // Tilt above deadzone (0.06)
+        calculator.updateFromSensor(0.5f, 0f)
+        repeat(100) { calculator.update(16) }
+
+        assertTrue("Tilt above deadzone should produce movement", calculator.getOffsetX() > 10f)
+    }
+
+    @Test
+    fun `tilt exactly at deadzone boundary produces movement`() {
+        // TILT_NOISE_DEADZONE = 0.06, filter is abs(tilt) < 0.06
+        // So tilt = 0.06 should NOT be filtered (passes through)
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 10f
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.smoothing = 0f
+        calculator.returnSpeed = 0f
+
+        calculator.updateFromSensor(0.06f, 0.06f)
+        repeat(100) { calculator.update(16) }
+
+        // Should produce movement since 0.06 is NOT strictly less than 0.06
+        assertTrue("Tilt at exactly deadzone should produce X movement", calculator.getOffsetX() > 0.5f)
+        assertTrue("Tilt at exactly deadzone should produce Y movement", calculator.getOffsetY() > 0.5f)
+    }
+
+    // ============== Circular clamping (kills L232 boundary, L219 math) ==============
+
+    @Test
+    fun `diagonal tilt is clamped to circle not square`() {
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 10f
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.smoothing = 0f
+
+        // Max tilt in both axes
+        calculator.updateFromSensor(1.0f, 1.0f)
+        repeat(100) { calculator.update(16) }
+
+        val x = calculator.getOffsetX()
+        val y = calculator.getOffsetY()
+        val magnitude = kotlin.math.sqrt(x * x + y * y)
+
+        // Same calculator, max tilt in one axis only
+        val calc2 = ParallaxCalculator()
+        calc2.strength = 1.0f
+        calc2.maxOffsetPercent = 10f
+        calc2.setCanvasSize(1080f, 1920f)
+        calc2.smoothing = 0f
+        calc2.updateFromSensor(1.0f, 0f)
+        repeat(100) { calc2.update(16) }
+        val xOnly = calc2.getOffsetX()
+
+        // Diagonal magnitude should not exceed single-axis max by more than ~10%
+        // (circular clamping prevents corner stretching)
+        assertTrue("Diagonal magnitude should not greatly exceed single-axis (diag=$magnitude, single=$xOnly)",
+            magnitude < xOnly * 1.15f)
+    }
+
+    // ============== Landscape orientation flips compensation axes (kills L212 conditional) ==============
+
+    @Test
+    fun `landscape orientation swaps aspect ratio compensation axes`() {
+        // In landscape (width >= height): horizontalComp=1.0, verticalComp=aspectRatio
+        val calcLandscape = ParallaxCalculator()
+        calcLandscape.strength = 1.0f
+        calcLandscape.maxOffsetPercent = 10f
+        calcLandscape.setCanvasSize(1920f, 1080f) // Landscape
+        calcLandscape.smoothing = 0f
+        calcLandscape.aspectRatioCompensation = 2.0f
+        calcLandscape.returnSpeed = 0f
+
+        calcLandscape.updateFromSensor(0.5f, 0.5f)
+        repeat(100) { calcLandscape.update(16) }
+
+        val xLand = kotlin.math.abs(calcLandscape.getOffsetX())
+        val yLand = kotlin.math.abs(calcLandscape.getOffsetY())
+
+        // In landscape: horizontalComp=1.0, verticalComp=2.0 → Y should be larger
+        assertTrue("In landscape, Y should be larger with aspect ratio 2.0 (x=$xLand, y=$yLand)",
+            yLand > xLand * 1.3f)
+    }
+
+    // ============== Delta time scaling (kills L219 mul→div, L247 add→sub) ==============
+
+    @Test
+    fun `longer delta time produces faster convergence`() {
+        // With smoothing > 0.02: lerp rate includes deltaScale
+        val calcNormal = ParallaxCalculator()
+        calcNormal.strength = 1.0f
+        calcNormal.maxOffsetPercent = 10f
+        calcNormal.setCanvasSize(1080f, 1920f)
+        calcNormal.smoothing = 0.5f
+        calcNormal.returnSpeed = 0f
+
+        calcNormal.updateFromSensor(1.0f, 0f)
+        calcNormal.update(16) // Normal 60fps frame
+        val x16ms = calcNormal.getOffsetX()
+
+        val calcSlow = ParallaxCalculator()
+        calcSlow.strength = 1.0f
+        calcSlow.maxOffsetPercent = 10f
+        calcSlow.setCanvasSize(1080f, 1920f)
+        calcSlow.smoothing = 0.5f
+        calcSlow.returnSpeed = 0f
+
+        calcSlow.updateFromSensor(1.0f, 0f)
+        calcSlow.update(32) // Slower frame rate, bigger step
+        val x32ms = calcSlow.getOffsetX()
+
+        // Longer delta should move further in one step
+        assertTrue("32ms frame should move further than 16ms (32ms=$x32ms, 16ms=$x16ms)",
+            x32ms > x16ms)
+    }
+
+    // ============== Return speed engages proportionally (kills L251, L247 boundary) ==============
+
+    @Test
+    fun `return speed medium gives moderate return`() {
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0.3f
+        calc.returnSpeed = 0.5f // Moderate
+
+        // Move to offset
+        calc.updateFromSensor(1.0f, 0f)
+        repeat(100) { calc.update(16) }
+        val xAtTilt = calc.getOffsetX()
+        assertTrue("Should have moved", xAtTilt > 50f)
+
+        // Release tilt
+        calc.updateFromSensor(0f, 0f)
+        repeat(50) { calc.update(16) }
+        val xAfter = calc.getOffsetX()
+
+        // Medium return speed should move somewhat toward center
+        assertTrue("Medium return should reduce offset (before=$xAtTilt, after=$xAfter)",
+            kotlin.math.abs(xAfter) < kotlin.math.abs(xAtTilt) * 0.8f)
+    }
+
+    // ============== Snap to target when close (kills L295-296 boundary/math) ==============
+
+    @Test
+    fun `snap to target prevents small oscillations`() {
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 0f
+
+        // Move to position
+        calc.updateFromSensor(1.0f, 0f)
+        repeat(100) { calc.update(16) }
+        val xFinal = calc.getOffsetX()
+
+        // Continue updating with same tilt - should stay exactly at target (no oscillation)
+        repeat(10) { calc.update(16) }
+        val xStable = calc.getOffsetX()
+        assertEquals("Position should be exactly stable (no micro-oscillation)", xFinal, xStable, 0.001f)
+    }
+
+    // ============== getOffsetXForDepth and getOffsetYForDepth (kills curvedOffset L348) ==============
+
+    @Test
+    fun `getOffsetXForDepth consistent with getOffsetForDepth`() {
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.depthSeparation = 1.0f
+
+        calc.updateFromSensor(0.8f, 0.6f)
+        repeat(100) { calc.update(16) }
+
+        val (pairX, pairY) = calc.getOffsetForDepth(0.3f)
+        val singleX = calc.getOffsetXForDepth(0.3f)
+        val singleY = calc.getOffsetYForDepth(0.3f)
+
+        assertEquals("X from pair and single should match", pairX, singleX, 0.001f)
+        assertEquals("Y from pair and single should match", pairY, singleY, 0.001f)
+    }
+
+    @Test
+    fun `depth offset scales between 0 and base proportionally`() {
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.depthSeparation = 1.0f
+        calc.perspective = 1.0f
+
+        calc.updateFromSensor(0.8f, 0f)
+        repeat(100) { calc.update(16) }
+
+        val depth00 = kotlin.math.abs(calc.getOffsetXForDepth(0.0f))
+        val depth05 = kotlin.math.abs(calc.getOffsetXForDepth(0.5f))
+        val depth10 = kotlin.math.abs(calc.getOffsetXForDepth(1.0f))
+
+        // depth=0 should have most offset, depth=1 should have least (with perspective=1)
+        assertTrue("depth=0 should have more offset than depth=0.5 (d0=$depth00, d05=$depth05)",
+            depth00 > depth05)
+        assertTrue("depth=0.5 should have more offset than depth=1.0 (d05=$depth05, d10=$depth10)",
+            depth05 > depth10)
+    }
+
+    // ============== Edge easing with both axes (kills calculateEdgeEasingMultiplier L384-395) ==============
+
+    @Test
+    fun `edge easing slows diagonal movement more than axial`() {
+        // At a diagonal position, normalizedDistance is higher than on a single axis
+        // So easing should slow it more
+        val calcAxis = ParallaxCalculator()
+        calcAxis.strength = 1.0f
+        calcAxis.maxOffsetPercent = 10f
+        calcAxis.setCanvasSize(1080f, 1920f)
+        calcAxis.edgeEasing = 0.8f
+        calcAxis.smoothing = 0.3f
+        calcAxis.returnSpeed = 0f
+
+        calcAxis.updateFromSensor(0.9f, 0f) // Single axis
+        repeat(30) { calcAxis.update(16) }
+        val xAxis = calcAxis.getOffsetX()
+
+        val calcDiag = ParallaxCalculator()
+        calcDiag.strength = 1.0f
+        calcDiag.maxOffsetPercent = 10f
+        calcDiag.setCanvasSize(1080f, 1920f)
+        calcDiag.edgeEasing = 0.8f
+        calcDiag.smoothing = 0.3f
+        calcDiag.returnSpeed = 0f
+
+        calcDiag.updateFromSensor(0.9f, 0.9f) // Diagonal
+        repeat(30) { calcDiag.update(16) }
+        val xDiag = calcDiag.getOffsetX()
+
+        // Diagonal should have less X progress due to higher easing effect
+        assertTrue("Diagonal X should be less due to stronger easing (axis=$xAxis, diag=$xDiag)",
+            xDiag < xAxis)
     }
 }
