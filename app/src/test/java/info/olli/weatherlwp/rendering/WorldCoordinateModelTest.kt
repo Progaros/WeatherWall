@@ -344,49 +344,48 @@ class WorldCoordinateModelTest {
     // ===================== Height-based zoom (getVisibleWorldHalf) =====================
 
     @Test
-    fun `getVisibleWorldHalf expands when height decreases`() {
+    fun `getVisibleWorldHalf is height-independent for same width`() {
         val w = 1080f
         val tallHalf = RenderConstants.getVisibleWorldHalf(w, 2400f)
         val shortHalf = RenderConstants.getVisibleWorldHalf(w, 960f)
-        assertTrue("shorter height should give wider world half", shortHalf > tallHalf)
+        // Generation range is now height-independent — same width gives same range
+        assertEquals("same width at different heights should produce same generation range",
+            tallHalf, shortHalf, 0.01f)
     }
 
     @Test
     fun `getVisibleWorldHalf at reference height matches expected`() {
         val w = 1080f
         val half = RenderConstants.getVisibleWorldHalf(w, RenderConstants.REFERENCE_HEIGHT)
-        // At reference height, heightScale=1, so visibleHalf = w/(2*1) + parallaxPad/1
-        val heightScale = RenderConstants.getHeightScale(RenderConstants.REFERENCE_HEIGHT)
-        val expected = w / (2f * heightScale) + RenderConstants.REFERENCE_HEIGHT * 0.45f / heightScale
+        // Generation range uses reference heightScale (1.0), so:
+        // visibleHalf = w/2 + REFERENCE_HEIGHT * 0.45
+        val expected = w / 2f + RenderConstants.REFERENCE_HEIGHT * 0.45f
         assertEquals(expected, half, 0.01f)
     }
 
     @Test
-    fun `getVisibleWorldHalf scales inversely with heightScale`() {
+    fun `getVisibleWorldHalf is stable across heights`() {
         val w = 1080f
         val h1 = 960f
         val h2 = 1920f
         val half1 = RenderConstants.getVisibleWorldHalf(w, h1)
         val half2 = RenderConstants.getVisibleWorldHalf(w, h2)
-        // Both viewport and padding scale inversely with heightScale, so
-        // the entire half value scales inversely.
-        val scale1 = RenderConstants.getHeightScale(h1)
-        val scale2 = RenderConstants.getHeightScale(h2)
-        // half = (w/2 + REFERENCE_HEIGHT*0.45) / heightScale
-        // half1/half2 = scale2/scale1
-        assertEquals(scale2 / scale1, half1 / half2, 0.02f)
+        // Height-independent: same width → same generation range
+        assertEquals("generation range should be height-independent",
+            half1, half2, 0.01f)
     }
 
     @Test
-    fun `shorter screen generates more cell indices (zoom-out)`() {
+    fun `same width at different heights generates same cell indices`() {
         val w = 1080f
         val cellSize = TreeRenderer.TREE_CELL_SIZE
         val tallHalf = RenderConstants.getVisibleWorldHalf(w, 2400f)
         val shortHalf = RenderConstants.getVisibleWorldHalf(w, 960f)
         val rangeTall = WorldViewportTransform.indexRangeForWorldRange(-tallHalf, tallHalf, cellSize)
         val rangeShort = WorldViewportTransform.indexRangeForWorldRange(-shortHalf, shortHalf, cellSize)
-        assertTrue("shorter screen sees more cells",
-            (rangeShort.last - rangeShort.first) >= (rangeTall.last - rangeTall.first))
+        // Height-independent generation: same cells at any height
+        assertEquals("same cell count at different heights",
+            rangeTall.last - rangeTall.first, rangeShort.last - rangeShort.first)
     }
 
     @Test
@@ -419,15 +418,12 @@ class WorldCoordinateModelTest {
     }
 
     @Test
-    fun `landscape sees wider visible world half than portrait`() {
-        // Same physical screen rotated: 1080x1920 portrait vs 1920x1080 landscape
+    fun `landscape sees wider visible world half than portrait due to width`() {
+        // Landscape (1920 wide) vs portrait (1080 wide): wider screen → wider range
         val portraitHalf = RenderConstants.getVisibleWorldHalf(1080f, 1920f)
         val landscapeHalf = RenderConstants.getVisibleWorldHalf(1920f, 1080f)
-        assertTrue("landscape should see wider world",
+        assertTrue("landscape (wider screen) should see wider world",
             landscapeHalf > portraitHalf)
-        // Landscape is significantly wider (not just slightly)
-        assertTrue("landscape visible half should be at least 2x portrait",
-            landscapeHalf > portraitHalf * 2f)
     }
 
     @Test

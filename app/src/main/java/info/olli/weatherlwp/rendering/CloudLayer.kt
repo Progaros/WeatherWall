@@ -58,6 +58,10 @@ class CloudLayer(private val context: Context) : SceneLayer {
     private var width = 0f
     private var height = 0f
     private var minDim = 0f  // min(width, height) - used for cloud sizing to prevent giant bitmaps
+
+    // Cached values rebuilt on resize only
+    private var cachedWrapRange = 0f
+    private var cachedTransform = WorldViewportTransform(1f, 1f)
     
     /**
      * Pre-calculated cloud group with cached bitmap.
@@ -354,6 +358,10 @@ class CloudLayer(private val context: Context) : SceneLayer {
         minDim = minOf(w, h)
 
         if (!sizeChanged) return
+
+        // Rebuild cached values
+        cachedWrapRange = RenderConstants.getVisibleWorldHalf(w.coerceAtLeast(1f), h.coerceAtLeast(1f)) * 2f
+        cachedTransform = WorldViewportTransform(w, h)
         
         // Invalidate cached bitmaps on any resize (pixel dimensions changed)
         clearGroupBitmaps()
@@ -399,7 +407,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         
         // Update each cloud group's position in world-space
         // Movement in world-space units per second
-        val wrapRange = RenderConstants.getVisibleWorldHalf(width.coerceAtLeast(1f), height.coerceAtLeast(1f)) * 2f
+        val wrapRange = cachedWrapRange
         for (group in currentGroups) {
             // Move cloud in world-space units
             val movement = deltaSec * group.speed * effectiveSpeed * RenderConstants.CLOUD_MOVEMENT_SCALE * dirX * wrapRange
@@ -478,7 +486,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         isBackLayer: Boolean,
         parallaxCalculator: ParallaxCalculator
     ) {
-        val transform = WorldViewportTransform(width, height, RenderConstants.getHeightScale(height, width))
+        val transform = cachedTransform
         var i = 0
         while (i < groups.size) {
             val group = groups[i]

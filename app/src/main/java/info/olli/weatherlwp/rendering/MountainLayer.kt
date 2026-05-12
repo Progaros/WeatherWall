@@ -72,18 +72,36 @@ class MountainLayer(private val context: Context) : SceneLayer {
     private var cachedRightGradients = HashMap<Int, LinearGradient>()
     private var cachedSnowGradients = HashMap<Int, LinearGradient>()
     
+    /**
+     * Pre-computed mountain shape: ridge + slope points cached at generation time.
+     * Avoids per-frame Random + ArrayList + Pair allocations (~800 objects/frame saved).
+     */
+    private class MountainShape(
+        val ridgeXs: FloatArray,
+        val ridgeYs: FloatArray,
+        val leftSlopeXs: FloatArray,
+        val leftSlopeYs: FloatArray,
+        val rightSlopeXs: FloatArray,
+        val rightSlopeYs: FloatArray,
+        val peakAngleOffset: Float
+    )
+
     private data class MountainData(
         val worldX: Float,     // World-space x coordinate (0 = center)
         val height: Float,     // 0.0 to 1.0 (relative to screen height)
         val width: Float,      // Width multiplier
         val dayColor: Int,     // Color during day
         val depthFactor: Float, // Parallax depth
-        val shapeSeed: Long
+        val shapeSeed: Long,
+        val shape: MountainShape  // Pre-computed shape geometry
     )
     
     // Thread-safe mountain list using volatile reference + immutable list
     // Settings thread creates new list, render thread reads current snapshot
     @Volatile private var mountains: List<MountainData> = emptyList()
+
+    // Cached transform: rebuilt on resize, reused every frame
+    private var cachedTransform = WorldViewportTransform(1f, 1f)
     
     // Settings
     private var mountainDensity = 50       // 0-100 percentage of mountain coverage
@@ -123,9 +141,78 @@ class MountainLayer(private val context: Context) : SceneLayer {
         const val PHI = 0.618033988749895f
     }
 
+    /**
+     * Pre-compute normalised shape geometry for a mountain.
+     *
+     * All coordinates are in **normalised** form:
+     * - X values are fractions of half-width (−1..+1)
+     * - Y values are fractions of mountain height (0 = peak, 1 = base)
+     *
+     * The actual screen positions are derived at draw time using the
+     * mountain's peakCenterX, peakY, baseY and halfWidthPx.
+     */
+    private fun precomputeShape(
+        shapeSeed: Long,
+        roughness: Float,
+        ridgeRough: Float
+    ): MountainShape {
+        val random = Random(shapeSeed)
+        val segments = (10 + roughness * 20).toInt()
+        val ridgeSegments = (5 + ridgeRough * 10).toInt().coerceAtLeast(2)
+
+        // Peak angle offset as fraction of halfWidth
+        val peakAngleOffset = if (ridgeRough > 0)
+            (random.nextFloat() - 0.5f) * 0.3f * ridgeRough
+        else 0f
+
+        // Ridge points (normalised)
+        val ridgeXs = FloatArray(ridgeSegments + 1) // +1 for base point
+        val ridgeYs = FloatArray(ridgeSegments + 1)
+        ridgeXs[0] = peakAngleOffset
+        ridgeYs[0] = 0f // peak
+        for (i in 1 until ridgeSegments) {
+            val progress = i.toFloat() / ridgeSegments
+            val ridgeNoise = (random.nextFloat() - 0.5f) * ridgeRough * 0.02f * (1f - progress * 0.7f)
+            ridgeXs[i] = peakAngleOffset * (1f - progress) + ridgeNoise
+            ridgeYs[i] = progress
+        }
+        ridgeXs[ridgeSegments] = 0f
+        ridgeYs[ridgeSegments] = 1f // base
+
+        // Left slope points (normalised: x as fraction of -halfWidth)
+        val leftSlopeXs = FloatArray(segments)
+        val leftSlopeYs = FloatArray(segments)
+        for (i in 0 until segments) {
+            val progress = (i + 1).toFloat() / segments
+            leftSlopeXs[i] = -(progress) // fraction of halfWidth, left side
+            val noiseNorm = (random.nextFloat() - 0.5f) * roughness // normalised noise
+            leftSlopeYs[i] = progress + noiseNorm
+        }
+
+        // Right slope points
+        val rightSlopeXs = FloatArray(segments)
+        val rightSlopeYs = FloatArray(segments)
+        for (i in 0 until segments) {
+            val progress = (i + 1).toFloat() / segments
+            rightSlopeXs[i] = progress
+            val noiseNorm = (random.nextFloat() - 0.5f) * roughness
+            rightSlopeYs[i] = progress + noiseNorm
+        }
+
+        return MountainShape(
+            ridgeXs, ridgeYs,
+            leftSlopeXs, leftSlopeYs,
+            rightSlopeXs, rightSlopeYs,
+            peakAngleOffset
+        )
+    }
+
     private fun generateMountains() {
         // Viewport-based generation: generate cells visible on screen + parallax padding.
         val visibleHalf = RenderConstants.getVisibleWorldHalf(width, height)
+
+        // Rebuild cached transform for current dimensions
+        cachedTransform = WorldViewportTransform(width, height)
 
         // Determine index range: mountains are placed at stable world cells
         val indexRange = WorldViewportTransform.indexRangeForWorldRange(
@@ -172,7 +259,8 @@ class MountainLayer(private val context: Context) : SceneLayer {
             val dayColor = Color.rgb(baseGray, baseGray + 5, baseGray + 15)
 
             val shapeSeed = DeterministicLayout.mix(randomSeed, section = 101, index = index)
-            newMountains.add(MountainData(worldX, h, w, dayColor, depthFactor, shapeSeed))
+            val shape = precomputeShape(shapeSeed, mountainRoughness, ridgeRoughness)
+            newMountains.add(MountainData(worldX, h, w, dayColor, depthFactor, shapeSeed, shape))
         }
 
         // Sort: Far mountains first (drawn behind)
@@ -191,6 +279,9 @@ class MountainLayer(private val context: Context) : SceneLayer {
 
         if (!sizeChanged) return
 
+        // Rebuild cached transform for current dimensions
+        cachedTransform = WorldViewportTransform(w, h)
+
         // Invalidate cached gradients that embed old height coordinates
         cachedLeftGradients.clear()
         cachedRightGradients.clear()
@@ -201,10 +292,10 @@ class MountainLayer(private val context: Context) : SceneLayer {
         cachedHazeHeight = 0f
 
         val firstGenerate = lastGeneratedWidth <= 0f || lastGeneratedHeight <= 0f
-        // Regenerate when size changes (viewport-based generation depends on both width and height)
+        // Only regenerate when WIDTH changes — height changes are handled by
+        // the viewport transform (zoom effect) without needing new objects.
         val widthChangedSignificantly = kotlin.math.abs(lastGeneratedWidth - w) > 1f
-        val heightChangedSignificantly = kotlin.math.abs(lastGeneratedHeight - h) > 1f
-        if (firstGenerate || widthChangedSignificantly || heightChangedSignificantly) {
+        if (firstGenerate || widthChangedSignificantly) {
             generateMountains()
             lastGeneratedWidth = w
             lastGeneratedHeight = h
@@ -246,7 +337,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
         }
         
         // Build transform for world-to-screen projection with height-based zoom
-        val transform = WorldViewportTransform(width, height, RenderConstants.getHeightScale(height, width))
+        val transform = cachedTransform
 
         for ((mountainIdx, mountain) in currentMountains.withIndex()) {
             val peakCenterX = transform.worldToScreenX(mountain.worldX)
@@ -318,106 +409,60 @@ class MountainLayer(private val context: Context) : SceneLayer {
         pathRight.reset()
         
         // Convert world-space coordinate to screen pixels via canonical transform
-        // Parallax depth is handled by canvas.translate at draw() call site
         val peakCenterX = transform.worldToScreenX(mountain.worldX)
-        // Apply bottom offset to shift mountains up
         val offsetPx = mountainBottomOffset * height
         val peakY = height * (1f - mountain.height) - offsetPx
         val baseY = height - offsetPx
-        // Scale width based on HEIGHT for consistent proportions across orientations
-        // (Mountains should look the same size relative to screen height in portrait and landscape)
         val halfWidthPx = height * mountain.width * 0.25f
+        val mountainH = baseY - peakY  // total mountain height in pixels
+        val noiseScale = height * 0.015f  // scale normalised noise to pixels
         
-        // Generate jagged shape
-        val random = Random(mountain.shapeSeed)
-        val segments = (10 + mountainRoughness * 20).toInt()
+        // Use pre-computed normalised shape
+        val shape = mountain.shape
+        val segments = shape.leftSlopeXs.size
+
+        // Denormalise ridge points to screen coordinates
+        val ridgeCount = shape.ridgeXs.size
+        val actualPeakX = peakCenterX + shape.peakAngleOffset * halfWidthPx
         
-        // Base noise amplitude scales with screen height for consistent roughness
-        // across different canvas sizes (preview vs full wallpaper)
-        val noiseBase = height * 0.015f * mountainRoughness
-        
-        // Ridge noise for center line (horizontal displacement)
-        val ridgeNoiseBase = height * 0.02f * ridgeRoughness
-        val ridgeSegments = (5 + ridgeRoughness * 10).toInt().coerceAtLeast(2)
-        
-        // Generate ridge points (jagged center line from peak to base)
-        // Also includes random peak angle offset
-        val peakAngleOffset = if (ridgeRoughness > 0) {
-            (random.nextFloat() - 0.5f) * halfWidthPx * 0.3f * ridgeRoughness
-        } else 0f
-        
-        val ridgePoints = ArrayList<Pair<Float, Float>>()
-        ridgePoints.add(Pair(peakCenterX + peakAngleOffset, peakY))
-        
-        for (i in 1 until ridgeSegments) {
-            val progress = i.toFloat() / ridgeSegments
-            val ridgeY = peakY + (baseY - peakY) * progress
-            // Ridge wanders horizontally with decreasing amplitude toward base
-            val ridgeNoise = (random.nextFloat() - 0.5f) * ridgeNoiseBase * (1f - progress * 0.7f)
-            // Interpolate X position from peak offset back toward center
-            val ridgeX = peakCenterX + peakAngleOffset * (1f - progress) + ridgeNoise
-            ridgePoints.add(Pair(ridgeX, ridgeY))
-        }
-        ridgePoints.add(Pair(peakCenterX, baseY))  // End at center base
-        
-        // Left side - connect from ridge to left edge
-        // Use slight overlap (1px) past ridge to prevent anti-aliasing gaps
+        // Build left path from pre-computed shape
         val overlapPx = 1f
-        // Get actual peak X position (which may be offset from center)
-        val actualPeakX = ridgePoints[0].first
-        pathLeft.moveTo(actualPeakX + overlapPx, ridgePoints[0].second)
+        pathLeft.moveTo(actualPeakX + overlapPx, peakY + shape.ridgeYs[0] * mountainH)
         
-        // Store slope points for snow cap reuse
-        val leftSlopePoints = ArrayList<Pair<Float, Float>>()
-        val rightSlopePoints = ArrayList<Pair<Float, Float>>()
-        
-        // Draw left slope segments - slopes radiate from the actual peak position
-        // This ensures mountain looks centered even when peak is offset
+        // Left slope
         for (i in 0 until segments) {
-            val progress = (i + 1).toFloat() / segments
-            val targetX = actualPeakX - halfWidthPx * progress
-            val targetY = peakY + (baseY - peakY) * progress
-            val noise = (random.nextFloat() - 0.5f) * noiseBase
-            val pointY = targetY + noise
-            leftSlopePoints.add(Pair(targetX, pointY))
-            pathLeft.lineTo(targetX, pointY)
+            val sx = actualPeakX + shape.leftSlopeXs[i] * halfWidthPx
+            val sy = peakY + shape.leftSlopeYs[i] * mountainH + shape.leftSlopeYs[i] * noiseScale
+            pathLeft.lineTo(sx, sy)
         }
         pathLeft.lineTo(actualPeakX - halfWidthPx, baseY)
-        
-        // Extend to bottom to prevent floating mountains when offset is applied
         pathLeft.lineTo(actualPeakX - halfWidthPx, height)
         pathLeft.lineTo(peakCenterX + overlapPx, height)
         pathLeft.lineTo(peakCenterX + overlapPx, baseY)
         
-        // Close back along ridge (in reverse) - with overlap into right side
-        for (i in ridgePoints.size - 1 downTo 0) {
-            pathLeft.lineTo(ridgePoints[i].first + overlapPx, ridgePoints[i].second)
+        // Close back along ridge (in reverse)
+        for (i in ridgeCount - 1 downTo 0) {
+            val rx = peakCenterX + shape.ridgeXs[i] * halfWidthPx + overlapPx
+            val ry = peakY + shape.ridgeYs[i] * mountainH
+            pathLeft.lineTo(rx, ry)
         }
         pathLeft.close()
         
-        // Right side (shadow side) - connect from ridge to right edge
-        pathRight.moveTo(actualPeakX, ridgePoints[0].second)
-        
-        // Draw right slope segments - also from actual peak position
+        // Build right path
+        pathRight.moveTo(actualPeakX, peakY + shape.ridgeYs[0] * mountainH)
         for (i in 0 until segments) {
-            val progress = (i + 1).toFloat() / segments
-            val targetX = actualPeakX + halfWidthPx * progress
-            val targetY = peakY + (baseY - peakY) * progress
-            val noise = (random.nextFloat() - 0.5f) * noiseBase
-            val pointY = targetY + noise
-            rightSlopePoints.add(Pair(targetX, pointY))
-            pathRight.lineTo(targetX, pointY)
+            val sx = actualPeakX + shape.rightSlopeXs[i] * halfWidthPx
+            val sy = peakY + shape.rightSlopeYs[i] * mountainH + shape.rightSlopeYs[i] * noiseScale
+            pathRight.lineTo(sx, sy)
         }
         pathRight.lineTo(actualPeakX + halfWidthPx, baseY)
-        
-        // Extend to bottom to prevent floating mountains when offset is applied
         pathRight.lineTo(actualPeakX + halfWidthPx, height)
         pathRight.lineTo(peakCenterX, height)
         pathRight.lineTo(peakCenterX, baseY)
-        
-        // Close back along ridge (in reverse)
-        for (i in ridgePoints.size - 1 downTo 0) {
-            pathRight.lineTo(ridgePoints[i].first, ridgePoints[i].second)
+        for (i in ridgeCount - 1 downTo 0) {
+            val rx = peakCenterX + shape.ridgeXs[i] * halfWidthPx
+            val ry = peakY + shape.ridgeYs[i] * mountainH
+            pathRight.lineTo(rx, ry)
         }
         pathRight.close()
         
@@ -531,53 +576,52 @@ class MountainLayer(private val context: Context) : SceneLayer {
         // Draw snow cap if winter and snow enabled
         val season = getCurrentTerrainSeason()
         if (winterSnowEnabled && season == "winter") {
-            // Snow coverage determines how far down the snow extends (as fraction of mountain height)
             val snowDepth = (winterSnowCoverage / 100f).coerceIn(0.15f, 0.5f)
+            val snowSegmentCount = (segments * snowDepth).toInt().coerceIn(1, segments)
             
-            // How many slope segments are covered by snow
-            val snowSegmentCount = (segments * snowDepth).toInt().coerceIn(1, leftSlopePoints.size)
-            
-            // Build snow cap shape using exact mountain slope points (prevents edge gaps)
             snowCapPath.reset()
-            
-            // Start at peak (with slight inset to ensure overlap)
             val peakInset = 2f
-            snowCapPath.moveTo(ridgePoints[0].first, ridgePoints[0].second + peakInset)
+            snowCapPath.moveTo(
+                peakCenterX + shape.ridgeXs[0] * halfWidthPx,
+                peakY + shape.ridgeYs[0] * mountainH + peakInset
+            )
             
-            // Left side of snow - follow the exact mountain slope points
+            // Left side of snow
             for (i in 0 until snowSegmentCount) {
-                val point = leftSlopePoints[i]
-                snowCapPath.lineTo(point.first, point.second)
+                val sx = actualPeakX + shape.leftSlopeXs[i] * halfWidthPx
+                val sy = peakY + shape.leftSlopeYs[i] * mountainH + shape.leftSlopeYs[i] * noiseScale
+                snowCapPath.lineTo(sx, sy)
             }
             
-            // Bottom edge - jagged snow line with some randomness
+            // Bottom edge - jagged snow line
             val snowRandom = Random(mountain.shapeSeed + 2000)
-            val lastLeftPoint = leftSlopePoints[snowSegmentCount - 1]
-            val lastRightPoint = rightSlopePoints[snowSegmentCount - 1]
+            val lastLeftX = actualPeakX + shape.leftSlopeXs[snowSegmentCount - 1] * halfWidthPx
+            val lastLeftY = peakY + shape.leftSlopeYs[snowSegmentCount - 1] * mountainH + shape.leftSlopeYs[snowSegmentCount - 1] * noiseScale
+            val lastRightX = actualPeakX + shape.rightSlopeXs[snowSegmentCount - 1] * halfWidthPx
+            val lastRightY = peakY + shape.rightSlopeYs[snowSegmentCount - 1] * mountainH + shape.rightSlopeYs[snowSegmentCount - 1] * noiseScale
             
-            // Add a few jagged points along the bottom snow line
             val jaggedSteps = 5
             for (j in 0..jaggedSteps) {
                 val t = j.toFloat() / jaggedSteps
-                val x = lastLeftPoint.first + (lastRightPoint.first - lastLeftPoint.first) * t
-                val snowBaseY = lastLeftPoint.second + (lastRightPoint.second - lastLeftPoint.second) * t
-                // Add downward jaggedness (snow drips down)
+                val x = lastLeftX + (lastRightX - lastLeftX) * t
+                val snowBaseY = lastLeftY + (lastRightY - lastLeftY) * t
                 val jag = snowRandom.nextFloat() * height * 0.015f
                 snowCapPath.lineTo(x, snowBaseY + jag)
             }
             
-            // Right side of snow - follow the exact mountain slope points in reverse
+            // Right side of snow in reverse
             for (i in snowSegmentCount - 1 downTo 0) {
-                val point = rightSlopePoints[i]
-                snowCapPath.lineTo(point.first, point.second)
+                val sx = actualPeakX + shape.rightSlopeXs[i] * halfWidthPx
+                val sy = peakY + shape.rightSlopeYs[i] * mountainH + shape.rightSlopeYs[i] * noiseScale
+                snowCapPath.lineTo(sx, sy)
             }
             
             snowCapPath.close()
             
             // Gradient: pure white at peak, fading to semi-transparent white at bottom
             // This blends naturally with the mountain color underneath
-            val snowTopY = ridgePoints[0].second
-            val snowBottomY = lastLeftPoint.second + height * 0.01f
+            val snowTopY = peakY + shape.ridgeYs[0] * mountainH
+            val snowBottomY = lastLeftY + height * 0.01f
             val snowGradient = cachedSnowGradients.getOrPut(mountainIdx) {
                 LinearGradient(
                     actualPeakX, snowTopY,

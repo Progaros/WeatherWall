@@ -4,68 +4,102 @@ import kotlin.math.ceil
 import kotlin.math.floor
 
 /**
- * Central world-to-screen coordinate transform.
+ * Central world-to-screen coordinate transform backed by [Viewport].
  *
  * The canonical horizontal coordinate is **worldX** (world-space units):
- * - `worldX = 0` is the scene center.
+ * - `worldX = 0` is the scene center (when [centerWorldX] is 0).
  * - Negative values are left of center, positive values right.
  *
- * Screen projection at draw time:
+ * Screen projection:
  * ```
- * screenX = screenWidth / 2 + worldX * heightScale
+ * screenX = (worldX - worldRect.left) / worldRect.width * screenWidth
  * ```
  *
- * [heightScale] controls the zoom level (pixels per world unit): taller
- * screens spread objects farther from center; shorter screens compress them.
+ * The [Viewport] computes a world rectangle from [worldHeight] (the zoom
+ * control) and screen aspect ratio:
+ * - `worldWidth = worldHeight * aspect`
+ * - Smaller [worldHeight] → smaller [worldWidth] → camera zoom-in
+ * - Objects at fixed worldX project to different screenX when zoom changes
  *
- * Parallax is handled exclusively via canvas.translate() at the call site,
- * which shifts the effective camera center per depth layer. This preserves
- * intra-layer spacing: two objects in the same layer always have screen
- * distance = (worldX2 - worldX1) * heightScale, regardless of depth.
+ * Parallax is handled exclusively via canvas.translate() at the call site.
+ *
+ * @param screenWidth  Screen width in pixels.
+ * @param screenHeight Screen height in pixels.
+ * @param worldHeight  Visible world height (zoom control). Defaults to
+ *                     [RenderConstants.REFERENCE_HEIGHT].
+ * @param centerWorldX Camera center in world-space X (default 0).
  */
 data class WorldViewportTransform(
     val screenWidth: Float,
     val screenHeight: Float,
-    val heightScale: Float
+    val worldHeight: Float = RenderConstants.REFERENCE_HEIGHT,
+    val centerWorldX: Float = 0f
 ) {
-    /** Screen-space center (pixels). */
+    /** The underlying viewport that defines the visible world rectangle. */
+    val viewport: Viewport = Viewport(
+        screenWidthPx = screenWidth.toInt().coerceAtLeast(1),
+        screenHeightPx = screenHeight.toInt().coerceAtLeast(1),
+        centerWorldX = centerWorldX,
+        worldHeight = worldHeight
+    )
+
+    /** Mapper that projects world coordinates to screen pixels. */
+    private val mapper: WorldToScreenMapper = WorldToScreenMapper(viewport)
+
+    /** Pixels per world unit (uniform for X and Y). */
+    val heightScale: Float get() = viewport.pixelsPerUnit
+
+    /** Screen-space center (pixels). Retained for call-site compatibility. */
     val centerX: Float get() = screenWidth / 2f
+
+    /** Visible world width derived from worldHeight and screen aspect. */
+    val worldWidth: Float get() = viewport.worldWidth
 
     /**
      * Convert a world-space x coordinate to screen pixels.
      *
-     * Parallax depth is NOT applied here — it is handled by
-     * canvas.translate() at the call site (camera-center model).
+     * Maps through the viewport world-rect:
+     * `screenX = (worldX - rect.left) / rect.width * screenWidth`
      *
-     * @param worldX Position in world-space (0 = center).
+     * Parallax depth is NOT applied here — it is handled by
+     * canvas.translate() at the call site.
      */
-    fun worldToScreenX(worldX: Float): Float {
-        return centerX + worldX * heightScale
-    }
+    fun worldToScreenX(worldX: Float): Float = mapper.x(worldX)
 
     /**
      * Convert a screen-pixel x coordinate back to world-space.
-     *
-     * Inverse of [worldToScreenX]:
-     * `worldX = (screenX - centerX) / heightScale`
      */
-    fun screenToWorldX(screenX: Float): Float {
-        return (screenX - centerX) / heightScale
-    }
+    fun screenToWorldX(screenX: Float): Float = mapper.worldX(screenX)
 
     /**
      * Return the visible world-x range for the current viewport.
      *
-     * Objects whose worldX falls inside this range (plus padding) are
-     * potentially visible on screen.
+     * Based on the viewport's world rectangle — shrinks when
+     * [worldHeight] decreases (zoom-in).
      *
      * @param paddingWorld Extra world-space padding on each side.
      */
     fun visibleWorldRangeX(
         paddingWorld: Float = 0f
     ): ClosedFloatingPointRange<Float> {
-        val half = screenWidth / (2f * heightScale.coerceAtLeast(0.001f))
-        return (-half - paddingWorld)..(half + paddingWorld)
+        val rect = viewport.worldRect
+        return (rect.left - paddingWorld)..(rect.right + paddingWorld)
+    }
+
+    /**
+     * Return the visible world range expanded by [paddingWorld] on each side,
+     * suitable for generation or culling decisions.
+     */
+    fun visibleWorldRange(paddingWorld: Float = 0f): ClosedFloatingPointRange<Float> =
+        visibleWorldRangeX(paddingWorld)
+
+    /**
+     * Return the cell index range that overlaps the visible world range
+     * (plus [paddingWorld] on each side).
+     */
+    fun visibleCellRange(cellSize: Float, paddingWorld: Float = 0f): IntRange {
+        val range = visibleWorldRangeX(paddingWorld)
+        return indexRangeForWorldRange(range.start, range.endInclusive, cellSize)
     }
 
     companion object {

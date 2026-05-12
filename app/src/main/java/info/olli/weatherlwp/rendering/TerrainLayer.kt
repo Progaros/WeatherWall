@@ -120,6 +120,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     
     // Thread-safe terrain data using volatile references + immutable lists
     @Volatile private var hills: List<HillData> = emptyList()
+
+    // Cached transform: rebuilt on resize, reused every frame
+    private var cachedTransform = WorldViewportTransform(1f, 1f)
     
     // Settings
     private var hillCount = 5
@@ -453,9 +456,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
      */
     @Deprecated("Use getHillYAtWorldX(worldX, depthFactor) instead")
     fun getHillYAtPosition(xRatio: Float, depthFactor: Float): Float {
-        val transform = WorldViewportTransform(width, height, RenderConstants.getHeightScale(height, width))
+        val transform = cachedTransform
         val screenX = xRatio * width
-        val worldX = (screenX - transform.centerX) / transform.heightScale
+        val worldX = transform.screenToWorldX(screenX)
         return getHillYAtWorldX(worldX, depthFactor)
     }
     
@@ -490,9 +493,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
      */
     @Deprecated("Use getHillInfoAtWorldX(worldX, requestedDepthFactor) instead")
     fun getHillInfoAtPosition(xRatio: Float, requestedDepthFactor: Float): Pair<Float, Float> {
-        val transform = WorldViewportTransform(width, height, RenderConstants.getHeightScale(height, width))
+        val transform = cachedTransform
         val screenX = xRatio * width
-        val worldX = (screenX - transform.centerX) / transform.heightScale
+        val worldX = transform.screenToWorldX(screenX)
         return getHillInfoAtWorldX(worldX, requestedDepthFactor)
     }
 
@@ -513,6 +516,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
 
         if (!sizeChanged) return
 
+        // Rebuild cached transform for current dimensions
+        cachedTransform = WorldViewportTransform(w, h)
+
         // Any geometry change invalidates cached gradients that embed old coordinates.
         cachedHillGradients.clear()
         cachedHillGradientAmbientBucket = -1
@@ -523,11 +529,11 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         bushRenderer.updateDimensions(w, h)
 
         val firstGenerate = lastGeneratedWidth <= 0f || lastGeneratedHeight <= 0f
-        // Regenerate when size changes (viewport-based generation depends on both width and height)
+        // Only regenerate when WIDTH changes — height changes are handled by
+        // the viewport transform (zoom effect) without needing new objects.
         val widthChangedSignificantly = kotlin.math.abs(lastGeneratedWidth - w) > 1f
-        val heightChangedSignificantly = kotlin.math.abs(lastGeneratedHeight - h) > 1f
 
-        if (firstGenerate || widthChangedSignificantly || heightChangedSignificantly) {
+        if (firstGenerate || widthChangedSignificantly) {
             generateTerrain()
             lastGeneratedWidth = w
             lastGeneratedHeight = h
@@ -821,9 +827,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private fun drawHill(canvas: Canvas, hillIndex: Int, hill: HillData, hillColor: Int) {
         hillPath.reset()
         
-        // Evaluate hill noise at screen pixel positions.
-        // Hills span beyond visible area for parallax movement.
-        val transform = WorldViewportTransform(width, height, RenderConstants.getHeightScale(height, width))
+        // Use cached transform (rebuilt on resize only)
+        val transform = cachedTransform
         val parallaxMargin = height * 0.3f
         val padding = height * 0.45f + width * 0.1f  // parallax + edge padding
         val startX = -padding
@@ -924,7 +929,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     }
     
     private fun drawSeasonalDecorations(canvas: Canvas, hillIndex: Int, hill: HillData, ambientColor: Int) {
-        val transform = WorldViewportTransform(width, height, RenderConstants.getHeightScale(height, width))
+        val transform = cachedTransform
         
         // Note: Snow is now integrated into the hill gradient (drawHill),
         // so we no longer draw floating snow patches here.
@@ -1039,8 +1044,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                     for (i in 0 until frostSteps) {
                         val x1 = frostStartX + i * frostStepX
                         val x2 = x1 + frostStepX
-                        val worldX1 = (x1 - transform.centerX) / transform.heightScale
-                        val worldX2 = (x2 - transform.centerX) / transform.heightScale
+                        val worldX1 = transform.screenToWorldX(x1)
+                        val worldX2 = transform.screenToWorldX(x2)
                         val y1 = getHillY(worldX1, hill) * height
                         val y2 = getHillY(worldX2, hill) * height
                         canvas.drawLine(x1, y1, x2, y2, frostPaint)

@@ -63,26 +63,34 @@ object RenderConstants {
     val REFERENCE_EXTENDED_WIDTH = REFERENCE_HEIGHT * REFERENCE_ASPECT_RATIO * (1f + 2f * EXTENDED_SIDE_MARGIN_RATIO)
 
     /**
-     * Half-width of the visible world in world-space units.
+     * Half-width of the visible world in world-space units for generation.
      *
      * Used for viewport-based generation: only cells within this range
      * around center need to be generated. Includes generous parallax padding
      * so content is available even at maximum tilt/scroll offset.
      *
-     * With the viewport model: heightScale = screenHeight / REFERENCE_HEIGHT,
-     * so visibleHalf = screenWidth / (2 * heightScale). In landscape mode this
-     * is wider because heightScale is smaller, correctly filling the screen.
+     * IMPORTANT: This uses the REFERENCE heightScale (1.0) for computing
+     * the generation range, making it independent of actual screen height.
+     * This ensures the same set of objects is generated regardless of
+     * viewport height — the viewport transform handles zoom by projecting
+     * objects to different screen positions, not by generating different
+     * objects for different heights.
+     *
+     * Width differences are handled: wider screens (larger screenWidth)
+     * produce a larger generation range to fill the extra horizontal space.
      *
      * @param screenWidth The actual visible screen width
-     * @param screenHeight The actual visible screen height (used for zoom)
+     * @param screenHeight Ignored — generation range is height-independent.
      * @return World-space half-width that covers viewport + parallax padding
      */
-    fun getVisibleWorldHalf(screenWidth: Float, screenHeight: Float = REFERENCE_HEIGHT): Float {
-        val heightScale = getHeightScale(screenHeight)
-        // Visible half in world-space, accounting for zoom
-        val visibleHalf = screenWidth / (2f * heightScale)
+    fun getVisibleWorldHalf(screenWidth: Float, @Suppress("UNUSED_PARAMETER") screenHeight: Float = REFERENCE_HEIGHT): Float {
+        // Use reference heightScale (1.0) so generation range doesn't expand
+        // when height shrinks. This is the key fix: objects stay at fixed
+        // worldX positions and the viewport transform moves them on screen.
+        val referenceScale = 1f
+        val visibleHalf = screenWidth / (2f * referenceScale)
         // Parallax padding: covers maximum parallax shift in world units
-        val parallaxPad = REFERENCE_HEIGHT * 0.45f / heightScale
+        val parallaxPad = REFERENCE_HEIGHT * 0.45f
         return visibleHalf + parallaxPad
     }
 

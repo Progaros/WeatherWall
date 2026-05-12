@@ -175,10 +175,10 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     override fun resize(w: Float, h: Float) {
         width = w
         height = h
-        // Calculate extended width for parallax content
-        extendedWidth = RenderConstants.getExtendedWidth(w, h)
-        extendedOffset = RenderConstants.getExtendedOffset(w, extendedWidth)
-        viewportRatio = if (extendedWidth > 0f) (w / extendedWidth).coerceIn(0.1f, 1.0f) else 1.0f
+        // extendedWidth/extendedOffset retained for legacy RandomEvent API compatibility
+        extendedWidth = w
+        extendedOffset = 0f
+        viewportRatio = 1.0f
 
         // Clear frame-scoped draw context and pooled entry references on geometry changes.
         // This prevents stale canvas/state/event references from surviving rotations.

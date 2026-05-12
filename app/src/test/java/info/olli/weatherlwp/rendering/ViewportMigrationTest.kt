@@ -51,8 +51,7 @@ class ViewportMigrationTest {
     fun `WorldViewportTransform worldToScreenX matches Viewport mapper`() {
         val w = 1080f
         val h = 1920f
-        val heightScale = RenderConstants.getHeightScale(h, w)
-        val transform = WorldViewportTransform(w, h, heightScale)
+        val transform = WorldViewportTransform(w, h)
         val vp = Viewport(w.toInt(), h.toInt(), worldHeight = RenderConstants.REFERENCE_HEIGHT)
         val mapper = WorldToScreenMapper(vp)
 
@@ -67,8 +66,7 @@ class ViewportMigrationTest {
     fun `WorldViewportTransform worldToScreenX matches for landscape`() {
         val w = 1920f
         val h = 1080f
-        val heightScale = RenderConstants.getHeightScale(h, w)
-        val transform = WorldViewportTransform(w, h, heightScale)
+        val transform = WorldViewportTransform(w, h)
         val vp = Viewport(w.toInt(), h.toInt(), worldHeight = RenderConstants.REFERENCE_HEIGHT)
         val mapper = WorldToScreenMapper(vp)
 
@@ -142,25 +140,24 @@ class ViewportMigrationTest {
     // ===================== Landscape short-height viewport =====================
 
     @Test
-    fun `landscape short height generates wider visible range`() {
-        // 1920x1080 landscape: heightScale = 1080/1920 = 0.5625
-        // visibleHalf should be significantly wider than portrait
+    fun `landscape wider screen generates wider visible range`() {
+        // 1920-wide landscape should have wider generation range than 1080-wide portrait
         val portraitHalf = RenderConstants.getVisibleWorldHalf(1080f, 1920f)
         val landscapeHalf = RenderConstants.getVisibleWorldHalf(1920f, 1080f)
 
-        assertTrue("landscape must see wider world",
-            landscapeHalf > portraitHalf * 1.5f)
+        assertTrue("landscape (wider screen) must generate wider range",
+            landscapeHalf > portraitHalf)
     }
 
     @Test
-    fun `small height zoom-in still works`() {
-        // Small height (e.g. preview widget) should zoom in proportionally
+    fun `generation range is height-independent`() {
+        // Same screen width at different heights → same generation range
+        // This is the key fix: generation doesn't expand when height shrinks
         val normalHalf = RenderConstants.getVisibleWorldHalf(1080f, 1920f)
         val smallHalf = RenderConstants.getVisibleWorldHalf(1080f, 960f)
 
-        // Smaller height = zoomed out = wider visible range
-        assertTrue("smaller height should show wider world range",
-            smallHalf > normalHalf)
+        assertEquals("same width at different heights should produce same generation range",
+            normalHalf, smallHalf, 0.01f)
     }
 
     // ===================== heightScale / positionScale audit =====================
@@ -181,11 +178,9 @@ class ViewportMigrationTest {
 
     @Test
     fun `visible world half does not extend unreasonably far`() {
-        // For 1080x1920 portrait at reference height, visibleHalf should be bounded
         val half = RenderConstants.getVisibleWorldHalf(1080f, 1920f)
-        // Should be larger than half screen width in world units
-        val heightScale = RenderConstants.getHeightScale(1920f)
-        val screenHalfWorld = 1080f / (2f * heightScale)
+        // Should be larger than half screen width (generation covers viewport + padding)
+        val screenHalfWorld = 1080f / 2f
         assertTrue("visibleHalf should exceed screen half-width",
             half > screenHalfWorld)
         // But should not be absurdly large (< 10x screen width in world units)
@@ -200,8 +195,7 @@ class ViewportMigrationTest {
         val range = WorldViewportTransform.indexRangeForWorldRange(-half, half, cellSize)
 
         // Range should include cells beyond screen edges for parallax
-        val heightScale = RenderConstants.getHeightScale(1920f)
-        val screenEdgeWorld = 1080f / (2f * heightScale)
+        val screenEdgeWorld = 1080f / 2f
         val edgeCell = (screenEdgeWorld / cellSize).toInt()
         assertTrue("range should extend past screen edge cell",
             range.last > edgeCell)
@@ -244,17 +238,13 @@ class ViewportMigrationTest {
 
     @Test
     fun `xRatio adapter and world-space API are equivalent`() {
-        // Verify that the legacy xRatio→worldX adapter produces the same
-        // result as calling the world-space method directly.
         val w = 1080f
         val h = 1920f
-        val heightScale = RenderConstants.getHeightScale(h, w)
-        val t = WorldViewportTransform(w, h, heightScale)
+        val t = WorldViewportTransform(w, h)
 
-        // Sample several xRatio values and verify the round-trip
         for (xRatio in listOf(0f, 0.25f, 0.5f, 0.75f, 1.0f)) {
             val screenX = xRatio * w
-            val worldX = (screenX - t.centerX) / t.heightScale
+            val worldX = t.screenToWorldX(screenX)
 
             // The world-space coordinate derived from xRatio should give
             // the same screen position when projected back

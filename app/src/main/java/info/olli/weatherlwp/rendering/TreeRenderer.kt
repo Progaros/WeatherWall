@@ -136,7 +136,7 @@ class TreeRenderer {
     private var height = 0f
 
     /** Cached world-to-screen transform, rebuilt on dimension change. */
-    private var cachedTransform = WorldViewportTransform(0f, 0f, 1f)
+    private var cachedTransform = WorldViewportTransform(1f, 1f)
 
     /**
      * Update render-time dimensions without regenerating tree positions.
@@ -145,7 +145,7 @@ class TreeRenderer {
     fun updateDimensions(screenWidth: Float, height: Float) {
         this.screenWidth = screenWidth
         this.height = height
-        cachedTransform = WorldViewportTransform(screenWidth, height, RenderConstants.getHeightScale(height, screenWidth))
+        cachedTransform = WorldViewportTransform(screenWidth, height)
     }
 
     // ---- Season state (set by TerrainLayer before each draw frame) ----

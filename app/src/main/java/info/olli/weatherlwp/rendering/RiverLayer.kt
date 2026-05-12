@@ -99,6 +99,9 @@ class RiverLayer(private val context: Context) : SceneLayer {
     private var extendedWidth = 0f
     private var extendedOffset = 0f
 
+    // Cached transform: rebuilt on resize only
+    private var cachedTransform = WorldViewportTransform(1f, 1f)
+
     // Settings
     private var enabled = PreferenceDefaults.RIVER_ENABLED
     private var style = RiverStyle.WAVY
@@ -122,8 +125,9 @@ class RiverLayer(private val context: Context) : SceneLayer {
     override fun resize(w: Float, h: Float) {
         width = w
         height = h
-        extendedWidth = RenderConstants.getExtendedWidth(w, h)
-        extendedOffset = RenderConstants.getExtendedOffset(w, extendedWidth)
+        extendedWidth = w
+        extendedOffset = 0f
+        cachedTransform = WorldViewportTransform(w, h)
     }
 
     override fun update(state: SimulationState, deltaTimeMs: Long) {
@@ -163,7 +167,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
 
         // Build transform for world-space sampling
         val transform = if (worldProvider != null)
-            WorldViewportTransform(width, height, RenderConstants.getHeightScale(height, width))
+            cachedTransform
         else null
 
         // Draw water at each hill depth layer (back to front)
@@ -266,7 +270,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
         if (worldProvider == null && legacyProvider == null) return
 
         val transform = if (worldProvider != null)
-            WorldViewportTransform(width, height, RenderConstants.getHeightScale(height, width))
+            cachedTransform
         else null
 
         val isFrozen = WaterColorUtil.isFrozen(state, waterPalette.frozenThreshold)

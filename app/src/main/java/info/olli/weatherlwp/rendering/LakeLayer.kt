@@ -76,6 +76,9 @@ class LakeLayer(private val context: Context) : SceneLayer {
     private var extendedWidth = 0f
     private var extendedOffset = 0f
 
+    // Cached transform: rebuilt on resize only
+    private var cachedTransform = WorldViewportTransform(1f, 1f)
+
     // Settings
     private var enabled = PreferenceDefaults.LAKE_ENABLED
     private var positionPercent = PreferenceDefaults.LAKE_POSITION / 100f
@@ -99,8 +102,9 @@ class LakeLayer(private val context: Context) : SceneLayer {
     override fun resize(w: Float, h: Float) {
         width = w
         height = h
-        extendedWidth = RenderConstants.getExtendedWidth(w, h)
-        extendedOffset = RenderConstants.getExtendedOffset(w, extendedWidth)
+        extendedWidth = w
+        extendedOffset = 0f
+        cachedTransform = WorldViewportTransform(w, h)
     }
 
     override fun update(state: SimulationState, deltaTimeMs: Long) {
@@ -152,7 +156,7 @@ class LakeLayer(private val context: Context) : SceneLayer {
         if (worldProvider == null && legacyProvider == null) return
 
         val transform = if (worldProvider != null)
-            WorldViewportTransform(width, height, RenderConstants.getHeightScale(height, width))
+            cachedTransform
         else null
 
         val px = parallaxCalculator.getOffsetXForDepth(depthFactor)
@@ -161,9 +165,12 @@ class LakeLayer(private val context: Context) : SceneLayer {
         canvas.save()
         canvas.translate(px, py)
 
-        // Calculate lake bounds in screen coordinates
+        // Calculate lake bounds in screen coordinates using viewport transform
         val lakeWidthPx = width * sizePercent * 1.2f  // slightly wider for natural feel
-        val lakeCenterX = -extendedOffset + extendedWidth * positionPercent
+        // Map position percent to world-space X: 0.0 = left edge, 0.5 = center, 1.0 = right edge
+        val lakeTransform = transform ?: cachedTransform
+        val lakeWorldX = (positionPercent - 0.5f) * lakeTransform.worldWidth
+        val lakeCenterX = lakeTransform.worldToScreenX(lakeWorldX)
         val lakeLeft = lakeCenterX - lakeWidthPx / 2f
         val lakeRight = lakeCenterX + lakeWidthPx / 2f
 
@@ -176,7 +183,8 @@ class LakeLayer(private val context: Context) : SceneLayer {
             val terrainY = if (worldProvider != null && transform != null) {
                 worldProvider(transform.screenToWorldX(screenX), depthFactor) * height
             } else {
-                val xRatio = ((screenX + extendedOffset) / extendedWidth).coerceIn(0f, 1f)
+                // Legacy fallback: convert screen X to xRatio via viewport
+                val xRatio = (screenX / width).coerceIn(0f, 1f)
                 legacyProvider!!.invoke(xRatio, depthFactor) * height
             }
             terrainYsArray[i] = terrainY

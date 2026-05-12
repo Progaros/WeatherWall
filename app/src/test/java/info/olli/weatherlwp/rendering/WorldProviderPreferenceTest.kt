@@ -45,7 +45,7 @@ class WorldProviderPreferenceTest {
     }
 
     private fun transform(): WorldViewportTransform =
-        WorldViewportTransform(1080f, 1920f, RenderConstants.getHeightScale(1920f))
+        WorldViewportTransform(1080f, 1920f)
 
     // ---------- provider preference ----------
 
