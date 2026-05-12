@@ -150,14 +150,14 @@ class ViewportMigrationTest {
     }
 
     @Test
-    fun `generation range is height-independent`() {
-        // Same screen width at different heights → same generation range
-        // This is the key fix: generation doesn't expand when height shrinks
-        val normalHalf = RenderConstants.getVisibleWorldHalf(1080f, 1920f)
-        val smallHalf = RenderConstants.getVisibleWorldHalf(1080f, 960f)
+    fun `generation range is aspect-ratio-aware`() {
+        // Same screen width at different heights → different aspect ratios → different ranges
+        // Shorter height = wider aspect = more world visible horizontally
+        val tallHalf = RenderConstants.getVisibleWorldHalf(1080f, 1920f)
+        val shortHalf = RenderConstants.getVisibleWorldHalf(1080f, 960f)
 
-        assertEquals("same width at different heights should produce same generation range",
-            normalHalf, smallHalf, 0.01f)
+        assertTrue("shorter screen (wider aspect) must produce wider generation range",
+            shortHalf > tallHalf)
     }
 
     // ===================== heightScale / positionScale audit =====================

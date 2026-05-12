@@ -75,14 +75,20 @@ class MountainLayer(private val context: Context) : SceneLayer {
     /**
      * Pre-computed mountain shape: ridge + slope points cached at generation time.
      * Avoids per-frame Random + ArrayList + Pair allocations (~800 objects/frame saved).
+     *
+     * Slope arrays are split into **progress** (monotonic 0→1 from peak to base) and
+     * **noise** (small random displacement). At draw time, progress is scaled by
+     * `mountainH` and noise by `noiseScale`, matching the original per-frame code.
      */
     private class MountainShape(
         val ridgeXs: FloatArray,
         val ridgeYs: FloatArray,
         val leftSlopeXs: FloatArray,
-        val leftSlopeYs: FloatArray,
+        val leftSlopeYs: FloatArray,       // progress only (0→1)
+        val leftSlopeNoiseYs: FloatArray,  // noise only (small random displacement)
         val rightSlopeXs: FloatArray,
-        val rightSlopeYs: FloatArray,
+        val rightSlopeYs: FloatArray,      // progress only
+        val rightSlopeNoiseYs: FloatArray, // noise only
         val peakAngleOffset: Float
     )
 
@@ -180,29 +186,33 @@ class MountainLayer(private val context: Context) : SceneLayer {
         ridgeYs[ridgeSegments] = 1f // base
 
         // Left slope points (normalised: x as fraction of -halfWidth)
+        // Progress and noise are stored SEPARATELY so that at draw time
+        // progress scales by mountainH and noise scales by noiseScale.
         val leftSlopeXs = FloatArray(segments)
         val leftSlopeYs = FloatArray(segments)
+        val leftSlopeNoiseYs = FloatArray(segments)
         for (i in 0 until segments) {
             val progress = (i + 1).toFloat() / segments
             leftSlopeXs[i] = -(progress) // fraction of halfWidth, left side
-            val noiseNorm = (random.nextFloat() - 0.5f) * roughness // normalised noise
-            leftSlopeYs[i] = progress + noiseNorm
+            leftSlopeYs[i] = progress     // monotonic slope from peak to base
+            leftSlopeNoiseYs[i] = (random.nextFloat() - 0.5f) * roughness // noise
         }
 
         // Right slope points
         val rightSlopeXs = FloatArray(segments)
         val rightSlopeYs = FloatArray(segments)
+        val rightSlopeNoiseYs = FloatArray(segments)
         for (i in 0 until segments) {
             val progress = (i + 1).toFloat() / segments
             rightSlopeXs[i] = progress
-            val noiseNorm = (random.nextFloat() - 0.5f) * roughness
-            rightSlopeYs[i] = progress + noiseNorm
+            rightSlopeYs[i] = progress
+            rightSlopeNoiseYs[i] = (random.nextFloat() - 0.5f) * roughness
         }
 
         return MountainShape(
             ridgeXs, ridgeYs,
-            leftSlopeXs, leftSlopeYs,
-            rightSlopeXs, rightSlopeYs,
+            leftSlopeXs, leftSlopeYs, leftSlopeNoiseYs,
+            rightSlopeXs, rightSlopeYs, rightSlopeNoiseYs,
             peakAngleOffset
         )
     }
@@ -429,10 +439,10 @@ class MountainLayer(private val context: Context) : SceneLayer {
         val overlapPx = 1f
         pathLeft.moveTo(actualPeakX + overlapPx, peakY + shape.ridgeYs[0] * mountainH)
         
-        // Left slope
+        // Left slope: progress * mountainH for base shape, noise * noiseScale for roughness
         for (i in 0 until segments) {
             val sx = actualPeakX + shape.leftSlopeXs[i] * halfWidthPx
-            val sy = peakY + shape.leftSlopeYs[i] * mountainH + shape.leftSlopeYs[i] * noiseScale
+            val sy = peakY + shape.leftSlopeYs[i] * mountainH + shape.leftSlopeNoiseYs[i] * noiseScale
             pathLeft.lineTo(sx, sy)
         }
         pathLeft.lineTo(actualPeakX - halfWidthPx, baseY)
@@ -452,7 +462,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
         pathRight.moveTo(actualPeakX, peakY + shape.ridgeYs[0] * mountainH)
         for (i in 0 until segments) {
             val sx = actualPeakX + shape.rightSlopeXs[i] * halfWidthPx
-            val sy = peakY + shape.rightSlopeYs[i] * mountainH + shape.rightSlopeYs[i] * noiseScale
+            val sy = peakY + shape.rightSlopeYs[i] * mountainH + shape.rightSlopeNoiseYs[i] * noiseScale
             pathRight.lineTo(sx, sy)
         }
         pathRight.lineTo(actualPeakX + halfWidthPx, baseY)
@@ -589,16 +599,16 @@ class MountainLayer(private val context: Context) : SceneLayer {
             // Left side of snow
             for (i in 0 until snowSegmentCount) {
                 val sx = actualPeakX + shape.leftSlopeXs[i] * halfWidthPx
-                val sy = peakY + shape.leftSlopeYs[i] * mountainH + shape.leftSlopeYs[i] * noiseScale
+                val sy = peakY + shape.leftSlopeYs[i] * mountainH + shape.leftSlopeNoiseYs[i] * noiseScale
                 snowCapPath.lineTo(sx, sy)
             }
             
             // Bottom edge - jagged snow line
             val snowRandom = Random(mountain.shapeSeed + 2000)
             val lastLeftX = actualPeakX + shape.leftSlopeXs[snowSegmentCount - 1] * halfWidthPx
-            val lastLeftY = peakY + shape.leftSlopeYs[snowSegmentCount - 1] * mountainH + shape.leftSlopeYs[snowSegmentCount - 1] * noiseScale
+            val lastLeftY = peakY + shape.leftSlopeYs[snowSegmentCount - 1] * mountainH + shape.leftSlopeNoiseYs[snowSegmentCount - 1] * noiseScale
             val lastRightX = actualPeakX + shape.rightSlopeXs[snowSegmentCount - 1] * halfWidthPx
-            val lastRightY = peakY + shape.rightSlopeYs[snowSegmentCount - 1] * mountainH + shape.rightSlopeYs[snowSegmentCount - 1] * noiseScale
+            val lastRightY = peakY + shape.rightSlopeYs[snowSegmentCount - 1] * mountainH + shape.rightSlopeNoiseYs[snowSegmentCount - 1] * noiseScale
             
             val jaggedSteps = 5
             for (j in 0..jaggedSteps) {
@@ -612,7 +622,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
             // Right side of snow in reverse
             for (i in snowSegmentCount - 1 downTo 0) {
                 val sx = actualPeakX + shape.rightSlopeXs[i] * halfWidthPx
-                val sy = peakY + shape.rightSlopeYs[i] * mountainH + shape.rightSlopeYs[i] * noiseScale
+                val sy = peakY + shape.rightSlopeYs[i] * mountainH + shape.rightSlopeNoiseYs[i] * noiseScale
                 snowCapPath.lineTo(sx, sy)
             }
             

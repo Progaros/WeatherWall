@@ -122,12 +122,12 @@ class PerformanceInvariantsTest {
     @Test
     fun `indexRangeForWorldRange produces bounded count`() {
         val cellSize = MountainLayer.MOUNTAIN_CELL_SIZE  // 110f
-        // Simulate a typical viewport
-        val half = RenderConstants.getVisibleWorldHalf(1080f)
+        // Simulate a typical portrait viewport
+        val half = RenderConstants.getVisibleWorldHalf(1080f, 1920f)
         val range = WorldViewportTransform.indexRangeForWorldRange(-half, half, cellSize)
         val count = range.last - range.first + 1
 
-        // At 1080px wide with 110 cells, expect ~(1080/2 + 864)*2 / 110 ≈ 26 cells
+        // At 1080px wide, portrait, with 110 cells: ~(540 + 864)*2 / 110 ≈ 26 cells
         assertTrue("cell count should be bounded, got $count",
             count in 1..40)
     }
@@ -136,8 +136,8 @@ class PerformanceInvariantsTest {
     fun `generation range is independent of world size`() {
         // Two different screen widths should produce different generation ranges
         // but both should be bounded (not infinite)
-        val half1 = RenderConstants.getVisibleWorldHalf(1080f)
-        val half2 = RenderConstants.getVisibleWorldHalf(2160f)
+        val half1 = RenderConstants.getVisibleWorldHalf(1080f, 1920f)
+        val half2 = RenderConstants.getVisibleWorldHalf(2160f, 1920f)
 
         assertTrue("generation half must be finite and positive", half1 > 0f && half1 < 10000f)
         assertTrue("wider screen produces wider range", half2 > half1)
@@ -175,7 +175,7 @@ class PerformanceInvariantsTest {
 
     @Test
     fun `mountain generation range bounded by visible world half`() {
-        val half = RenderConstants.getVisibleWorldHalf(1080f)
+        val half = RenderConstants.getVisibleWorldHalf(1080f, 1920f)
         val range = WorldViewportTransform.indexRangeForWorldRange(
             -half, half, MountainLayer.MOUNTAIN_CELL_SIZE
         )

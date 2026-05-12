@@ -344,48 +344,47 @@ class WorldCoordinateModelTest {
     // ===================== Height-based zoom (getVisibleWorldHalf) =====================
 
     @Test
-    fun `getVisibleWorldHalf is height-independent for same width`() {
+    fun `getVisibleWorldHalf is aspect-ratio-aware`() {
         val w = 1080f
         val tallHalf = RenderConstants.getVisibleWorldHalf(w, 2400f)
         val shortHalf = RenderConstants.getVisibleWorldHalf(w, 960f)
-        // Generation range is now height-independent — same width gives same range
-        assertEquals("same width at different heights should produce same generation range",
-            tallHalf, shortHalf, 0.01f)
+        // Shorter height = wider aspect ratio = wider visible world
+        assertTrue("shorter screen (wider aspect) should produce wider generation range",
+            shortHalf > tallHalf)
     }
 
     @Test
     fun `getVisibleWorldHalf at reference height matches expected`() {
         val w = 1080f
-        val half = RenderConstants.getVisibleWorldHalf(w, RenderConstants.REFERENCE_HEIGHT)
-        // Generation range uses reference heightScale (1.0), so:
-        // visibleHalf = w/2 + REFERENCE_HEIGHT * 0.45
-        val expected = w / 2f + RenderConstants.REFERENCE_HEIGHT * 0.45f
+        val h = RenderConstants.REFERENCE_HEIGHT
+        val half = RenderConstants.getVisibleWorldHalf(w, h)
+        // New formula: REFERENCE_HEIGHT * aspect / 2 + REFERENCE_HEIGHT * 0.45
+        val aspect = w / h
+        val expected = RenderConstants.REFERENCE_HEIGHT * aspect / 2f + RenderConstants.REFERENCE_HEIGHT * 0.45f
         assertEquals(expected, half, 0.01f)
     }
 
     @Test
-    fun `getVisibleWorldHalf is stable across heights`() {
-        val w = 1080f
-        val h1 = 960f
-        val h2 = 1920f
-        val half1 = RenderConstants.getVisibleWorldHalf(w, h1)
-        val half2 = RenderConstants.getVisibleWorldHalf(w, h2)
-        // Height-independent: same width → same generation range
-        assertEquals("generation range should be height-independent",
+    fun `getVisibleWorldHalf at same aspect ratio is stable`() {
+        // Same aspect ratio (same w/h ratio) at different sizes → same generation range
+        // because getVisibleWorldHalf uses REFERENCE_HEIGHT * aspect
+        val half1 = RenderConstants.getVisibleWorldHalf(1080f, 1920f)  // aspect=0.5625
+        val half2 = RenderConstants.getVisibleWorldHalf(540f, 960f)    // aspect=0.5625
+        assertEquals("same aspect ratio should produce same generation range",
             half1, half2, 0.01f)
     }
 
     @Test
-    fun `same width at different heights generates same cell indices`() {
-        val w = 1080f
+    fun `same aspect ratio at different sizes generates same cell indices`() {
         val cellSize = TreeRenderer.TREE_CELL_SIZE
-        val tallHalf = RenderConstants.getVisibleWorldHalf(w, 2400f)
-        val shortHalf = RenderConstants.getVisibleWorldHalf(w, 960f)
-        val rangeTall = WorldViewportTransform.indexRangeForWorldRange(-tallHalf, tallHalf, cellSize)
-        val rangeShort = WorldViewportTransform.indexRangeForWorldRange(-shortHalf, shortHalf, cellSize)
-        // Height-independent generation: same cells at any height
-        assertEquals("same cell count at different heights",
-            rangeTall.last - rangeTall.first, rangeShort.last - rangeShort.first)
+        // Same aspect ratio (0.5625) at different resolutions
+        val half1 = RenderConstants.getVisibleWorldHalf(1080f, 1920f)
+        val half2 = RenderConstants.getVisibleWorldHalf(540f, 960f)
+        val range1 = WorldViewportTransform.indexRangeForWorldRange(-half1, half1, cellSize)
+        val range2 = WorldViewportTransform.indexRangeForWorldRange(-half2, half2, cellSize)
+        // Same aspect ratio → same generation range → same cells
+        assertEquals("same aspect ratio should produce same cell count",
+            range1.last - range1.first, range2.last - range2.first)
     }
 
     @Test

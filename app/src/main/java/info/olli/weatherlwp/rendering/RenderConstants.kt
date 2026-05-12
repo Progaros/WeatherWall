@@ -69,26 +69,25 @@ object RenderConstants {
      * around center need to be generated. Includes generous parallax padding
      * so content is available even at maximum tilt/scroll offset.
      *
-     * IMPORTANT: This uses the REFERENCE heightScale (1.0) for computing
-     * the generation range, making it independent of actual screen height.
-     * This ensures the same set of objects is generated regardless of
-     * viewport height — the viewport transform handles zoom by projecting
-     * objects to different screen positions, not by generating different
-     * objects for different heights.
+     * Uses the viewport's actual world-space width, which is derived from
+     * [REFERENCE_HEIGHT] (the default worldHeight) and the screen aspect
+     * ratio. This makes generation:
+     * - **zoom-independent**: changing worldHeight (zoom) does not change
+     *   what is generated — only the viewport projection changes.
+     * - **aspect-ratio-aware**: landscape screens produce a wider generation
+     *   range because the viewport physically sees more of the world.
      *
-     * Width differences are handled: wider screens (larger screenWidth)
-     * produce a larger generation range to fill the extra horizontal space.
-     *
-     * @param screenWidth The actual visible screen width
-     * @param screenHeight Ignored — generation range is height-independent.
+     * @param screenWidth  The actual visible screen width in pixels.
+     * @param screenHeight The actual visible screen height in pixels.
      * @return World-space half-width that covers viewport + parallax padding
      */
-    fun getVisibleWorldHalf(screenWidth: Float, @Suppress("UNUSED_PARAMETER") screenHeight: Float = REFERENCE_HEIGHT): Float {
-        // Use reference heightScale (1.0) so generation range doesn't expand
-        // when height shrinks. This is the key fix: objects stay at fixed
-        // worldX positions and the viewport transform moves them on screen.
-        val referenceScale = 1f
-        val visibleHalf = screenWidth / (2f * referenceScale)
+    fun getVisibleWorldHalf(screenWidth: Float, screenHeight: Float = REFERENCE_HEIGHT): Float {
+        // Compute the actual visible world half-width from the viewport geometry.
+        // worldWidth = REFERENCE_HEIGHT * aspect  (at default zoom)
+        // In portrait (1080×1920): aspect=0.5625, worldHalf=540
+        // In landscape (1920×1080): aspect=1.778, worldHalf=1707
+        val aspect = screenWidth / screenHeight.coerceAtLeast(1f)
+        val visibleHalf = REFERENCE_HEIGHT * aspect / 2f
         // Parallax padding: covers maximum parallax shift in world units
         val parallaxPad = REFERENCE_HEIGHT * 0.45f
         return visibleHalf + parallaxPad

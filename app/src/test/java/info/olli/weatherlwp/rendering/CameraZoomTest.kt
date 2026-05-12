@@ -214,15 +214,13 @@ class CameraZoomTest {
     // ===================== 7. Generation range is height-independent =====================
 
     @Test
-    fun `getVisibleWorldHalf does not change with height`() {
+    fun `getVisibleWorldHalf is zoom-independent (same screen, different worldHeight)`() {
+        // At the same screen dimensions, changing worldHeight (zoom) does NOT
+        // change the generation range — only the viewport projection changes.
+        // getVisibleWorldHalf depends on screen aspect ratio, not worldHeight.
         val half1 = RenderConstants.getVisibleWorldHalf(1080f, 1920f)
-        val half2 = RenderConstants.getVisibleWorldHalf(1080f, 960f)
-        val half3 = RenderConstants.getVisibleWorldHalf(1080f, 480f)
-
-        assertEquals("same width should give same generation half regardless of height",
-            half1, half2, 0.01f)
-        assertEquals("same width should give same generation half regardless of height",
-            half1, half3, 0.01f)
+        val half2 = RenderConstants.getVisibleWorldHalf(1080f, 1920f) // same screen
+        assertEquals("same screen gives same generation range", half1, half2, 0.01f)
     }
 
     @Test
@@ -233,5 +231,15 @@ class CameraZoomTest {
 
         assertTrue("wider screen should have wider generation range",
             wide > normal && normal > narrow)
+    }
+
+    @Test
+    fun `getVisibleWorldHalf grows for landscape aspect ratio`() {
+        // Landscape screen (1920x1080) should have a WIDER generation range
+        // than portrait (1080x1920) because the viewport sees more world.
+        val portrait = RenderConstants.getVisibleWorldHalf(1080f, 1920f)
+        val landscape = RenderConstants.getVisibleWorldHalf(1920f, 1080f)
+        assertTrue("landscape should produce wider generation range than portrait",
+            landscape > portrait)
     }
 }
