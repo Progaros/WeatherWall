@@ -304,7 +304,10 @@ class TreeRenderer {
                 val crown = if (isLeaf) generateCrownCircles(treeRandom) else emptyList()
                 val branches = if (isLeaf) generateBranches(treeRandom) else emptyList()
 
-                newTrees.add(TreeData(worldX, yRatio, scale, depthFactor, dayColor, newTrees.size,
+                // Stable identity: derived from hill and cell, not list position
+                val stableId = hillIndex * 100003 + cellIndex
+
+                newTrees.add(TreeData(worldX, yRatio, scale, depthFactor, dayColor, stableId,
                     type, crown, branches))
             }
         }
@@ -335,8 +338,9 @@ class TreeRenderer {
             val newPinecones = mutableMapOf<Int, List<PineconeData>>()
             val pineconeProbability = pineconeDensity / 100f
 
-            for ((index, _) in currentTrees.withIndex()) {
-                val treeRandom = DeterministicLayout.random(randomSeed + 7000, section = 320, index = index)
+            for (tree in currentTrees) {
+                val stableId = tree.index  // stable cell-based identity
+                val treeRandom = DeterministicLayout.random(randomSeed + 7000, section = 320, index = stableId)
                 if (treeRandom.nextFloat() > pineconeProbability) continue
                 val cones = mutableListOf<PineconeData>()
                 val numCones = 1 + treeRandom.nextInt(3)  // 1-3 pinecones per tree
@@ -347,7 +351,7 @@ class TreeRenderer {
                         size = 0.003f + treeRandom.nextFloat() * 0.003f
                     ))
                 }
-                newPinecones[index] = cones
+                newPinecones[stableId] = cones
             }
             pineconesByTree = newPinecones
         } else {

@@ -1,6 +1,7 @@
 package info.olli.weatherlwp.rendering
 
 import android.graphics.Color
+import kotlin.math.floor
 
 /**
  * Shared vegetation utility functions used by both TreeRenderer and BushRenderer.
@@ -24,7 +25,7 @@ object VegetationUtil {
 
     /** 1D value noise with smoothstep interpolation. Works at any x. */
     fun noise(x: Float, seed: Int): Float {
-        val i = x.toInt()
+        val i = floor(x).toInt()
         val f = x - i
         val h1 = hash(i + seed)
         val h2 = hash(i + 1 + seed)

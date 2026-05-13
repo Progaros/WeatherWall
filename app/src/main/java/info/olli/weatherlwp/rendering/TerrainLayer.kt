@@ -306,10 +306,16 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // Visibility/opacity is controlled at draw time using season blend factors,
         // enabling smooth transitions between seasons.
         
-        // World-space generation range: covers visible viewport + parallax padding
+        // Cell-based generation range: covers visible viewport + parallax padding
         val worldHalf = RenderConstants.getVisibleWorldHalf(width, height)
         
-        // Generate spring flowers (always, visibility controlled at draw time)
+        // Cell sizes for each decoration type (world units)
+        val flowerCellSize = 5f
+        val leafCellSize = 8f
+        val mushroomCellSize = 20f
+        val snowCellSize = 40f
+        
+        // Generate spring flowers using cell-based placement
         if (springFlowersEnabled) {
             val flowerColors = intArrayOf(
                 Color.rgb(255, 182, 193),  // Light pink
@@ -320,55 +326,66 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 Color.rgb(255, 255, 255)   // White
             )
             val newFlowers = mutableMapOf<Int, List<FlowerData>>()
-            val flowersPerHill = (springFlowerDensity / 8).coerceIn(5, 200)
+            val densityFraction = (springFlowerDensity / 500f).coerceIn(0.05f, 1f)
+            val indexRange = WorldViewportTransform.indexRangeForWorldRange(-worldHalf, worldHalf, flowerCellSize)
             
-            for (index in currentHills.indices) {
+            for (hillIndex in currentHills.indices) {
                 val hillFlowers = mutableListOf<FlowerData>()
-                for (f in 0 until flowersPerHill) {
-                    val flowerRandom = DeterministicLayout.random(randomSeed + 6000 + index, section = 600, index = f)
-                    val worldX = (flowerRandom.nextFloat() - 0.5f) * worldHalf * 2f
+                for (cellIndex in indexRange) {
+                    val cellSeed = randomSeed + 6000 + hillIndex
+                    val h = DeterministicLayout.hashToFloat(cellSeed, cellIndex, 0)
+                    if (h > densityFraction) continue
+                    
+                    val worldX = cellIndex * flowerCellSize +
+                        (DeterministicLayout.hashToFloat(cellSeed, cellIndex, 1) - 0.5f) * flowerCellSize * 0.9f
                     val maxVerticalOffset = springFlowerSpread * 0.12f
-                    // Store normalized vertical offset (height-independent)
-                    val verticalOffset = flowerRandom.nextFloat() * maxVerticalOffset
+                    val verticalOffset = DeterministicLayout.hashToFloat(cellSeed, cellIndex, 2) * maxVerticalOffset
+                    val colorIdx = (DeterministicLayout.hashToFloat(cellSeed, cellIndex, 3) * flowerColors.size).toInt()
+                        .coerceIn(0, flowerColors.size - 1)
                     hillFlowers.add(FlowerData(
                         worldX = worldX,
                         yOffset = verticalOffset,
-                        color = flowerColors[flowerRandom.nextInt(flowerColors.size)],
-                        size = 0.002f + flowerRandom.nextFloat() * 0.003f
+                        color = flowerColors[colorIdx],
+                        size = 0.002f + DeterministicLayout.hashToFloat(cellSeed, cellIndex, 4) * 0.003f
                     ))
                 }
-                newFlowers[index] = hillFlowers
+                newFlowers[hillIndex] = hillFlowers
             }
             flowersByHill = newFlowers
         } else {
             flowersByHill = emptyMap()
         }
         
-        // Generate winter snow patches (always, visibility controlled at draw time)
+        // Generate winter snow patches using cell-based placement
         if (winterSnowEnabled) {
             val newSnow = mutableMapOf<Int, List<SnowPatchData>>()
-            val patchesPerHill = (winterSnowCoverage / 20).coerceAtLeast(1)
+            val densityFraction = (winterSnowCoverage / 100f).coerceIn(0.1f, 1f)
+            val snowIndexRange = WorldViewportTransform.indexRangeForWorldRange(-worldHalf, worldHalf, snowCellSize)
             
-            for ((index, _) in currentHills.withIndex()) {
+            for ((hillIndex, _) in currentHills.withIndex()) {
                 val hillSnow = mutableListOf<SnowPatchData>()
-                for (p in 0 until patchesPerHill) {
-                    val snowRandom = DeterministicLayout.random(randomSeed + 7000 + index, section = 700, index = p)
-                    val startWX = (snowRandom.nextFloat() - 0.5f) * worldHalf * 2f * 0.9f
-                    val patchWidth = (0.05f + snowRandom.nextFloat() * 0.1f * (winterSnowCoverage / 50f)) * worldHalf * 2f
+                for (cellIndex in snowIndexRange) {
+                    val cellSeed = randomSeed + 7000 + hillIndex
+                    val h = DeterministicLayout.hashToFloat(cellSeed, cellIndex, 0)
+                    if (h > densityFraction) continue
+                    
+                    val startWX = cellIndex * snowCellSize +
+                        (DeterministicLayout.hashToFloat(cellSeed, cellIndex, 1) - 0.5f) * snowCellSize * 0.8f
+                    val patchWidth = (0.3f + DeterministicLayout.hashToFloat(cellSeed, cellIndex, 2) * 0.7f) * snowCellSize
                     hillSnow.add(SnowPatchData(
                         startWorldX = startWX,
                         endWorldX = startWX + patchWidth,
-                        alpha = 150 + snowRandom.nextInt(80)
+                        alpha = 150 + (DeterministicLayout.hashToFloat(cellSeed, cellIndex, 3) * 80).toInt()
                     ))
                 }
-                newSnow[index] = hillSnow
+                newSnow[hillIndex] = hillSnow
             }
             snowByHill = newSnow
         } else {
             snowByHill = emptyMap()
         }
         
-        // Generate fallen leaves (always, visibility controlled at draw time)
+        // Generate fallen leaves using cell-based placement
         if (fallenLeavesEnabled) {
             val leafColors = intArrayOf(
                 Color.rgb(200, 80, 20),    // Orange-red
@@ -379,28 +396,36 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 Color.rgb(220, 100, 30)    // Bright orange
             )
             val newLeaves = mutableMapOf<Int, List<FallenLeafData>>()
-            val leavesPerHill = (fallenLeavesDensity * currentHills.size / 100 + 3).coerceIn(3, 80)
+            val densityFraction = (fallenLeavesDensity / 100f).coerceIn(0.05f, 1f)
+            val leafIndexRange = WorldViewportTransform.indexRangeForWorldRange(-worldHalf, worldHalf, leafCellSize)
             
-            for (index in currentHills.indices) {
+            for (hillIndex in currentHills.indices) {
                 val hillLeaves = mutableListOf<FallenLeafData>()
-                for (l in 0 until leavesPerHill) {
-                    val leafRandom = DeterministicLayout.random(randomSeed + 8000 + index, section = 800, index = l)
+                for (cellIndex in leafIndexRange) {
+                    val cellSeed = randomSeed + 8000 + hillIndex
+                    val h = DeterministicLayout.hashToFloat(cellSeed, cellIndex, 0)
+                    if (h > densityFraction) continue
+                    
+                    val worldX = cellIndex * leafCellSize +
+                        (DeterministicLayout.hashToFloat(cellSeed, cellIndex, 1) - 0.5f) * leafCellSize * 0.9f
+                    val colorIdx = (DeterministicLayout.hashToFloat(cellSeed, cellIndex, 2) * leafColors.size).toInt()
+                        .coerceIn(0, leafColors.size - 1)
                     hillLeaves.add(FallenLeafData(
-                        worldX = (leafRandom.nextFloat() - 0.5f) * worldHalf * 2f,
-                        yOffset = leafRandom.nextFloat() * 0.08f,
-                        color = leafColors[leafRandom.nextInt(leafColors.size)],
-                        size = 0.003f + leafRandom.nextFloat() * 0.004f,
-                        rotation = leafRandom.nextFloat() * 360f
+                        worldX = worldX,
+                        yOffset = DeterministicLayout.hashToFloat(cellSeed, cellIndex, 3) * 0.08f,
+                        color = leafColors[colorIdx],
+                        size = 0.003f + DeterministicLayout.hashToFloat(cellSeed, cellIndex, 4) * 0.004f,
+                        rotation = DeterministicLayout.hashToFloat(cellSeed, cellIndex, 5) * 360f
                     ))
                 }
-                newLeaves[index] = hillLeaves
+                newLeaves[hillIndex] = hillLeaves
             }
             fallenLeavesByHill = newLeaves
         } else {
             fallenLeavesByHill = emptyMap()
         }
         
-        // Generate mushrooms (always, visibility controlled at draw time)
+        // Generate mushrooms using cell-based placement
         if (mushroomsEnabled) {
             val capColors = intArrayOf(
                 Color.rgb(180, 50, 30),    // Red cap
@@ -410,20 +435,28 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 Color.rgb(140, 90, 40)     // Dark brown
             )
             val newMushrooms = mutableMapOf<Int, List<MushroomData>>()
-            val mushroomsPerHill = (mushroomDensity * currentHills.size / 150 + 1).coerceIn(1, 30)
+            val densityFraction = (mushroomDensity / 100f).coerceIn(0.05f, 1f)
+            val mushIndexRange = WorldViewportTransform.indexRangeForWorldRange(-worldHalf, worldHalf, mushroomCellSize)
             
-            for (index in currentHills.indices) {
+            for (hillIndex in currentHills.indices) {
                 val hillMushrooms = mutableListOf<MushroomData>()
-                for (m in 0 until mushroomsPerHill) {
-                    val mushRandom = DeterministicLayout.random(randomSeed + 9000 + index, section = 900, index = m)
+                for (cellIndex in mushIndexRange) {
+                    val cellSeed = randomSeed + 9000 + hillIndex
+                    val h = DeterministicLayout.hashToFloat(cellSeed, cellIndex, 0)
+                    if (h > densityFraction) continue
+                    
+                    val worldX = cellIndex * mushroomCellSize +
+                        (DeterministicLayout.hashToFloat(cellSeed, cellIndex, 1) - 0.5f) * mushroomCellSize * 0.8f
+                    val colorIdx = (DeterministicLayout.hashToFloat(cellSeed, cellIndex, 2) * capColors.size).toInt()
+                        .coerceIn(0, capColors.size - 1)
                     hillMushrooms.add(MushroomData(
-                        worldX = (mushRandom.nextFloat() - 0.5f) * worldHalf * 2f,
-                        yOffset = mushRandom.nextFloat() * 0.04f,
-                        capColor = capColors[mushRandom.nextInt(capColors.size)],
-                        size = 0.004f + mushRandom.nextFloat() * 0.005f
+                        worldX = worldX,
+                        yOffset = DeterministicLayout.hashToFloat(cellSeed, cellIndex, 3) * 0.04f,
+                        capColor = capColors[colorIdx],
+                        size = 0.004f + DeterministicLayout.hashToFloat(cellSeed, cellIndex, 4) * 0.005f
                     ))
                 }
-                newMushrooms[index] = hillMushrooms
+                newMushrooms[hillIndex] = hillMushrooms
             }
             mushroomsByHill = newMushrooms
         } else {

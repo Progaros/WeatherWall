@@ -218,7 +218,8 @@ class BushRenderer {
                     30
                 )
 
-                newBushes.add(BushData(worldX, yRatio, scale, depthFactor, dayColor, newBushes.size,
+                newBushes.add(BushData(worldX, yRatio, scale, depthFactor, dayColor,
+                    hillIndex * 100003 + cellIndex,
                     generateBushCircles(bushRandom)))
             }
         }
@@ -250,8 +251,9 @@ class BushRenderer {
             val newBerries = mutableMapOf<Int, List<BerryData>>()
             val berryProbability = berryDensity / 100f
 
-            for ((index, _) in currentBushes.withIndex()) {
-                val bushRandom = DeterministicLayout.random(randomSeed + 8000, section = 510, index = index)
+            for (bush in currentBushes) {
+                val stableId = bush.index  // stable cell-based identity
+                val bushRandom = DeterministicLayout.random(randomSeed + 8000, section = 510, index = stableId)
                 if (bushRandom.nextFloat() > berryProbability) continue
                 val bushBerries = mutableListOf<BerryData>()
                 val numBerries = 2 + bushRandom.nextInt(4)  // 2-5 berries per bush
@@ -263,7 +265,7 @@ class BushRenderer {
                         size = 0.002f + bushRandom.nextFloat() * 0.002f
                     ))
                 }
-                newBerries[index] = bushBerries
+                newBerries[stableId] = bushBerries
             }
             berriesByBush = newBerries
         } else {
