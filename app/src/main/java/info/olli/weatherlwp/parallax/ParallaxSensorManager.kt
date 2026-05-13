@@ -13,6 +13,7 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.sqrt
+import kotlin.math.tanh
 
 /**
  * Manages sensor input for parallax effect.
@@ -267,6 +268,12 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
     
     /** Linear interpolation between a and b */
     private fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
+
+    /** Soft-clamp a value to ±max using tanh saturation. Monotonic, never exceeds max. */
+    private fun softClamp(value: Float, max: Float): Float {
+        if (max <= 0f) return 0f
+        return max * tanh(value / max)
+    }
     
     /**
      * Register shake detection sensors.
@@ -529,9 +536,10 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
         
         // Step 4: Accumulate averaged angular velocity into angles
         // No deadzone check, no decay - angles hold until moved
-        gyroYaw = (gyroYaw + avgYaw.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
-        gyroPitch = (gyroPitch + avgPitch.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
-        gyroRoll = (gyroRoll + avgRoll.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
+        // Use soft saturation (tanh) instead of hard coerceIn for smooth deceleration near limits
+        gyroYaw = softClamp(gyroYaw + avgYaw.calc() * f, MAX_TILT_RAD)
+        gyroPitch = softClamp(gyroPitch + avgPitch.calc() * f, MAX_TILT_RAD)
+        gyroRoll = softClamp(gyroRoll + avgRoll.calc() * f, MAX_TILT_RAD)
         
         // Update time AFTER accumulation
         lastGyroTime = currentTime
@@ -547,9 +555,9 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
             else -> Pair(-gyroPitch, gyroYaw)  // ROTATION_0
         }
         
-        // Convert angles from radians to normalized -1..1 range
-        val tiltX = (rawTiltX / MAX_TILT_RAD).coerceIn(-1f, 1f)
-        val tiltY = (rawTiltY / MAX_TILT_RAD).coerceIn(-1f, 1f)
+        // Convert angles from radians to normalized -1..1 range using soft saturation
+        val tiltX = softClamp(rawTiltX / MAX_TILT_RAD, 1f)
+        val tiltY = softClamp(rawTiltY / MAX_TILT_RAD, 1f)
         
         // Output directly - no additional filtering on sensor side
         filteredX = tiltX
@@ -945,9 +953,9 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
         accumulatedX += -deltaRoll * sensitivity
         accumulatedY += -deltaPitch * sensitivity
         
-        // Clamp accumulated offset to ±1 range
-        accumulatedX = accumulatedX.coerceIn(-1f, 1f)
-        accumulatedY = accumulatedY.coerceIn(-1f, 1f)
+        // Soft-clamp accumulated offset to ±1 range using tanh saturation
+        accumulatedX = softClamp(accumulatedX, 1f)
+        accumulatedY = softClamp(accumulatedY, 1f)
         
         // Auto-return: gentle decay ONLY when device is not actively moving.
         // During active tilting the accumulated values pass through unchanged

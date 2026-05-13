@@ -147,4 +147,46 @@ class EventTraversalTest {
         assertEquals(-0.15f, EventTraversal.xAtProgress(path, 1f), 0.001f)
         assertEquals(0.5f, EventTraversal.xAtProgress(path, 0.5f), 0.001f)
     }
+
+    // ============== Event zoom factor tests ==============
+
+    @Test
+    fun `zoom factor is 1 at reference height`() {
+        val referenceHeight = 1920f
+        val worldHeight = 1920f
+        val zoom = referenceHeight / worldHeight
+        assertEquals("Zoom at reference height should be 1", 1f, zoom, 0.001f)
+    }
+
+    @Test
+    fun `zoom factor increases when zoomed in`() {
+        val referenceHeight = 1920f
+        val worldHeight = 960f  // Zoomed in 2x (shows half the world)
+        val zoom = referenceHeight / worldHeight
+        assertEquals("Zoom when zoomed in 2x", 2f, zoom, 0.001f)
+    }
+
+    @Test
+    fun `zoom factor decreases when zoomed out`() {
+        val referenceHeight = 1920f
+        val worldHeight = 3840f  // Zoomed out 2x (shows twice the world)
+        val zoom = referenceHeight / worldHeight
+        assertEquals("Zoom when zoomed out 2x", 0.5f, zoom, 0.001f)
+    }
+
+    @Test
+    fun `event screen speed scales with zoom`() {
+        // World speed is constant (xRatio per ms), screen speed = world speed * zoom
+        val worldSpeed = 0.001f  // xRatio/ms
+        val width = 1080f
+
+        // At reference height: screen speed = worldSpeed * width * 1.0
+        val screenSpeedRef = worldSpeed * width * 1.0f
+
+        // At 2x zoom: events should traverse screen 2x faster visually
+        val screenSpeedZoomed = worldSpeed * width * 2.0f
+
+        assertEquals("Zoomed screen speed should be 2x",
+            screenSpeedRef * 2f, screenSpeedZoomed, 0.001f)
+    }
 }

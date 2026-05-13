@@ -241,9 +241,9 @@ class ParallaxCalculatorTest {
         repeat(100) { calculator.update(16) }
         val x = calculator.getOffsetX()
         
-        // At max tilt (1.0) with strength 1.0, should approach 192px
-        assertTrue("Max offset should be ~10% of height", kotlin.math.abs(x) > 150f)
-        assertTrue("Max offset should not exceed ~10% of height", kotlin.math.abs(x) < 250f)
+        // With softLimit: target = softLimit(192, 192) = 192*tanh(1) ≈ 146
+        assertTrue("Max offset should be ~10% of height (softLimited)", kotlin.math.abs(x) > 130f)
+        assertTrue("Max offset should not exceed ~10% of height", kotlin.math.abs(x) < 200f)
     }
     
     @Test
@@ -360,11 +360,12 @@ class ParallaxCalculatorTest {
         calculator.update(16)
         val xAfter2Frames = calculator.getOffsetX()
         
-        // With lerp rate 0.9: first frame reaches 90%, second frame reaches 99%
-        assertTrue("After 1 frame, should reach at least 80% of target", 
-            kotlin.math.abs(xAfter1Frame) > 70f)
-        assertTrue("After 2 frames, should reach at least 95% of target", 
-            kotlin.math.abs(xAfter2Frames) > 90f)
+        // With softLimit: target = softLimit(100, 100) = 100*tanh(1) ≈ 76.2
+        // With smoothing=0 and lerp rate 1.0: reaches target in 1 frame
+        assertTrue("After 1 frame, should reach softLimit target (~76)", 
+            kotlin.math.abs(xAfter1Frame) > 60f)
+        assertTrue("After 2 frames, should still be at softLimit target", 
+            kotlin.math.abs(xAfter2Frames) > 70f)
     }
     
     @Test
@@ -447,8 +448,8 @@ class ParallaxCalculatorTest {
         repeat(100) { calculator.update(16) }
         val xAtEdge = calculator.getOffsetX()
         
-        // Should reach near maximum
-        assertTrue("With edgeEasing=0, should reach near max offset", xAtEdge > 150f)
+        // Should reach near maximum (softLimit target ≈ 146 for maxOffset=192)
+        assertTrue("With edgeEasing=0, should reach near soft-limited max offset", xAtEdge > 130f)
     }
     
     @Test
@@ -958,10 +959,12 @@ class ParallaxCalculatorTest {
         repeat(100) { calc2.update(16) }
         val xOnly = calc2.getOffsetX()
 
-        // Diagonal magnitude should not exceed single-axis max by more than ~10%
-        // (circular clamping prevents corner stretching)
-        assertTrue("Diagonal magnitude should not greatly exceed single-axis (diag=$magnitude, single=$xOnly)",
-            magnitude < xOnly * 1.15f)
+        // With per-axis softLimit (no circular clamping), diagonal magnitude
+        // can be up to sqrt(2) times single-axis. Verify each axis is still bounded.
+        assertTrue("Each diagonal axis should be bounded (X=$x < max=192)",
+            kotlin.math.abs(x) < 1920f * 0.10f)
+        assertTrue("Each diagonal axis should be bounded (Y=$y < max=192)",
+            kotlin.math.abs(y) < 1920f * 0.10f)
     }
 
     // ============== Landscape orientation flips compensation axes (kills L212 conditional) ==============
@@ -1146,5 +1149,172 @@ class ParallaxCalculatorTest {
         // Diagonal should have less X progress due to higher easing effect
         assertTrue("Diagonal X should be less due to stronger easing (axis=$xAxis, diag=$xDiag)",
             xDiag < xAxis)
+    }
+
+    // ============== softLimit tests (monotonic, bounded, sign-preserving) ==============
+
+    @Test
+    fun `softLimit is monotonically increasing`() {
+        val calc = ParallaxCalculator()
+        val max = 100f
+        var prev = calc.softLimit(-200f, max)
+        for (i in -199..200) {
+            val v = i.toFloat()
+            val result = calc.softLimit(v, max)
+            assertTrue("softLimit($v) = $result should be >= softLimit(${v - 1}) = $prev",
+                result >= prev)
+            prev = result
+        }
+    }
+
+    @Test
+    fun `softLimit never exceeds max`() {
+        val calc = ParallaxCalculator()
+        val max = 50f
+        for (v in listOf(-10000f, -100f, -50f, -1f, 0f, 1f, 50f, 100f, 10000f)) {
+            val result = calc.softLimit(v, max)
+            assertTrue("softLimit($v, $max) = $result should be in [-$max, $max]",
+                kotlin.math.abs(result) <= max)
+        }
+    }
+
+    @Test
+    fun `softLimit preserves sign`() {
+        val calc = ParallaxCalculator()
+        assertTrue("Positive input → positive output", calc.softLimit(5f, 10f) > 0f)
+        assertTrue("Negative input → negative output", calc.softLimit(-5f, 10f) < 0f)
+        assertEquals("Zero input → zero output", 0f, calc.softLimit(0f, 10f), 0.001f)
+    }
+
+    @Test
+    fun `softLimit with zero max returns zero`() {
+        val calc = ParallaxCalculator()
+        assertEquals(0f, calc.softLimit(100f, 0f), 0.001f)
+        assertEquals(0f, calc.softLimit(-100f, 0f), 0.001f)
+    }
+
+    @Test
+    fun `softLimit near-linear for small inputs`() {
+        val calc = ParallaxCalculator()
+        val max = 100f
+        // For small inputs relative to max, tanh(x/max) ≈ x/max, so softLimit ≈ x
+        val result = calc.softLimit(5f, max)
+        assertEquals("Small input should be near-linear", 5f, result, 0.5f)
+    }
+
+    // ============== Return-to-center stillness detection ==============
+
+    @Test
+    fun `recenter does not engage during motion`() {
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 1.0f
+
+        // Maintain steady tilt - should NOT recenter despite returnSpeed being high
+        calc.updateFromSensor(0.8f, 0f)
+        repeat(200) { calc.update(16) }
+        val xAtTilt = calc.getOffsetX()
+        assertTrue("Should have significant offset while tilted", xAtTilt > 80f)
+    }
+
+    @Test
+    fun `recenter engages after hold time with zero tilt`() {
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 1.0f
+
+        // Move to offset
+        calc.updateFromSensor(0.8f, 0f)
+        repeat(100) { calc.update(16) }
+        val xBefore = calc.getOffsetX()
+        assertTrue("Should have offset", xBefore > 50f)
+
+        // Zero tilt and wait for hold timer (400ms = 25 frames at 16ms)
+        calc.updateFromSensor(0f, 0f)
+        repeat(100) { calc.update(16) }  // 1600ms > 400ms hold time
+        val xAfter = calc.getOffsetX()
+
+        // Should have recentered significantly
+        assertTrue("Should recenter after hold time (before=$xBefore, after=$xAfter)",
+            kotlin.math.abs(xAfter) < kotlin.math.abs(xBefore) * 0.2f)
+    }
+
+    @Test
+    fun `recenter is frame-rate independent`() {
+        // Test that recentering at 30fps and 60fps produces similar results
+        val calc60 = ParallaxCalculator()
+        calc60.strength = 1.0f
+        calc60.maxOffsetPercent = 10f
+        calc60.setCanvasSize(1080f, 1920f)
+        calc60.smoothing = 0f
+        calc60.returnSpeed = 0.8f
+
+        calc60.updateFromSensor(0.8f, 0f)
+        repeat(100) { calc60.update(16) }
+        calc60.updateFromSensor(0f, 0f)
+        // Skip past hold time then measure decay
+        repeat(30) { calc60.update(16) }  // 480ms to pass hold timer
+        val x60start = calc60.getOffsetX()
+        repeat(60) { calc60.update(16) }  // 960ms of recentering at 60fps
+        val x60end = calc60.getOffsetX()
+        val decay60 = if (x60start != 0f) x60end / x60start else 0f
+
+        val calc30 = ParallaxCalculator()
+        calc30.strength = 1.0f
+        calc30.maxOffsetPercent = 10f
+        calc30.setCanvasSize(1080f, 1920f)
+        calc30.smoothing = 0f
+        calc30.returnSpeed = 0.8f
+
+        calc30.updateFromSensor(0.8f, 0f)
+        repeat(100) { calc30.update(16) }
+        calc30.updateFromSensor(0f, 0f)
+        repeat(30) { calc30.update(16) }  // Same 480ms hold
+        val x30start = calc30.getOffsetX()
+        repeat(30) { calc30.update(32) }  // Same 960ms of recentering at 30fps
+        val x30end = calc30.getOffsetX()
+        val decay30 = if (x30start != 0f) x30end / x30start else 0f
+
+        // Decay ratios should be similar (frame-rate independent)
+        assertEquals("Decay should be frame-rate independent", decay60, decay30, 0.15f)
+    }
+
+    @Test
+    fun `softLimit replaces hard clamp in target position`() {
+        // Verify that extreme tilt values produce output approaching but not reaching the max
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 0f
+
+        // Extreme tilt
+        calc.updateFromSensor(5.0f, 0f)
+        repeat(100) { calc.update(16) }
+        val xExtreme = calc.getOffsetX()
+
+        // Normal tilt
+        val calc2 = ParallaxCalculator()
+        calc2.strength = 1.0f
+        calc2.maxOffsetPercent = 10f
+        calc2.setCanvasSize(1080f, 1920f)
+        calc2.smoothing = 0f
+        calc2.returnSpeed = 0f
+        calc2.updateFromSensor(1.0f, 0f)
+        repeat(100) { calc2.update(16) }
+        val xNormal = calc2.getOffsetX()
+
+        // Extreme should be larger than normal but still bounded
+        assertTrue("Extreme tilt should produce larger offset", xExtreme > xNormal)
+        val maxOffset = 1920f * 0.10f // 10% = 192px
+        assertTrue("Extreme tilt should still be bounded below max ($xExtreme < $maxOffset)",
+            xExtreme < maxOffset)
     }
 }

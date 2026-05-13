@@ -210,10 +210,16 @@ class CloudLayer(private val context: Context) : SceneLayer {
         // Generate world-space position: clouds distributed across visible range + padding
         val visibleHalf = RenderConstants.getVisibleWorldHalf(width.coerceAtLeast(1f), height.coerceAtLeast(1f))
         val worldX = (random.nextFloat() - 0.5f) * visibleHalf * 2f
-        val y = RenderConstants.CLOUD_Y_MIN + random.nextFloat() * RenderConstants.CLOUD_Y_RANGE
-        
+
         val groupWidth = GROUP_WIDTH_MIN + random.nextFloat() * (GROUP_WIDTH_MAX - GROUP_WIDTH_MIN)
         val groupHeight = GROUP_HEIGHT_MIN + random.nextFloat() * (GROUP_HEIGHT_MAX - GROUP_HEIGHT_MIN)
+
+        // Account for cloud half-height so the full bitmap stays within the visible cloud band.
+        // Without this, clouds near the top/bottom of the range get clipped.
+        val halfH = groupHeight * 0.5f
+        val minY = RenderConstants.CLOUD_Y_MIN + halfH
+        val maxY = (RenderConstants.CLOUD_Y_MIN + RenderConstants.CLOUD_Y_RANGE - halfH).coerceAtLeast(minY)
+        val y = minY + random.nextFloat() * (maxY - minY)
         
         val speed = RenderConstants.CLOUD_SPEED_BASE + random.nextFloat() * RenderConstants.CLOUD_SPEED_RANGE
         

@@ -2,8 +2,10 @@ package info.olli.weatherlwp.parallax
 
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.atan
+import kotlin.math.exp
 import kotlin.math.pow
 import kotlin.math.tan
+import kotlin.math.tanh
 
 /**
  * Calculates parallax offset values using a position-based (tilt-following) system.
@@ -39,6 +41,18 @@ class ParallaxCalculator {
 
         /** Ignore tiny tilt noise so return-to-center can engage when device is effectively still. */
         private const val TILT_NOISE_DEADZONE = 0.06f
+
+        /** Stillness detection: tilt magnitude threshold below which phone is "still". */
+        private const val STILL_TILT_EPSILON = 0.08f
+
+        /** Stillness detection: tilt velocity threshold (change per frame). */
+        private const val STILL_VELOCITY_EPSILON = 0.015f
+
+        /** Stillness detection: ms the phone must remain still before recentering engages. */
+        private const val STILL_HOLD_MS = 400L
+
+        /** Damping rate for return-to-center (higher = faster return). */
+        private const val RECENTER_DAMPING = 2.5f
     }
     
     // Tilt holder for atomic operations (lock-free)
@@ -52,6 +66,13 @@ class ParallaxCalculator {
     // Target position based on sensor tilt
     private var targetX = 0f
     private var targetY = 0f
+
+    // Previous tilt values for velocity estimation
+    private var prevTiltX = 0f
+    private var prevTiltY = 0f
+
+    // Accumulated time (ms) since the phone was last "not still"
+    private var stillTimerMs = 0L
     
     // User-configurable settings - defaults match pref_effects.xml
     // These are overwritten by loadPrefs() but provide sane defaults before settings load
@@ -190,62 +211,55 @@ class ParallaxCalculator {
      * - edgeEasing=1: extreme slowdown near edges, only center moves freely
      */
     fun update(deltaTimeMs: Long = 16L) {
-        val deltaScale = deltaTimeMs / 16f  // Normalize to ~60fps
+        val dt = deltaTimeMs / 1000f  // Convert to seconds for dt-based damping
+        val deltaScale = deltaTimeMs / 16f  // Normalize to ~60fps for legacy lerp rates
         
         // Get latest tilt from sensor
         val tilt = pendingTilt.get()
         val filteredTiltX = if (kotlin.math.abs(tilt.x) < TILT_NOISE_DEADZONE) 0f else tilt.x
         val filteredTiltY = if (kotlin.math.abs(tilt.y) < TILT_NOISE_DEADZONE) 0f else tilt.y
         val tiltMagnitude = kotlin.math.sqrt(filteredTiltX * filteredTiltX + filteredTiltY * filteredTiltY)
+
+        // Estimate tilt velocity (change since last frame)
+        val tiltVelocityX = filteredTiltX - prevTiltX
+        val tiltVelocityY = filteredTiltY - prevTiltY
+        val tiltVelocity = kotlin.math.sqrt(tiltVelocityX * tiltVelocityX + tiltVelocityY * tiltVelocityY)
+        prevTiltX = filteredTiltX
+        prevTiltY = filteredTiltY
+
+        // Stillness detection: phone must be below both magnitude and velocity thresholds
+        val isStill = tiltMagnitude < STILL_TILT_EPSILON &&
+                tiltVelocity < STILL_VELOCITY_EPSILON
+        if (isStill) {
+            stillTimerMs += deltaTimeMs
+        } else {
+            stillTimerMs = 0L
+        }
+        val shouldRecenter = isStill && stillTimerMs > STILL_HOLD_MS && returnSpeed > 0.001f
         
         // Calculate effective max offset based on canvas height percentage
-        // This ensures movement is proportional to screen size (e.g., 10% = 192px on 1920p screen)
         val effectiveMaxOffset = if (maxOffsetPercent > 0) {
             canvasHeight * (maxOffsetPercent / 100f)
         } else {
-            // Fallback to legacy pixel-based offset if percentage not set
             maxOffsetPx * scaleFactor
         }
         
-        // Calculate target position from tilt (where tilt alone would put us)
-        // Rotate H/V compensation with orientation so ratio behavior follows wallpaper rotation.
+        // Calculate target position from tilt
         val (horizontalComp, verticalComp) = if (canvasWidth >= canvasHeight) {
             1f to aspectRatioCompensation
         } else {
             aspectRatioCompensation to 1f
         }
 
-        val tiltTargetX = filteredTiltX * effectiveMaxOffset * strength * horizontalComp
-        val tiltTargetY = filteredTiltY * effectiveMaxOffset * strength * verticalComp
-        
-        // Clamp to circular bounds instead of square (prevents corner stretching)
-        // This gives consistent maximum movement in all directions
+        val rawTargetX = filteredTiltX * effectiveMaxOffset * strength * horizontalComp
+        val rawTargetY = filteredTiltY * effectiveMaxOffset * strength * verticalComp
+
+        // Soft-limit the target using tanh-based radial saturation
+        // This replaces the hard circular clamp, giving smooth deceleration near edges
         val xLimit = effectiveMaxOffset * horizontalComp
         val yLimit = effectiveMaxOffset * verticalComp
-        
-        // Normalize to unit circle bounds then scale back
-        val targetMagnitude = kotlin.math.sqrt(
-            (tiltTargetX / xLimit) * (tiltTargetX / xLimit) + 
-            (tiltTargetY / yLimit) * (tiltTargetY / yLimit)
-        )
-        
-        if (targetMagnitude > 1f) {
-            // Scale down proportionally to fit within circle
-            val scale = 1f / targetMagnitude
-            targetX = tiltTargetX * scale
-            targetY = tiltTargetY * scale
-        } else {
-            targetX = tiltTargetX
-            targetY = tiltTargetY
-        }
-        
-        // Determine interpolation speed
-        // Blend smoothly between tilt-following and return-to-center based on tilt magnitude
-        // (avoids abrupt mode switch at a fixed threshold)
-        // Threshold scales with returnSpeed: higher return speed means broader engagement,
-        // so a mostly-stable held position already starts drifting toward center.
-        val returnThreshold = 0.15f + returnSpeed * 0.35f  // 0.15 at speed=0, 0.50 at speed=1
-        val returnBlend = (1f - tiltMagnitude / returnThreshold).coerceIn(0f, 1f)  // 1=flat, 0=tilted
+        targetX = softLimit(rawTargetX, xLimit)
+        targetY = softLimit(rawTargetY, yLimit)
         
         // Calculate edge easing multiplier based on current position
         val edgeEasingMultiplier = if (edgeEasing > 0.01f) {
@@ -253,47 +267,56 @@ class ParallaxCalculator {
         } else {
             1f
         }
-        
-        // Tilt lerp rate: direct mode for low smoothing, graduated for higher
-        val tiltLerp = if (smoothing <= 0.02f) {
-            // Direct mode: instant response, no lerping
-            1.0f
+
+        if (shouldRecenter) {
+            // Return-to-center: dt-based exponential damping toward (0, 0)
+            val recenterRate = RECENTER_DAMPING * returnSpeed
+            val t = 1f - exp(-recenterRate * dt)
+            positionX += (0f - positionX) * t
+            positionY += (0f - positionY) * t
         } else {
-            val baseLerpRate = POSITION_LERP_RATE * (1f - smoothing * 0.5f) * deltaScale
-            baseLerpRate.coerceIn(0.1f, 0.98f)
-        }
-        
-        // Return-to-center rate
-        val returnLerp = if (returnSpeed <= 0.001f) {
-            0f  // No return: hold position when flat
-        } else {
-            (returnSpeed * 0.5f * deltaScale).coerceAtMost(0.9f)
-        }
-        
-        // Blend between tilt response and return-to-center
-        val baseLerp = tiltLerp * (1f - returnBlend) + returnLerp * returnBlend
-        
-        // Apply edge easing only when moving away from center
-        val effectiveLerpRate = if (edgeEasing > 0.01f && isMovingAwayFromCenter(targetX, targetY)) {
-            val eased = if (returnSpeedUnlocked && returnBlend > 0.5f) baseLerp else baseLerp * edgeEasingMultiplier
-            eased
-        } else {
-            baseLerp
-        }
-        
-        // Apply interpolation
-        if (effectiveLerpRate >= 1.0f) {
-            // Direct/instant mode - no lerping
-            positionX = targetX
-            positionY = targetY
-        } else if (effectiveLerpRate > 0f) {
-            positionX += (targetX - positionX) * effectiveLerpRate
-            positionY += (targetY - positionY) * effectiveLerpRate
+            // Normal tilt tracking
+            val returnThreshold = 0.15f + returnSpeed * 0.35f
+            val returnBlend = (1f - tiltMagnitude / returnThreshold).coerceIn(0f, 1f)
+
+            val tiltLerp = if (smoothing <= 0.02f) {
+                1.0f
+            } else {
+                val baseLerpRate = POSITION_LERP_RATE * (1f - smoothing * 0.5f) * deltaScale
+                baseLerpRate.coerceIn(0.1f, 0.98f)
+            }
+
+            val returnLerp = if (returnSpeed <= 0.001f) {
+                0f
+            } else {
+                (returnSpeed * 0.5f * deltaScale).coerceAtMost(0.9f)
+            }
+
+            val baseLerp = tiltLerp * (1f - returnBlend) + returnLerp * returnBlend
+
+            val effectiveLerpRate = if (edgeEasing > 0.01f && isMovingAwayFromCenter(targetX, targetY)) {
+                if (returnSpeedUnlocked && returnBlend > 0.5f) baseLerp else baseLerp * edgeEasingMultiplier
+            } else {
+                baseLerp
+            }
+
+            if (effectiveLerpRate >= 1.0f) {
+                positionX = targetX
+                positionY = targetY
+            } else if (effectiveLerpRate > 0f) {
+                positionX += (targetX - positionX) * effectiveLerpRate
+                positionY += (targetY - positionY) * effectiveLerpRate
+            }
         }
         
         // Snap to target when very close (prevents tiny oscillations)
         if (kotlin.math.abs(targetX - positionX) < 0.1f) positionX = targetX
         if (kotlin.math.abs(targetY - positionY) < 0.1f) positionY = targetY
+        // Also snap to zero when recentering is nearly complete
+        if (shouldRecenter) {
+            if (kotlin.math.abs(positionX) < 0.1f) positionX = 0f
+            if (kotlin.math.abs(positionY) < 0.1f) positionY = 0f
+        }
     }
     
     /**
@@ -366,7 +389,20 @@ class ParallaxCalculator {
         positionY = 0f
         targetX = 0f
         targetY = 0f
+        prevTiltX = 0f
+        prevTiltY = 0f
+        stillTimerMs = 0L
         pendingTilt.set(TiltPair(0f, 0f))
+    }
+
+    /**
+     * Soft-limit a value using tanh-based saturation.
+     * Smoothly decelerates toward max instead of hard-clamping.
+     * Output is always in (-max, +max) and monotonic.
+     */
+    fun softLimit(value: Float, max: Float): Float {
+        if (max <= 0f) return 0f
+        return max * tanh(value / max)
     }
     
     /**

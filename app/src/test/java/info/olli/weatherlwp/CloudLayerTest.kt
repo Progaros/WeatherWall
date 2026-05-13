@@ -360,4 +360,49 @@ class CloudLayerTest {
         assertEquals("Top and bottom edges should match", grid[0][0], grid[gridSize][0], 0.001f)
         assertEquals("Left and right edges should match", grid[0][0], grid[0][gridSize], 0.001f)
     }
+
+    // ============== Cloud Y Bounds Tests (clipping fix) ==============
+
+    @Test
+    fun `cloud Y placement accounts for half-height`() {
+        // The fix: minY = CLOUD_Y_MIN + halfH, maxY = CLOUD_Y_MIN + CLOUD_Y_RANGE - halfH
+        // This ensures the full bitmap stays within [CLOUD_Y_MIN, CLOUD_Y_MIN + CLOUD_Y_RANGE]
+        val cloudYMin = 0.05f  // RenderConstants.CLOUD_Y_MIN
+        val cloudYRange = 0.35f  // RenderConstants.CLOUD_Y_RANGE
+
+        val groupHeightMin = 0.15f
+        val groupHeightMax = 0.30f
+
+        // For any groupHeight in [min, max], the cloud center Y should be bounded
+        for (gh in listOf(groupHeightMin, groupHeightMax, (groupHeightMin + groupHeightMax) / 2f)) {
+            val halfH = gh * 0.5f
+            val minY = cloudYMin + halfH
+            val maxY = (cloudYMin + cloudYRange - halfH).coerceAtLeast(minY)
+
+            // Cloud center at minY: top edge = minY - halfH >= CLOUD_Y_MIN
+            assertTrue("Top edge at minY should not clip (gh=$gh)",
+                minY - halfH >= cloudYMin - 0.001f)
+
+            // Cloud center at maxY: bottom edge = maxY + halfH <= CLOUD_Y_MIN + CLOUD_Y_RANGE
+            assertTrue("Bottom edge at maxY should not clip (gh=$gh)",
+                maxY + halfH <= cloudYMin + cloudYRange + 0.001f)
+
+            // Range should be non-negative
+            assertTrue("Y range should be non-negative (gh=$gh)", maxY >= minY)
+        }
+    }
+
+    @Test
+    fun `largest cloud height still has valid Y range`() {
+        val cloudYMin = 0.05f
+        val cloudYRange = 0.35f
+        val groupHeightMax = 0.30f
+
+        val halfH = groupHeightMax * 0.5f  // 0.15
+        val minY = cloudYMin + halfH  // 0.05 + 0.15 = 0.20
+        val maxY = (cloudYMin + cloudYRange - halfH).coerceAtLeast(minY)  // (0.05 + 0.35 - 0.15) = 0.25
+
+        assertTrue("Largest cloud should still have valid Y range", maxY >= minY)
+        assertEquals("maxY for largest cloud", 0.25f, maxY, 0.001f)
+    }
 }

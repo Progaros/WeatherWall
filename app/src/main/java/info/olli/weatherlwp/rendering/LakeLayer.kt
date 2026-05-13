@@ -89,13 +89,13 @@ class LakeLayer(private val context: Context) : SceneLayer {
     // Animation
     private var shimmerPhase = 0f
 
-    // Lake water palette
+    // Lake water palette — increased saturation/brightness for visibility
     private val waterPalette = WaterColorUtil.WaterPalette(
-        day   = Color.rgb(60, 120, 170),
-        dawn  = Color.rgb(130, 115, 135),
-        dusk  = Color.rgb(110, 75, 85),
-        night = Color.rgb(15, 25, 45),
-        deep  = Color.rgb(25, 50, 80),
+        day   = Color.rgb(40, 110, 170),   // Deeper blue for readability
+        dawn  = Color.rgb(110, 100, 140),
+        dusk  = Color.rgb(100, 65, 85),
+        night = Color.rgb(12, 22, 50),
+        deep  = Color.rgb(15, 40, 70),     // Much darker deep for contrast
         ice   = Color.rgb(195, 215, 235)
     )
 
@@ -248,36 +248,53 @@ class LakeLayer(private val context: Context) : SceneLayer {
         cx: Float, cy: Float, w: Float, h: Float,
         color: Int, isFrozen: Boolean
     ) {
-        val alphaInt = (opacity * 255).toInt().coerceIn(0, 255)
+        // Boost alpha: ensure lake is always clearly visible
+        val alphaInt = (opacity * 255).toInt().coerceIn(100, 255)
+        val deepColor = waterPalette.deep
 
-        // Gradient from surface to depth — cache by bucketed position + color
-        val yBucket = ((cy - h).toInt() / 4).toLong()
-        val hBucket = ((cy + h).toInt() / 4).toLong()
+        // 3-stop gradient: shallow edge → mid water → deep bottom
+        val shallowColor = RenderConstants.lerpColor(color, Color.rgb(120, 200, 220), 0.3f)
+        val topY = cy - h * 0.3f
+        val botY = cy + h
+
+        val yBucket = (topY.toInt() / 4).toLong()
+        val hBucket = (botY.toInt() / 4).toLong()
         val key = yBucket * 100003L + hBucket * 31L + color.toLong() + alphaInt
         if (cachedSimpleGradient == null || cachedSimpleGradientKey != key) {
             cachedSimpleGradient = LinearGradient(
-                0f, cy - h, 0f, cy + h,
-                Color.argb(alphaInt, Color.red(color), Color.green(color), Color.blue(color)),
-                Color.argb(alphaInt, Color.red(waterPalette.deep), Color.green(waterPalette.deep), Color.blue(waterPalette.deep)),
+                0f, topY, 0f, botY,
+                intArrayOf(
+                    Color.argb(alphaInt, Color.red(shallowColor), Color.green(shallowColor), Color.blue(shallowColor)),
+                    Color.argb(alphaInt, Color.red(color), Color.green(color), Color.blue(color)),
+                    Color.argb(alphaInt, Color.red(deepColor), Color.green(deepColor), Color.blue(deepColor))
+                ),
+                floatArrayOf(0f, 0.35f, 1f),
                 Shader.TileMode.CLAMP
             )
             cachedSimpleGradientKey = key
         }
         lakePaint.shader = cachedSimpleGradient
 
-        canvas.drawOval(cx - w / 2f, cy - h * 0.3f, cx + w / 2f, cy + h, lakePaint)
+        canvas.drawOval(cx - w / 2f, topY, cx + w / 2f, botY, lakePaint)
         lakePaint.shader = null
 
-        // Subtle surface wave
+        // Shoreline highlight rim
+        shimmerPaint.color = Color.argb((50 * opacity).toInt().coerceIn(15, 80), 200, 230, 255)
+        shimmerPaint.style = Paint.Style.STROKE
+        shimmerPaint.strokeWidth = 2f
+        canvas.drawOval(cx - w / 2f, topY, cx + w / 2f, botY, shimmerPaint)
+        shimmerPaint.style = Paint.Style.FILL
+
+        // Horizontal ripple strokes
         if (!isFrozen) {
-            val waveY = cy - h * 0.1f
-            shimmerPaint.color = Color.argb((25 * opacity).toInt().coerceIn(5, 40), 255, 255, 255)
-            val waveOffset = sin(shimmerPhase.toDouble()).toFloat() * w * 0.05f
-            canvas.drawOval(
-                cx - w * 0.35f + waveOffset, waveY - 2f,
-                cx + w * 0.35f + waveOffset, waveY + 2f,
-                shimmerPaint
-            )
+            val rippleAlpha = (30 * opacity).toInt().coerceIn(8, 50)
+            shimmerPaint.color = Color.argb(rippleAlpha, 200, 220, 255)
+            for (r in 0..2) {
+                val ry = topY + (botY - topY) * (0.2f + r * 0.25f)
+                val rw = w * (0.3f - r * 0.06f)
+                val waveOff = sin((shimmerPhase * 0.6f + r * 1.2f).toDouble()).toFloat() * w * 0.02f
+                canvas.drawLine(cx - rw + waveOff, ry, cx + rw + waveOff, ry, shimmerPaint)
+            }
         }
     }
 
@@ -326,17 +343,24 @@ class LakeLayer(private val context: Context) : SceneLayer {
         color: Int, isFrozen: Boolean,
         surfaceY: Float, bottomY: Float
     ) {
-        val alphaInt = (opacity * 255).toInt().coerceIn(0, 255)
+        // Boost alpha for visibility
+        val alphaInt = (opacity * 255).toInt().coerceIn(100, 255)
+        val shallowColor = RenderConstants.lerpColor(color, Color.rgb(120, 200, 220), 0.3f)
+        val deepColor = waterPalette.deep
 
-        // Cache gradient by bucketed Y positions + color
+        // 3-stop gradient: shallow near surface → main color → deep at bottom
         val sBucket = (surfaceY.toInt() / 4).toLong()
         val bBucket = (bottomY.toInt() / 4).toLong()
         val key = sBucket * 100003L + bBucket * 31L + color.toLong() + alphaInt
         if (cachedSegmentGradient == null || cachedSegmentGradientKey != key) {
             cachedSegmentGradient = LinearGradient(
                 0f, surfaceY, 0f, bottomY,
-                Color.argb(alphaInt, Color.red(color), Color.green(color), Color.blue(color)),
-                Color.argb(alphaInt, Color.red(waterPalette.deep), Color.green(waterPalette.deep), Color.blue(waterPalette.deep)),
+                intArrayOf(
+                    Color.argb(alphaInt, Color.red(shallowColor), Color.green(shallowColor), Color.blue(shallowColor)),
+                    Color.argb(alphaInt, Color.red(color), Color.green(color), Color.blue(color)),
+                    Color.argb(alphaInt, Color.red(deepColor), Color.green(deepColor), Color.blue(deepColor))
+                ),
+                floatArrayOf(0f, 0.3f, 1f),
                 Shader.TileMode.CLAMP
             )
             cachedSegmentGradientKey = key
@@ -344,6 +368,13 @@ class LakeLayer(private val context: Context) : SceneLayer {
         lakePaint.shader = cachedSegmentGradient
         canvas.drawPath(lakePath, lakePaint)
         lakePaint.shader = null
+
+        // Shoreline highlight — thin bright line along the water edge path
+        shimmerPaint.color = Color.argb((45 * opacity).toInt().coerceIn(12, 70), 180, 220, 255)
+        shimmerPaint.style = Paint.Style.STROKE
+        shimmerPaint.strokeWidth = 1.5f
+        canvas.drawPath(lakePath, shimmerPaint)
+        shimmerPaint.style = Paint.Style.FILL
 
         // Ice sheen overlay
         if (isFrozen) {
@@ -362,21 +393,33 @@ class LakeLayer(private val context: Context) : SceneLayer {
         val lightLevel = state.getLightLevel()
         if (lightLevel < 0.15f && state.moonIllumination < 0.2f) return
 
-        val intensity = if (state.isNight) state.moonIllumination * 0.4f else lightLevel * 0.6f
-        val alpha = (intensity * 150 * opacity).toInt().coerceIn(0, 180)
-        shimmerPaint.color = Color.argb(alpha, 255, 255, 240)
+        val intensity = if (state.isNight) state.moonIllumination * 0.5f else lightLevel * 0.8f
 
-        val numSparkles = (6 * intensity).toInt().coerceIn(2, 10)
+        // Horizontal ripple lines
+        val rippleAlpha = (intensity * 60 * opacity).toInt().coerceIn(10, 80)
+        shimmerPaint.color = Color.argb(rippleAlpha, 200, 225, 255)
+        for (r in 0..3) {
+            val ry = surfaceY + height * 0.005f * (r + 1)
+            val rw = lakeWidth * (0.35f - r * 0.06f)
+            val waveOff = sin((shimmerPhase * 0.5f + r * 1.5f).toDouble()).toFloat() * lakeWidth * 0.015f
+            canvas.drawLine(centerX - rw + waveOff, ry, centerX + rw + waveOff, ry, shimmerPaint)
+        }
+
+        // Sparkle dots
+        val sparkleAlpha = (intensity * 200 * opacity).toInt().coerceIn(0, 200)
+        shimmerPaint.color = Color.argb(sparkleAlpha, 255, 255, 240)
+
+        val numSparkles = (8 * intensity).toInt().coerceIn(2, 12)
         val seed = (shimmerPhase * 80).toInt()
 
         for (i in 0 until numSparkles) {
             val hash = ((i * 6271 + seed) % 10000) / 10000f
             val hash2 = ((i * 7919 + seed * 2) % 10000) / 10000f
             val x = centerX - lakeWidth * 0.4f + hash * lakeWidth * 0.8f
-            val y = surfaceY + hash2 * height * 0.02f  // near surface
+            val y = surfaceY + hash2 * height * 0.02f
             val twinkle = sin((shimmerPhase * 4f + i * 1.7f).toDouble()).toFloat()
-            if (twinkle > 0.4f) {
-                canvas.drawCircle(x, y, 1f + twinkle * 1.5f, shimmerPaint)
+            if (twinkle > 0.3f) {
+                canvas.drawCircle(x, y, 1.5f + twinkle * 2f, shimmerPaint)
             }
         }
     }

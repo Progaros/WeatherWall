@@ -63,6 +63,13 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     // Ratio of visible viewport to extended world width (1.0 landscape, <1.0 portrait)
     private var viewportRatio = 1.0f
 
+    // Cached world-to-screen transform for zoom-aware event drawing
+    private var cachedTransform = WorldViewportTransform(1f, 1f)
+
+    // Zoom factor: REFERENCE_HEIGHT / worldHeight.
+    // At default zoom = 1.0. Zoom-in → >1 (events move faster on screen).
+    private var zoomFactor = 1f
+
     // Cached per-frame ambient color (computed in update, used by multiple draw methods)
     private var cachedAmbientColor = 0
     private var eventsEnabled = true
@@ -123,8 +130,15 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
             val canvas = groundDrawCanvas ?: return
             val state = groundDrawState ?: return
             val parallaxCalculator = groundDrawParallaxCalculator ?: return
+            val zoom = zoomFactor
 
             try {
+                if (zoom != 1f) {
+                    canvas.save()
+                    canvas.translate(width * 0.5f, 0f)
+                    canvas.scale(zoom, 1f)
+                    canvas.translate(-width * 0.5f, 0f)
+                }
                 currentEvent.draw(
                     canvas,
                     paint,
@@ -136,11 +150,16 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
                     groundDrawAmbientColor,
                     extendedOffset,
                     groundDrawAbsoluteTimeMs,
-                    // Events internally use xRatio-based positions (legacy boundary)
                     @Suppress("DEPRECATION")
                     hillHeightProvider
                 )
+                if (zoom != 1f) {
+                    canvas.restore()
+                }
             } catch (e: Exception) {
+                if (zoom != 1f) {
+                    try { canvas.restore() } catch (_: Exception) {}
+                }
                 android.util.Log.e("RandomEventLayer", "Error drawing event ${currentEvent.javaClass.simpleName}", e)
             }
         }
@@ -179,6 +198,8 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         extendedWidth = w
         extendedOffset = 0f
         viewportRatio = 1.0f
+        cachedTransform = WorldViewportTransform(w, h)
+        zoomFactor = RenderConstants.REFERENCE_HEIGHT / cachedTransform.viewport.worldHeight
 
         // Clear frame-scoped draw context and pooled entry references on geometry changes.
         // This prevents stale canvas/state/event references from surviving rotations.
@@ -499,18 +520,33 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         if (currentEvents.isEmpty()) return
 
         val ambientColor = cachedAmbientColor
+        val zoom = zoomFactor
 
         for (event in currentEvents) {
             if (predicate(event)) {
                 try {
+                    // Apply zoom-dependent X scale so event world-space speed is
+                    // consistent: when zoomed in, events traverse the screen faster
+                    // because more pixels map to one world unit.
+                    if (zoom != 1f) {
+                        canvas.save()
+                        canvas.translate(width * 0.5f, 0f)
+                        canvas.scale(zoom, 1f)
+                        canvas.translate(-width * 0.5f, 0f)
+                    }
                     event.draw(
                         canvas, paint, strokePaint, parallaxCalculator, extendedWidth, height,
                         state.timeSeconds, ambientColor, extendedOffset, state.absoluteTimeMs,
-                        // Events internally use xRatio-based positions (legacy boundary)
                         @Suppress("DEPRECATION")
                         if (event.layer == EventLayer.GROUND) hillHeightProvider else null
                     )
+                    if (zoom != 1f) {
+                        canvas.restore()
+                    }
                 } catch (e: Exception) {
+                    if (zoom != 1f) {
+                        try { canvas.restore() } catch (_: Exception) {}
+                    }
                     android.util.Log.e("RandomEventLayer", "Error drawing event ${event.javaClass.simpleName}", e)
                 }
             }

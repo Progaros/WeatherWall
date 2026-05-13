@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RectF
 import android.graphics.Shader
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.PreferenceDefaults
@@ -83,6 +84,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
     }
     private val riverPath = Path()
     private val foamPath = Path()
+    private val segmentBounds = RectF()
 
     // Pre-allocated terrain sampling array (numSamples=50 is constant)
     private val terrainYsArray = FloatArray(51)
@@ -112,14 +114,14 @@ class RiverLayer(private val context: Context) : SceneLayer {
     // Animation phase
     private var flowPhase = 0f
 
-    // River water palette
+    // River water palette — increased saturation for visibility
     private val waterPalette = WaterColorUtil.WaterPalette(
-        day   = Color.rgb(70, 130, 180),   // Steel blue
-        dawn  = Color.rgb(140, 120, 140),  // Muted lavender
-        dusk  = Color.rgb(120, 80, 90),    // Dark rose
-        night = Color.rgb(20, 30, 50),     // Deep dark blue
-        deep  = Color.rgb(30, 60, 90),     // Darker shade for depth
-        ice   = Color.rgb(200, 220, 240)   // Icy surface color
+        day   = Color.rgb(45, 115, 170),   // Stronger steel blue
+        dawn  = Color.rgb(120, 105, 135),
+        dusk  = Color.rgb(105, 70, 85),
+        night = Color.rgb(12, 22, 45),
+        deep  = Color.rgb(15, 40, 70),     // Darker for depth contrast
+        ice   = Color.rgb(200, 220, 240)
     )
 
     override fun resize(w: Float, h: Float) {
@@ -382,7 +384,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
         }
 
         riverPath.close()
-        drawRiverSegment(canvas, state, waterColor, layerAlpha, isFrozen, waterLevel, layerWidthFactor)
+        drawRiverSegment(canvas, state, waterColor, layerAlpha, isFrozen, waterLevel, layerWidthFactor, waterSurfaceY)
     }
 
     /**
@@ -392,20 +394,66 @@ class RiverLayer(private val context: Context) : SceneLayer {
     private fun drawRiverSegment(
         canvas: Canvas, state: SimulationState,
         color: Int, alphaFactor: Float, isFrozen: Boolean,
-        waterLevel: Float, widthFactor: Float
+        waterLevel: Float, widthFactor: Float,
+        waterSurfaceY: Float
     ) {
-        val alphaMultiplier = (alphaFactor * 255).toInt().coerceIn(0, 255)
-        riverPaint.shader = null
-        riverPaint.color = Color.argb(
-            alphaMultiplier,
-            Color.red(color), Color.green(color), Color.blue(color)
-        )
-        canvas.drawPath(riverPath, riverPaint)
+        // Boost minimum alpha for visibility
+        val alphaMultiplier = (alphaFactor * 255).toInt().coerceIn(60, 255)
+        val deepColor = waterPalette.deep
+        val shallowColor = RenderConstants.lerpColor(color, Color.rgb(100, 190, 210), 0.25f)
 
-        // Foam/shimmer on top
+        // Compute river path bounds for gradient
+        val bounds = segmentBounds
+        riverPath.computeBounds(bounds, true)
+        val topY = bounds.top
+        val botY = bounds.bottom
+
+        // 3-stop depth gradient: shallow near surface → main water → deep at bottom
+        val sBucket = (topY.toInt() / 4).toLong()
+        val bBucket = (botY.toInt() / 4).toLong()
+        val gradKey = sBucket * 100003L + bBucket * 31L + color.toLong() + alphaMultiplier
+        // Use cached wavy gradient slot (reuse existing cache fields)
+        if (cachedWavyGradient == null || cachedWavyGradientKey != gradKey) {
+            cachedWavyGradient = LinearGradient(
+                0f, topY, 0f, botY,
+                intArrayOf(
+                    Color.argb(alphaMultiplier, Color.red(shallowColor), Color.green(shallowColor), Color.blue(shallowColor)),
+                    Color.argb(alphaMultiplier, Color.red(color), Color.green(color), Color.blue(color)),
+                    Color.argb(alphaMultiplier, Color.red(deepColor), Color.green(deepColor), Color.blue(deepColor))
+                ),
+                floatArrayOf(0f, 0.3f, 1f),
+                Shader.TileMode.CLAMP
+            )
+            cachedWavyGradientKey = gradKey
+        }
+        riverPaint.shader = cachedWavyGradient
+        canvas.drawPath(riverPath, riverPaint)
+        riverPaint.shader = null
+
+        // Shoreline highlight — thin bright stroke along the water edge
+        foamPaint.color = Color.argb((35 * alphaFactor).toInt().coerceIn(10, 55), 180, 220, 255)
+        foamPaint.strokeWidth = 1.5f * widthFactor
+        foamPaint.style = Paint.Style.STROKE
+        canvas.drawPath(riverPath, foamPaint)
+
+        // Flow lines — horizontal ripples near the water surface
+        if (!isFrozen && waterLevel > 0.15f) {
+            val rippleAlpha = (22 * alphaFactor).toInt().coerceIn(6, 40)
+            foamPaint.color = Color.argb(rippleAlpha, 200, 230, 255)
+            foamPaint.strokeWidth = 1f
+            val rippleY1 = topY + (botY - topY) * 0.15f
+            val rippleY2 = topY + (botY - topY) * 0.35f
+            val waveOff1 = sin((flowPhase * 0.8f).toDouble()).toFloat() * 3f
+            val waveOff2 = sin((flowPhase * 0.6f + 1.5f).toDouble()).toFloat() * 3f
+            canvas.drawLine(bounds.left + 4f + waveOff1, rippleY1, bounds.right - 4f + waveOff1, rippleY1, foamPaint)
+            canvas.drawLine(bounds.left + 8f + waveOff2, rippleY2, bounds.right - 8f + waveOff2, rippleY2, foamPaint)
+        }
+
+        // Foam on surface (white froth)
         if (!isFrozen && waterLevel > 0.2f) {
-            foamPaint.color = Color.argb((40 * alphaFactor).toInt().coerceIn(10, 70), 255, 255, 255)
+            foamPaint.color = Color.argb((30 * alphaFactor).toInt().coerceIn(8, 50), 255, 255, 255)
             foamPaint.strokeWidth = 1.5f * widthFactor
+            foamPaint.style = Paint.Style.STROKE
             canvas.drawPath(riverPath, foamPaint)
         }
     }
