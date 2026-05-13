@@ -552,14 +552,15 @@ class TreeRenderer {
             val shadowGustLean = gustPush * RenderConstants.GUST_LEAN_FACTOR
             val tipSway = tipWave * shadowWindFactor * maxAmplitude * 0.5f + shadowGustLean * totalHeight * 0.5f
 
-            // Shadow as a skewed tree triangle flattened onto the ground
+            // Shadow as a thin wedge lying on the ground
             val shadowLength = totalHeight * skewFactor * 0.7f
             val shadowBaseWidth = baseTreeWidth * 0.35f
+            val shadowHeight = totalHeight * 0.025f  // Thin ground-hugging wedge
 
             val shadowTipX = x + shadowLength * skewDirection + tipSway
-            val shadowTipY = groundY + 2f
+            val shadowTipY = groundY + 1f
             val shadowBaseX = x
-            val shadowBaseY = groundY + 2f
+            val shadowBaseY = groundY + shadowHeight
 
             treePath.reset()
             treePath.moveTo(shadowTipX, shadowTipY)

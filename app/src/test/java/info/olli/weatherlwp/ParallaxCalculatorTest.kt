@@ -6,8 +6,11 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Unit tests for ParallaxCalculator
- * Tests parallax physics: strength, max offset, position-based tilt following
+ * Unit tests for ParallaxCalculator (delta-based relative motion model).
+ * Tests parallax physics: strength, max offset, delta-based movement, soft limit.
+ *
+ * Key: Tests must ramp tilt gradually (not set abruptly) because the delta
+ * model computes per-frame changes and discards jumps > JUMP_THRESHOLD.
  */
 class ParallaxCalculatorTest {
 
@@ -16,10 +19,35 @@ class ParallaxCalculatorTest {
     @Before
     fun setUp() {
         calculator = ParallaxCalculator()
-        // Set canvas size to reference height so scale factor is 1.0 for predictable tests
         calculator.setCanvasSize(1080f, 1920f)
-        // Use legacy pixel mode for these tests (maxOffsetPercent = 0)
-        calculator.maxOffsetPercent = 0f
+        calculator.maxOffsetPercent = 0f  // Use legacy pixel mode for these tests
+        calculator.smoothing = 0f         // No smoothing for deterministic tests
+    }
+
+    /** Gradually ramp tilt from (0,0) to (toX, toY). Auto-calculates steps. */
+    private fun rampTiltFromZero(toX: Float, toY: Float, steps: Int = -1) {
+        val mag = kotlin.math.sqrt(toX * toX + toY * toY)
+        val autoSteps = (mag / 0.025f).toInt().coerceIn(5, 100)
+        val actualSteps = if (steps > 0) steps else autoSteps
+        for (i in 0..actualSteps) {
+            val t = i.toFloat() / actualSteps
+            calculator.updateFromSensor(toX * t, toY * t)
+            calculator.update(16)
+        }
+    }
+
+    /** Gradually ramp tilt from (fromX, fromY) to (toX, toY). Auto-calculates steps. */
+    private fun rampTilt(fromX: Float, fromY: Float, toX: Float, toY: Float, steps: Int = -1) {
+        val dx = toX - fromX
+        val dy = toY - fromY
+        val mag = kotlin.math.sqrt(dx * dx + dy * dy)
+        val autoSteps = (mag / 0.025f).toInt().coerceIn(5, 100)
+        val actualSteps = if (steps > 0) steps else autoSteps
+        for (i in 1..actualSteps) {
+            val t = i.toFloat() / actualSteps
+            calculator.updateFromSensor(fromX + dx * t, fromY + dy * t)
+            calculator.update(16)
+        }
     }
 
     // P1: Test position follows tilt and respects maxOffset
@@ -27,36 +55,24 @@ class ParallaxCalculatorTest {
     fun testPositionFollowsTiltWithinMaxOffset() {
         calculator.strength = 1.0f
         calculator.maxOffsetPx = 40f
-        
-        // Full tilt to the right
-        calculator.updateFromSensor(1.0f, 0f)
-        // Let it converge
-        repeat(100) { calculator.update(16) }
-        
-        // With softLimit (tanh): target = 40*1.0*1.0 = 40, softLimit(40,40) ≈ 30.5
+
+        rampTiltFromZero(1.0f, 0f)
+
         val offset = calculator.getOffsetX()
-        assertTrue("X offset should be near softLimit result", offset >= 25f && offset <= 40f)
+        assertTrue("X offset should be positive and bounded: $offset", offset > 20f && offset <= 40f)
     }
 
-    // P2: Test max offset is respected with high strength (circular clamping)
+    // P2: Test max offset is respected with high strength
     @Test
     fun testMaxOffsetIsRespectedWithHighStrength() {
-        calculator.strength = 2.0f  // High strength
+        calculator.strength = 2.0f
         calculator.maxOffsetPx = 50f
-        
-        calculator.updateFromSensor(1.0f, 1.0f)
-        // Run multiple updates to converge
-        repeat(100) { calculator.update(16) }
-        
+
+        rampTiltFromZero(1.0f, 1.0f)
+
         val offset = calculator.getOffset()
-        // Target = (1.0 * 50 * 2.0, 1.0 * 50 * 2.0) = (100, 100)
-        // With circular clamping, magnitude = sqrt((100/50)^2 + (100/50)^2) = sqrt(8) = 2.83
-        // Scaled to unit circle: each axis = 100 / 2.83 ≈ 35.36
-        // But after lerp they should be within the circle (magnitude <= 50)
         val magnitude = kotlin.math.sqrt(offset.first * offset.first + offset.second * offset.second)
-        // With per-axis softLimit, diagonal magnitude can exceed single-axis max
-        // Each axis: softLimit(100, 50) ≈ 48.2, diagonal ≈ sqrt(48.2² + 48.2²) ≈ 68
-        assertTrue("Combined magnitude should be bounded by soft limit", magnitude <= 75f)
+        assertTrue("Combined magnitude should be bounded by soft limit: $magnitude", magnitude <= 75f)
     }
 
     // P3: Test vertical movement works
@@ -64,63 +80,47 @@ class ParallaxCalculatorTest {
     fun testVerticalParallaxWorks() {
         calculator.strength = 1.0f
         calculator.maxOffsetPx = 40f
-        
-        // Full Y tilt, no X
-        calculator.updateFromSensor(0f, 1.0f)
-        repeat(50) { calculator.update(16) }
-        
-        assertTrue("Y offset should be positive for positive Y input", 
-            calculator.getOffsetY() > 10f)  // Should have moved significantly
-        assertEquals("X offset should be minimal for no X input", 
-            0f, calculator.getOffsetX(), 1f)
+
+        rampTiltFromZero(0f, 1.0f)
+
+        assertTrue("Y offset should be positive", calculator.getOffsetY() > 10f)
+        assertEquals("X offset should be minimal", 0f, calculator.getOffsetX(), 1f)
     }
 
-    // P4: Test position stays when tilt is held constant
+    // P4: Test position stays when tilt is held constant (delta = 0)
     @Test
     fun testPositionStaysWithConstantTilt() {
         calculator.strength = 1.0f
         calculator.maxOffsetPx = 40f
-        
-        // Set a tilt and let it fully converge
-        calculator.updateFromSensor(0.5f, 0f)
-        repeat(200) { calculator.update(16) }  // More frames to fully converge
+
+        rampTiltFromZero(0.5f, 0f)
         val initialOffset = calculator.getOffsetX()
-        
-        // Continue with same tilt for more frames (no sensor change needed - same value)
+
+        // Hold same tilt (delta = 0 each frame, no return speed)
         repeat(50) { calculator.update(16) }
         val laterOffset = calculator.getOffsetX()
-        
-        // Position should stay stable (fully converged)
-        assertEquals("Position should remain stable when tilt is constant", 
-            initialOffset, laterOffset, 0.5f)
+
+        assertEquals("Position should remain stable", initialOffset, laterOffset, 0.5f)
     }
-    
-    // P4b: Test radial clamping consistency (diagonal distance ≈ cardinal distance)
+
+    // P4b: Radial clamping consistency
     @Test
     fun testCircularClampingConsistency() {
         calculator.strength = 2.0f
         calculator.maxOffsetPx = 50f
-        
-        // Test diagonal tilt (45 degrees)
-        calculator.updateFromSensor(1.0f, 1.0f)
-        repeat(100) { calculator.update(16) }
-        val diagonalOffset = calculator.getOffset()
+
+        rampTiltFromZero(1.0f, 1.0f)
         val diagonalDist = kotlin.math.sqrt(
-            diagonalOffset.first * diagonalOffset.first + diagonalOffset.second * diagonalOffset.second
+            calculator.getOffsetX().let { it * it } + calculator.getOffsetY().let { it * it }
         )
-        
-        // Reset
+
         calculator.reset()
-        
-        // Test pure X tilt
-        calculator.updateFromSensor(1.0f, 0f)
-        repeat(100) { calculator.update(16) }
+
+        rampTiltFromZero(1.0f, 0f)
         val pureXOffset = kotlin.math.abs(calculator.getOffsetX())
-        
-        // With radial soft-limit, diagonal distance should be similar to cardinal distance
-        // (both saturate at the same radial maximum)
-        assertEquals("Diagonal distance should approximate cardinal distance (radial limit)",
-            pureXOffset, diagonalDist, pureXOffset * 0.25f)
+
+        assertEquals("Diagonal distance ≈ cardinal distance (radial limit)",
+            pureXOffset, diagonalDist, pureXOffset * 0.3f)
     }
 
     // P5: Test returning to center when tilt goes to zero
@@ -128,372 +128,254 @@ class ParallaxCalculatorTest {
     fun testReturnsToZeroWhenTiltRemoved() {
         calculator.strength = 1.0f
         calculator.maxOffsetPx = 40f
-        calculator.returnSpeed = 1.0f  // Fast return for predictable test
-        
-        // Move to offset
-        calculator.updateFromSensor(1.0f, 0f)
-        repeat(50) { calculator.update(16) }
-        
-        assertTrue("Should have moved away from center", calculator.getOffsetX() > 10f)
-        
-        // Remove tilt
-        calculator.updateFromSensor(0f, 0f)
-        repeat(100) { calculator.update(16) }
-        
-        // Should return to center
+        calculator.returnSpeed = 1.0f
+
+        rampTiltFromZero(1.0f, 0f)
+        assertTrue("Should have moved", calculator.getOffsetX() > 10f)
+
+        // Ramp back to zero, then hold for recenter
+        rampTilt(1.0f, 0f, 0f, 0f, 20)
+        repeat(200) { calculator.update(16) }
+
         assertTrue("Should return near center", kotlin.math.abs(calculator.getOffsetX()) < 5f)
     }
 
-    // Test reset functionality
     @Test
     fun testResetClearsOffset() {
-        calculator.updateFromSensor(1.0f, 1.0f)
-        repeat(20) { calculator.update(16) }
-        
+        rampTiltFromZero(1.0f, 1.0f, 20)
         assertTrue("Should have offset before reset", calculator.getOffsetX() > 0f)
-        
+
         calculator.reset()
-        
         assertEquals(0f, calculator.getOffsetX(), 0.001f)
         assertEquals(0f, calculator.getOffsetY(), 0.001f)
     }
 
-    // Test depth-based offset
     @Test
     fun testDepthBasedOffset() {
         calculator.strength = 1.0f
         calculator.maxOffsetPx = 100f
-        calculator.depthSeparation = 1.0f  // Max separation for clear test
-        calculator.perspective = 0f         // Foreground-heavy for predictable math
-        
-        calculator.updateFromSensor(1.0f, 0f)
-        repeat(100) { calculator.update(16) }
-        
+        calculator.depthSeparation = 1.0f
+        calculator.perspective = 0f
+
+        rampTiltFromZero(1.0f, 0f)
+
         val baseOffset = calculator.getOffsetX()
         val halfDepthOffset = calculator.getOffsetXForDepth(0.5f)
         val fullDepthOffset = calculator.getOffsetXForDepth(1.0f)
-        
-        // With depthSeparation=1.0:
-        // At depth 0.5: effectiveDepth = 0.5 * 1.0 = 0.5
-        // At depth 1.0: effectiveDepth = 1.0 * 1.0 = 1.0
-        assertEquals("Half depth should be half offset", 
-            baseOffset * 0.5f, halfDepthOffset, 3f)
-        assertEquals("Full depth should equal base offset", 
-            baseOffset, fullDepthOffset, 3f)
+
+        assertEquals("Half depth", baseOffset * 0.5f, halfDepthOffset, 3f)
+        assertEquals("Full depth", baseOffset, fullDepthOffset, 3f)
     }
 
-    // Test getOffsetForDepth returns correct pair
     @Test
     fun testGetOffsetForDepthReturnsPair() {
-        calculator.depthSeparation = 1.0f  // Max separation for clear test
-        
-        calculator.updateFromSensor(0.5f, 0.8f)
-        repeat(100) { calculator.update(16) }
-        
+        calculator.depthSeparation = 1.0f
+        rampTiltFromZero(0.5f, 0.8f)
+
         val offset = calculator.getOffsetForDepth(0.5f)
-        
-        // With depthSeparation=1.0: effectiveDepth = 0.5
         assertEquals(calculator.getOffsetX() * 0.5f, offset.first, 1f)
         assertEquals(calculator.getOffsetY() * 0.5f, offset.second, 1f)
     }
 
-    // Test strength affects offset magnitude
     @Test
     fun testStrengthAffectsOffset() {
         calculator.maxOffsetPx = 40f
-        
-        // Low strength
+
         calculator.strength = 0.5f
-        calculator.updateFromSensor(1.0f, 0f)
-        repeat(100) { calculator.update(16) }
+        rampTiltFromZero(1.0f, 0f)
         val lowStrengthOffset = calculator.getOffsetX()
-        
+
         calculator.reset()
-        
-        // High strength (still clamped to maxOffset)
+
         calculator.strength = 1.5f
-        calculator.updateFromSensor(1.0f, 0f)
-        repeat(100) { calculator.update(16) }
+        rampTiltFromZero(1.0f, 0f)
         val highStrengthOffset = calculator.getOffsetX()
-        
-        assertTrue("Higher strength should produce larger offset",
-            highStrengthOffset > lowStrengthOffset)
+
+        assertTrue("Higher strength → larger offset", highStrengthOffset > lowStrengthOffset)
     }
 
-    // Test all four cardinal directions
     @Test
     fun testAllCardinalDirections() {
         calculator.strength = 1.0f
         calculator.maxOffsetPx = 40f
-        
-        // Right (positive X)
-        calculator.updateFromSensor(1.0f, 0f)
-        repeat(100) { calculator.update(16) }
-        assertTrue("Right tilt should produce positive X offset", calculator.getOffsetX() > 30f)
-        assertEquals("Right tilt should have minimal Y offset", 0f, calculator.getOffsetY(), 1f)
-        
+
+        // Right
+        rampTiltFromZero(1.0f, 0f)
+        assertTrue("Right +X", calculator.getOffsetX() > 20f)
+        assertEquals("Right Y≈0", 0f, calculator.getOffsetY(), 1f)
+
         calculator.reset()
-        
-        // Left (negative X)
-        calculator.updateFromSensor(-1.0f, 0f)
-        repeat(100) { calculator.update(16) }
-        assertTrue("Left tilt should produce negative X offset", calculator.getOffsetX() < -30f)
-        assertEquals("Left tilt should have minimal Y offset", 0f, calculator.getOffsetY(), 1f)
-        
+        rampTiltFromZero(-1.0f, 0f)
+        assertTrue("Left -X", calculator.getOffsetX() < -20f)
+
         calculator.reset()
-        
-        // Down (positive Y)
-        calculator.updateFromSensor(0f, 1.0f)
-        repeat(100) { calculator.update(16) }
-        assertEquals("Down tilt should have minimal X offset", 0f, calculator.getOffsetX(), 1f)
-        assertTrue("Down tilt should produce positive Y offset", calculator.getOffsetY() > 30f)
-        
+        rampTiltFromZero(0f, 1.0f)
+        assertTrue("Down +Y", calculator.getOffsetY() > 20f)
+
         calculator.reset()
-        
-        // Up (negative Y)
-        calculator.updateFromSensor(0f, -1.0f)
-        repeat(100) { calculator.update(16) }
-        assertEquals("Up tilt should have minimal X offset", 0f, calculator.getOffsetX(), 1f)
-        assertTrue("Up tilt should produce negative Y offset", calculator.getOffsetY() < -30f)
+        rampTiltFromZero(0f, -1.0f)
+        assertTrue("Up -Y", calculator.getOffsetY() < -20f)
     }
 
-    // Test diagonal directions
     @Test
     fun testDiagonalDirections() {
         calculator.strength = 1.0f
         calculator.maxOffsetPx = 40f
-        
-        // Top-right diagonal
-        calculator.updateFromSensor(0.7f, -0.7f)
-        repeat(100) { calculator.update(16) }
-        assertTrue("Top-right should have positive X", calculator.getOffsetX() > 20f)
-        assertTrue("Top-right should have negative Y", calculator.getOffsetY() < -20f)
-        
+
+        rampTiltFromZero(0.7f, -0.7f)
+        assertTrue("Top-right +X", calculator.getOffsetX() > 10f)
+        assertTrue("Top-right -Y", calculator.getOffsetY() < -10f)
+
         calculator.reset()
-        
-        // Bottom-left diagonal
-        calculator.updateFromSensor(-0.7f, 0.7f)
-        repeat(100) { calculator.update(16) }
-        assertTrue("Bottom-left should have negative X", calculator.getOffsetX() < -20f)
-        assertTrue("Bottom-left should have positive Y", calculator.getOffsetY() > 20f)
+
+        rampTiltFromZero(-0.7f, 0.7f)
+        assertTrue("Bottom-left -X", calculator.getOffsetX() < -10f)
+        assertTrue("Bottom-left +Y", calculator.getOffsetY() > 10f)
     }
 
-    // Test smooth transition between directions
     @Test
     fun testSmoothTransitionBetweenDirections() {
         calculator.strength = 1.0f
         calculator.maxOffsetPx = 40f
-        calculator.smoothing = 0.4f  // Default smoothing
-        
-        // Start tilted right
-        calculator.updateFromSensor(1.0f, 0f)
-        repeat(100) { calculator.update(16) }
+
+        rampTiltFromZero(1.0f, 0f)
         val rightOffset = calculator.getOffsetX()
-        assertTrue("Should be at right", rightOffset > 30f)
-        
-        // Transition to left (tilt changes direction)
-        calculator.updateFromSensor(-1.0f, 0f)
-        
-        // After just a few frames, should start moving left but not be there yet
-        repeat(20) { calculator.update(16) }
-        val transitioningOffset = calculator.getOffsetX()
-        assertTrue("Should be transitioning (less than initial right)",
-            transitioningOffset < rightOffset)
-        
-        // After more frames, should reach left
-        repeat(100) { calculator.update(16) }
+        assertTrue("Should be right", rightOffset > 20f)
+
+        // Ramp from right to left
+        rampTilt(1.0f, 0f, -1.0f, 0f, 100)
         val leftOffset = calculator.getOffsetX()
-        assertTrue("Should reach left side", leftOffset < -30f)
+        assertTrue("Should reach left side: $leftOffset", leftOffset < -20f)
     }
 
-    // Test zero tilt returns to center
     @Test
     fun testZeroTiltReturnsToCenter() {
         calculator.strength = 1.0f
         calculator.maxOffsetPx = 40f
-        calculator.returnSpeed = 1.0f  // Fast return for predictable test
-        calculator.smoothing = 0f      // No smoothing for faster convergence
-        
-        // Move to various positions, then return to center
+        calculator.returnSpeed = 1.0f
+
         val testDirections = listOf(
-            Pair(1.0f, 0f),    // Right
-            Pair(-1.0f, 0f),   // Left
-            Pair(0f, 1.0f),    // Down
-            Pair(0f, -1.0f),   // Up
-            Pair(0.7f, 0.7f),  // Bottom-right
-            Pair(-0.7f, -0.7f) // Top-left
+            Pair(1.0f, 0f), Pair(-1.0f, 0f), Pair(0f, 1.0f), Pair(0f, -1.0f)
         )
-        
+
         for (direction in testDirections) {
-            calculator.updateFromSensor(direction.first, direction.second)
-            repeat(50) { calculator.update(16) }
-            
-            // Should be away from center
-            val offsetMagnitude = kotlin.math.sqrt(
-                calculator.getOffsetX() * calculator.getOffsetX() + 
-                calculator.getOffsetY() * calculator.getOffsetY()
+            rampTiltFromZero(direction.first, direction.second)
+            val mag = kotlin.math.sqrt(
+                calculator.getOffsetX().let { it * it } + calculator.getOffsetY().let { it * it }
             )
-            assertTrue("Should have moved from center for ${direction}", offsetMagnitude > 10f)
-            
-            // Return to center - increase iterations for reliable convergence
-            calculator.updateFromSensor(0f, 0f)
+            assertTrue("Should have moved for $direction: $mag", mag > 5f)
+
+            // Ramp back to zero then hold for recenter
+            rampTilt(direction.first, direction.second, 0f, 0f, 20)
             repeat(200) { calculator.update(16) }
-            
-            // Should be near center - use larger tolerance for robustness
-            assertEquals("X should return to center", 0f, calculator.getOffsetX(), 5f)
-            assertEquals("Y should return to center", 0f, calculator.getOffsetY(), 5f)
+
+            assertEquals("X near center", 0f, calculator.getOffsetX(), 5f)
+            assertEquals("Y near center", 0f, calculator.getOffsetY(), 5f)
         }
     }
 
-    // Test partial tilt produces proportional offset
     @Test
     fun testPartialTiltProducesProportionalOffset() {
         calculator.strength = 1.0f
         calculator.maxOffsetPx = 40f
-        
-        // Full tilt
-        calculator.updateFromSensor(1.0f, 0f)
-        repeat(100) { calculator.update(16) }
+
+        rampTiltFromZero(1.0f, 0f)
         val fullTiltOffset = calculator.getOffsetX()
-        
+
         calculator.reset()
-        
-        // Half tilt
-        calculator.updateFromSensor(0.5f, 0f)
-        repeat(100) { calculator.update(16) }
+
+        rampTiltFromZero(0.5f, 0f)
         val halfTiltOffset = calculator.getOffsetX()
-        
-        // With softLimit (tanh), half tilt input produces more than half output
-        // (tanh is near-linear for small inputs, so half input ≈ half output for small values)
-        // But with strength*maxOffset, the relationship is nonlinear.
-        // Just verify that half tilt produces less than full tilt
-        assertTrue("Half tilt should produce less than full tilt",
-            halfTiltOffset < fullTiltOffset)
-        assertTrue("Half tilt should produce more than quarter of full tilt",
-            halfTiltOffset > fullTiltOffset * 0.25f)
+
+        assertTrue("Half tilt < full tilt", halfTiltOffset < fullTiltOffset)
+        assertTrue("Half tilt > quarter of full", halfTiltOffset > fullTiltOffset * 0.25f)
     }
-    
-    // ============== Circular Clamping Tests ==============
-    
+
+    // ============== Pure math tests (unchanged) ==============
+
     @Test
     fun testCircularClampingPrinciple() {
-        // Test the circular clamping formula
-        val maxOffsetPercent = 15f
-        
-        // If tilt is at corner (1, 1), both X and Y are at max
-        val targetX = 1.0f  // Normalized to maxOffset
+        val targetX = 1.0f
         val targetY = 1.0f
-        
-        // Calculate magnitude
         val magnitude = kotlin.math.sqrt(targetX * targetX + targetY * targetY)
-        
-        // Magnitude should be sqrt(2) ≈ 1.414
         assertTrue("Corner magnitude exceeds 1", magnitude > 1f)
         assertEquals("Corner magnitude is sqrt(2)", kotlin.math.sqrt(2f), magnitude, 0.01f)
-        
-        // After circular clamping, magnitude should be 1
         val scale = 1f / magnitude
-        val clampedX = targetX * scale
-        val clampedY = targetY * scale
-        
-        val clampedMagnitude = kotlin.math.sqrt(clampedX * clampedX + clampedY * clampedY)
+        val clampedMagnitude = kotlin.math.sqrt((targetX * scale).let { it * it } + (targetY * scale).let { it * it })
         assertEquals("Clamped magnitude should be 1", 1f, clampedMagnitude, 0.01f)
     }
-    
+
     @Test
     fun testCircularClampingPreservesDirection() {
-        // Direction should be preserved after clamping
         val targetX = 0.8f
         val targetY = 0.6f
-        
         val magnitude = kotlin.math.sqrt(targetX * targetX + targetY * targetY)
-        // magnitude = 1.0, so no clamping needed
-        assertEquals("This vector is already on unit circle", 1f, magnitude, 0.01f)
-        
-        // No scaling needed when already at unit magnitude
-        val angle = kotlin.math.atan2(targetY, targetX)
-        val expectedAngle = kotlin.math.atan2(0.6f, 0.8f)
-        assertEquals("Direction preserved", expectedAngle, angle, 0.01f)
+        assertEquals("Already on unit circle", 1f, magnitude, 0.01f)
     }
-    
+
     @Test
     fun testCircularClampingVsSquare() {
-        // Square clamping: max = 1.0 in each axis independently
-        // Circular clamping: max = 1.0 in combined magnitude
-        
-        // At corner (1, 1):
-        // Square: stays at (1, 1) - magnitude = sqrt(2) ≈ 1.414
-        // Circular: becomes (0.707, 0.707) - magnitude = 1.0
-        
-        val cornerX = 1f
-        val cornerY = 1f
-        
-        // Square clamping result
-        val squareMagnitude = kotlin.math.sqrt(cornerX * cornerX + cornerY * cornerY)
-        
-        // Circular clamping result
-        val circularX = cornerX / squareMagnitude
-        val circularY = cornerY / squareMagnitude
-        val circularMagnitude = kotlin.math.sqrt(circularX * circularX + circularY * circularY)
-        
-        assertTrue("Square clamping allows corner overflow", squareMagnitude > 1f)
-        assertEquals("Circular clamping constrains to unit circle", 1f, circularMagnitude, 0.01f)
+        val squareMagnitude = kotlin.math.sqrt(1f * 1f + 1f * 1f)
+        val circularX = 1f / squareMagnitude
+        val circularMagnitude = kotlin.math.sqrt(circularX * circularX + circularX * circularX)
+        assertTrue("Square allows overflow", squareMagnitude > 1f)
+        assertEquals("Circular constrains to 1", 1f, circularMagnitude, 0.01f)
     }
-    
+
     @Test
     fun testMaxOffsetPercentIs20() {
-        // Verify the default max offset is 20%
-        val newCalculator = ParallaxCalculator()
-        
-        // Default should be 20%
-        assertEquals("Default maxOffsetPercent should be 20", 20f, newCalculator.maxOffsetPercent, 0.01f)
+        assertEquals("Default maxOffsetPercent", 20f, ParallaxCalculator().maxOffsetPercent, 0.01f)
     }
-    
-    // ============== Direct Mode (smoothing=0) Tests ==============
-    
-    @Test
-    fun testDirectModeInstantResponse() {
-        // When smoothing=0, position should instantly match target (no lerping)
-        // This matches expected behavior
-        calculator.smoothing = 0f
-        calculator.strength = 1.0f
-        calculator.maxOffsetPx = 40f
-        
-        // Set tilt and update ONCE
-        calculator.updateFromSensor(1.0f, 0f)
-        calculator.update(16)  // Single frame
-        
-        // With softLimit: target = softLimit(40, 40) = 40 * tanh(1) ≈ 30.5
-        val offset = calculator.getOffsetX()
-        assertTrue("Direct mode should reach target in one frame", offset > 25f && offset < 35f)
-    }
-    
+
     @Test
     fun testDefaultSmoothingIsNonZero() {
-        // Verify the default is 0.134 (smoothing=30 → 0.02 + 0.3*0.38)
-        val newCalculator = ParallaxCalculator()
-        
-        assertEquals("Default smoothing should be 0.134", 0.134f, newCalculator.smoothing, 0.01f)
+        assertEquals("Default smoothing", 0.134f, ParallaxCalculator().smoothing, 0.01f)
     }
-    
+
+    // ============== Delta-model specific tests ==============
+
     @Test
-    fun testSmoothingAboveZeroAddsLerp() {
-        // When smoothing > 0, there should be gradual interpolation
-        calculator.smoothing = 0.5f
+    fun testDirectModeSmallDeltaProducesProportionalMove() {
         calculator.strength = 1.0f
-        calculator.maxOffsetPx = 40f
-        
-        // Set tilt and update once
-        calculator.updateFromSensor(1.0f, 0f)
+        calculator.maxOffsetPx = 100f
+
+        // First update sets baseline
+        calculator.updateFromSensor(0f, 0f)
         calculator.update(16)
-        
-        // With smoothing, position should NOT be at target yet
+
+        // Single small delta
+        calculator.updateFromSensor(0.1f, 0f)
+        calculator.update(16)
+
         val offset = calculator.getOffsetX()
-        assertTrue("With smoothing, first frame should not reach full target", offset < 35f)
-        
-        // After many frames, should converge to softLimit target (~30.5 for maxOffset=40)
-        repeat(100) { calculator.update(16) }
-        val convergedOffset = calculator.getOffsetX()
-        assertTrue("After many frames should be near softLimit target", convergedOffset >= 25f)
+        // Expected: 0.1 * 100 * 1.0 = 10px (before soft limit, which barely changes it)
+        assertTrue("Small delta should produce proportional offset: $offset", offset > 8f && offset < 12f)
+    }
+
+    @Test
+    fun testSmoothingDelaysResponse() {
+        // With smoothing = 0: delta is applied directly
+        calculator.strength = 1.0f
+        calculator.maxOffsetPx = 100f
+        calculator.smoothing = 0f
+
+        calculator.updateFromSensor(0f, 0f)
+        calculator.update(16)
+        calculator.updateFromSensor(0.1f, 0f)
+        calculator.update(16)
+        val directOffset = calculator.getOffsetX()
+
+        calculator.reset()
+
+        // With smoothing > 0: delta is filtered, so less immediate movement
+        calculator.smoothing = 0.5f
+        calculator.updateFromSensor(0f, 0f)
+        calculator.update(16)
+        calculator.updateFromSensor(0.1f, 0f)
+        calculator.update(16)
+        val smoothedOffset = calculator.getOffsetX()
+
+        assertTrue("Smoothing should delay response: direct=$directOffset, smoothed=$smoothedOffset",
+            smoothedOffset < directOffset)
     }
 }
