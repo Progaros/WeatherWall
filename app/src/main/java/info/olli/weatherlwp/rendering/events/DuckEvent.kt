@@ -60,7 +60,8 @@ class DuckEvent(random: Random, override val spawnTimeMs: Long = System.currentT
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float,
                       absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?) {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
-        val x = startX + direction * speed * elapsedMs
+        val traversalElapsed = EventTraversal.scaledElapsed(elapsedMs, height)
+        val x = startX + direction * speed * traversalElapsed
 
         val px = parallaxCalculator.getOffsetXForDepth(depthFactor)
         val py = parallaxCalculator.getOffsetYForDepth(depthFactor)

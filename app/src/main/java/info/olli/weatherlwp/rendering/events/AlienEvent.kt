@@ -63,7 +63,8 @@ class AlienEvent(random: Random, override val spawnTimeMs: Long = System.current
         val size = unit * 5f  // About 2% saucer width max (40px on 2000px screen)
         
         val elapsedMs = absoluteTimeMs - spawnTimeMs
-        val x = startX + direction * speed * elapsedMs
+        val traversalElapsed = EventTraversal.scaledElapsed(elapsedMs, height)
+        val x = startX + direction * speed * traversalElapsed
         // Slow, gentle movement - much calmer UFO drift
         val wobblePhase = initialWobblePhase + elapsedMs * 0.0008f  // Very slow wobble
         val hoverPhase = initialHoverPhase + elapsedMs * 0.0005f   // Very slow hover bob

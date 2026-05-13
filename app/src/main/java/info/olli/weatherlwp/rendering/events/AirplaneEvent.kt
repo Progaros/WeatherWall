@@ -59,7 +59,8 @@ class AirplaneEvent(random: Random, override val spawnTimeMs: Long = System.curr
         val size = unit * 8f  // Base airplane size
         
         val elapsedMs = absoluteTimeMs - spawnTimeMs
-        val progress = (elapsedMs * speed).coerceIn(-0.1f, 1.4f)
+        val traversalElapsed = EventTraversal.scaledElapsed(elapsedMs, height)
+        val progress = (traversalElapsed * speed).coerceIn(-0.1f, 1.4f)
         
         val px = parallaxCalculator.getOffsetXForDepth(parallaxDepth)
         val py = parallaxCalculator.getOffsetYForDepth(parallaxDepth)

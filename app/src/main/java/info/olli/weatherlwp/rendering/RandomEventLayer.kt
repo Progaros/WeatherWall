@@ -212,8 +212,11 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         
         // Update existing events and remove finished ones
         for (event in events) {
-            if (!event.update(deltaTimeMs, state, width, height)) {
-                // Event finished - need to remove it
+            // Events get proportionally longer lifetime at smaller screen heights
+            // so their height-scaled traversal can complete before expiry.
+            val scaledDurationMs = (event.durationMs / EventTraversal.heightScale(height)).toLong()
+            val isStillAlive = (state.absoluteTimeMs - event.spawnTimeMs) < scaledDurationMs
+            if (!isStillAlive) {
                 if (currentEvents == null) {
                     currentEvents = events.toMutableList()
                 }

@@ -68,8 +68,9 @@ class BatEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val elapsedSec = elapsedMs / 1000f
         
-        // Base position from elapsed time
-        val baseX = startX + direction * speed * elapsedMs
+        // Base position from elapsed time (height-scaled traversal)
+        val traversalElapsed = EventTraversal.scaledElapsed(elapsedMs, height)
+        val baseX = startX + direction * speed * traversalElapsed
         
         val px = parallaxCalculator.getOffsetXForDepth(parallaxDepth)
         val py = parallaxCalculator.getOffsetYForDepth(parallaxDepth)

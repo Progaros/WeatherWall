@@ -70,8 +70,9 @@ class BirdFlockEvent(random: Random, override val spawnTimeMs: Long = System.cur
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val elapsedSec = elapsedMs / 1000f
         
-        // Calculate x position from elapsed time
-        val x = -0.15f + speed * elapsedMs
+        // Calculate x position from elapsed time (height-scaled traversal)
+        val traversalElapsed = EventTraversal.scaledElapsed(elapsedMs, height)
+        val x = -0.15f + speed * traversalElapsed
         
         // Smooth flap cycle using sine - continuous oscillation
         val flapCycleSec = flapCycleMs / 1000f

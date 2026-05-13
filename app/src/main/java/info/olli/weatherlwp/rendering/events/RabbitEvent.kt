@@ -68,8 +68,9 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
         
         val hopPhase = (elapsedMs * 0.006f) % (2f * 3.14159f)  // Slower hop animation
         
-        // Calculate X position based on average speed
-        val x = startX + direction * avgSpeed * elapsedMs
+        // Calculate X position based on average speed (height-scaled)
+        val traversalElapsed = EventTraversal.scaledElapsed(elapsedMs, height)
+        val x = startX + direction * avgSpeed * traversalElapsed
         
         // Use depthFactor for parallax so rabbit moves with terrain at correct depth
         val px = parallaxCalculator.getOffsetXForDepth(depthFactor)

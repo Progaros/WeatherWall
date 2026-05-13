@@ -69,7 +69,8 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val localTime = elapsedMs * 0.001f
-        val progress = -0.15f + speed * elapsedMs
+        val traversalElapsed = EventTraversal.scaledElapsed(elapsedMs, height)
+        val progress = -0.15f + speed * traversalElapsed
         
         val px = parallaxCalculator.getOffsetXForDepth(parallaxDepth)
         val py = parallaxCalculator.getOffsetYForDepth(parallaxDepth)

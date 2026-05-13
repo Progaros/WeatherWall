@@ -302,10 +302,12 @@ class MountainLayer(private val context: Context) : SceneLayer {
         cachedHazeHeight = 0f
 
         val firstGenerate = lastGeneratedWidth <= 0f || lastGeneratedHeight <= 0f
-        // Only regenerate when WIDTH changes — height changes are handled by
-        // the viewport transform (zoom effect) without needing new objects.
+        // Regenerate when visible world range changes significantly.
         val widthChangedSignificantly = kotlin.math.abs(lastGeneratedWidth - w) > 1f
-        if (firstGenerate || widthChangedSignificantly) {
+        val newWorldHalf = RenderConstants.getVisibleWorldHalf(w, h)
+        val oldWorldHalf = RenderConstants.getVisibleWorldHalf(lastGeneratedWidth, lastGeneratedHeight)
+        val visibleRangeGrew = newWorldHalf > oldWorldHalf + 10f
+        if (firstGenerate || widthChangedSignificantly || visibleRangeGrew) {
             generateMountains()
             lastGeneratedWidth = w
             lastGeneratedHeight = h

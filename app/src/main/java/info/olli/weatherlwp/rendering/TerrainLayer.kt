@@ -562,11 +562,15 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         bushRenderer.updateDimensions(w, h)
 
         val firstGenerate = lastGeneratedWidth <= 0f || lastGeneratedHeight <= 0f
-        // Only regenerate when WIDTH changes — height changes are handled by
-        // the viewport transform (zoom effect) without needing new objects.
+        // Regenerate when visible world range changes significantly.
+        // Width changes AND height decreases both widen the visible range
+        // (aspect = w/h increases), so decorations must cover more world.
         val widthChangedSignificantly = kotlin.math.abs(lastGeneratedWidth - w) > 1f
+        val newWorldHalf = RenderConstants.getVisibleWorldHalf(w, h)
+        val oldWorldHalf = RenderConstants.getVisibleWorldHalf(lastGeneratedWidth, lastGeneratedHeight)
+        val visibleRangeGrew = newWorldHalf > oldWorldHalf + 10f
 
-        if (firstGenerate || widthChangedSignificantly) {
+        if (firstGenerate || widthChangedSignificantly || visibleRangeGrew) {
             generateTerrain()
             lastGeneratedWidth = w
             lastGeneratedHeight = h

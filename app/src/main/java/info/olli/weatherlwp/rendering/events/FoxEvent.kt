@@ -67,7 +67,8 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
                       hillHeightProvider: HillHeightProvider?) {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
-        val x = startX + direction * speed * elapsedMs
+        val traversalElapsed = EventTraversal.scaledElapsed(elapsedMs, height)
+        val x = startX + direction * speed * traversalElapsed
         val walkPhase = elapsedMs * 0.008f  // Slower walk animation
         
         // Use depthFactor for parallax so fox moves with terrain at correct depth

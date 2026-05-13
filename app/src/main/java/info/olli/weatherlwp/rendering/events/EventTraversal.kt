@@ -2,6 +2,7 @@ package info.olli.weatherlwp.rendering.events
 
 import android.graphics.Canvas
 import info.olli.weatherlwp.parallax.ParallaxCalculator
+import info.olli.weatherlwp.rendering.RenderConstants
 import kotlin.math.abs
 import kotlin.random.Random
 
@@ -10,6 +11,36 @@ import kotlin.random.Random
  * Centralizing these calculations avoids per-event drift in spawn/expiry behavior.
  */
 object EventTraversal {
+
+    /** Minimum movement scale — prevents events from appearing frozen on tiny widgets. */
+    const val MIN_HEIGHT_SCALE = 0.25f
+    /** Maximum movement scale — prevents events from being too fast on large screens. */
+    const val MAX_HEIGHT_SCALE = 4.0f
+
+    /**
+     * Movement scale factor for screen-overlay events.
+     *
+     * Events are authored at [RenderConstants.REFERENCE_HEIGHT]. When the screen
+     * height is smaller (landscape, widget, zoomed-in), their traversal speed is
+     * reduced proportionally so they don't look too fast relative to the visible
+     * world slice.
+     *
+     * - At REFERENCE_HEIGHT (1920): returns 1.0 (unchanged speed)
+     * - At smaller heights: returns < 1.0 (slower — viewport sees less world)
+     * - At larger heights: returns > 1.0 (faster — viewport sees more world)
+     */
+    fun heightScale(screenHeight: Float): Float =
+        (screenHeight / RenderConstants.REFERENCE_HEIGHT).coerceIn(MIN_HEIGHT_SCALE, MAX_HEIGHT_SCALE)
+
+    /**
+     * Scale elapsed time for horizontal traversal position.
+     *
+     * Use this in event draw() to scale only the traversal component of
+     * elapsed time. Animation timing (wing flaps, wobble) should NOT use this.
+     */
+    fun scaledElapsed(elapsedMs: Long, screenHeight: Float): Long =
+        (elapsedMs * heightScale(screenHeight)).toLong()
+
     data class HorizontalPath(
         val startX: Float,
         val endX: Float,

@@ -63,9 +63,10 @@ class ShootingStarEvent(random: Random, override val spawnTimeMs: Long = System.
         // Don't draw during the delay period
         if (elapsedMs < spawnDelayMs) return
         
-        // Adjust progress for the delay
+        // Adjust progress for the delay (height-scaled traversal)
         val activeElapsedMs = elapsedMs - spawnDelayMs
-        val progress = speed * activeElapsedMs
+        val traversalElapsed = EventTraversal.scaledElapsed(activeElapsedMs, height)
+        val progress = speed * traversalElapsed
         
         // Calculate fade-out alpha (1.0 -> 0.0 during last 20% of journey)
         val fadeAlpha = if (progress >= fadeStartProgress) {

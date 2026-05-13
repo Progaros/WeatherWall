@@ -95,9 +95,10 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         val cycleTime = elapsedMs % (grazeInterval + grazeDuration)
         val isGrazing = cycleTime >= grazeInterval
         
-        // Calculate position considering grazing pauses
+        // Calculate position considering grazing pauses (height-scaled)
         val movingTime = movingElapsedMs(absoluteTimeMs)
-        val x = startX + direction * speed * movingTime
+        val scaledMovingTime = EventTraversal.scaledElapsed(movingTime, height)
+        val x = startX + direction * speed * scaledMovingTime
         
         // Skip if off-screen
         if (x < -0.2f || x > 1.2f) return

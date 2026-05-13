@@ -94,8 +94,10 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
         val cyclePos = elapsedMs % (stopIntervalMs + stopDurationMs)
         val isStopped = cyclePos > stopIntervalMs
         
-        // Calculate position
-        val effectiveElapsed = getEffectiveElapsedMs(elapsedMs)
+        // Calculate position (height-scaled traversal)
+        val effectiveElapsed = getEffectiveElapsedMs(
+            EventTraversal.scaledElapsed(elapsedMs, height)
+        )
         
         val x = startX + direction * speed * effectiveElapsed
         val y = hillHeightProvider?.invoke(x, depthFactor) ?: baseY

@@ -70,7 +70,8 @@ class HotAirBalloonEvent(random: Random, override val spawnTimeMs: Long = System
         val size = unit * 6f
         
         val elapsedMs = absoluteTimeMs - spawnTimeMs
-        val progress = -0.1f + speed * elapsedMs
+        val traversalElapsed = EventTraversal.scaledElapsed(elapsedMs, height)
+        val progress = -0.1f + speed * traversalElapsed
         
         val px = parallaxCalculator.getOffsetXForDepth(parallaxDepth)
         val py = parallaxCalculator.getOffsetYForDepth(parallaxDepth)

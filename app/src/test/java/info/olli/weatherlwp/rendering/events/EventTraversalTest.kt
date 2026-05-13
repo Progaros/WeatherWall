@@ -191,4 +191,41 @@ class EventTraversalTest {
         assertEquals("Event screen speed is zoom-independent",
             screenSpeedRef, screenSpeedZoomed, 0.001f)
     }
+
+    // ============== Height-scaled motion tests ==============
+
+    @Test
+    fun `heightScale returns 1 at reference height`() {
+        assertEquals(1f, EventTraversal.heightScale(1920f), 0.001f)
+    }
+
+    @Test
+    fun `heightScale is proportional to screen height`() {
+        assertEquals(0.5f, EventTraversal.heightScale(960f), 0.001f)
+        assertEquals(2f, EventTraversal.heightScale(3840f), 0.001f)
+    }
+
+    @Test
+    fun `heightScale is clamped at extremes`() {
+        assertEquals(EventTraversal.MIN_HEIGHT_SCALE, EventTraversal.heightScale(1f), 0.001f)
+        assertEquals(EventTraversal.MAX_HEIGHT_SCALE, EventTraversal.heightScale(99999f), 0.001f)
+    }
+
+    @Test
+    fun `scaledElapsed proportional to height`() {
+        val elapsed = 10000L
+        val refScaled = EventTraversal.scaledElapsed(elapsed, 1920f)
+        val halfScaled = EventTraversal.scaledElapsed(elapsed, 960f)
+        assertEquals(elapsed, refScaled)
+        assertEquals(elapsed / 2, halfScaled)
+    }
+
+    @Test
+    fun `shared heightScale used by all crossing events`() {
+        // Verify the formula: scaledElapsed = elapsed * (height / REFERENCE_HEIGHT)
+        val height = 1200f
+        val elapsed = 5000L
+        val expected = (elapsed * (height / 1920f)).toLong()
+        assertEquals(expected, EventTraversal.scaledElapsed(elapsed, height))
+    }
 }

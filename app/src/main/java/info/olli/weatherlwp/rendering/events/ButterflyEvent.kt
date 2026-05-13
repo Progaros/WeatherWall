@@ -75,7 +75,8 @@ class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
         
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val t = elapsedMs / 1000f
-        val progress = (elapsedMs / durationMs.toFloat()).coerceIn(0f, 1f)
+        val traversalElapsed = EventTraversal.scaledElapsed(elapsedMs, height)
+        val progress = (traversalElapsed / durationMs.toFloat()).coerceIn(0f, 1f)
         
         // Horizontal movement is guaranteed to traverse from off-screen to off-screen.
         val x = EventTraversal.xAtProgress(traversal, progress) +
