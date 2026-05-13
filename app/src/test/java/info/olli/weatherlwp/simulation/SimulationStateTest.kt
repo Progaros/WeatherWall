@@ -388,15 +388,27 @@ class SimulationStateTest {
     }
     
     @Test
-    fun `getEffectiveShadowStrength scales with light level at night`() {
+    fun `getEffectiveShadowStrength scales with moon illumination at night`() {
         val state = SimulationState.default().copy(
             mountainShadowsEnabled = true,
             treeShadowsEnabled = true,
             shadowStrength = 1f,
-            timeOfDayHours = 0f  // Midnight
+            timeOfDayHours = 0f,  // Midnight
+            moonIllumination = 0.5f  // Half moon
         )
-        // Light level at midnight = 0.15, so effective = 1.0 * 0.15 = 0.15
-        assertEquals(0.15f, state.getEffectiveShadowStrength(), 0.01f)
+        // At night: dayFactor=0, lightFactor = moonIllumination * 0.4 = 0.2
+        // effective = 1.0 * 0.2 = 0.2
+        assertEquals(0.2f, state.getEffectiveShadowStrength(), 0.01f)
+    }
+    
+    @Test
+    fun `getEffectiveShadowStrength zero at night with new moon`() {
+        val state = SimulationState.default().copy(
+            shadowStrength = 1f,
+            timeOfDayHours = 0f,
+            moonIllumination = 0f  // New moon = no shadows
+        )
+        assertEquals(0f, state.getEffectiveShadowStrength(), 0.01f)
     }
     
     @Test
@@ -657,45 +669,49 @@ class SimulationStateTest {
     // ============== Light Source Angle Tests ==============
 
     @Test
-    fun `getLightSourceAngle at noon is PI div 2 (overhead)`() {
-        val state = SimulationState.default().copy(timeOfDayHours = 12f)
-        // noon: dayProgress = (12-6)/12 = 0.5, angle = PI*(1-0.5) = PI/2
+    fun `getLightSourceAngle at solar noon is PI div 2 (overhead)`() {
+        // Default sunrise=6, sunset=20: solar noon = (6+20)/2 = 13h
+        val state = SimulationState.default().copy(timeOfDayHours = 13f)
+        // dayProgress = (13-6)/14 = 0.5, angle = PI*(1-0.5) = PI/2
         assertEquals(kotlin.math.PI.toFloat() / 2f, state.getLightSourceAngle(), 0.01f)
     }
 
     @Test
     fun `getLightSourceAngle at 6am is PI (left)`() {
         val state = SimulationState.default().copy(timeOfDayHours = 6f)
-        // 6am: dayProgress = (6-6)/12 = 0, angle = PI*(1-0) = PI
+        // sunrise: dayProgress = 0, angle = PI
         assertEquals(kotlin.math.PI.toFloat(), state.getLightSourceAngle(), 0.01f)
     }
 
     @Test
-    fun `getLightSourceAngle at 6pm is 0 (right)`() {
-        val state = SimulationState.default().copy(timeOfDayHours = 18f)
-        // 6pm: dayProgress = (18-6)/12 = 1, angle = PI*(1-1) = 0
+    fun `getLightSourceAngle at sunset is 0 (right)`() {
+        // Default sunset = 20h
+        val state = SimulationState.default().copy(timeOfDayHours = 20f)
+        // sunset: dayProgress = 1, angle = PI*(1-1) = 0
         assertEquals(0f, state.getLightSourceAngle(), 0.01f)
     }
 
     @Test
-    fun `getLightSourceAngle at midnight is PI div 2 (moon overhead)`() {
-        val state = SimulationState.default().copy(timeOfDayHours = 0f)
-        // midnight: nightProgress = (0+6)/12 = 0.5, angle = PI*(1-0.5) = PI/2
+    fun `getLightSourceAngle at lunar midnight is PI div 2`() {
+        // Default sunset=20, sunrise=6: night=10h, lunar midnight = sunset + 5h = 1:00 AM
+        val state = SimulationState.default().copy(timeOfDayHours = 1f)
+        // nightProgress = (24-20+1)/10 = 5/10 = 0.5, angle = PI*0.5 = PI/2
         assertEquals(kotlin.math.PI.toFloat() / 2f, state.getLightSourceAngle(), 0.01f)
     }
 
     // ============== Shadow Offset Tests ==============
 
     @Test
-    fun `getShadowOffset at noon points down`() {
+    fun `getShadowOffset at solar noon points down`() {
+        // Solar noon = (6+20)/2 = 13h for default sun times
         val state = SimulationState.default().copy(
-            timeOfDayHours = 12f,
+            timeOfDayHours = 13f,
             mountainShadowsEnabled = true,
             treeShadowsEnabled = true,
             shadowStrength = 1f
         )
         val (dx, dy) = state.getShadowOffset(1f)
-        // At noon, light is overhead (PI/2), cos(PI/2)≈0 so dx≈0
+        // At solar noon, light is overhead (PI/2), cos(PI/2)≈0 so dx≈0
         assertEquals(0f, dx, 0.1f)
         // dy should be positive (shadow extends downward)
         assertTrue("Shadow at noon should point down", dy > 0f)

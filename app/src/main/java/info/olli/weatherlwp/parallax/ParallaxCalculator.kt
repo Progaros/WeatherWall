@@ -54,8 +54,11 @@ class ParallaxCalculator {
         /** Snap position to zero when magnitude is below this (prevents oscillation). */
         private const val SNAP_EPSILON = 0.1f
 
-        /** Discard frame as sensor reset / orientation change if delta exceeds this. */
-        private const val JUMP_THRESHOLD = 0.3f
+        /** Clamp per-frame delta to this maximum (prevents huge jumps, keeps movement). */
+        private const val MAX_DELTA_PER_FRAME = 0.10f
+
+        /** Only treat as sensor reset if delta exceeds this (much larger than any tilt). */
+        private const val SENSOR_RESET_THRESHOLD = 0.6f
 
         /** Cap dt to prevent huge position jumps on app resume. */
         private const val MAX_DT_SECONDS = 0.1f
@@ -199,8 +202,8 @@ class ParallaxCalculator {
         }
 
         // Per-frame tilt delta
-        val deltaTiltX = filteredTiltX - prevTiltX
-        val deltaTiltY = filteredTiltY - prevTiltY
+        var deltaTiltX = filteredTiltX - prevTiltX
+        var deltaTiltY = filteredTiltY - prevTiltY
         prevTiltX = filteredTiltX
         prevTiltY = filteredTiltY
 
@@ -208,11 +211,18 @@ class ParallaxCalculator {
             deltaTiltX * deltaTiltX + deltaTiltY * deltaTiltY
         )
 
-        // Discard huge jumps (sensor reset, orientation change)
-        if (motionMagnitude > JUMP_THRESHOLD) {
+        // Sensor reset (orientation change): reset baseline, no visual jump
+        if (motionMagnitude > SENSOR_RESET_THRESHOLD) {
             smoothedDeltaX = 0f
             smoothedDeltaY = 0f
             return
+        }
+
+        // Clamp large deltas instead of discarding them (preserves movement direction)
+        if (motionMagnitude > MAX_DELTA_PER_FRAME) {
+            val clampScale = MAX_DELTA_PER_FRAME / motionMagnitude
+            deltaTiltX *= clampScale
+            deltaTiltY *= clampScale
         }
 
         // Stillness hysteresis
@@ -264,7 +274,20 @@ class ParallaxCalculator {
             var moveX = smoothedDeltaX * sensitivityPx * hComp
             var moveY = smoothedDeltaY * sensitivityPx * vComp
 
-            // Edge easing: slow outward movement near edges
+            // Soft resistance near edges: progressively reduce outward movement
+            val maxDist = effectiveMaxOffset * kotlin.math.max(hComp, vComp)
+            if (maxDist > 0f) {
+                val rawDist = kotlin.math.sqrt(rawPositionX * rawPositionX + rawPositionY * rawPositionY)
+                val normalized = rawDist / maxDist
+                // Resistance starts at 65% of max, fully resists at 125%
+                if (normalized > 0.65f && isMovingAwayFromCenter(moveX, moveY)) {
+                    val resistance = 1f - smoothstepF(0.65f, 1.25f, normalized)
+                    moveX *= resistance.coerceAtLeast(0.05f)
+                    moveY *= resistance.coerceAtLeast(0.05f)
+                }
+            }
+
+            // Edge easing: additional directional slow-down near edges
             if (edgeEasing > 0.01f && isMovingAwayFromCenter(moveX, moveY)) {
                 val xLimit = effectiveMaxOffset * hComp
                 val yLimit = effectiveMaxOffset * vComp
@@ -275,15 +298,27 @@ class ParallaxCalculator {
 
             rawPositionX += moveX
             rawPositionY += moveY
+
+            // Gentle pullback if raw position overshoots max by too much
+            if (maxDist > 0f) {
+                val rawDist = kotlin.math.sqrt(rawPositionX * rawPositionX + rawPositionY * rawPositionY)
+                if (rawDist > maxDist * 1.5f) {
+                    val pullback = 1f - exp(-2f * dt)
+                    val targetDist = maxDist * 1.2f
+                    val scale = (1f - pullback) + pullback * (targetDist / rawDist)
+                    rawPositionX *= scale
+                    rawPositionY *= scale
+                }
+            }
         } else {
             // ---- RECENTERING ----
             val rate = RECENTER_DAMPING * returnSpeed
             val t = 1f - exp(-rate * dt)
             rawPositionX -= rawPositionX * t
             rawPositionY -= rawPositionY * t
-            // Drain smoothed delta so tracking resumes cleanly
-            smoothedDeltaX = 0f
-            smoothedDeltaY = 0f
+            // Drain smoothed delta gradually so tracking resumes cleanly
+            smoothedDeltaX *= (1f - t)
+            smoothedDeltaY *= (1f - t)
         }
 
         // Compute display position from raw via soft-limit
@@ -409,5 +444,11 @@ class ParallaxCalculator {
                 (rawPositionY + moveY) * (rawPositionY + moveY)
         )
         return newMag > currentMag
+    }
+
+    /** Smoothstep interpolation for soft resistance curves. */
+    private fun smoothstepF(edge0: Float, edge1: Float, x: Float): Float {
+        val t = ((x - edge0) / (edge1 - edge0)).coerceIn(0f, 1f)
+        return t * t * (3f - 2f * t)
     }
 }

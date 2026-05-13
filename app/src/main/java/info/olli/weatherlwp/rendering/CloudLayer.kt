@@ -149,7 +149,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         
         // Max groups for overcast conditions
         const val MAX_GROUPS = 30
-        const val MAX_GROUPS_PREVIEW = 12
+        const val MAX_GROUPS_PREVIEW = 20
     }
 
     /** When true, reduces bitmap sizes and group count for better preview performance. */
@@ -208,8 +208,18 @@ class CloudLayer(private val context: Context) : SceneLayer {
     
     private fun createCloudGroup(random: Random, isBackLayer: Boolean): CloudGroup {
         // Generate world-space position: clouds distributed across visible range + padding
-        val visibleHalf = RenderConstants.getVisibleWorldHalf(width.coerceAtLeast(1f), height.coerceAtLeast(1f))
-        val worldX = (random.nextFloat() - 0.5f) * visibleHalf * 2f
+        val effectiveWidth = width.coerceAtLeast(1f)
+        val effectiveHeight = height.coerceAtLeast(1f)
+        val visibleHalf = RenderConstants.getVisibleWorldHalf(effectiveWidth, effectiveHeight)
+        // In preview mode, concentrate clouds in the visible viewport only (no parallax padding)
+        // to avoid most clouds being generated off-screen
+        val distributionHalf = if (isPreviewMode) {
+            val hs = (effectiveHeight / RenderConstants.REFERENCE_HEIGHT).coerceAtLeast(0.1f)
+            (effectiveWidth / (2f * hs)) * 1.2f  // visible viewport + 20% margin
+        } else {
+            visibleHalf
+        }
+        val worldX = (random.nextFloat() - 0.5f) * distributionHalf * 2f
 
         val groupWidth = GROUP_WIDTH_MIN + random.nextFloat() * (GROUP_WIDTH_MAX - GROUP_WIDTH_MIN)
         val groupHeight = GROUP_HEIGHT_MIN + random.nextFloat() * (GROUP_HEIGHT_MAX - GROUP_HEIGHT_MIN)
@@ -525,8 +535,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
             val paddedHeight = groupHeightPx + paddingY * 2
 
             // Viewport culling using actual padded dimensions (accounting for zoom scale)
-            val halfW = paddedWidth / 2f * transform.heightScale
-            val halfH = paddedHeight / 2f * transform.heightScale
+            val cullScale = if (isPreviewMode) transform.heightScale.coerceAtLeast(0.5f) else transform.heightScale
+            val halfW = paddedWidth / 2f * cullScale
+            val halfH = paddedHeight / 2f * cullScale
             if (screenX + halfW < 0f || screenX - halfW > width) continue
             if (screenY + halfH < 0f || screenY - halfH > height) continue
 
@@ -551,9 +562,15 @@ class CloudLayer(private val context: Context) : SceneLayer {
             val bitmap = group.cachedBitmap
             if (bitmap != null) {
                 // Scale clouds proportionally to scene zoom so they don't shrink relative to other elements
+                // In preview mode, use a minimum scale to keep clouds visible
+                val drawScale = if (isPreviewMode) {
+                    transform.heightScale.coerceAtLeast(0.5f)
+                } else {
+                    transform.heightScale
+                }
                 canvas.save()
                 canvas.translate(screenX, screenY)
-                canvas.scale(transform.heightScale, transform.heightScale)
+                canvas.scale(drawScale, drawScale)
                 canvas.drawBitmap(bitmap, -paddedWidth / 2f, -paddedHeight / 2f, drawPaint)
                 canvas.restore()
             }
@@ -562,21 +579,49 @@ class CloudLayer(private val context: Context) : SceneLayer {
 
     private fun calculateCloudColor(state: SimulationState): Int {
         val hour = state.timeOfDayHours
+        val sunrise = state.sunriseHours
+        val sunset = state.sunsetHours
+
+        val nightColor = Color.rgb(150, 155, 180)
+        val dawnColor = Color.rgb(255, 200, 180)
+        val dayColor = Color.rgb(250, 250, 255)
+        val duskColor = Color.rgb(255, 220, 200)
+
+        // Smooth time-based interpolation using actual sunrise/sunset
+        val dawnStart = sunrise - 1.0f
+        val dawnEnd = sunrise + 0.5f
+        val duskStart = sunset - 0.5f
+        val duskEnd = sunset + 1.0f
+
         val baseColor = when {
-            state.isNight -> Color.rgb(150, 155, 180)
-            state.isDawn -> {
-                val t = (hour - 5f).coerceIn(0f, 2f) / 2f
-                RenderConstants.lerpColor(Color.rgb(180, 170, 190), Color.rgb(255, 200, 180), t)
+            // Pre-dawn: Night → Dawn
+            hour >= dawnStart && hour < sunrise -> {
+                val t = ((hour - dawnStart) / (sunrise - dawnStart)).coerceIn(0f, 1f)
+                RenderConstants.lerpColor(nightColor, dawnColor, t)
             }
-            state.isDusk -> {
-                val t = (hour - 17f).coerceIn(0f, 2f) / 2f
-                RenderConstants.lerpColor(Color.rgb(255, 220, 200), Color.rgb(200, 170, 190), t)
+            // Dawn → Day
+            hour >= sunrise && hour < dawnEnd -> {
+                val t = ((hour - sunrise) / (dawnEnd - sunrise)).coerceIn(0f, 1f)
+                RenderConstants.lerpColor(dawnColor, dayColor, t)
             }
-            else -> Color.rgb(250, 250, 255)
+            // Day
+            hour >= dawnEnd && hour < duskStart -> dayColor
+            // Day → Dusk
+            hour >= duskStart && hour < sunset -> {
+                val t = ((hour - duskStart) / (sunset - duskStart)).coerceIn(0f, 1f)
+                RenderConstants.lerpColor(dayColor, duskColor, t)
+            }
+            // Dusk → Night
+            hour >= sunset && hour < duskEnd -> {
+                val t = ((hour - sunset) / (duskEnd - sunset)).coerceIn(0f, 1f)
+                RenderConstants.lerpColor(duskColor, nightColor, t)
+            }
+            // Night
+            else -> nightColor
         }
         
-        // Apply night shade darkening
-        return if (state.isNight && state.nightShadeStrength > 0f) {
+        // Apply night shade darkening smoothly based on light level
+        return if (state.nightShadeStrength > 0f && state.getLightLevel() < 0.5f) {
             ColorMath.shadeRgb(baseColor, state.nightShadeStrength)
         } else {
             baseColor

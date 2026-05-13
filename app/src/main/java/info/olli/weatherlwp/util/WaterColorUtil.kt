@@ -26,14 +26,44 @@ object WaterColorUtil {
 
     /**
      * Select the appropriate water color for the current time-of-day and frozen state.
+     * Uses smooth time-based interpolation with actual sunrise/sunset times.
      */
     fun getWaterColor(state: SimulationState, isFrozen: Boolean, palette: WaterPalette): Int {
         if (isFrozen) return palette.ice
+
+        val hour = state.timeOfDayHours
+        val sunrise = state.sunriseHours
+        val sunset = state.sunsetHours
+        val dawnEnd = sunrise + 0.5f
+        val duskStart = sunset - 0.5f
+        val duskEnd = sunset + 1.0f
+        val dawnStart = sunrise - 1.0f
+
         return when {
-            state.isNight -> palette.night
-            state.isDawn -> RenderConstants.lerpColor(palette.night, palette.dawn, 0.5f)
-            state.isDusk -> RenderConstants.lerpColor(palette.day, palette.dusk, 0.5f)
-            else -> palette.day
+            // Pre-dawn: Night → Dawn
+            hour >= dawnStart && hour < sunrise -> {
+                val t = ((hour - dawnStart) / (sunrise - dawnStart)).coerceIn(0f, 1f)
+                RenderConstants.lerpColor(palette.night, palette.dawn, t)
+            }
+            // Dawn → Day
+            hour >= sunrise && hour < dawnEnd -> {
+                val t = ((hour - sunrise) / (dawnEnd - sunrise)).coerceIn(0f, 1f)
+                RenderConstants.lerpColor(palette.dawn, palette.day, t)
+            }
+            // Day
+            hour >= dawnEnd && hour < duskStart -> palette.day
+            // Day → Dusk
+            hour >= duskStart && hour < sunset -> {
+                val t = ((hour - duskStart) / (sunset - duskStart)).coerceIn(0f, 1f)
+                RenderConstants.lerpColor(palette.day, palette.dusk, t)
+            }
+            // Dusk → Night
+            hour >= sunset && hour < duskEnd -> {
+                val t = ((hour - sunset) / (duskEnd - sunset)).coerceIn(0f, 1f)
+                RenderConstants.lerpColor(palette.dusk, palette.night, t)
+            }
+            // Night
+            else -> palette.night
         }
     }
 

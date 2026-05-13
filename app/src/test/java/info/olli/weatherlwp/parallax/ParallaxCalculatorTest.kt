@@ -1516,7 +1516,7 @@ class ParallaxCalculatorTest {
     }
 
     @Test
-    fun `jump threshold discards large delta`() {
+    fun `sensor reset threshold discards huge delta`() {
         val calc = ParallaxCalculator()
         calc.strength = 1.0f
         calc.maxOffsetPercent = 10f
@@ -1528,11 +1528,33 @@ class ParallaxCalculatorTest {
         calc.updateFromSensor(0f, 0f)
         calc.update(16)
 
-        // Large sudden tilt (> JUMP_THRESHOLD 0.3) — should be discarded
+        // Huge sudden tilt (> SENSOR_RESET_THRESHOLD 0.6) — should be discarded as sensor reset
         calc.updateFromSensor(0.8f, 0f)
         calc.update(16)
         val x = calc.getOffsetX()
 
-        assertEquals("Large sudden delta should be discarded", 0f, x, 0.5f)
+        assertEquals("Sensor reset delta should be discarded", 0f, x, 0.5f)
+    }
+
+    @Test
+    fun `large delta is clamped not discarded`() {
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 0f
+
+        // Establish baseline
+        calc.updateFromSensor(0f, 0f)
+        calc.update(16)
+
+        // Moderate-large delta (> MAX_DELTA_PER_FRAME 0.1 but < SENSOR_RESET_THRESHOLD 0.6)
+        // should be clamped to MAX_DELTA_PER_FRAME, not discarded
+        calc.updateFromSensor(0.3f, 0f)
+        calc.update(16)
+        val x = calc.getOffsetX()
+
+        assertTrue("Clamped delta should produce some movement: $x", kotlin.math.abs(x) > 1f)
     }
 }

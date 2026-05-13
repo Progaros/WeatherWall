@@ -10,7 +10,7 @@ import org.junit.Test
  * Tests parallax physics: strength, max offset, delta-based movement, soft limit.
  *
  * Key: Tests must ramp tilt gradually (not set abruptly) because the delta
- * model computes per-frame changes and discards jumps > JUMP_THRESHOLD.
+ * model computes per-frame changes, clamps large deltas, and discards sensor resets.
  */
 class ParallaxCalculatorTest {
 

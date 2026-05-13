@@ -181,18 +181,17 @@ data class SimulationState(
     
     /**
      * Get effective shadow intensity combining settings and light level.
-     * Shadows are strongest during bright day, and at night scale with moon illumination.
+     * Uses continuous interpolation (no boolean branch) so shadows never jump
+     * at sunrise/sunset boundaries.
      * Note: Callers should check mountainShadowsEnabled or treeShadowsEnabled first.
      * @return 0.0 = no shadow, 1.0 = full shadow intensity
      */
     fun getEffectiveShadowStrength(): Float {
-        // During day, shadows scale with light level
-        // At night, shadows scale with moon illumination (full moon casts shadows, new moon doesn't)
-        val lightFactor = if (isNight) {
-            moonIllumination * 0.4f  // Moon shadows are subtler than sun shadows
-        } else {
-            getLightLevel()
-        }
+        val light = getLightLevel()  // 0.15 (night) to 1.0 (day), smooth transitions
+        // Normalized day factor: 0 at deep night, 1 during full day
+        val dayFactor = ((light - 0.15f) / 0.85f).coerceIn(0f, 1f)
+        // Smoothly blend: day shadows scale with sunlight, night shadows with moonlight
+        val lightFactor = dayFactor * light + (1f - dayFactor) * moonIllumination * 0.4f
         return shadowStrength * lightFactor
     }
     
@@ -211,24 +210,31 @@ data class SimulationState(
     fun getLightSourceAngle(): Float = lightSourceAngle
     
     // Pre-calculated light source angle and shadow trig values (computed once per state)
+    //
+    // CONTINUOUS at sunrise/sunset: daytime arc (PI→0) meets nighttime arc (0→PI)
+    // so the angle matches at both boundaries and shadows never flip direction.
+    //   Day:   sunrise(PI) → noon(PI/2) → sunset(0)
+    //   Night: sunset(0)   → midnight(PI/2) → sunrise(PI)
     private val lightSourceAngle: Float = run {
         val hour = timeOfDayHours
-        when {
-            // Day: 6am-6pm, sun arc from left to right
-            hour in 6f..18f -> {
-                val dayProgress = (hour - 6f) / 12f  // 0 to 1
-                // Start at PI (left), arc through PI/2 (top), end at 0 (right)
-                kotlin.math.PI.toFloat() * (1f - dayProgress)
+        val sunrise = sunriseHours
+        val sunset = sunsetHours
+        val PI = kotlin.math.PI.toFloat()
+
+        if (hour >= sunrise && hour <= sunset) {
+            // Daytime: PI at sunrise → 0 at sunset
+            val dayDuration = (sunset - sunrise).coerceAtLeast(0.5f)
+            val dayProgress = ((hour - sunrise) / dayDuration).coerceIn(0f, 1f)
+            PI * (1f - dayProgress)
+        } else {
+            // Nighttime: 0 at sunset → PI at sunrise (continuous at both boundaries)
+            val nightDuration = (24f - sunset + sunrise).coerceAtLeast(0.5f)
+            val nightProgress = if (hour >= sunset) {
+                (hour - sunset) / nightDuration
+            } else {
+                (24f - sunset + hour) / nightDuration
             }
-            // Night: moon arc similar to sun
-            else -> {
-                val nightProgress = if (hour >= 18f) {
-                    (hour - 18f) / 12f  // 6pm to midnight = 0 to 0.5
-                } else {
-                    (hour + 6f) / 12f  // midnight to 6am = 0.5 to 1
-                }
-                kotlin.math.PI.toFloat() * (1f - nightProgress)
-            }
+            PI * nightProgress.coerceIn(0f, 1f)
         }
     }
     
