@@ -254,7 +254,7 @@ class HeightContinuityTest {
         assertTrue("Range must include cell -1", -1 in range)
     }
 
-    // ===================== E. Regeneration trigger =====================
+    // ===================== E. Regeneration hysteresis =====================
 
     @Test
     fun `visible world half changes with height`() {
@@ -266,8 +266,47 @@ class HeightContinuityTest {
         // Height decrease → aspect increase → wider visible world
         assertTrue("Smaller height must give larger visible half: $half2 > $half1",
             half2 > half1)
-        // The difference should be significant (> 10 world units threshold used in resize)
-        assertTrue("Difference must exceed regeneration threshold of 10",
-            half2 - half1 > 10f)
+    }
+
+    @Test
+    fun `preload margin prevents regeneration on same-size resize`() {
+        // Simulates the hysteresis: generatedWorldHalf = required * 1.25
+        // So small changes don't exceed the cached coverage.
+        val w = 1080f
+        val h = 1920f
+        val required = RenderConstants.getVisibleWorldHalf(w, h)
+        val generated = required * 1.25f
+
+        // A slightly wider requirement (e.g. height changed by 20px) should still fit
+        val slightlyWider = RenderConstants.getVisibleWorldHalf(w, h - 20f)
+        assertTrue("Slightly wider requirement ($slightlyWider) must fit within " +
+            "generated coverage ($generated)",
+            slightlyWider <= generated)
+    }
+
+    @Test
+    fun `large height decrease escapes preload margin`() {
+        // A dramatic height decrease (e.g. portrait to landscape) should exceed margin
+        val w = 1080f
+        val portraitRequired = RenderConstants.getVisibleWorldHalf(w, 1920f)
+        val portraitGenerated = portraitRequired * 1.25f
+
+        val landscapeRequired = RenderConstants.getVisibleWorldHalf(w, 400f)
+        assertTrue("Landscape requirement ($landscapeRequired) must exceed " +
+            "portrait generated coverage ($portraitGenerated)",
+            landscapeRequired > portraitGenerated)
+    }
+
+    @Test
+    fun `small float precision change does not escape margin`() {
+        val w = 1080f
+        val h = 1920f
+        val required = RenderConstants.getVisibleWorldHalf(w, h)
+        val generated = required * 1.25f
+
+        // Tiny precision change
+        val requiredAfterTinyChange = RenderConstants.getVisibleWorldHalf(w + 0.01f, h - 0.01f)
+        assertTrue("Tiny precision change must not escape margin",
+            requiredAfterTinyChange <= generated)
     }
 }

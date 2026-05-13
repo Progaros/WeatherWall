@@ -58,6 +58,8 @@ class MountainLayer(private val context: Context) : SceneLayer {
     private var height = 0f
     private var lastGeneratedWidth = 0f
     private var lastGeneratedHeight = 0f
+    /** Cached world-space half-width used for generation; avoids regeneration when viewport still fits. */
+    private var generatedWorldHalf = 0f
     
     // Cached haze gradient to avoid per-frame allocation
     private var cachedHazeAmbient = 0
@@ -218,8 +220,9 @@ class MountainLayer(private val context: Context) : SceneLayer {
     }
 
     private fun generateMountains() {
-        // Viewport-based generation: generate cells visible on screen + parallax padding.
-        val visibleHalf = RenderConstants.getVisibleWorldHalf(width, height)
+        // Use cached generatedWorldHalf which includes preload margin
+        val visibleHalf = generatedWorldHalf.takeIf { it > 0f }
+            ?: RenderConstants.getVisibleWorldHalf(width, height)
 
         // Rebuild cached transform for current dimensions
         cachedTransform = WorldViewportTransform(width, height)
@@ -302,12 +305,12 @@ class MountainLayer(private val context: Context) : SceneLayer {
         cachedHazeHeight = 0f
 
         val firstGenerate = lastGeneratedWidth <= 0f || lastGeneratedHeight <= 0f
-        // Regenerate when visible world range changes significantly.
-        val widthChangedSignificantly = kotlin.math.abs(lastGeneratedWidth - w) > 1f
-        val newWorldHalf = RenderConstants.getVisibleWorldHalf(w, h)
-        val oldWorldHalf = RenderConstants.getVisibleWorldHalf(lastGeneratedWidth, lastGeneratedHeight)
-        val visibleRangeGrew = newWorldHalf > oldWorldHalf + 10f
-        if (firstGenerate || widthChangedSignificantly || visibleRangeGrew) {
+        // Regenerate only when generated coverage can no longer contain the visible
+        // world range.  Preload margin prevents per-frame thrash from tiny changes.
+        val requiredWorldHalf = RenderConstants.getVisibleWorldHalf(w, h)
+        val needsWiderCoverage = requiredWorldHalf > generatedWorldHalf
+        if (firstGenerate || needsWiderCoverage) {
+            generatedWorldHalf = requiredWorldHalf * 1.25f
             generateMountains()
             lastGeneratedWidth = w
             lastGeneratedHeight = h

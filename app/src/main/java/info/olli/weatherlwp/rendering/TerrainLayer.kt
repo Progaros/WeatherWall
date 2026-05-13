@@ -42,6 +42,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private var height = 0f
     private var lastGeneratedWidth = 0f
     private var lastGeneratedHeight = 0f
+    /** Cached world-space half-width used for generation; avoids regeneration when viewport still fits. */
+    private var generatedWorldHalf = 0f
     
     // Cached hill gradients to avoid per-frame LinearGradient allocation
     private var cachedHillGradientAmbientBucket = -1
@@ -306,8 +308,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // Visibility/opacity is controlled at draw time using season blend factors,
         // enabling smooth transitions between seasons.
         
-        // Cell-based generation range: covers visible viewport + parallax padding
-        val worldHalf = RenderConstants.getVisibleWorldHalf(width, height)
+        // Cell-based generation range: use the cached coverage (includes preload margin)
+        val worldHalf = generatedWorldHalf.takeIf { it > 0f }
+            ?: RenderConstants.getVisibleWorldHalf(width, height)
         
         // Cell sizes for each decoration type (world units)
         val flowerCellSize = 5f
@@ -562,15 +565,16 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         bushRenderer.updateDimensions(w, h)
 
         val firstGenerate = lastGeneratedWidth <= 0f || lastGeneratedHeight <= 0f
-        // Regenerate when visible world range changes significantly.
-        // Width changes AND height decreases both widen the visible range
-        // (aspect = w/h increases), so decorations must cover more world.
-        val widthChangedSignificantly = kotlin.math.abs(lastGeneratedWidth - w) > 1f
-        val newWorldHalf = RenderConstants.getVisibleWorldHalf(w, h)
-        val oldWorldHalf = RenderConstants.getVisibleWorldHalf(lastGeneratedWidth, lastGeneratedHeight)
-        val visibleRangeGrew = newWorldHalf > oldWorldHalf + 10f
+        // Regenerate only when current generated coverage can no longer contain the
+        // visible world range.  We add a preload margin on generation and require
+        // the visible range to escape that margin before re-generating, preventing
+        // per-frame thrash from tiny float-precision size changes.
+        val requiredWorldHalf = RenderConstants.getVisibleWorldHalf(w, h)
+        val needsWiderCoverage = requiredWorldHalf > generatedWorldHalf
 
-        if (firstGenerate || widthChangedSignificantly || visibleRangeGrew) {
+        if (firstGenerate || needsWiderCoverage) {
+            // Generate with preload margin so small subsequent changes don't retrigger
+            generatedWorldHalf = requiredWorldHalf * 1.25f
             generateTerrain()
             lastGeneratedWidth = w
             lastGeneratedHeight = h
@@ -751,17 +755,20 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             val hillColor = RenderConstants.blendWithAmbient(effectiveDayColor, ambientColor, blendAmount)
             drawHill(canvas, index, hill, hillColor)
             
-            // Draw seasonal decorations on top of hill
-            drawSeasonalDecorations(canvas, index, hill, ambientColor)
-            
             canvas.restore()
             
-            // Draw river/water at this depth layer (after hill fill, before trees)
-            // This ensures river water sits on top of hills but behind trees
+            // Draw river/water at this depth layer (after hill fill)
             riverDrawer?.drawAtDepth(canvas, hill.depthFactor, index, currentHills.size)
             
             // Draw lake at its target depth layer (same z-ordering as river)
             lakeDrawer?.drawAtDepth(canvas, hill.depthFactor, index, currentHills.size)
+            
+            // Draw seasonal decorations AFTER water so foreground mushrooms/flowers
+            // render in front of river/lake at the same or nearer depth layers.
+            canvas.save()
+            canvas.translate(px, py)
+            drawSeasonalDecorations(canvas, index, hill, ambientColor)
+            canvas.restore()
             
             // Get trees and animals for this depth range
             val nextDepth = if (index + 1 < currentHills.size) {
@@ -967,6 +974,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     
     private fun drawSeasonalDecorations(canvas: Canvas, hillIndex: Int, hill: HillData, ambientColor: Int) {
         val transform = cachedTransform
+        // Viewport culling bounds: skip decorations whose screen X is far offscreen.
+        // Use a generous margin to avoid popping at edges with parallax shift.
+        val cullLeft = -width * 0.15f
+        val cullRight = width * 1.15f
         
         // Note: Snow is now integrated into the hill gradient (drawHill),
         // so we no longer draw floating snow patches here.
@@ -984,6 +995,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             flowerPaint.alpha = (255 * flowerAlpha).toInt()
             for (flower in flowers) {
                 val x = transform.worldToScreenX(flower.worldX)
+                if (x < cullLeft || x > cullRight) continue
                 
                 // Get hill Y at flower position using world-space coordinate directly
                 val yRatio = getHillY(flower.worldX, hill)
@@ -1008,6 +1020,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             leafPaint.alpha = (255 * leafAlpha).toInt()
             for (leaf in leaves) {
                 val x = transform.worldToScreenX(leaf.worldX)
+                if (x < cullLeft || x > cullRight) continue
                 
                 val yRatio = getHillY(leaf.worldX, hill)
                 val y = yRatio * height + leaf.yOffset * height
@@ -1033,6 +1046,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         mushroomsByHill[hillIndex]?.let { mushrooms ->
             for (mushroom in mushrooms) {
                 val x = transform.worldToScreenX(mushroom.worldX)
+                if (x < cullLeft || x > cullRight) continue
                 
                 val yRatio = getHillY(mushroom.worldX, hill)
                 val y = yRatio * height + mushroom.yOffset * height

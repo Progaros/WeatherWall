@@ -214,7 +214,9 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         for (event in events) {
             // Events get proportionally longer lifetime at smaller screen heights
             // so their height-scaled traversal can complete before expiry.
+            // Cap to prevent active-event explosion at very small heights.
             val scaledDurationMs = (event.durationMs / EventTraversal.heightScale(height)).toLong()
+                .coerceAtMost(event.durationMs * 3L)
             val isStillAlive = (state.absoluteTimeMs - event.spawnTimeMs) < scaledDurationMs
             if (!isStillAlive) {
                 if (currentEvents == null) {

@@ -1486,4 +1486,40 @@ class ParallaxCalculatorTest {
         // Should still have substantial offset — recentering never kicked in
         assertTrue("Active motion should maintain offset: $x", x > 40f)
     }
+
+    // ============== Recenter-exit continuity ==============
+
+    @Test
+    fun `recenter then small movement does not jump to old offset`() {
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0.2f  // Moderate smoothing (realistic user setting)
+        calc.returnSpeed = 0f  // Disable recenter during convergence
+
+        // 1. Tilt far to establish a large offset
+        calc.updateFromSensor(0.8f, 0f)
+        repeat(200) { calc.update(16) }
+        val farOffset = calc.getOffsetX()
+        assertTrue("Should have far offset: $farOffset", farOffset > 30f)
+
+        // 2. Enable recenter and hold still → recenter engages after hold time
+        calc.returnSpeed = 1.0f
+        repeat(300) { calc.update(16) }  // 4800ms, well past hold timer
+        val nearZero = calc.getOffsetX()
+        assertTrue("Should be near zero after recentering: $nearZero",
+            kotlin.math.abs(nearZero) < 10f)
+
+        // 3. Apply a small movement (just enough to exit recenter: vel > 0.015)
+        //    With smoothing, position should not immediately jump to tilt target.
+        calc.updateFromSensor(0.85f, 0f)
+        calc.update(16)
+        val afterFirstFrame = calc.getOffsetX()
+
+        // On exit frame, wasRecentering snaps target to position → no jump.
+        assertTrue("First frame after recenter exit must not jump back to old offset. " +
+            "Position: $afterFirstFrame, old far offset: $farOffset",
+            kotlin.math.abs(afterFirstFrame) < farOffset * 0.3f)
+    }
 }

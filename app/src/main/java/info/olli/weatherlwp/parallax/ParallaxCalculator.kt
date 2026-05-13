@@ -70,6 +70,9 @@ class ParallaxCalculator {
 
     // Accumulated time (ms) since the phone was last "not still"
     private var stillTimerMs = 0L
+
+    // Track whether we were recentering on the previous frame to detect transitions
+    private var wasRecentering = false
     
     // User-configurable settings - defaults match pref_effects.xml
     // These are overwritten by loadPrefs() but provide sane defaults before settings load
@@ -281,7 +284,20 @@ class ParallaxCalculator {
             val t = 1f - exp(-recenterRate * dt)
             positionX += (0f - positionX) * t
             positionY += (0f - positionY) * t
+            // Keep target synced with position during recenter so that when
+            // tracking resumes, interpolation starts from the current position
+            // instead of jumping back to the stale pre-recenter target.
+            targetX = positionX
+            targetY = positionY
+            wasRecentering = true
         } else {
+            // If we just exited recenter, snap target to current position
+            // to prevent a jump to the old tilt-derived target.
+            if (wasRecentering) {
+                targetX = positionX
+                targetY = positionY
+                wasRecentering = false
+            }
             // Normal tilt tracking
             val returnThreshold = 0.15f + returnSpeed * 0.35f
             val returnBlend = (1f - tiltMagnitude / returnThreshold).coerceIn(0f, 1f)
@@ -399,6 +415,7 @@ class ParallaxCalculator {
         prevTiltX = 0f
         prevTiltY = 0f
         stillTimerMs = 0L
+        wasRecentering = false
         pendingTilt.set(TiltPair(0f, 0f))
     }
 

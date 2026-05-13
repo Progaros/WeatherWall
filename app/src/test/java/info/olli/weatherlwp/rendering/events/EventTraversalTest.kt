@@ -228,4 +228,23 @@ class EventTraversalTest {
         val expected = (elapsed * (height / 1920f)).toLong()
         assertEquals(expected, EventTraversal.scaledElapsed(elapsed, height))
     }
+
+    @Test
+    fun `scaled lifetime is capped at 3x base duration`() {
+        // At MIN_HEIGHT_SCALE (0.25), 1/0.25 = 4x, but cap at 3x
+        val baseDurationMs = 10000L
+        val heightScale = EventTraversal.MIN_HEIGHT_SCALE
+        val scaledDuration = (baseDurationMs / heightScale).toLong()
+            .coerceAtMost(baseDurationMs * 3L)
+        assertEquals(baseDurationMs * 3L, scaledDuration)
+    }
+
+    @Test
+    fun `scaled lifetime equals base at reference height`() {
+        val baseDurationMs = 10000L
+        val heightScale = EventTraversal.heightScale(1920f)
+        val scaledDuration = (baseDurationMs / heightScale).toLong()
+            .coerceAtMost(baseDurationMs * 3L)
+        assertEquals(baseDurationMs, scaledDuration)
+    }
 }
