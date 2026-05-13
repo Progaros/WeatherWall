@@ -98,6 +98,7 @@ object PreferenceDefaults {
     const val RIVER_WIDTH = 40       // 0-100 (% of foreground terrain width)
     const val RIVER_OPACITY = 70     // 0-100
     const val RIVER_SPEED = 50       // 0-100 flow animation speed
+    const val RIVER_DEPTH_LAYER = 30 // 0-100 which terrain layer (0=foreground)
     
     // === Lake Settings ===
     const val LAKE_ENABLED = false   // Off by default (opt-in)

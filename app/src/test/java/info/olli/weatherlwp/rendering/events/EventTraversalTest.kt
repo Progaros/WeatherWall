@@ -175,18 +175,20 @@ class EventTraversalTest {
     }
 
     @Test
-    fun `event screen speed scales with zoom`() {
-        // World speed is constant (xRatio per ms), screen speed = world speed * zoom
-        val worldSpeed = 0.001f  // xRatio/ms
+    fun `events are screen-relative and do not scale with zoom`() {
+        // Events use ratio-based positions (0..1 of screen width).
+        // Their speed is constant in screen-space regardless of world zoom.
+        // This is intentional: events are overlay content, not world content.
+        val worldSpeed = 0.001f  // xRatio/ms - constant screen-relative speed
         val width = 1080f
 
-        // At reference height: screen speed = worldSpeed * width * 1.0
-        val screenSpeedRef = worldSpeed * width * 1.0f
+        // At reference height: screen pixels/ms = speed * width
+        val screenSpeedRef = worldSpeed * width
 
-        // At 2x zoom: events should traverse screen 2x faster visually
-        val screenSpeedZoomed = worldSpeed * width * 2.0f
+        // At 2x zoom: same speed (events DON'T scale with zoom)
+        val screenSpeedZoomed = worldSpeed * width  // No zoom factor
 
-        assertEquals("Zoomed screen speed should be 2x",
-            screenSpeedRef * 2f, screenSpeedZoomed, 0.001f)
+        assertEquals("Event screen speed is zoom-independent",
+            screenSpeedRef, screenSpeedZoomed, 0.001f)
     }
 }

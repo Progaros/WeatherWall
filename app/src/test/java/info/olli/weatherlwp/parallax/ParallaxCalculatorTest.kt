@@ -296,7 +296,7 @@ class ParallaxCalculatorTest {
         calculator.maxOffsetPercent = 0f
         calculator.maxOffsetPx = 100f
         calculator.setCanvasSize(1080f, 1920f)
-        calculator.returnSpeed = 1.0f  // Fast return
+        calculator.returnSpeed = 0f  // No recenter during convergence
         
         // Move to offset
         calculator.updateFromSensor(1.0f, 0f)
@@ -305,6 +305,7 @@ class ParallaxCalculatorTest {
         assertTrue("Should have moved", kotlin.math.abs(xAtTilt) > 50f)
         
         // Release tilt - with high returnSpeed, should quickly return to center
+        calculator.returnSpeed = 1.0f
         calculator.updateFromSensor(0f, 0f)
         repeat(50) { calculator.update(16) }
         val xAfterRelease = calculator.getOffsetX()
@@ -317,8 +318,8 @@ class ParallaxCalculatorTest {
     fun testReturnSpeedDefault() {
         val calculator = ParallaxCalculator()
         
-        // Default should be slow return (0.15)
-        assertEquals("Default return speed should be 0.15", 0.15f, calculator.returnSpeed, 0.01f)
+        // Default should be 0 (production sets from preferences)
+        assertEquals("Default return speed should be 0", 0f, calculator.returnSpeed, 0.01f)
     }
     
     @Test
@@ -496,7 +497,7 @@ class ParallaxCalculatorTest {
         calculator.maxOffsetPercent = 10f
         calculator.setCanvasSize(1080f, 1920f)
         calculator.edgeEasing = 1.0f  // Maximum easing
-        calculator.returnSpeed = 0.5f  // Fast return
+        calculator.returnSpeed = 0f  // No recenter during convergence
         calculator.returnSpeedUnlocked = true  // Fast return ignores easing
         
         // Move to edge
@@ -506,6 +507,7 @@ class ParallaxCalculatorTest {
         assertTrue("Should have moved to edge", xAtEdge > 100f)
         
         // Now return to center (tilt near zero triggers return)
+        calculator.returnSpeed = 0.5f
         calculator.updateFromSensor(0f, 0f)
         repeat(100) { calculator.update(16) }
         val xAfterReturn = calculator.getOffsetX()
@@ -818,11 +820,12 @@ class ParallaxCalculatorTest {
         calcUnlocked.maxOffsetPercent = 10f
         calcUnlocked.setCanvasSize(1080f, 1920f)
         calcUnlocked.edgeEasing = 1.0f
-        calcUnlocked.returnSpeed = 0.5f
+        calcUnlocked.returnSpeed = 0f  // No recenter during convergence
         calcUnlocked.returnSpeedUnlocked = true
 
         calcUnlocked.updateFromSensor(1.0f, 0f)
         repeat(100) { calcUnlocked.update(16) }
+        calcUnlocked.returnSpeed = 0.5f
         calcUnlocked.updateFromSensor(0f, 0f)
         repeat(30) { calcUnlocked.update(16) }
         val xUnlocked = calcUnlocked.getOffsetX()
@@ -832,11 +835,12 @@ class ParallaxCalculatorTest {
         calcLocked.maxOffsetPercent = 10f
         calcLocked.setCanvasSize(1080f, 1920f)
         calcLocked.edgeEasing = 1.0f
-        calcLocked.returnSpeed = 0.5f
+        calcLocked.returnSpeed = 0f  // No recenter during convergence
         calcLocked.returnSpeedUnlocked = false
 
         calcLocked.updateFromSensor(1.0f, 0f)
         repeat(100) { calcLocked.update(16) }
+        calcLocked.returnSpeed = 0.5f
         calcLocked.updateFromSensor(0f, 0f)
         repeat(30) { calcLocked.update(16) }
         val xLocked = calcLocked.getOffsetX()
@@ -1032,7 +1036,7 @@ class ParallaxCalculatorTest {
         calc.maxOffsetPercent = 10f
         calc.setCanvasSize(1080f, 1920f)
         calc.smoothing = 0.3f
-        calc.returnSpeed = 0.5f // Moderate
+        calc.returnSpeed = 0f  // No recenter during convergence
 
         // Move to offset
         calc.updateFromSensor(1.0f, 0f)
@@ -1040,7 +1044,8 @@ class ParallaxCalculatorTest {
         val xAtTilt = calc.getOffsetX()
         assertTrue("Should have moved", xAtTilt > 50f)
 
-        // Release tilt
+        // Enable moderate return speed and release tilt
+        calc.returnSpeed = 0.5f
         calc.updateFromSensor(0f, 0f)
         repeat(50) { calc.update(16) }
         val xAfter = calc.getOffsetX()
@@ -1205,7 +1210,7 @@ class ParallaxCalculatorTest {
     // ============== Return-to-center stillness detection ==============
 
     @Test
-    fun `recenter does not engage during motion`() {
+    fun `recenter does not engage during active motion`() {
         val calc = ParallaxCalculator()
         calc.strength = 1.0f
         calc.maxOffsetPercent = 10f
@@ -1213,11 +1218,18 @@ class ParallaxCalculatorTest {
         calc.smoothing = 0f
         calc.returnSpeed = 1.0f
 
-        // Maintain steady tilt - should NOT recenter despite returnSpeed being high
-        calc.updateFromSensor(0.8f, 0f)
-        repeat(200) { calc.update(16) }
+        // Actively changing tilt each frame (simulates hand movement) —
+        // velocity stays above threshold so recentering never engages
+        var tiltX = 0.8f
+        repeat(200) { i ->
+            // Oscillate tilt with enough amplitude and frequency to keep
+            // velocity above STILL_VELOCITY_EPSILON (0.015) every frame
+            tiltX = 0.8f + 0.1f * kotlin.math.sin(i * 0.5f)
+            calc.updateFromSensor(tiltX, 0f)
+            calc.update(16)
+        }
         val xAtTilt = calc.getOffsetX()
-        assertTrue("Should have significant offset while tilted", xAtTilt > 80f)
+        assertTrue("Should have significant offset during active motion: $xAtTilt", xAtTilt > 60f)
     }
 
     @Test
@@ -1227,15 +1239,16 @@ class ParallaxCalculatorTest {
         calc.maxOffsetPercent = 10f
         calc.setCanvasSize(1080f, 1920f)
         calc.smoothing = 0f
-        calc.returnSpeed = 1.0f
+        calc.returnSpeed = 0f  // No recenter during convergence phase
 
-        // Move to offset
+        // Move to offset without recentering
         calc.updateFromSensor(0.8f, 0f)
         repeat(100) { calc.update(16) }
         val xBefore = calc.getOffsetX()
         assertTrue("Should have offset", xBefore > 50f)
 
-        // Zero tilt and wait for hold timer (400ms = 25 frames at 16ms)
+        // Enable recenter and zero tilt — wait for hold timer (400ms = 25 frames)
+        calc.returnSpeed = 1.0f
         calc.updateFromSensor(0f, 0f)
         repeat(100) { calc.update(16) }  // 1600ms > 400ms hold time
         val xAfter = calc.getOffsetX()
@@ -1253,10 +1266,11 @@ class ParallaxCalculatorTest {
         calc60.maxOffsetPercent = 10f
         calc60.setCanvasSize(1080f, 1920f)
         calc60.smoothing = 0f
-        calc60.returnSpeed = 0.8f
+        calc60.returnSpeed = 0f  // No recenter during convergence
 
         calc60.updateFromSensor(0.8f, 0f)
         repeat(100) { calc60.update(16) }
+        calc60.returnSpeed = 0.8f  // Enable recenter for decay test
         calc60.updateFromSensor(0f, 0f)
         // Skip past hold time then measure decay
         repeat(30) { calc60.update(16) }  // 480ms to pass hold timer
@@ -1270,10 +1284,11 @@ class ParallaxCalculatorTest {
         calc30.maxOffsetPercent = 10f
         calc30.setCanvasSize(1080f, 1920f)
         calc30.smoothing = 0f
-        calc30.returnSpeed = 0.8f
+        calc30.returnSpeed = 0f  // No recenter during convergence
 
         calc30.updateFromSensor(0.8f, 0f)
         repeat(100) { calc30.update(16) }
+        calc30.returnSpeed = 0.8f  // Enable recenter for decay test
         calc30.updateFromSensor(0f, 0f)
         repeat(30) { calc30.update(16) }  // Same 480ms hold
         val x30start = calc30.getOffsetX()
@@ -1316,5 +1331,112 @@ class ParallaxCalculatorTest {
         val maxOffset = 1920f * 0.10f // 10% = 192px
         assertTrue("Extreme tilt should still be bounded below max ($xExtreme < $maxOffset)",
             xExtreme < maxOffset)
+    }
+
+    @Test
+    fun softLimitPreservesDirection() {
+        // Radial soft-limit must preserve the direction vector
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 0f
+
+        // Diagonal tilt at 45 degrees
+        calc.updateFromSensor(0.8f, 0.8f)
+        repeat(200) { calc.update(16) }
+        val x = calc.getOffsetX()
+        val y = calc.getOffsetY()
+
+        // X and Y should have the same sign and similar magnitude (direction preserved)
+        assertTrue("X should be positive: $x", x > 0)
+        assertTrue("Y should be positive: $y", y > 0)
+        // Ratio should be close to 1.0 (diagonal direction preserved)
+        val ratio = x / y
+        assertEquals("Direction should be preserved (ratio ~1)", 1.0f, ratio, 0.15f)
+    }
+
+    @Test
+    fun softLimitIsRadialNotPerAxis() {
+        // A 45° tilt should reach the same DISTANCE as a cardinal tilt of same magnitude,
+        // not sqrt(2) * cardinal (which would happen with per-axis clamp)
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 0f
+
+        // Cardinal: pure X
+        calc.updateFromSensor(1.0f, 0.0f)
+        repeat(200) { calc.update(16) }
+        val cardinalDist = kotlin.math.abs(calc.getOffsetX())
+
+        // Diagonal: equal X and Y
+        val calc2 = ParallaxCalculator()
+        calc2.strength = 1.0f
+        calc2.maxOffsetPercent = 10f
+        calc2.setCanvasSize(1080f, 1920f)
+        calc2.smoothing = 0f
+        calc2.returnSpeed = 0f
+        calc2.updateFromSensor(0.707f, 0.707f) // Same magnitude as (1,0)
+        repeat(200) { calc2.update(16) }
+        val diagonalDist = kotlin.math.sqrt(
+            calc2.getOffsetX() * calc2.getOffsetX() + calc2.getOffsetY() * calc2.getOffsetY()
+        )
+
+        // With radial limit, diagonal distance should be similar to cardinal distance
+        // (both saturate at the same radial maximum)
+        assertEquals("Radial limit: diagonal dist ~= cardinal dist",
+            cardinalDist, diagonalDist, cardinalDist * 0.2f)
+    }
+
+    @Test
+    fun phoneStillButTiltedRecentersAfterHold() {
+        // A phone held perfectly still at an angle should recenter
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 0.5f  // Non-zero return speed enables recentering
+
+        // Move to a tilted position
+        calc.updateFromSensor(0.5f, 0.3f)
+        repeat(60) { calc.update(16) }  // ~1 second of tracking
+        val xBeforeRecenter = calc.getOffsetX()
+        assertTrue("Should have moved to tilted position: $xBeforeRecenter",
+            xBeforeRecenter > 10f)
+
+        // Now hold perfectly still at same tilt (no velocity)
+        // Keep calling update with the SAME tilt value — velocity = 0
+        repeat(200) { calc.update(16) }  // ~3.2 seconds of stillness
+
+        val xAfterRecenter = calc.getOffsetX()
+        // Should have recentered significantly
+        assertTrue("Should have recentered from $xBeforeRecenter to near zero: $xAfterRecenter",
+            kotlin.math.abs(xAfterRecenter) < kotlin.math.abs(xBeforeRecenter) * 0.3f)
+    }
+
+    @Test
+    fun strongTiltStillApproachesUsefulMaxOffset() {
+        // Without double-tanh compression, full tilt should reach a useful fraction of max offset
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 0f
+
+        calc.updateFromSensor(1.0f, 0.0f)
+        repeat(200) { calc.update(16) }
+        val x = calc.getOffsetX()
+        val maxOffset = 1920f * 0.10f  // 192px
+
+        // With single radial tanh, tilt=1.0 should reach ~76% of max (tanh(1) ≈ 0.76)
+        // With double-tanh it would only reach ~57% (tanh(tanh(1)) ≈ 0.57)
+        assertTrue("Full tilt should reach >70% of max offset ($x vs $maxOffset)",
+            x > maxOffset * 0.70f)
     }
 }

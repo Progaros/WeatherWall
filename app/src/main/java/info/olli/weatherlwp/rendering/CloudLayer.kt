@@ -219,7 +219,12 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val halfH = groupHeight * 0.5f
         val minY = RenderConstants.CLOUD_Y_MIN + halfH
         val maxY = (RenderConstants.CLOUD_Y_MIN + RenderConstants.CLOUD_Y_RANGE - halfH).coerceAtLeast(minY)
-        val y = minY + random.nextFloat() * (maxY - minY)
+        val y = if (maxY > minY) {
+            minY + random.nextFloat() * (maxY - minY)
+        } else {
+            // Degenerate case: cloud taller than band, center it
+            RenderConstants.CLOUD_Y_MIN + RenderConstants.CLOUD_Y_RANGE * 0.5f
+        }
         
         val speed = RenderConstants.CLOUD_SPEED_BASE + random.nextFloat() * RenderConstants.CLOUD_SPEED_RANGE
         

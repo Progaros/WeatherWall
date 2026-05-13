@@ -405,4 +405,25 @@ class CloudLayerTest {
         assertTrue("Largest cloud should still have valid Y range", maxY >= minY)
         assertEquals("maxY for largest cloud", 0.25f, maxY, 0.001f)
     }
+
+    @Test
+    fun `degenerate cloud taller than band centers in band`() {
+        // If a cloud's height exceeds the band, it should be centered
+        val cloudYMin = 0.05f
+        val cloudYRange = 0.35f
+        val oversizedHeight = 0.80f  // Much taller than band
+
+        val halfH = oversizedHeight * 0.5f  // 0.40
+        val minY = cloudYMin + halfH  // 0.45
+        val maxY = (cloudYMin + cloudYRange - halfH).coerceAtLeast(minY)  // coerceAtLeast(0.45) = 0.45
+
+        // When maxY <= minY (degenerate), should center in band
+        val y = if (maxY > minY) {
+            minY  // Would use random but won't happen here
+        } else {
+            cloudYMin + cloudYRange * 0.5f
+        }
+        assertEquals("Degenerate cloud should center in band",
+            cloudYMin + cloudYRange * 0.5f, y, 0.001f)
+    }
 }

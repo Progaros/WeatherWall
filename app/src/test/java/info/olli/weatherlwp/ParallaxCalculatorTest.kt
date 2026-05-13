@@ -95,7 +95,7 @@ class ParallaxCalculatorTest {
             initialOffset, laterOffset, 0.5f)
     }
     
-    // P4b: Test circular clamping consistency
+    // P4b: Test radial clamping consistency (diagonal distance ≈ cardinal distance)
     @Test
     fun testCircularClampingConsistency() {
         calculator.strength = 2.0f
@@ -105,6 +105,9 @@ class ParallaxCalculatorTest {
         calculator.updateFromSensor(1.0f, 1.0f)
         repeat(100) { calculator.update(16) }
         val diagonalOffset = calculator.getOffset()
+        val diagonalDist = kotlin.math.sqrt(
+            diagonalOffset.first * diagonalOffset.first + diagonalOffset.second * diagonalOffset.second
+        )
         
         // Reset
         calculator.reset()
@@ -112,12 +115,12 @@ class ParallaxCalculatorTest {
         // Test pure X tilt
         calculator.updateFromSensor(1.0f, 0f)
         repeat(100) { calculator.update(16) }
-        val pureXOffset = calculator.getOffsetX()
+        val pureXOffset = kotlin.math.abs(calculator.getOffsetX())
         
-        // With per-axis softLimit, diagonal X should be approximately equal to pure X
-        // (each axis is soft-limited independently)
-        assertEquals("Diagonal X should be approximately equal to pure X",
-            kotlin.math.abs(pureXOffset), kotlin.math.abs(diagonalOffset.first), 2f)
+        // With radial soft-limit, diagonal distance should be similar to cardinal distance
+        // (both saturate at the same radial maximum)
+        assertEquals("Diagonal distance should approximate cardinal distance (radial limit)",
+            pureXOffset, diagonalDist, pureXOffset * 0.25f)
     }
 
     // P5: Test returning to center when tilt goes to zero

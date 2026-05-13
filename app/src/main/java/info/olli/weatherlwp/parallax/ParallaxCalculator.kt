@@ -144,7 +144,7 @@ class ParallaxCalculator {
      * 1.0 = instant return
      * Only applies when tilt magnitude is low (near zero).
      */
-    var returnSpeed = 0.15f             // Default: moderate pull (pref_parallax_return_speed=15)
+    var returnSpeed = 0f                // Default: off (production sets from pref_parallax_return_speed)
     
     /**
      * Parallax perspective: controls which layers move more.
@@ -227,9 +227,9 @@ class ParallaxCalculator {
         prevTiltX = filteredTiltX
         prevTiltY = filteredTiltY
 
-        // Stillness detection: phone must be below both magnitude and velocity thresholds
-        val isStill = tiltMagnitude < STILL_TILT_EPSILON &&
-                tiltVelocity < STILL_VELOCITY_EPSILON
+        // Stillness detection: velocity-only check so phone held still at any angle
+        // will recenter (not just near-neutral tilt)
+        val isStill = tiltVelocity < STILL_VELOCITY_EPSILON
         if (isStill) {
             stillTimerMs += deltaTimeMs
         } else {
@@ -254,14 +254,24 @@ class ParallaxCalculator {
         val rawTargetX = filteredTiltX * effectiveMaxOffset * strength * horizontalComp
         val rawTargetY = filteredTiltY * effectiveMaxOffset * strength * verticalComp
 
-        // Soft-limit the target using tanh-based radial saturation
-        // This replaces the hard circular clamp, giving smooth deceleration near edges
-        val xLimit = effectiveMaxOffset * horizontalComp
-        val yLimit = effectiveMaxOffset * verticalComp
-        targetX = softLimit(rawTargetX, xLimit)
-        targetY = softLimit(rawTargetY, yLimit)
+        // Radial soft-limit using tanh saturation. Preserves direction while smoothly
+        // decelerating toward the maximum offset circle. Single point of tanh in the
+        // pipeline (SensorManager uses hard coerceIn for physical bounds).
+        val rawLen = kotlin.math.sqrt(rawTargetX * rawTargetX + rawTargetY * rawTargetY)
+        val maxDist = effectiveMaxOffset * kotlin.math.max(horizontalComp, verticalComp)
+        if (rawLen > 0f) {
+            val limitedLen = maxDist * tanh(rawLen / maxDist)
+            val scale = limitedLen / rawLen
+            targetX = rawTargetX * scale
+            targetY = rawTargetY * scale
+        } else {
+            targetX = 0f
+            targetY = 0f
+        }
         
         // Calculate edge easing multiplier based on current position
+        val xLimit = effectiveMaxOffset * horizontalComp
+        val yLimit = effectiveMaxOffset * verticalComp
         val edgeEasingMultiplier = if (edgeEasing > 0.01f) {
             calculateEdgeEasingMultiplier(xLimit, yLimit)
         } else {

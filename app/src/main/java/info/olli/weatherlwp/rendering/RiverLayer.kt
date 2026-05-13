@@ -111,6 +111,9 @@ class RiverLayer(private val context: Context) : SceneLayer {
     private var opacity = PreferenceDefaults.RIVER_OPACITY / 100f
     private var flowSpeed = PreferenceDefaults.RIVER_SPEED / 100f
 
+    // Target depth layer percent: 0=foreground, 1=background. Default to foreground-ish.
+    private var depthLayerPercent = PreferenceDefaults.RIVER_DEPTH_LAYER / 100f
+
     // Animation phase
     private var flowPhase = 0f
 
@@ -255,6 +258,18 @@ class RiverLayer(private val context: Context) : SceneLayer {
     }
 
     /**
+     * Determine which terrain depth layer index the river should be drawn at.
+     * Returns -1 if river should not be drawn.
+     */
+    fun getTargetLayerIndex(totalLayers: Int): Int {
+        if (!enabled || totalLayers <= 0) return -1
+        // Settings semantics: 0=foreground, 100=background.
+        // Terrain layer index semantics: 0=background, last=foreground.
+        val clampedDepthPercent = depthLayerPercent.coerceIn(0f, 1f)
+        return ((1f - clampedDepthPercent) * (totalLayers - 1)).toInt().coerceIn(0, totalLayers - 1)
+    }
+
+    /**
      * Draw water at a single depth layer. Called by TerrainLayer via callback
      * for correct z-ordering (river behind trees but on top of hills).
      */
@@ -263,6 +278,11 @@ class RiverLayer(private val context: Context) : SceneLayer {
         depthFactor: Float, layerIndex: Int, totalLayers: Int
     ) {
         if (!enabled || width <= 0 || height <= 0) return
+
+        // Only draw at the target depth layer (single-layer policy like LakeLayer)
+        val targetLayer = getTargetLayerIndex(totalLayers)
+        if (layerIndex != targetLayer) return
+
         val waterLevel = state.riverLevel
         if (waterLevel < 0.01f) return
 
@@ -731,6 +751,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
         riverWidthPercent = settings.getInt("pref_river_width", PreferenceDefaults.RIVER_WIDTH) / 100f
         opacity = settings.getInt("pref_river_opacity", PreferenceDefaults.RIVER_OPACITY) / 100f
         flowSpeed = settings.getInt("pref_river_speed", PreferenceDefaults.RIVER_SPEED) / 100f
+        depthLayerPercent = settings.getInt("pref_river_depth", PreferenceDefaults.RIVER_DEPTH_LAYER) / 100f
     }
 
     override fun destroy() {
