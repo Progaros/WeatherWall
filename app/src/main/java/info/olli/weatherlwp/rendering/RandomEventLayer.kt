@@ -18,20 +18,22 @@ import kotlin.random.Random
 /**
  * Layer that manages random events like birds, planes, and animals.
  * Events spawn randomly and update/draw until they leave the screen.
- * 
+ *
  * Event classes are in the events/ package for better organization.
  *
- * ## World-space migration status
+ * ## Overlay content — screen-relative, not world content
+ *
+ * Random events are intentionally **screen-relative overlay effects**.
+ * They are not deterministic world content and are not scaled by world zoom.
+ * Their movement uses ratio-based screen positions (0..1) with absolute-time
+ * traversal for visual consistency across zoom levels and orientations.
+ *
+ * Random usage in event spawning is acceptable because events are temporary
+ * overlays — they do not need world-coordinate determinism.
  *
  * Layer-level depth snapping uses [hillInfoWorldProvider] (world-space, primary)
- * with fallback to the deprecated [hillInfoProvider] (xRatio-based).
- *
- * Individual [RandomEvent] implementations (DuckEvent, FrogEvent, DeerEvent, etc.)
- * still use xRatio-based positions internally and receive the legacy
- * [hillHeightProvider] for terrain following via [RandomEvent.getCurrentYRatio].
- *
- * TODO: Migrate individual RandomEvent implementations to world-space coordinates
- *       and replace HillHeightProvider with HillHeightWorldProvider in their APIs.
+ * with fallback to the deprecated [hillInfoProvider] (xRatio-based) for
+ * terrain-following of ground events (e.g. animals walking along hills).
  */
 class RandomEventLayer(private val context: Context) : SceneLayer {
     override val layerType = LayerType.RANDOM_EVENTS

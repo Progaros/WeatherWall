@@ -42,9 +42,6 @@ class ParallaxCalculator {
         /** Ignore tiny tilt noise so return-to-center can engage when device is effectively still. */
         private const val TILT_NOISE_DEADZONE = 0.06f
 
-        /** Stillness detection: tilt magnitude threshold below which phone is "still". */
-        private const val STILL_TILT_EPSILON = 0.08f
-
         /** Stillness detection: tilt velocity threshold (change per frame). */
         private const val STILL_VELOCITY_EPSILON = 0.015f
 

@@ -148,7 +148,7 @@ class EventTraversalTest {
         assertEquals(0.5f, EventTraversal.xAtProgress(path, 0.5f), 0.001f)
     }
 
-    // ============== Event zoom factor tests ==============
+    // ============== Zoom factor arithmetic (informational — events are zoom-independent) ==============
 
     @Test
     fun `zoom factor is 1 at reference height`() {

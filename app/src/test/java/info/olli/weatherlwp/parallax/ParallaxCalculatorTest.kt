@@ -1439,4 +1439,51 @@ class ParallaxCalculatorTest {
         assertTrue("Full tilt should reach >70% of max offset ($x vs $maxOffset)",
             x > maxOffset * 0.70f)
     }
+
+    @Test
+    fun phoneFlatStillRecenters() {
+        // Phone flat on table (tilt ~ 0), returnSpeed enabled → should recenter
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 0f
+
+        // Offset the position first
+        calc.updateFromSensor(0.8f, 0f)
+        repeat(60) { calc.update(16) }
+        val xBefore = calc.getOffsetX()
+        assertTrue("Should have offset", xBefore > 50f)
+
+        // Phone goes flat, enable recenter
+        calc.returnSpeed = 0.5f
+        calc.updateFromSensor(0f, 0f)
+        // 400ms hold + generous recenter time
+        repeat(200) { calc.update(16) }
+        val xAfter = calc.getOffsetX()
+        assertTrue("Phone flat and still should recenter (before=$xBefore, after=$xAfter)",
+            kotlin.math.abs(xAfter) < kotlin.math.abs(xBefore) * 0.1f)
+    }
+
+    @Test
+    fun phoneMovingDoesNotRecenter() {
+        // Phone actively moving — recentering must NOT engage
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 0.8f
+
+        // Continuously varying tilt simulates active hand movement
+        repeat(200) { i ->
+            val tiltX = 0.6f + 0.15f * kotlin.math.sin(i * 0.4f)
+            calc.updateFromSensor(tiltX, 0f)
+            calc.update(16)
+        }
+        val x = calc.getOffsetX()
+        // Should still have substantial offset — recentering never kicked in
+        assertTrue("Active motion should maintain offset: $x", x > 40f)
+    }
 }

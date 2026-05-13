@@ -89,6 +89,11 @@ class RiverLayer(private val context: Context) : SceneLayer {
     // Pre-allocated terrain sampling array (numSamples=50 is constant)
     private val terrainYsArray = FloatArray(51)
 
+    // Pre-allocated gradient arrays to avoid per-segment allocation
+    private val gradientColors = IntArray(3)
+    private val gradientStops = floatArrayOf(0f, 0.3f, 1f)
+    private val reflectiveGradientStops = floatArrayOf(0f, 0.4f, 1f)
+
     // Cached gradients to avoid per-frame allocation
     private var cachedWavyGradient: LinearGradient? = null
     private var cachedWavyGradientKey = 0L
@@ -434,14 +439,13 @@ class RiverLayer(private val context: Context) : SceneLayer {
         val gradKey = sBucket * 100003L + bBucket * 31L + color.toLong() + alphaMultiplier
         // Use cached wavy gradient slot (reuse existing cache fields)
         if (cachedWavyGradient == null || cachedWavyGradientKey != gradKey) {
+            gradientColors[0] = Color.argb(alphaMultiplier, Color.red(shallowColor), Color.green(shallowColor), Color.blue(shallowColor))
+            gradientColors[1] = Color.argb(alphaMultiplier, Color.red(color), Color.green(color), Color.blue(color))
+            gradientColors[2] = Color.argb(alphaMultiplier, Color.red(deepColor), Color.green(deepColor), Color.blue(deepColor))
             cachedWavyGradient = LinearGradient(
                 0f, topY, 0f, botY,
-                intArrayOf(
-                    Color.argb(alphaMultiplier, Color.red(shallowColor), Color.green(shallowColor), Color.blue(shallowColor)),
-                    Color.argb(alphaMultiplier, Color.red(color), Color.green(color), Color.blue(color)),
-                    Color.argb(alphaMultiplier, Color.red(deepColor), Color.green(deepColor), Color.blue(deepColor))
-                ),
-                floatArrayOf(0f, 0.3f, 1f),
+                gradientColors,
+                gradientStops,
                 Shader.TileMode.CLAMP
             )
             cachedWavyGradientKey = gradKey
@@ -620,17 +624,16 @@ class RiverLayer(private val context: Context) : SceneLayer {
         val bBucket = (bottom.toInt() / 4).toLong()
         val refKey = tBucket * 100003L + bBucket * 31L + color.toLong() + reflectionColor.toLong() * 7L + alphaMultiplier
         if (cachedReflectiveGradient == null || cachedReflectiveGradientKey != refKey) {
+            gradientColors[0] = Color.argb(alphaMultiplier,
+                Color.red(reflectionColor), Color.green(reflectionColor), Color.blue(reflectionColor))
+            gradientColors[1] = Color.argb(alphaMultiplier,
+                Color.red(color), Color.green(color), Color.blue(color))
+            gradientColors[2] = Color.argb(alphaMultiplier,
+                Color.red(waterPalette.deep), Color.green(waterPalette.deep), Color.blue(waterPalette.deep))
             cachedReflectiveGradient = LinearGradient(
                 0f, top, 0f, bottom,
-                intArrayOf(
-                    Color.argb(alphaMultiplier,
-                        Color.red(reflectionColor), Color.green(reflectionColor), Color.blue(reflectionColor)),
-                    Color.argb(alphaMultiplier,
-                        Color.red(color), Color.green(color), Color.blue(color)),
-                    Color.argb(alphaMultiplier,
-                        Color.red(waterPalette.deep), Color.green(waterPalette.deep), Color.blue(waterPalette.deep))
-                ),
-                floatArrayOf(0f, 0.4f, 1f),
+                gradientColors,
+                reflectiveGradientStops,
                 Shader.TileMode.CLAMP
             )
             cachedReflectiveGradientKey = refKey

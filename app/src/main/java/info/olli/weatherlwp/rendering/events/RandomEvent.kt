@@ -64,7 +64,11 @@ typealias HillInfoWorldProvider = (worldX: Float, requestedDepthFactor: Float) -
 
 /**
  * Base interface for random events.
- * 
+ *
+ * Events are screen-relative overlay effects — they use ratio-based positions
+ * (0..1 of screen width) and are not scaled by world zoom. Their movement speed
+ * is constant in screen-space for visual consistency across zoom levels.
+ *
  * Events are synchronized across preview and wallpaper by using absolute time
  * rather than accumulated delta time. The spawnTimeMs is set when the event
  * is created, and progress is derived from (currentTime - spawnTime).

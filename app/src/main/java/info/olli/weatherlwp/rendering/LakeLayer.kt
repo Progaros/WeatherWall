@@ -64,6 +64,11 @@ class LakeLayer(private val context: Context) : SceneLayer {
     // Pre-allocated terrain sampling array (numSamples=30 is constant)
     private val terrainYsArray = FloatArray(31)
 
+    // Pre-allocated gradient arrays to avoid per-segment allocation
+    private val gradientColors = IntArray(3)
+    private val gradientStops = floatArrayOf(0f, 0.3f, 1f)
+    private val simpleGradientStops = floatArrayOf(0f, 0.35f, 1f)
+
     // Cached gradients to avoid per-frame allocation
     private var cachedSimpleGradient: LinearGradient? = null
     private var cachedSimpleGradientKey = 0L
@@ -261,14 +266,13 @@ class LakeLayer(private val context: Context) : SceneLayer {
         val hBucket = (botY.toInt() / 4).toLong()
         val key = yBucket * 100003L + hBucket * 31L + color.toLong() + alphaInt
         if (cachedSimpleGradient == null || cachedSimpleGradientKey != key) {
+            gradientColors[0] = Color.argb(alphaInt, Color.red(shallowColor), Color.green(shallowColor), Color.blue(shallowColor))
+            gradientColors[1] = Color.argb(alphaInt, Color.red(color), Color.green(color), Color.blue(color))
+            gradientColors[2] = Color.argb(alphaInt, Color.red(deepColor), Color.green(deepColor), Color.blue(deepColor))
             cachedSimpleGradient = LinearGradient(
                 0f, topY, 0f, botY,
-                intArrayOf(
-                    Color.argb(alphaInt, Color.red(shallowColor), Color.green(shallowColor), Color.blue(shallowColor)),
-                    Color.argb(alphaInt, Color.red(color), Color.green(color), Color.blue(color)),
-                    Color.argb(alphaInt, Color.red(deepColor), Color.green(deepColor), Color.blue(deepColor))
-                ),
-                floatArrayOf(0f, 0.35f, 1f),
+                gradientColors,
+                simpleGradientStops,
                 Shader.TileMode.CLAMP
             )
             cachedSimpleGradientKey = key
@@ -353,14 +357,13 @@ class LakeLayer(private val context: Context) : SceneLayer {
         val bBucket = (bottomY.toInt() / 4).toLong()
         val key = sBucket * 100003L + bBucket * 31L + color.toLong() + alphaInt
         if (cachedSegmentGradient == null || cachedSegmentGradientKey != key) {
+            gradientColors[0] = Color.argb(alphaInt, Color.red(shallowColor), Color.green(shallowColor), Color.blue(shallowColor))
+            gradientColors[1] = Color.argb(alphaInt, Color.red(color), Color.green(color), Color.blue(color))
+            gradientColors[2] = Color.argb(alphaInt, Color.red(deepColor), Color.green(deepColor), Color.blue(deepColor))
             cachedSegmentGradient = LinearGradient(
                 0f, surfaceY, 0f, bottomY,
-                intArrayOf(
-                    Color.argb(alphaInt, Color.red(shallowColor), Color.green(shallowColor), Color.blue(shallowColor)),
-                    Color.argb(alphaInt, Color.red(color), Color.green(color), Color.blue(color)),
-                    Color.argb(alphaInt, Color.red(deepColor), Color.green(deepColor), Color.blue(deepColor))
-                ),
-                floatArrayOf(0f, 0.3f, 1f),
+                gradientColors,
+                gradientStops,
                 Shader.TileMode.CLAMP
             )
             cachedSegmentGradientKey = key
