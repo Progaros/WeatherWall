@@ -1223,7 +1223,7 @@ class ParallaxCalculatorTest {
         var tiltX = 0.8f
         repeat(200) { i ->
             // Oscillate tilt with enough amplitude and frequency to keep
-            // velocity above STILL_VELOCITY_EPSILON (0.015) every frame
+            // velocity above STILL_VELOCITY_EXIT (0.025) every frame
             tiltX = 0.8f + 0.1f * kotlin.math.sin(i * 0.5f)
             calc.updateFromSensor(tiltX, 0f)
             calc.update(16)
@@ -1511,15 +1511,116 @@ class ParallaxCalculatorTest {
         assertTrue("Should be near zero after recentering: $nearZero",
             kotlin.math.abs(nearZero) < 10f)
 
-        // 3. Apply a small movement (just enough to exit recenter: vel > 0.015)
-        //    With smoothing, position should not immediately jump to tilt target.
+        // 3. Apply a small movement (just enough to exit recenter)
+        //    Tilt origin was rebased, so the delta from 0.8→0.85 is only 0.05
+        //    relative to the rebased origin. Must not jump to old offset.
         calc.updateFromSensor(0.85f, 0f)
         calc.update(16)
         val afterFirstFrame = calc.getOffsetX()
 
-        // On exit frame, wasRecentering snaps target to position → no jump.
+        // On exit frame, tilt origin rebasing keeps target near zero.
         assertTrue("First frame after recenter exit must not jump back to old offset. " +
             "Position: $afterFirstFrame, old far offset: $farOffset",
             kotlin.math.abs(afterFirstFrame) < farOffset * 0.3f)
+
+        // 4. CRITICAL: verify multiple subsequent frames stay stable too
+        //    (the old wasRecentering fix only prevented the jump on frame 1)
+        repeat(30) { frame ->
+            calc.update(16)
+            val pos = calc.getOffsetX()
+            assertTrue("Frame ${frame + 2} after exit must not jump. " +
+                "Position: $pos, old far offset: $farOffset",
+                kotlin.math.abs(pos) < farOffset * 0.3f)
+        }
+    }
+
+    @Test
+    fun `recenter rebases tilt origin so movement is relative`() {
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f // No smoothing for deterministic results
+        calc.returnSpeed = 0f
+
+        // 1. Tilt to 0.5 and converge
+        calc.updateFromSensor(0.5f, 0f)
+        repeat(100) { calc.update(16) }
+        val initialOffset = calc.getOffsetX()
+        assertTrue("Should have offset at 0.5 tilt", initialOffset > 20f)
+
+        // 2. Enable recenter, hold still, let it recenter to zero
+        calc.returnSpeed = 1.0f
+        repeat(300) { calc.update(16) }
+        assertTrue("Should be near zero", kotlin.math.abs(calc.getOffsetX()) < 5f)
+
+        // 3. Now move from 0.5 → 0.6 (small 0.1 delta from rebased origin)
+        calc.updateFromSensor(0.6f, 0f)
+        repeat(100) { calc.update(16) }
+        val afterSmallMove = calc.getOffsetX()
+
+        // The offset should be small (proportional to 0.1 delta, not 0.6 absolute)
+        assertTrue("Movement after recenter should be relative to rebased origin. " +
+            "Offset: $afterSmallMove, initial offset at 0.5: $initialOffset",
+            kotlin.math.abs(afterSmallMove) < initialOffset * 0.5f)
+    }
+
+    @Test
+    fun `held tilt becomes neutral after recenter`() {
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 0f  // Disable recenter during convergence
+
+        // 1. Hold phone at 0.7 tilt and let it converge
+        calc.updateFromSensor(0.7f, 0f)
+        repeat(100) { calc.update(16) }
+        assertTrue("Should have offset", calc.getOffsetX() > 20f)
+
+        // 2. Enable recenter. Hold still at 0.7 → recenter kicks in, origin rebases to 0.7
+        calc.returnSpeed = 1.0f
+        repeat(300) { calc.update(16) }
+        assertTrue("Should be near zero", kotlin.math.abs(calc.getOffsetX()) < 5f)
+
+        // 3. Keep holding at 0.7 — since origin is 0.7, delta is 0 → stays at zero
+        repeat(60) { calc.update(16) }
+        assertTrue("Holding at rebased tilt should keep position at zero. " +
+            "Position: ${calc.getOffsetX()}",
+            kotlin.math.abs(calc.getOffsetX()) < 2f)
+    }
+
+    @Test
+    fun `stillness hysteresis prevents recenter flicker`() {
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 1.0f
+
+        // 1. Establish offset
+        calc.updateFromSensor(0.5f, 0f)
+        repeat(100) { calc.update(16) }
+        val establishedOffset = calc.getOffsetX()
+
+        // 2. Hold still but inject tiny noise oscillating around the enter threshold.
+        //    Velocity toggles between ~0.01 and ~0.013 — both below EXIT (0.025)
+        //    but straddling ENTER (0.012). Without hysteresis this would flicker.
+        val positions = mutableListOf<Float>()
+        for (i in 0 until 200) {
+            // Alternate between two very close tilt values (delta = 0.013)
+            val tiltX = if (i % 2 == 0) 0.5f else 0.513f
+            calc.updateFromSensor(tiltX, 0f)
+            calc.update(16)
+            positions.add(calc.getOffsetX())
+        }
+
+        // Check that the position doesn't wildly oscillate; it should be smoothly
+        // decaying or stable, not flip-flopping between recenter and tracking.
+        val maxDelta = positions.zipWithNext().maxOf { kotlin.math.abs(it.second - it.first) }
+        assertTrue("Position should not wildly oscillate with tiny noise. " +
+            "Max frame-to-frame delta: $maxDelta", maxDelta < establishedOffset * 0.15f)
     }
 }

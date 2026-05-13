@@ -42,8 +42,12 @@ class ParallaxCalculator {
         /** Ignore tiny tilt noise so return-to-center can engage when device is effectively still. */
         private const val TILT_NOISE_DEADZONE = 0.06f
 
-        /** Stillness detection: tilt velocity threshold (change per frame). */
-        private const val STILL_VELOCITY_EPSILON = 0.015f
+        /** Stillness detection: enter stillness when velocity below this threshold. */
+        private const val STILL_VELOCITY_ENTER = 0.012f
+
+        /** Stillness detection: exit stillness / recenter when velocity above this threshold.
+         *  Higher than enter to add hysteresis and prevent mode flicker on tiny sensor noise. */
+        private const val STILL_VELOCITY_EXIT = 0.025f
 
         /** Stillness detection: ms the phone must remain still before recentering engages. */
         private const val STILL_HOLD_MS = 400L
@@ -71,8 +75,26 @@ class ParallaxCalculator {
     // Accumulated time (ms) since the phone was last "not still"
     private var stillTimerMs = 0L
 
-    // Track whether we were recentering on the previous frame to detect transitions
-    private var wasRecentering = false
+    /**
+     * Recenter semantics:
+     * When the phone is held still, the visible offset relaxes to center.
+     * The current physical tilt is then treated as the new neutral baseline
+     * ([originTiltX]/[originTiltY]). This prevents a small movement after
+     * recenter from jumping back to the pre-recenter tilt-derived offset.
+     *
+     * Tracking mode computes target from (filteredTilt − originTilt), so
+     * movement is always relative to the rebased origin.
+     */
+    private enum class Mode { TRACKING, RECENTERING }
+    private var mode = Mode.TRACKING
+
+    /** Tilt baseline: physical tilt that maps to zero parallax offset.
+     *  Updated when exiting recenter so the held angle becomes neutral. */
+    private var originTiltX = 0f
+    private var originTiltY = 0f
+
+    /** Whether the device is currently considered still (with hysteresis). */
+    private var isDeviceStill = false
     
     // User-configurable settings - defaults match pref_effects.xml
     // These are overwritten by loadPrefs() but provide sane defaults before settings load
@@ -227,15 +249,25 @@ class ParallaxCalculator {
         prevTiltX = filteredTiltX
         prevTiltY = filteredTiltY
 
-        // Stillness detection: velocity-only check so phone held still at any angle
-        // will recenter (not just near-neutral tilt)
-        val isStill = tiltVelocity < STILL_VELOCITY_EPSILON
-        if (isStill) {
-            stillTimerMs += deltaTimeMs
+        // Stillness detection with hysteresis to avoid mode flicker.
+        // Enter stillness at a tighter threshold; exit at a wider one.
+        if (isDeviceStill) {
+            if (tiltVelocity > STILL_VELOCITY_EXIT) {
+                isDeviceStill = false
+                stillTimerMs = 0L
+            } else {
+                stillTimerMs += deltaTimeMs
+            }
         } else {
-            stillTimerMs = 0L
+            if (tiltVelocity < STILL_VELOCITY_ENTER) {
+                isDeviceStill = true
+                stillTimerMs += deltaTimeMs
+            } else {
+                stillTimerMs = 0L
+            }
         }
-        val shouldRecenter = isStill && stillTimerMs > STILL_HOLD_MS && returnSpeed > 0.001f
+
+        val shouldRecenter = isDeviceStill && stillTimerMs > STILL_HOLD_MS && returnSpeed > 0.001f
         
         // Calculate effective max offset based on canvas height percentage
         val effectiveMaxOffset = if (maxOffsetPercent > 0) {
@@ -244,31 +276,12 @@ class ParallaxCalculator {
             maxOffsetPx * scaleFactor
         }
         
-        // Calculate target position from tilt
         val (horizontalComp, verticalComp) = if (canvasWidth >= canvasHeight) {
             1f to aspectRatioCompensation
         } else {
             aspectRatioCompensation to 1f
         }
 
-        val rawTargetX = filteredTiltX * effectiveMaxOffset * strength * horizontalComp
-        val rawTargetY = filteredTiltY * effectiveMaxOffset * strength * verticalComp
-
-        // Radial soft-limit using tanh saturation. Preserves direction while smoothly
-        // decelerating toward the maximum offset circle. Single point of tanh in the
-        // pipeline (SensorManager uses hard coerceIn for physical bounds).
-        val rawLen = kotlin.math.sqrt(rawTargetX * rawTargetX + rawTargetY * rawTargetY)
-        val maxDist = effectiveMaxOffset * kotlin.math.max(horizontalComp, verticalComp)
-        if (rawLen > 0f) {
-            val limitedLen = maxDist * tanh(rawLen / maxDist)
-            val scale = limitedLen / rawLen
-            targetX = rawTargetX * scale
-            targetY = rawTargetY * scale
-        } else {
-            targetX = 0f
-            targetY = 0f
-        }
-        
         // Calculate edge easing multiplier based on current position
         val xLimit = effectiveMaxOffset * horizontalComp
         val yLimit = effectiveMaxOffset * verticalComp
@@ -279,25 +292,59 @@ class ParallaxCalculator {
         }
 
         if (shouldRecenter) {
-            // Return-to-center: dt-based exponential damping toward (0, 0)
+            // ---- RECENTERING MODE ----
+            mode = Mode.RECENTERING
+
+            // Continuously rebase tilt origin to current held tilt so that when
+            // tracking resumes, the current physical angle maps to zero.
+            originTiltX = filteredTiltX
+            originTiltY = filteredTiltY
+
+            // Exponential damping toward (0, 0)
             val recenterRate = RECENTER_DAMPING * returnSpeed
             val t = 1f - exp(-recenterRate * dt)
             positionX += (0f - positionX) * t
             positionY += (0f - positionY) * t
-            // Keep target synced with position during recenter so that when
-            // tracking resumes, interpolation starts from the current position
-            // instead of jumping back to the stale pre-recenter target.
+
+            // Keep target synced to position during recenter
             targetX = positionX
             targetY = positionY
-            wasRecentering = true
         } else {
-            // If we just exited recenter, snap target to current position
-            // to prevent a jump to the old tilt-derived target.
-            if (wasRecentering) {
+            // ---- TRACKING MODE ----
+            if (mode == Mode.RECENTERING) {
+                // Transition: just exited recenter.
+                // Origin was already continuously set to the held tilt during recenter.
+                // Do NOT rebase to the current (moving) tilt — that would zero out
+                // the relative delta and freeze the position.
+                mode = Mode.TRACKING
+                // Skip target recomputation this frame: keep target = position so
+                // the lerp is a no-op and there is no discontinuity.
                 targetX = positionX
                 targetY = positionY
-                wasRecentering = false
+            } else {
+                // Compute target relative to rebased tilt origin.
+                // Movement is always a delta from where the phone was when
+                // tracking resumed after the last recenter.
+                val relativeTiltX = filteredTiltX - originTiltX
+                val relativeTiltY = filteredTiltY - originTiltY
+
+                val rawTargetX = relativeTiltX * effectiveMaxOffset * strength * horizontalComp
+                val rawTargetY = relativeTiltY * effectiveMaxOffset * strength * verticalComp
+
+                // Radial soft-limit using tanh saturation
+                val rawLen = kotlin.math.sqrt(rawTargetX * rawTargetX + rawTargetY * rawTargetY)
+                val maxDist = effectiveMaxOffset * kotlin.math.max(horizontalComp, verticalComp)
+                if (rawLen > 0f) {
+                    val limitedLen = maxDist * tanh(rawLen / maxDist)
+                    val scale = limitedLen / rawLen
+                    targetX = rawTargetX * scale
+                    targetY = rawTargetY * scale
+                } else {
+                    targetX = 0f
+                    targetY = 0f
+                }
             }
+
             // Normal tilt tracking
             val returnThreshold = 0.15f + returnSpeed * 0.35f
             val returnBlend = (1f - tiltMagnitude / returnThreshold).coerceIn(0f, 1f)
@@ -415,7 +462,10 @@ class ParallaxCalculator {
         prevTiltX = 0f
         prevTiltY = 0f
         stillTimerMs = 0L
-        wasRecentering = false
+        mode = Mode.TRACKING
+        originTiltX = 0f
+        originTiltY = 0f
+        isDeviceStill = false
         pendingTilt.set(TiltPair(0f, 0f))
     }
 
