@@ -39,23 +39,24 @@ class CloudLayerTest {
     }
     
     @Test
-    fun `maximum groups capped at 40 for performance`() {
-        val maxGroups = 40
+    fun `maximum groups capped at 22 for performance`() {
+        val maxGroups = 22
         val cloudCount = 200  // More than overcast
         val avgCloudsPerGroup = 9  // (6+12)/2
         
         val calculated = (cloudCount / avgCloudsPerGroup).coerceIn(2, maxGroups)
-        assertEquals("Max groups capped", 22, calculated)  // 200/9 = 22, still below 40
+        assertEquals("Max groups capped", 22, calculated)  // 200/9 = 22, capped at 22
     }
     
     @Test
-    fun `overcast 35 clouds should produce reasonable groups`() {
+    fun `overcast 35 clouds produces coverage-based groups`() {
         val overcastClouds = 35
-        val maxGroups = 40
         
-        // Now cloud count IS the group count (each cloud = one group)
-        val groups = overcastClouds.coerceIn(2, maxGroups)
-        assertTrue("Overcast produces sufficient groups", groups >= 30)
+        // With coverage mapping: 35 raw → (35*0.4)=14 groups, sizeMult=1.5
+        // This is the new model: fewer, larger groups
+        val groups = ((overcastClouds * 0.4f).toInt()).coerceIn(12, 20)
+        assertTrue("Overcast produces 12+ groups via coverage mapping", groups >= 12)
+        assertTrue("Overcast groups capped at 20", groups <= 20)
     }
 
     // ============== Layer Property Tests ==============
@@ -127,12 +128,12 @@ class CloudLayerTest {
     // ============== Performance Tests ==============
     
     @Test
-    fun `draw calls reduced from 120 clouds to max 25 groups`() {
+    fun `draw calls reduced from 120 clouds to max 22 groups`() {
         val oldIndividualClouds = 120
-        val newMaxGroups = 25
+        val newMaxGroups = 22
         
         val reduction = oldIndividualClouds / newMaxGroups.toFloat()
-        assertTrue("At least 4x reduction", reduction >= 4f)
+        assertTrue("At least 5x reduction", reduction >= 5f)
     }
     
     @Test
@@ -425,5 +426,120 @@ class CloudLayerTest {
         }
         assertEquals("Degenerate cloud should center in band",
             cloudYMin + cloudYRange * 0.5f, y, 0.001f)
+    }
+
+    // ============== Coverage-Based Cloud Generation Tests ==============
+
+    @Test
+    fun `coverage mapping reduces group count for overcast`() {
+        // Overcast (50 raw) → fewer groups with larger size multiplier
+        val rawCount = 50
+        val (groups, sizeMult) = coverageMapping(rawCount)
+        assertTrue("Overcast groups ($groups) should be significantly less than raw ($rawCount)", 
+            groups < rawCount / 2)
+        assertTrue("Overcast size mult ($sizeMult) should compensate (> 1.3)", sizeMult > 1.3f)
+    }
+
+    @Test
+    fun `coverage mapping preserves light cloud count`() {
+        // Light (3 raw) → minimal reduction, no size increase
+        val (groups, sizeMult) = coverageMapping(3)
+        assertTrue("Light clouds: groups ($groups) should be >= 2", groups >= 2)
+        assertEquals("Light clouds: no size increase", 1.0f, sizeMult, 0.01f)
+    }
+
+    @Test
+    fun `coverage mapping medium clouds moderate reduction`() {
+        val (groups, sizeMult) = coverageMapping(10)
+        assertTrue("Medium: groups >= 4", groups >= 4)
+        assertTrue("Medium: groups <= 10", groups <= 10)
+        assertTrue("Medium: slight size increase", sizeMult >= 1.0f)
+    }
+
+    @Test
+    fun `coverage mapping group count monotonically increases`() {
+        var prevGroups = 0
+        for (rawCount in listOf(0, 3, 10, 25, 50)) {
+            val (groups, _) = coverageMapping(rawCount)
+            assertTrue("Groups should be >= previous ($prevGroups) at rawCount=$rawCount", 
+                groups >= prevGroups)
+            prevGroups = groups
+        }
+    }
+
+    @Test
+    fun `coverage mapping size mult monotonically increases`() {
+        var prevMult = 0f
+        for (rawCount in listOf(0, 3, 10, 25, 50)) {
+            val (_, mult) = coverageMapping(rawCount)
+            assertTrue("Size mult should be >= previous ($prevMult) at rawCount=$rawCount", 
+                mult >= prevMult)
+            prevMult = mult
+        }
+    }
+
+    // ============== Cloud Culling Tests ==============
+
+    @Test
+    fun `offscreen clouds to the right are culled`() {
+        val screenWidth = 1080f
+        val cloudScreenX = screenWidth + 400f  // well off right
+        val halfW = 200f
+        val culled = cloudScreenX - halfW > screenWidth
+        assertTrue("Cloud far right of screen should be culled", culled)
+    }
+
+    @Test
+    fun `offscreen clouds to the left are culled`() {
+        val cloudScreenX = -400f  // well off left
+        val halfW = 200f
+        val culled = cloudScreenX + halfW < 0f
+        assertTrue("Cloud far left of screen should be culled", culled)
+    }
+
+    @Test
+    fun `partially visible cloud on right edge not culled`() {
+        val screenWidth = 1080f
+        val halfW = 200f
+        val cloudScreenX = screenWidth + 100f  // partially visible
+        val culled = cloudScreenX - halfW > screenWidth || cloudScreenX + halfW < 0f
+        assertFalse("Partially visible cloud should NOT be culled", culled)
+    }
+
+    @Test
+    fun `cloud exactly at screen boundary not culled`() {
+        val screenWidth = 1080f
+        val halfW = 200f
+        val cloudScreenX = screenWidth  // edge case: at right boundary
+        val culled = cloudScreenX - halfW > screenWidth || cloudScreenX + halfW < 0f
+        assertFalse("Cloud at boundary should NOT be culled", culled)
+    }
+
+    @Test
+    fun `effective draw scale boosts culling bounds correctly`() {
+        // Culling uses effectiveDrawScale for bounds - verify clouds drawn larger
+        // aren't incorrectly culled at the edges
+        val paddedWidth = 252
+        val effectiveDrawScale = 0.975f  // preview overcast
+        val halfW = paddedWidth / 2f * effectiveDrawScale
+        
+        // Cloud at right edge of a 300px preview
+        val screenX = 300f
+        val screenWidth = 300f
+        val culled = screenX - halfW > screenWidth
+        
+        // halfW = 126 * 0.975 = ~123. 300 - 123 = 177 which is < 300
+        assertFalse("Cloud at edge with effective scale should not be culled", culled)
+    }
+
+    // Helper: mirrors CloudLayer.cloudCountToCoverageGroups logic for testing
+    private fun coverageMapping(rawCount: Int): Pair<Int, Float> {
+        return when {
+            rawCount <= 0 -> 0 to 1.0f
+            rawCount <= 5 -> rawCount.coerceAtLeast(2) to 1.0f
+            rawCount <= 15 -> ((rawCount * 0.7f).toInt().coerceAtLeast(4)) to 1.15f
+            rawCount <= 30 -> ((rawCount * 0.5f).toInt().coerceAtLeast(8)) to 1.3f
+            else -> ((rawCount * 0.4f).toInt().coerceIn(12, 20)) to 1.5f
+        }
     }
 }

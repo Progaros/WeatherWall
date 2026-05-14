@@ -101,6 +101,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
     private var cloudOpacity = 0.4f
     private var cloudSpeedMultiplier = 1.0f  // Controls cloud movement speed (0=frozen, 1=normal, 2=fast)
     private var fluffinessMultiplier = 1.0f  // Controls puffs per cloud (density of each cloud)
+    private var coverageSizeMult = 1.0f      // Coverage-based draw size multiplier (fewer groups, each drawn larger)
     
     // Reused color filter: only recreated when cloud tint actually changes
     private var cachedMultiplyFilterColor = Int.MIN_VALUE
@@ -147,9 +148,12 @@ class CloudLayer(private val context: Context) : SceneLayer {
         const val MAX_BITMAP_DIMENSION = 512
         const val MAX_BITMAP_DIMENSION_PREVIEW = 256
         
-        // Max groups for overcast conditions
-        const val MAX_GROUPS = 30
-        const val MAX_GROUPS_PREVIEW = 20
+        // Max groups for overcast conditions (reduced: coverage-based uses fewer, larger groups)
+        const val MAX_GROUPS = 22
+        const val MAX_GROUPS_PREVIEW = 16
+        
+        // Preview cloud visibility: minimum draw scale to prevent tiny preview clouds
+        const val PREVIEW_MIN_DRAW_SCALE = 0.65f
     }
 
     /** When true, reduces bitmap sizes and group count for better preview performance. */
@@ -261,6 +265,21 @@ class CloudLayer(private val context: Context) : SceneLayer {
             groupHeight = groupHeight,
             seed = random.nextLong()
         )
+    }
+    
+    /**
+     * Map raw cloud count to coverage-driven group parameters.
+     * Fewer groups drawn larger produces same visual coverage with less GPU cost.
+     * @return Pair(effectiveGroupCount, sizeMultiplier)
+     */
+    internal fun cloudCountToCoverageGroups(rawCount: Int): Pair<Int, Float> {
+        return when {
+            rawCount <= 0 -> 0 to 1.0f
+            rawCount <= 5 -> rawCount.coerceAtLeast(2) to 1.0f
+            rawCount <= 15 -> ((rawCount * 0.7f).toInt().coerceAtLeast(4)) to 1.15f
+            rawCount <= 30 -> ((rawCount * 0.5f).toInt().coerceAtLeast(8)) to 1.3f
+            else -> ((rawCount * 0.4f).toInt().coerceIn(12, 20)) to 1.5f
+        }
     }
     
     /**
@@ -476,7 +495,10 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val screenWidth = width.coerceAtLeast(1f)
         val widthScale = (screenWidth / RenderConstants.REFERENCE_EXTENDED_WIDTH).coerceIn(1.0f, 1.5f)
         val baseCount = state.getCloudCount()
-        val targetCount = (baseCount * widthScale).toInt().coerceIn(0, effectiveMaxGroups)
+        // Coverage-based: fewer groups drawn larger for same visual coverage, better performance
+        val (coverageGroups, sizeMult) = cloudCountToCoverageGroups((baseCount * widthScale).toInt())
+        val targetCount = coverageGroups.coerceIn(0, effectiveMaxGroups)
+        coverageSizeMult = sizeMult
         
         // Regenerate groups if count changed significantly
         if (kotlin.math.abs(targetCount - cloudCount) > 3 || 
@@ -485,6 +507,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
             clearGroupBitmaps()
             cloudCount = targetCount
             generateCloudGroups()
+            android.util.Log.d("CloudPerf", "regenerated: groups=$targetCount sizeMult=${"%.2f".format(sizeMult)} base=$baseCount preview=$isPreviewMode")
         }
         
         val currentGroups = cloudGroups
@@ -508,6 +531,14 @@ class CloudLayer(private val context: Context) : SceneLayer {
         parallaxCalculator: ParallaxCalculator
     ) {
         val transform = cachedTransform
+        // Effective draw scale: includes heightScale clamping and coverage size multiplier.
+        // Preview: full coverage multiplier for better visibility.
+        // Live: dampened multiplier to preserve established visual style.
+        val effectiveDrawScale = if (isPreviewMode) {
+            transform.heightScale.coerceAtLeast(PREVIEW_MIN_DRAW_SCALE) * coverageSizeMult
+        } else {
+            transform.heightScale * (1f + (coverageSizeMult - 1f) * 0.5f)
+        }
         var i = 0
         while (i < groups.size) {
             val group = groups[i]
@@ -534,10 +565,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
             val paddedWidth = groupWidthPx + paddingX * 2
             val paddedHeight = groupHeightPx + paddingY * 2
 
-            // Viewport culling using actual padded dimensions (accounting for zoom scale)
-            val cullScale = if (isPreviewMode) transform.heightScale.coerceAtLeast(0.5f) else transform.heightScale
-            val halfW = paddedWidth / 2f * cullScale
-            val halfH = paddedHeight / 2f * cullScale
+            // Viewport culling: use effective draw scale for accurate bounds
+            val halfW = paddedWidth / 2f * effectiveDrawScale
+            val halfH = paddedHeight / 2f * effectiveDrawScale
             if (screenX + halfW < 0f || screenX - halfW > width) continue
             if (screenY + halfH < 0f || screenY - halfH > height) continue
 
@@ -561,16 +591,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
 
             val bitmap = group.cachedBitmap
             if (bitmap != null) {
-                // Scale clouds proportionally to scene zoom so they don't shrink relative to other elements
-                // In preview mode, use a minimum scale to keep clouds visible
-                val drawScale = if (isPreviewMode) {
-                    transform.heightScale.coerceAtLeast(0.5f)
-                } else {
-                    transform.heightScale
-                }
                 canvas.save()
                 canvas.translate(screenX, screenY)
-                canvas.scale(drawScale, drawScale)
+                canvas.scale(effectiveDrawScale, effectiveDrawScale)
                 canvas.drawBitmap(bitmap, -paddedWidth / 2f, -paddedHeight / 2f, drawPaint)
                 canvas.restore()
             }
