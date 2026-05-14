@@ -22,25 +22,15 @@ class PreviewCloudDensityTest {
     }
 
     @Test
-    fun `preview cloud distribution concentrated in visible area`() {
-        // In preview mode, clouds should be distributed in the visible viewport,
-        // not across the full parallax-padded range. Verify by checking that the
-        // distribution half-width in preview is less than the full generation range.
-        val previewWidth = 300f
-        val previewHeight = 500f
+    fun `preview cloud distribution uses cell-based placement`() {
+        // In the new cell-based system, both preview and live use the same
+        // cell-based generation. Verify cell size is positive.
+        val worldHeight = 1920f  // REFERENCE_HEIGHT
+        val bandHeight = worldHeight * CloudLayer.BAND_HEIGHT_FRACTION
+        val cellSize = bandHeight * CloudLayer.CELL_SIZE_FRACTION
 
-        val fullHalf = RenderConstants.getVisibleWorldHalf(previewWidth, previewHeight)
-        val hs = (previewHeight / RenderConstants.REFERENCE_HEIGHT).coerceAtLeast(0.1f)
-        val previewDistribution = (previewWidth / (2f * hs)) * 1.2f
-
-        assertTrue(
-            "Preview distribution ($previewDistribution) should be < full range ($fullHalf)",
-            previewDistribution < fullHalf
-        )
-        assertTrue(
-            "Preview distribution should be > 0",
-            previewDistribution > 0f
-        )
+        assertTrue("Cell size ($cellSize) should be positive", cellSize > 0f)
+        assertTrue("Cell size should be smaller than band height", cellSize < bandHeight)
     }
 
     @Test
@@ -189,44 +179,65 @@ class PreviewCloudDensityTest {
     }
 
     @Test
-    fun `cloud band top below cloud band bottom`() {
+    fun `cloud band has positive height from world-space fractions`() {
         assertTrue(
-            "CLOUD_BAND_TOP < CLOUD_BAND_BOTTOM",
-            CloudLayer.CLOUD_BAND_TOP < CloudLayer.CLOUD_BAND_BOTTOM
+            "BAND_HEIGHT_FRACTION should be > 0",
+            CloudLayer.BAND_HEIGHT_FRACTION > 0f
+        )
+        assertTrue(
+            "BAND_MARGIN_FRACTION should be > 0",
+            CloudLayer.BAND_MARGIN_FRACTION > 0f
         )
     }
 
     @Test
     fun `cloud band accommodates largest cloud without clipping`() {
-        val bandHeight = CloudLayer.CLOUD_BAND_BOTTOM - CloudLayer.CLOUD_BAND_TOP
-        val largestCloudHalfH = CloudLayer.GROUP_HEIGHT_MAX * 0.5f
-        // Available range for cloud center = bandHeight - 2 * halfH
-        val centerRange = bandHeight - 2f * largestCloudHalfH
+        val worldHeight = 1920f  // REFERENCE_HEIGHT
+        val worldTop = 0.5f - worldHeight / 2f
+        val bandHeight = worldHeight * CloudLayer.BAND_HEIGHT_FRACTION
+        val margin = worldHeight * CloudLayer.BAND_MARGIN_FRACTION
+        val bandTop = worldTop - margin
+        val bandBottom = worldTop + bandHeight + margin
+
+        val totalBandHeight = bandBottom - bandTop
+        val largestCloudHalfHWorld = CloudLayer.GROUP_HEIGHT_MAX * 0.5f * worldHeight
+        val centerRange = totalBandHeight - 2f * largestCloudHalfHWorld
         assertTrue(
-            "Largest cloud (halfH=$largestCloudHalfH) should fit in band (height=$bandHeight), range=$centerRange",
+            "Largest cloud (halfH=$largestCloudHalfHWorld) should fit in band (height=$totalBandHeight), range=$centerRange",
             centerRange >= 0f
         )
     }
 
     @Test
-    fun `clouds not clipped at top of band`() {
-        val halfH = CloudLayer.GROUP_HEIGHT_MAX * 0.5f
-        val minY = CloudLayer.CLOUD_BAND_TOP + halfH
-        val topEdge = minY - halfH
+    fun `clouds not clipped at top of world-space band`() {
+        val worldHeight = 1920f
+        val worldTop = 0.5f - worldHeight / 2f
+        val margin = worldHeight * CloudLayer.BAND_MARGIN_FRACTION
+        val bandTop = worldTop - margin
+
+        val halfHWorld = CloudLayer.GROUP_HEIGHT_MAX * 0.5f * worldHeight
+        val minY = bandTop + halfHWorld
+        val topEdge = minY - halfHWorld
         assertTrue(
-            "Top edge ($topEdge) should be >= CLOUD_BAND_TOP (${CloudLayer.CLOUD_BAND_TOP})",
-            topEdge >= CloudLayer.CLOUD_BAND_TOP - 0.001f
+            "Top edge ($topEdge) should be >= bandTop ($bandTop)",
+            topEdge >= bandTop - 0.001f
         )
     }
 
     @Test
-    fun `clouds not clipped at bottom of band`() {
-        val halfH = CloudLayer.GROUP_HEIGHT_MAX * 0.5f
-        val maxY = CloudLayer.CLOUD_BAND_BOTTOM - halfH
-        val bottomEdge = maxY + halfH
+    fun `clouds not clipped at bottom of world-space band`() {
+        val worldHeight = 1920f
+        val worldTop = 0.5f - worldHeight / 2f
+        val bandHeight = worldHeight * CloudLayer.BAND_HEIGHT_FRACTION
+        val margin = worldHeight * CloudLayer.BAND_MARGIN_FRACTION
+        val bandBottom = worldTop + bandHeight + margin
+
+        val halfHWorld = CloudLayer.GROUP_HEIGHT_MAX * 0.5f * worldHeight
+        val maxY = bandBottom - halfHWorld
+        val bottomEdge = maxY + halfHWorld
         assertTrue(
-            "Bottom edge ($bottomEdge) should be <= CLOUD_BAND_BOTTOM (${CloudLayer.CLOUD_BAND_BOTTOM})",
-            bottomEdge <= CloudLayer.CLOUD_BAND_BOTTOM + 0.001f
+            "Bottom edge ($bottomEdge) should be <= bandBottom ($bandBottom)",
+            bottomEdge <= bandBottom + 0.001f
         )
     }
 }

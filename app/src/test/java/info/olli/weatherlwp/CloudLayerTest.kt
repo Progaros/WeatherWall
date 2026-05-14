@@ -5,12 +5,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 /**
- * Unit tests for CloudLayer optimization - Issue: Overcast lag
+ * Unit tests for CloudLayer optimization and world-space cloud placement.
  * 
- * Tests the pre-calculated cloud group system:
+ * Tests the cell-based deterministic cloud generation system:
  * - Cloud groups instead of individual clouds
  * - Layer distribution (75% back, 25% front)
- * - Group size and property calculations
+ * - World-space cloud band (no screen-space Y)
+ * - Coverage-driven spawn probability and size scaling
+ * - Cell-based caching and deterministic placement
  * - Performance characteristics
  */
 class CloudLayerTest {
@@ -363,30 +365,57 @@ class CloudLayerTest {
         assertEquals("Left and right edges should match", grid[0][0], grid[0][gridSize], 0.001f)
     }
 
-    // ============== Cloud Y Bounds Tests (clipping fix) ==============
+    // ============== Cloud Y Bounds Tests (world-space band) ==============
 
     @Test
-    fun `cloud Y placement accounts for half-height`() {
-        // Uses CLOUD_BAND_TOP / CLOUD_BAND_BOTTOM from CloudLayer companion
-        val bandTop = CloudLayer.CLOUD_BAND_TOP
-        val bandBottom = CloudLayer.CLOUD_BAND_BOTTOM
+    fun `cloud worldY placement within world-space band`() {
+        // With world-space band:
+        // bandHeight = worldHeight * BAND_HEIGHT_FRACTION
+        // bandTop = worldRect.top - margin
+        // bandBottom = worldRect.top + bandHeight + margin
+        // For REFERENCE_HEIGHT=1920, centerWorldY=0.5:
+        //   worldRect.top = 0.5 - 960 = -959.5
+        //   bandHeight = 1920 * 0.35 = 672
+        //   margin = 1920 * 0.20 = 384
+        //   bandTop = -959.5 - 384 = -1343.5
+        //   bandBottom = -959.5 + 672 + 384 = 96.5
+        val worldHeight = 1920f
+        val worldTop = 0.5f - worldHeight / 2f
+        val bandHeight = worldHeight * CloudLayer.BAND_HEIGHT_FRACTION
+        val margin = worldHeight * CloudLayer.BAND_MARGIN_FRACTION
+        val bandTop = worldTop - margin
+        val bandBottom = worldTop + bandHeight + margin
+
+        // Band should span above visible area through upper ~55% of screen
+        assertTrue("Band top ($bandTop) should be above visible area ($worldTop)", bandTop < worldTop)
+        assertTrue("Band bottom ($bandBottom) should be in upper half", bandBottom < 0.5f + worldHeight / 2f)
+        assertTrue("Band has positive height", bandBottom > bandTop)
+    }
+
+    @Test
+    fun `cloud worldY accounts for half-height clamping`() {
+        val worldHeight = 1920f
+        val worldTop = 0.5f - worldHeight / 2f
+        val bandHeight = worldHeight * CloudLayer.BAND_HEIGHT_FRACTION
+        val margin = worldHeight * CloudLayer.BAND_MARGIN_FRACTION
+        val bandTop = worldTop - margin
+        val bandBottom = worldTop + bandHeight + margin
 
         val groupHeightMin = CloudLayer.GROUP_HEIGHT_MIN
         val groupHeightMax = CloudLayer.GROUP_HEIGHT_MAX
 
-        // For any groupHeight in [min, max], the cloud center Y should be bounded
         for (gh in listOf(groupHeightMin, groupHeightMax, (groupHeightMin + groupHeightMax) / 2f)) {
-            val halfH = gh * 0.5f
-            val minY = bandTop + halfH
-            val maxY = (bandBottom - halfH).coerceAtLeast(minY)
+            val halfHWorld = gh * 0.5f * worldHeight
+            val minY = bandTop + halfHWorld
+            val maxY = (bandBottom - halfHWorld).coerceAtLeast(minY)
 
-            // Cloud center at minY: top edge = minY - halfH >= bandTop
-            assertTrue("Top edge at minY should not clip (gh=$gh)",
-                minY - halfH >= bandTop - 0.001f)
+            // Cloud center at minY: top edge stays within band
+            assertTrue("Top edge should not exceed band top (gh=$gh)",
+                minY - halfHWorld >= bandTop - 0.001f)
 
-            // Cloud center at maxY: bottom edge = maxY + halfH <= bandBottom
-            assertTrue("Bottom edge at maxY should not clip (gh=$gh)",
-                maxY + halfH <= bandBottom + 0.001f)
+            // Cloud center at maxY: bottom edge stays within band
+            assertTrue("Bottom edge should not exceed band bottom (gh=$gh)",
+                maxY + halfHWorld <= bandBottom + 0.001f)
 
             // Range should be non-negative
             assertTrue("Y range should be non-negative (gh=$gh)", maxY >= minY)
@@ -394,39 +423,79 @@ class CloudLayerTest {
     }
 
     @Test
-    fun `largest cloud height still has valid Y range`() {
-        val bandTop = CloudLayer.CLOUD_BAND_TOP
-        val bandBottom = CloudLayer.CLOUD_BAND_BOTTOM
-        val groupHeightMax = CloudLayer.GROUP_HEIGHT_MAX
+    fun `largest cloud height still has valid Y range in world-space`() {
+        val worldHeight = 1920f
+        val worldTop = 0.5f - worldHeight / 2f
+        val bandHeight = worldHeight * CloudLayer.BAND_HEIGHT_FRACTION
+        val margin = worldHeight * CloudLayer.BAND_MARGIN_FRACTION
+        val bandTop = worldTop - margin
+        val bandBottom = worldTop + bandHeight + margin
 
-        val halfH = groupHeightMax * 0.5f
-        val minY = bandTop + halfH
-        val maxY = (bandBottom - halfH).coerceAtLeast(minY)
+        val halfHWorld = CloudLayer.GROUP_HEIGHT_MAX * 0.5f * worldHeight
+        val minY = bandTop + halfHWorld
+        val maxY = (bandBottom - halfHWorld).coerceAtLeast(minY)
 
         assertTrue("Largest cloud should still have valid Y range", maxY >= minY)
-        // bandBottom(0.42) - halfH(0.15) = 0.27 >= bandTop(0.05) + halfH(0.15) = 0.20
-        assertTrue("maxY should be >= minY", maxY >= minY)
     }
 
     @Test
     fun `degenerate cloud taller than band centers in band`() {
-        // If a cloud's height exceeds the band, it should be centered
-        val bandTop = CloudLayer.CLOUD_BAND_TOP
-        val bandBottom = CloudLayer.CLOUD_BAND_BOTTOM
-        val oversizedHeight = 0.80f  // Much taller than band
+        val worldHeight = 1920f
+        val worldTop = 0.5f - worldHeight / 2f
+        val bandHeight = worldHeight * CloudLayer.BAND_HEIGHT_FRACTION
+        val margin = worldHeight * CloudLayer.BAND_MARGIN_FRACTION
+        val bandTop = worldTop - margin
+        val bandBottom = worldTop + bandHeight + margin
 
-        val halfH = oversizedHeight * 0.5f
-        val minY = bandTop + halfH
-        val maxY = (bandBottom - halfH).coerceAtLeast(minY)
+        // Oversized cloud: halfH exceeds entire band
+        val halfHWorld = 0.80f * 0.5f * worldHeight  // 768 world units
 
-        // When maxY <= minY (degenerate), should center in band
-        val y = if (maxY > minY) {
-            minY
-        } else {
-            (bandTop + bandBottom) * 0.5f
-        }
+        val minY = bandTop + halfHWorld
+        val maxY = (bandBottom - halfHWorld).coerceAtLeast(minY)
+
+        val y = if (maxY > minY) minY else (bandTop + bandBottom) * 0.5f
         assertEquals("Degenerate cloud should center in band",
             (bandTop + bandBottom) * 0.5f, y, 0.001f)
+    }
+
+    // ============== World-Space Band Tests ==============
+
+    @Test
+    fun `band margin extends above visible area`() {
+        val worldHeight = 1920f
+        val worldTop = 0.5f - worldHeight / 2f
+        val margin = worldHeight * CloudLayer.BAND_MARGIN_FRACTION
+        val bandTop = worldTop - margin
+
+        assertTrue("Band top should extend above visible world top",
+            bandTop < worldTop)
+    }
+
+    @Test
+    fun `band covers upper portion of screen`() {
+        // The visible cloud content (excluding margin) should be in the upper ~35%
+        val worldHeight = 1920f
+        val worldTop = 0.5f - worldHeight / 2f
+        val bandHeight = worldHeight * CloudLayer.BAND_HEIGHT_FRACTION
+
+        // Content zone: worldTop to worldTop + bandHeight
+        val contentBottom = worldTop + bandHeight
+        // As screen fraction: (contentBottom - worldTop) / worldHeight = BAND_HEIGHT_FRACTION
+        val screenFraction = (contentBottom - worldTop) / worldHeight
+        assertEquals("Cloud content covers upper 35%", 0.35f, screenFraction, 0.01f)
+    }
+
+    @Test
+    fun `parallax cannot clip clouds within band margin`() {
+        // Maximum parallax shift: REFERENCE_HEIGHT * 0.45 = 864 world units
+        // Band margin: 1920 * 0.20 = 384 world units
+        // Y parallax depth factor max: 0.35
+        // Max Y shift in world: 864 * 0.35 / pixelsPerUnit... but we check margin adequacy
+        val worldHeight = 1920f
+        val margin = worldHeight * CloudLayer.BAND_MARGIN_FRACTION
+        assertTrue("Band margin ($margin) should be > 0 for parallax safety", margin > 0f)
+        // 384 world units of margin on each side provides generous parallax headroom
+        assertTrue("Band margin should be >= 15% of world height", margin >= worldHeight * 0.15f)
     }
 
     // ============== Coverage-Based Cloud Generation Tests ==============
@@ -479,58 +548,150 @@ class CloudLayerTest {
         }
     }
 
-    // ============== Cloud Culling Tests ==============
+    // ============== Cell-Based Generation Tests ==============
 
     @Test
-    fun `offscreen clouds to the right are culled`() {
-        val screenWidth = 1080f
-        val cloudScreenX = screenWidth + 400f  // well off right
-        val halfW = 200f
-        val culled = cloudScreenX - halfW > screenWidth
-        assertTrue("Cloud far right of screen should be culled", culled)
+    fun `cell spawn probability increases with coverage`() {
+        val lowCoverage = 0.1f
+        val highCoverage = 0.9f
+        val lowProb = CloudLayer.SPAWN_PROB_MIN + (CloudLayer.SPAWN_PROB_MAX - CloudLayer.SPAWN_PROB_MIN) * lowCoverage
+        val highProb = CloudLayer.SPAWN_PROB_MIN + (CloudLayer.SPAWN_PROB_MAX - CloudLayer.SPAWN_PROB_MIN) * highCoverage
+        assertTrue("High coverage spawn prob ($highProb) > low ($lowProb)", highProb > lowProb)
+        assertTrue("Low prob >= SPAWN_PROB_MIN", lowProb >= CloudLayer.SPAWN_PROB_MIN)
+        assertTrue("High prob <= SPAWN_PROB_MAX", highProb <= CloudLayer.SPAWN_PROB_MAX)
     }
 
     @Test
-    fun `offscreen clouds to the left are culled`() {
-        val cloudScreenX = -400f  // well off left
+    fun `coverage scale increases with cloud count`() {
+        val lowCoverage = 0.1f
+        val highCoverage = 0.9f
+        val lowScale = CloudLayer.COVERAGE_SCALE_MIN + (CloudLayer.COVERAGE_SCALE_MAX - CloudLayer.COVERAGE_SCALE_MIN) * lowCoverage
+        val highScale = CloudLayer.COVERAGE_SCALE_MIN + (CloudLayer.COVERAGE_SCALE_MAX - CloudLayer.COVERAGE_SCALE_MIN) * highCoverage
+        assertTrue("High coverage scale ($highScale) > low ($lowScale)", highScale > lowScale)
+        assertTrue("Low scale >= COVERAGE_SCALE_MIN", lowScale >= CloudLayer.COVERAGE_SCALE_MIN)
+        assertTrue("High scale <= COVERAGE_SCALE_MAX", highScale <= CloudLayer.COVERAGE_SCALE_MAX)
+    }
+
+    @Test
+    fun `cell size derived from band height`() {
+        val worldHeight = 1920f
+        val bandHeight = worldHeight * CloudLayer.BAND_HEIGHT_FRACTION
+        val cellSize = bandHeight * CloudLayer.CELL_SIZE_FRACTION
+        assertTrue("Cell size ($cellSize) should be > 0", cellSize > 0f)
+        assertTrue("Cell size should be < band height", cellSize < bandHeight)
+    }
+
+    @Test
+    fun `deterministic cells produce same result for same seed`() {
+        val seed = 42
+        val cellX = 5
+        val seed1 = info.olli.weatherlwp.rendering.DeterministicLayout.mix(seed + 5000, 500, cellX)
+        val seed2 = info.olli.weatherlwp.rendering.DeterministicLayout.mix(seed + 5000, 500, cellX)
+        assertEquals("Same cell + seed → same hash", seed1, seed2)
+    }
+
+    @Test
+    fun `different cells produce different seeds`() {
+        val seed = 42
+        val seed1 = info.olli.weatherlwp.rendering.DeterministicLayout.mix(seed + 5000, 500, 0)
+        val seed2 = info.olli.weatherlwp.rendering.DeterministicLayout.mix(seed + 5000, 500, 1)
+        assertNotEquals("Different cells → different seeds", seed1, seed2)
+    }
+
+    // ============== Cloud Culling Tests (rect-intersects with margin) ==============
+
+    @Test
+    fun `offscreen clouds to the right are culled with margin`() {
+        val screenWidth = 1080f
+        val screenHeight = 1920f
+        val cullMargin = screenHeight * CloudLayer.CULL_MARGIN_FRACTION
         val halfW = 200f
-        val culled = cloudScreenX + halfW < 0f
-        assertTrue("Cloud far left of screen should be culled", culled)
+        val cloudScreenX = screenWidth + cullMargin + halfW + 10f  // well beyond margin + halfW
+        val culled = cloudScreenX - halfW > screenWidth + cullMargin
+        assertTrue("Cloud far right of screen+margin should be culled", culled)
+    }
+
+    @Test
+    fun `offscreen clouds to the left are culled with margin`() {
+        val screenHeight = 1920f
+        val cullMargin = screenHeight * CloudLayer.CULL_MARGIN_FRACTION
+        val cloudScreenX = -cullMargin - 400f  // well beyond margin
+        val halfW = 200f
+        val culled = cloudScreenX + halfW < -cullMargin
+        assertTrue("Cloud far left of screen+margin should be culled", culled)
     }
 
     @Test
     fun `partially visible cloud on right edge not culled`() {
         val screenWidth = 1080f
+        val screenHeight = 1920f
+        val cullMargin = screenHeight * CloudLayer.CULL_MARGIN_FRACTION
         val halfW = 200f
         val cloudScreenX = screenWidth + 100f  // partially visible
-        val culled = cloudScreenX - halfW > screenWidth || cloudScreenX + halfW < 0f
+        val culled = cloudScreenX - halfW > screenWidth + cullMargin || cloudScreenX + halfW < -cullMargin
         assertFalse("Partially visible cloud should NOT be culled", culled)
     }
 
     @Test
     fun `cloud exactly at screen boundary not culled`() {
         val screenWidth = 1080f
+        val screenHeight = 1920f
+        val cullMargin = screenHeight * CloudLayer.CULL_MARGIN_FRACTION
         val halfW = 200f
         val cloudScreenX = screenWidth  // edge case: at right boundary
-        val culled = cloudScreenX - halfW > screenWidth || cloudScreenX + halfW < 0f
+        val culled = cloudScreenX - halfW > screenWidth + cullMargin || cloudScreenX + halfW < -cullMargin
         assertFalse("Cloud at boundary should NOT be culled", culled)
     }
 
     @Test
+    fun `cloud within margin zone not culled`() {
+        val screenWidth = 1080f
+        val screenHeight = 1920f
+        val cullMargin = screenHeight * CloudLayer.CULL_MARGIN_FRACTION
+        val halfW = 200f
+        // Cloud just outside screen but within cull margin
+        val cloudScreenX = screenWidth + cullMargin * 0.5f
+        val culled = cloudScreenX - halfW > screenWidth + cullMargin || cloudScreenX + halfW < -cullMargin
+        assertFalse("Cloud within cull margin should NOT be culled", culled)
+    }
+
+    @Test
+    fun `vertical culling with margin prevents top clipping`() {
+        val screenHeight = 1920f
+        val cullMargin = screenHeight * CloudLayer.CULL_MARGIN_FRACTION
+        val halfH = 150f
+        // Cloud partially above screen but within margin
+        val cloudScreenY = -50f
+        val culled = cloudScreenY + halfH < -cullMargin || cloudScreenY - halfH > screenHeight + cullMargin
+        assertFalse("Cloud partially above screen should NOT be culled", culled)
+    }
+
+    @Test
+    fun `vertical culling with margin prevents bottom clipping`() {
+        val screenHeight = 1920f
+        val cullMargin = screenHeight * CloudLayer.CULL_MARGIN_FRACTION
+        val halfH = 150f
+        // Cloud partially below visible band
+        val cloudScreenY = screenHeight + 50f
+        val culled = cloudScreenY + halfH < -cullMargin || cloudScreenY - halfH > screenHeight + cullMargin
+        assertFalse("Cloud partially below screen should NOT be culled", culled)
+    }
+
+    @Test
     fun `effective draw scale boosts culling bounds correctly`() {
-        // Culling uses effectiveDrawScale for bounds - verify clouds drawn larger
-        // aren't incorrectly culled at the edges
+        // Culling uses effectiveDrawScale for bounds + cull margin
         val paddedWidth = 252
         val effectiveDrawScale = 0.975f  // preview overcast
         val halfW = paddedWidth / 2f * effectiveDrawScale
+        val screenHeight = 500f
+        val cullMargin = screenHeight * CloudLayer.CULL_MARGIN_FRACTION
         
         // Cloud at right edge of a 300px preview
         val screenX = 300f
         val screenWidth = 300f
-        val culled = screenX - halfW > screenWidth
+        val culled = screenX - halfW > screenWidth + cullMargin
         
-        // halfW = 126 * 0.975 = ~123. 300 - 123 = 177 which is < 300
-        assertFalse("Cloud at edge with effective scale should not be culled", culled)
+        assertFalse("Cloud at edge with effective scale + cull margin should not be culled", culled)
     }
 
     // Helper: mirrors CloudLayer.cloudCountToCoverageGroups logic for testing

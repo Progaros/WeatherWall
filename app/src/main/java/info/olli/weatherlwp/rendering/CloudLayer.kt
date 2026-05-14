@@ -69,7 +69,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
      */
     internal data class CloudGroup(
         val initialWorldX: Float,  // World-space x coordinate (0 = center)
-        val y: Float,             // Y center position (0-1)
+        val worldY: Float,        // World-space Y coordinate (sky height)
         val speed: Float,         // Movement speed multiplier
         val alpha: Int,           // Pre-calculated alpha (0-255)
         val isBackLayer: Boolean, // True = back layer (75%), False = front layer (25%)
@@ -108,6 +108,15 @@ class CloudLayer(private val context: Context) : SceneLayer {
     private var cachedMultiplyFilter: PorterDuffColorFilter? = null
     private var cloudsEnabled = true
     private var randomSeed = 42
+
+    // World-space cloud band values (recalculated on resize)
+    private var cachedBandTop = 0f
+    private var cachedBandBottom = 0f
+    private var cachedBandHeight = 0f
+
+    // Cell-based generation cache: cellIndex → generated groups
+    // Prevents regeneration stalls by caching deterministic cell results
+    private val cellCache = mutableMapOf<Int, List<CloudGroup>>()
     
     // Background executor for async bitmap rendering (prevents frame stutters)
     private val bitmapExecutor = Executors.newSingleThreadExecutor { r ->
@@ -155,11 +164,17 @@ class CloudLayer(private val context: Context) : SceneLayer {
         // Preview cloud visibility: minimum draw scale to prevent tiny preview clouds
         const val PREVIEW_MIN_DRAW_SCALE = 0.65f
         
-        // Vertical cloud band (fraction of screen height).
-        // Clouds are placed with centers inside this band, clamped by half-height
-        // to prevent top/bottom clipping. Works identically in portrait and landscape.
-        const val CLOUD_BAND_TOP = 0.05f
-        const val CLOUD_BAND_BOTTOM = 0.42f
+        // World-space cloud band (fraction of visible world height).
+        // Clouds exist within a band defined relative to the visible world top,
+        // with extra margin above/below so parallax never causes clipping.
+        const val BAND_HEIGHT_FRACTION = 0.35f      // Cloud content height as fraction of world height
+        const val BAND_MARGIN_FRACTION = 0.20f      // Extra margin above/below for parallax safety
+        const val CELL_SIZE_FRACTION = 0.5f         // X-cell width as fraction of band height
+        const val SPAWN_PROB_MIN = 0.4f             // Cell spawn probability at low coverage
+        const val SPAWN_PROB_MAX = 0.9f             // Cell spawn probability at overcast
+        const val COVERAGE_SCALE_MIN = 0.6f         // Cloud draw-size scale at low coverage
+        const val COVERAGE_SCALE_MAX = 1.8f         // Cloud draw-size scale at overcast
+        const val CULL_MARGIN_FRACTION = 0.25f      // Screen-space culling margin
     }
 
     /** When true, reduces bitmap sizes and group count for better preview performance. */
@@ -168,6 +183,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
             if (field != value) {
                 field = value
                 clearGroupBitmaps()
+                cellCache.clear()
                 generateCloudGroups()
             }
         }
@@ -180,77 +196,91 @@ class CloudLayer(private val context: Context) : SceneLayer {
     }
     
     /**
-     * Generate cloud groups with pre-calculated properties.
-     * Groups are distributed: 75% back layer, 25% front layer.
-     * Cloud count comes from weather/simulation data; fluffiness affects each cloud's density.
+     * Generate cloud groups using cell-based deterministic placement.
+     *
+     * World-space X is divided into cells. Each cell deterministically
+     * decides whether to spawn a cloud based on coverage-derived probability.
+     * Results are cached per cell to prevent regeneration stalls.
+     *
+     * Groups are distributed: 75% back layer, 25% front layer (via cell hash).
      */
     internal fun generateCloudGroups() {
-        // Cloud count is directly from weather - number of cloud groups on screen
-        // fluffinessMultiplier only affects how many puffs each cloud has (set later in render)
-        val targetGroups = cloudCount.coerceIn(0, effectiveMaxGroups)
-        
-        // If no clouds requested (NONE density), return empty list
-        if (targetGroups == 0) {
+        if (cloudCount <= 0 || !cloudsEnabled) {
             cloudGroups = emptyList()
             return
         }
-        
-        val newGroups = ArrayList<CloudGroup>(targetGroups)
-        
-        val backCount = (targetGroups * BACK_LAYER_RATIO).toInt().coerceAtLeast(1)
-        val frontCount = (targetGroups - backCount).coerceAtLeast(1)
-        
-        // Generate back layer groups (majority of clouds, lower alpha)
-        // Per-cloud deterministic seed: stable regardless of count changes
-        for (i in 0 until backCount) {
-            val cloudRandom = DeterministicLayout.random(randomSeed + 4000, section = 401, index = i)
-            newGroups.add(createCloudGroup(cloudRandom, isBackLayer = true))
+
+        val bandHeight = cachedBandHeight
+        if (bandHeight <= 0f) {
+            cloudGroups = emptyList()
+            return
         }
-        
-        // Generate front layer groups (fewer clouds, higher alpha)
-        for (i in 0 until frontCount) {
-            val cloudRandom = DeterministicLayout.random(randomSeed + 4000, section = 402, index = i)
-            newGroups.add(createCloudGroup(cloudRandom, isBackLayer = false))
+
+        val cellSize = bandHeight * CELL_SIZE_FRACTION
+        if (cellSize <= 0f) {
+            cloudGroups = emptyList()
+            return
         }
-        
-        cloudGroups = newGroups
+
+        val transform = cachedTransform
+        val worldRect = transform.viewport.worldRect
+        val parallaxPad = RenderConstants.REFERENCE_HEIGHT * 0.45f
+        val startCell = kotlin.math.floor((worldRect.left - parallaxPad) / cellSize.toDouble()).toInt()
+        val endCell = kotlin.math.ceil((worldRect.right + parallaxPad) / cellSize.toDouble()).toInt()
+
+        // Coverage drives spawn probability & draw-size scale
+        val cloudCoverage = (cloudCount.toFloat() / effectiveMaxGroups).coerceIn(0f, 1f)
+        val spawnProbability = SPAWN_PROB_MIN + (SPAWN_PROB_MAX - SPAWN_PROB_MIN) * cloudCoverage
+        coverageSizeMult = COVERAGE_SCALE_MIN + (COVERAGE_SCALE_MAX - COVERAGE_SCALE_MIN) * cloudCoverage
+
+        val allGroups = mutableListOf<CloudGroup>()
+        for (cellX in startCell..endCell) {
+            val groups = cellCache.getOrPut(cellX) {
+                generateCellClouds(cellX, cellSize, spawnProbability)
+            }
+            allGroups.addAll(groups)
+        }
+
+        // Cleanup cells far outside the visible range to prevent memory leaks
+        val buffer = 2
+        cellCache.keys.removeAll { it < startCell - buffer || it > endCell + buffer }
+
+        cloudGroups = allGroups
+    }
+
+    /**
+     * Generate clouds for a single cell. Deterministic: same cellX + seed → same result.
+     */
+    private fun generateCellClouds(cellX: Int, cellSize: Float, spawnProbability: Float): List<CloudGroup> {
+        val cellSeed = DeterministicLayout.mix(randomSeed + 5000, section = 500, index = cellX)
+        val rng = Random(cellSeed)
+
+        if (rng.nextFloat() >= spawnProbability) return emptyList()
+
+        // Decide back vs front layer deterministically (75/25 split)
+        val isBack = rng.nextFloat() < BACK_LAYER_RATIO
+        val cloud = createCloudGroup(rng, isBack, cellX, cellSize)
+        return listOf(cloud)
     }
     
-    private fun createCloudGroup(random: Random, isBackLayer: Boolean): CloudGroup {
-        // Distribute clouds across the full visible world range (aspect-aware).
-        // Uses the cached viewport transform so landscape views get clouds across
-        // the full wide viewport, not just the center.
-        val transform = cachedTransform
-        val effectiveWidth = width.coerceAtLeast(1f)
-        val effectiveHeight = height.coerceAtLeast(1f)
-        val distributionHalf = if (isPreviewMode) {
-            // Preview: concentrate in visible viewport + small margin (no parallax padding)
-            val hs = (effectiveHeight / RenderConstants.REFERENCE_HEIGHT).coerceAtLeast(0.1f)
-            (effectiveWidth / (2f * hs)) * 1.2f
-        } else {
-            // Live: use visible world width / 2 + parallax padding.
-            // This is wider than getVisibleWorldHalf for landscape because it
-            // derives from the actual viewport, not the reference aspect ratio.
-            val worldHalf = transform.worldWidth / 2f
-            val parallaxPad = RenderConstants.REFERENCE_HEIGHT * 0.45f
-            worldHalf + parallaxPad
-        }
-        val worldX = (random.nextFloat() - 0.5f) * distributionHalf * 2f
+    private fun createCloudGroup(random: Random, isBackLayer: Boolean, cellX: Int, cellSize: Float): CloudGroup {
+        // World-space X: place within the cell range
+        val worldX = cellX * cellSize + random.nextFloat() * cellSize
 
         val groupWidth = GROUP_WIDTH_MIN + random.nextFloat() * (GROUP_WIDTH_MAX - GROUP_WIDTH_MIN)
         val groupHeight = GROUP_HEIGHT_MIN + random.nextFloat() * (GROUP_HEIGHT_MAX - GROUP_HEIGHT_MIN)
 
-        // Vertical cloud band: defined as fractions of screen height.
-        // Clamp cloud centers by half-height so the full bitmap stays inside the band.
-        val halfH = groupHeight * 0.5f
-        val bandTop = CLOUD_BAND_TOP
-        val bandBottom = CLOUD_BAND_BOTTOM
-        val minY = (bandTop + halfH)
-        val maxY = (bandBottom - halfH).coerceAtLeast(minY)
-        val y = if (maxY > minY) {
+        // World-space Y: place within the cloud band (with extra margin for parallax).
+        // Cloud centers are clamped by half-height so the full bitmap stays inside the band.
+        val bandTop = cachedBandTop
+        val bandBottom = cachedBandBottom
+        val worldRect = cachedTransform.viewport.worldRect
+        val halfHWorld = groupHeight * 0.5f * worldRect.height
+        val minY = bandTop + halfHWorld
+        val maxY = (bandBottom - halfHWorld).coerceAtLeast(minY)
+        val worldY = if (maxY > minY) {
             minY + random.nextFloat() * (maxY - minY)
         } else {
-            // Degenerate case: cloud taller than band, center it
             (bandTop + bandBottom) * 0.5f
         }
         
@@ -270,7 +300,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         
         return CloudGroup(
             initialWorldX = worldX,
-            y = y,
+            worldY = worldY,
             speed = speed,
             alpha = alpha,
             isBackLayer = isBackLayer,
@@ -402,6 +432,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
             group.lastWidth = 0
             group.lastHeight = 0
         }
+        cellCache.clear()
     }
 
     override fun resize(w: Float, h: Float) {
@@ -421,6 +452,16 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val worldHalf = cachedTransform.worldWidth / 2f
         val parallaxPad = RenderConstants.REFERENCE_HEIGHT * 0.45f
         cachedWrapRange = (worldHalf + parallaxPad) * 2f
+
+        // Compute world-space cloud band from viewport geometry.
+        // Band lives in the upper portion of the visible world with generous
+        // margins so parallax never clips clouds at top or bottom.
+        val worldRect = cachedTransform.viewport.worldRect
+        val worldHeight = worldRect.height
+        cachedBandHeight = worldHeight * BAND_HEIGHT_FRACTION
+        val extraMargin = worldHeight * BAND_MARGIN_FRACTION
+        cachedBandTop = worldRect.top - extraMargin
+        cachedBandBottom = worldRect.top + cachedBandHeight + extraMargin
         
         // Invalidate cached bitmaps on any resize (pixel dimensions changed)
         clearGroupBitmaps()
@@ -517,10 +558,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val referenceWorldWidth = RenderConstants.REFERENCE_HEIGHT * 0.5625f  // reference portrait width
         val widthScale = (visibleWorldWidth / referenceWorldWidth).coerceIn(1.0f, 3.0f)
         val baseCount = state.getCloudCount()
-        // Coverage-based: fewer groups drawn larger for same visual coverage, better performance
-        val (coverageGroups, sizeMult) = cloudCountToCoverageGroups((baseCount * widthScale).toInt())
-        val targetCount = coverageGroups.coerceIn(0, effectiveMaxGroups)
-        coverageSizeMult = sizeMult
+        val targetCount = (baseCount * widthScale).toInt().coerceIn(0, effectiveMaxGroups)
         
         // Regenerate groups if count changed significantly
         if (kotlin.math.abs(targetCount - cloudCount) > 3 || 
@@ -529,7 +567,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
             clearGroupBitmaps()
             cloudCount = targetCount
             generateCloudGroups()
-            android.util.Log.d("CloudPerf", "regenerated: groups=$targetCount sizeMult=${"%.2f".format(sizeMult)} base=$baseCount preview=$isPreviewMode")
+            android.util.Log.d("CloudPerf", "regenerated: groups=${cloudGroups.size} coverage=${"%.2f".format(coverageSizeMult)} base=$baseCount preview=$isPreviewMode")
         }
         
         val currentGroups = cloudGroups
@@ -553,6 +591,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
         parallaxCalculator: ParallaxCalculator
     ) {
         val transform = cachedTransform
+        val mapper = WorldToScreenMapper(transform.viewport)
+        val ppu = transform.viewport.pixelsPerUnit
         // Effective draw scale: includes heightScale clamping and coverage size multiplier.
         // Preview: full coverage multiplier for better visibility.
         // Live: dampened multiplier to preserve established visual style.
@@ -561,17 +601,28 @@ class CloudLayer(private val context: Context) : SceneLayer {
         } else {
             transform.heightScale * (1f + (coverageSizeMult - 1f) * 0.5f)
         }
+        // Generous cull margin prevents pop-in at screen edges
+        val cullMargin = height * CULL_MARGIN_FRACTION
+
         var i = 0
         while (i < groups.size) {
             val group = groups[i]
             i++
             if (group.isBackLayer != isBackLayer) continue
 
+            // Parallax offsets in screen pixels, convert to world-space
             val px = parallaxCalculator.getOffsetXForDepth(group.depthFactor)
             val py = parallaxCalculator.getOffsetYForDepth(group.depthFactor)
-            // World-space to screen projection via canonical transform + sensor parallax
-            val screenX = transform.worldToScreenX(group.currentWorldX) + px
-            val screenY = group.y * height + py
+            val worldPX = if (ppu > 0f) px / ppu else 0f
+            val worldPY = if (ppu > 0f) py / ppu else 0f
+
+            // Apply parallax in world-space BEFORE projection
+            val renderX = group.currentWorldX + worldPX
+            val renderY = group.worldY + worldPY
+
+            // Single projection: world-space → screen-space
+            val screenX = mapper.x(renderX)
+            val screenY = mapper.y(renderY)
 
             val groupWidthPx = (group.groupWidth * minDim).toInt()
                 .coerceIn(50, effectiveMaxDimension)
@@ -587,11 +638,11 @@ class CloudLayer(private val context: Context) : SceneLayer {
             val paddedWidth = groupWidthPx + paddingX * 2
             val paddedHeight = groupHeightPx + paddingY * 2
 
-            // Viewport culling: use effective draw scale for accurate bounds
+            // Screen-space rect-intersects culling with generous margin
             val halfW = paddedWidth / 2f * effectiveDrawScale
             val halfH = paddedHeight / 2f * effectiveDrawScale
-            if (screenX + halfW < 0f || screenX - halfW > width) continue
-            if (screenY + halfH < 0f || screenY - halfH > height) continue
+            if (screenX + halfW < -cullMargin || screenX - halfW > width + cullMargin) continue
+            if (screenY + halfH < -cullMargin || screenY - halfH > height + cullMargin) continue
 
             // Queue async bitmap render if not ready and not already rendering
             if (group.cachedBitmap == null) {
@@ -728,6 +779,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
             // Invalidate cached cloud resources when structural settings change
             // Note: opacity is applied at draw time, no bitmap regeneration needed
             clearGroupBitmaps()
+            cellCache.clear()
             generateCloudGroups()
         }
     }
@@ -746,6 +798,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         
         // Cleanup cached cloud group bitmaps to prevent memory leaks
         clearGroupBitmaps()
+        cellCache.clear()
         cloudGroups = emptyList()
     }
 }
