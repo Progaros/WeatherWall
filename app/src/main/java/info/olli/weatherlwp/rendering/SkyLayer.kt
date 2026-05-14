@@ -148,8 +148,10 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
     }
 
     override fun update(state: SimulationState, deltaTimeMs: Long) {
-        // Track night shade strength for darker nights
-        nightShadeStrength = if (state.isNight) state.nightShadeStrength else 0f
+        // Track night shade strength continuously using light level
+        val lightLevel = state.getLightLevel()
+        val dayFactor = ((lightLevel - 0.15f) / 0.85f).coerceIn(0f, 1f)
+        nightShadeStrength = state.nightShadeStrength * (1f - dayFactor)
         
         updateColorsForTime(state)
     }

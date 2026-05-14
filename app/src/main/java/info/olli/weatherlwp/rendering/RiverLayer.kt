@@ -694,11 +694,9 @@ class RiverLayer(private val context: Context) : SceneLayer {
         val lightLevel = state.getLightLevel()
         if (lightLevel < 0.2f && state.moonIllumination < 0.3f) return  // Too dark for sparkles
 
-        val sparkleIntensity = if (state.isNight) {
-            state.moonIllumination * 0.5f
-        } else {
-            lightLevel * 0.8f
-        }
+        // Continuous blend: day sparkles from sun, night sparkles from moon
+        val dayFactor = ((lightLevel - 0.15f) / 0.85f).coerceIn(0f, 1f)
+        val sparkleIntensity = dayFactor * lightLevel * 0.8f + (1f - dayFactor) * state.moonIllumination * 0.5f
 
         val sparkleAlpha = (sparkleIntensity * 180).toInt().coerceIn(0, 200)
         sparkPaint.color = Color.argb(sparkleAlpha, 255, 255, 240)
@@ -731,11 +729,55 @@ class RiverLayer(private val context: Context) : SceneLayer {
 
 
     private fun getSkyReflectionColor(state: SimulationState): Int {
+        val hour = state.timeOfDayHours
+        val sunrise = state.sunriseHours
+        val sunset = state.sunsetHours
+
+        val nightColor = Color.rgb(15, 20, 40)
+        val dawnColor = Color.rgb(180, 150, 130)
+        val dayColor = Color.rgb(135, 190, 230)
+        val duskColor = Color.rgb(160, 100, 80)
+
+        if (sunrise <= 0f || sunset <= 0f) {
+            // Legacy fallback
+            return when {
+                state.isNight -> nightColor
+                state.isDawn -> dawnColor
+                state.isDusk -> duskColor
+                else -> dayColor
+            }
+        }
+
+        val dawnStart = sunrise - 1.0f
+        val dawnEnd = sunrise + 1.5f
+        val duskStart = sunset - 1.5f
+        val duskEnd = sunset + 1.0f
+
         return when {
-            state.isNight -> Color.rgb(15, 20, 40)
-            state.isDawn -> Color.rgb(180, 150, 130)
-            state.isDusk -> Color.rgb(160, 100, 80)
-            else -> Color.rgb(135, 190, 230)  // Light sky blue
+            // Pre-dawn: night → dawn
+            hour >= dawnStart && hour < sunrise -> {
+                val t = ((hour - dawnStart) / (sunrise - dawnStart)).coerceIn(0f, 1f)
+                RenderConstants.lerpColorRGB(nightColor, dawnColor, t)
+            }
+            // Dawn → day
+            hour >= sunrise && hour < dawnEnd -> {
+                val t = ((hour - sunrise) / (dawnEnd - sunrise)).coerceIn(0f, 1f)
+                RenderConstants.lerpColorRGB(dawnColor, dayColor, t)
+            }
+            // Day
+            hour >= dawnEnd && hour < duskStart -> dayColor
+            // Day → dusk
+            hour >= duskStart && hour < sunset -> {
+                val t = ((hour - duskStart) / (sunset - duskStart)).coerceIn(0f, 1f)
+                RenderConstants.lerpColorRGB(dayColor, duskColor, t)
+            }
+            // Dusk → night
+            hour >= sunset && hour < duskEnd -> {
+                val t = ((hour - sunset) / (duskEnd - sunset)).coerceIn(0f, 1f)
+                RenderConstants.lerpColorRGB(duskColor, nightColor, t)
+            }
+            // Night
+            else -> nightColor
         }
     }
 

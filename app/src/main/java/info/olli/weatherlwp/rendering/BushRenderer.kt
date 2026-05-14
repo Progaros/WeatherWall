@@ -331,7 +331,10 @@ class BushRenderer {
         }
 
         val yBasedDepth = ((bush.yRatio - 0.6f) / 0.35f).coerceIn(0f, 1f)
-        val timeMultiplier = if (!state.isNight && !state.isDawn && !state.isDusk) 0.15f else 1.0f
+        // Continuous ambient tint: full at night (1.0), minimal during day (0.15)
+        val lightLevel = state.getLightLevel()
+        val dayFactor = ((lightLevel - 0.15f) / 0.85f).coerceIn(0f, 1f)
+        val timeMultiplier = 1.0f - dayFactor * 0.85f
         val blendAmount = RenderConstants.applyAmbientTint(effectiveColor, ambientColor, yBasedDepth) * timeMultiplier
         val blendedColor = RenderConstants.blendWithAmbient(effectiveColor, ambientColor, blendAmount)
 

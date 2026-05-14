@@ -528,7 +528,7 @@ object RenderConstants {
      * Timeline (e.g. sunrise=6, sunset=20):
      * - Night: after dusk transition, before dawn transition
      * - Pre-dawn: sunrise-1h .. sunrise  → lerp(NIGHT, DAWN)
-     * - Dawn→Day: sunrise .. sunrise+0.5h → lerp(DAWN, DAY)
+     * - Dawn→Day: sunrise .. sunrise+1h   → lerp(DAWN, DAY)
      * - Day: sunrise+0.5h .. sunset-1.5h
      * - Day→Dusk: sunset-1.5h .. sunset  → lerp(DAY, DUSK)
      * - Post-dusk: sunset .. sunset+1h    → lerp(DUSK, NIGHT)
@@ -548,7 +548,7 @@ object RenderConstants {
             val hour = timeOfDayHours
             val dawnTransStart = sunriseHours - 1.0f        // Night→Dawn starts
             val dawnTransEnd = sunriseHours                  // Night→Dawn ends (= Dawn peak)
-            val dawnToDayEnd = sunriseHours + 0.5f           // Dawn→Day ends
+            val dawnToDayEnd = sunriseHours + 1.0f           // Dawn→Day ends
             val dayToDuskStart = sunsetHours - 1.5f          // Day→Dusk starts
             val duskTransStart = sunsetHours                 // Dusk peak
             val duskTransEnd = sunsetHours + 1.0f            // Dusk→Night ends
@@ -589,11 +589,31 @@ object RenderConstants {
             }
         }
 
-        return if (isNight && nightShadeStrength > 0f) {
-            ColorMath.shadeRgb(base, nightShadeStrength)
-        } else {
-            base
+        // Apply night shade continuously using time-based night factor
+        if (nightShadeStrength > 0f) {
+            val nightFactor = if (sunriseHours > 0f && sunsetHours > 0f) {
+                val h = timeOfDayHours
+                val dawnStart = sunriseHours - 1.0f
+                val duskEnd = sunsetHours + 1.0f
+                when {
+                    h in dawnStart..sunriseHours -> {
+                        val t = ((h - dawnStart) / 1.0f).coerceIn(0f, 1f)
+                        1f - t * t * (3f - 2f * t)
+                    }
+                    h in sunsetHours..duskEnd -> {
+                        val t = ((h - sunsetHours) / 1.0f).coerceIn(0f, 1f)
+                        t * t * (3f - 2f * t)
+                    }
+                    h in sunriseHours..sunsetHours -> 0f
+                    else -> 1f
+                }
+            } else {
+                if (isNight) 1f else 0f
+            }
+            val effectiveShade = nightShadeStrength * nightFactor
+            return if (effectiveShade > 0.001f) ColorMath.shadeRgb(base, effectiveShade) else base
         }
+        return base
     }
     
     /**

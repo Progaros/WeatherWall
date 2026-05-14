@@ -396,7 +396,9 @@ class LakeLayer(private val context: Context) : SceneLayer {
         val lightLevel = state.getLightLevel()
         if (lightLevel < 0.15f && state.moonIllumination < 0.2f) return
 
-        val intensity = if (state.isNight) state.moonIllumination * 0.5f else lightLevel * 0.8f
+        // Continuous blend: day sparkles from sun, night sparkles from moon
+        val dayFactor = ((lightLevel - 0.15f) / 0.85f).coerceIn(0f, 1f)
+        val intensity = dayFactor * lightLevel * 0.8f + (1f - dayFactor) * state.moonIllumination * 0.5f
 
         // Horizontal ripple lines
         val rippleAlpha = (intensity * 60 * opacity).toInt().coerceIn(10, 80)
