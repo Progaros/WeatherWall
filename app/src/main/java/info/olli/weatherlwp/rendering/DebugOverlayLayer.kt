@@ -40,13 +40,15 @@ class DebugOverlayLayer(private val context: Context) : SceneLayer {
         CLOUDS("clouds", "Cloud Density"),
         EVENTS("events", "Active Events"),
         MOON("moon", "Moon Phase"),
-        PARALLAX("parallax", "Parallax Offset")
+        PARALLAX("parallax", "Parallax Offset"),
+        SIMULATION("simulation", "Simulation")
     }
     
     private val prefs = PreferenceManager.getDefaultSharedPreferences(context)
     
     private var enabled = false
     private var enabledItems = mutableSetOf<DebugItem>()
+    private var simulationEnabled = false
     
     private var width = 0f
     private var height = 0f
@@ -89,6 +91,18 @@ class DebugOverlayLayer(private val context: Context) : SceneLayer {
         typeface = Typeface.MONOSPACE
     }
     
+    private val enabledPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(255, 80, 220, 80)  // Green for enabled
+        textSize = 28f
+        typeface = Typeface.MONOSPACE
+    }
+    
+    private val disabledPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(255, 220, 80, 80)  // Red for disabled
+        textSize = 28f
+        typeface = Typeface.MONOSPACE
+    }
+    
     init {
         reloadSettings()
     }
@@ -101,6 +115,8 @@ class DebugOverlayLayer(private val context: Context) : SceneLayer {
         textPaint.textSize = 28f * scaleFactor
         valuePaint.textSize = 28f * scaleFactor
         warningPaint.textSize = 28f * scaleFactor
+        enabledPaint.textSize = 28f * scaleFactor
+        disabledPaint.textSize = 28f * scaleFactor
     }
     
     override fun update(state: SimulationState, deltaTimeMs: Long) {
@@ -201,16 +217,23 @@ class DebugOverlayLayer(private val context: Context) : SceneLayer {
                     val offsetStr = String.format("%.1f, %.1f", parallaxOffsetX, parallaxOffsetY)
                     Triple("Parallax", offsetStr, false)
                 }
+                DebugItem.SIMULATION -> {
+                    Triple("Simulation", if (simulationEnabled) "true" else "false", false)
+                }
             }
             lines.add(Triple(label, value, isWarning))
         }
         
         if (lines.isEmpty()) return
         
+        // Check if simulation item is present (needs extra line for button)
+        val hasSimulation = enabledItems.contains(DebugItem.SIMULATION)
+        val buttonLineExtra = if (hasSimulation) textPaint.textSize * 1.3f else 0f
+        
         // Calculate background size dynamically based on content
         val padding = 16f
         val lineHeight = textPaint.textSize * 1.4f
-        val bgHeight = lines.size * lineHeight + padding * 2
+        val bgHeight = lines.size * lineHeight + buttonLineExtra + padding * 2
         
         // Calculate minimum width needed for label + gap + value
         var maxContentWidth = 0f
@@ -246,6 +269,16 @@ class DebugOverlayLayer(private val context: Context) : SceneLayer {
             canvas.drawText(value, bgLeft + bgWidth - padding - valueWidth, y, paint)
             
             y += lineHeight
+            
+            // Draw centered "Enabled"/"Disabled" button below simulation line
+            if (label == "Simulation") {
+                val buttonPaint = if (simulationEnabled) enabledPaint else disabledPaint
+                val buttonText = if (simulationEnabled) "Enabled" else "Disabled"
+                val buttonWidth = buttonPaint.measureText(buttonText)
+                val buttonX = bgLeft + (bgWidth - buttonWidth) / 2f
+                canvas.drawText(buttonText, buttonX, y, buttonPaint)
+                y += textPaint.textSize * 1.3f
+            }
         }
     }
     
@@ -255,6 +288,7 @@ class DebugOverlayLayer(private val context: Context) : SceneLayer {
 
     override fun reloadSettings(settings: SimulationSettings) {
         enabled = settings.getBoolean("pref_debug_overlay_enabled", false)
+        simulationEnabled = settings.debugEnabled
 
         // Load enabled items from settings snapshot
         enabledItems.clear()

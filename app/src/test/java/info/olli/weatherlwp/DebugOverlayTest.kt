@@ -57,6 +57,7 @@ class DebugOverlayTest {
         assertTrue("Events item exists", keys.contains("events"))
         assertTrue("Moon item exists", keys.contains("moon"))
         assertTrue("Parallax item exists", keys.contains("parallax"))
+        assertTrue("Simulation item exists", keys.contains("simulation"))
     }
     
     @Test
