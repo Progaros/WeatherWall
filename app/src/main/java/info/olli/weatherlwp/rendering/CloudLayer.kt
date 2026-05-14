@@ -154,6 +154,12 @@ class CloudLayer(private val context: Context) : SceneLayer {
         
         // Preview cloud visibility: minimum draw scale to prevent tiny preview clouds
         const val PREVIEW_MIN_DRAW_SCALE = 0.65f
+        
+        // Vertical cloud band (fraction of screen height).
+        // Clouds are placed with centers inside this band, clamped by half-height
+        // to prevent top/bottom clipping. Works identically in portrait and landscape.
+        const val CLOUD_BAND_TOP = 0.05f
+        const val CLOUD_BAND_BOTTOM = 0.42f
     }
 
     /** When true, reduces bitmap sizes and group count for better preview performance. */
@@ -211,33 +217,41 @@ class CloudLayer(private val context: Context) : SceneLayer {
     }
     
     private fun createCloudGroup(random: Random, isBackLayer: Boolean): CloudGroup {
-        // Generate world-space position: clouds distributed across visible range + padding
+        // Distribute clouds across the full visible world range (aspect-aware).
+        // Uses the cached viewport transform so landscape views get clouds across
+        // the full wide viewport, not just the center.
+        val transform = cachedTransform
         val effectiveWidth = width.coerceAtLeast(1f)
         val effectiveHeight = height.coerceAtLeast(1f)
-        val visibleHalf = RenderConstants.getVisibleWorldHalf(effectiveWidth, effectiveHeight)
-        // In preview mode, concentrate clouds in the visible viewport only (no parallax padding)
-        // to avoid most clouds being generated off-screen
         val distributionHalf = if (isPreviewMode) {
+            // Preview: concentrate in visible viewport + small margin (no parallax padding)
             val hs = (effectiveHeight / RenderConstants.REFERENCE_HEIGHT).coerceAtLeast(0.1f)
-            (effectiveWidth / (2f * hs)) * 1.2f  // visible viewport + 20% margin
+            (effectiveWidth / (2f * hs)) * 1.2f
         } else {
-            visibleHalf
+            // Live: use visible world width / 2 + parallax padding.
+            // This is wider than getVisibleWorldHalf for landscape because it
+            // derives from the actual viewport, not the reference aspect ratio.
+            val worldHalf = transform.worldWidth / 2f
+            val parallaxPad = RenderConstants.REFERENCE_HEIGHT * 0.45f
+            worldHalf + parallaxPad
         }
         val worldX = (random.nextFloat() - 0.5f) * distributionHalf * 2f
 
         val groupWidth = GROUP_WIDTH_MIN + random.nextFloat() * (GROUP_WIDTH_MAX - GROUP_WIDTH_MIN)
         val groupHeight = GROUP_HEIGHT_MIN + random.nextFloat() * (GROUP_HEIGHT_MAX - GROUP_HEIGHT_MIN)
 
-        // Account for cloud half-height so the full bitmap stays within the visible cloud band.
-        // Without this, clouds near the top/bottom of the range get clipped.
+        // Vertical cloud band: defined as fractions of screen height.
+        // Clamp cloud centers by half-height so the full bitmap stays inside the band.
         val halfH = groupHeight * 0.5f
-        val minY = RenderConstants.CLOUD_Y_MIN + halfH
-        val maxY = (RenderConstants.CLOUD_Y_MIN + RenderConstants.CLOUD_Y_RANGE - halfH).coerceAtLeast(minY)
+        val bandTop = CLOUD_BAND_TOP
+        val bandBottom = CLOUD_BAND_BOTTOM
+        val minY = (bandTop + halfH)
+        val maxY = (bandBottom - halfH).coerceAtLeast(minY)
         val y = if (maxY > minY) {
             minY + random.nextFloat() * (maxY - minY)
         } else {
             // Degenerate case: cloud taller than band, center it
-            RenderConstants.CLOUD_Y_MIN + RenderConstants.CLOUD_Y_RANGE * 0.5f
+            (bandTop + bandBottom) * 0.5f
         }
         
         val speed = RenderConstants.CLOUD_SPEED_BASE + random.nextFloat() * RenderConstants.CLOUD_SPEED_RANGE
@@ -392,6 +406,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
 
     override fun resize(w: Float, h: Float) {
         val oldW = width
+        val oldH = height
         val sizeChanged = width != w || height != h
         width = w
         height = h
@@ -400,16 +415,22 @@ class CloudLayer(private val context: Context) : SceneLayer {
         if (!sizeChanged) return
 
         // Rebuild cached values
-        cachedWrapRange = RenderConstants.getVisibleWorldHalf(w.coerceAtLeast(1f), h.coerceAtLeast(1f)) * 2f
         cachedTransform = WorldViewportTransform(w, h)
+        // Wrap range = full visible world width + parallax padding on each side.
+        // Uses actual viewport worldWidth so landscape views get the correct wider wrap.
+        val worldHalf = cachedTransform.worldWidth / 2f
+        val parallaxPad = RenderConstants.REFERENCE_HEIGHT * 0.45f
+        cachedWrapRange = (worldHalf + parallaxPad) * 2f
         
         // Invalidate cached bitmaps on any resize (pixel dimensions changed)
         clearGroupBitmaps()
         
-        // Only regenerate cloud group positions on WIDTH changes.
+        // Regenerate cloud group positions on any dimension change
+        // (HEIGHT changes now affect density via visible world width in landscape).
         val firstGenerate = oldW <= 0f
         val widthChangedSignificantly = kotlin.math.abs(oldW - w) > 1f
-        if (firstGenerate || widthChangedSignificantly) {
+        val heightChangedSignificantly = kotlin.math.abs(oldH - h) > 1f
+        if (firstGenerate || widthChangedSignificantly || heightChangedSignificantly) {
             generateCloudGroups()
         }
     }
@@ -490,10 +511,11 @@ class CloudLayer(private val context: Context) : SceneLayer {
      * to prevent frame stutters during allocation/blur operations.
      */
     private fun drawCachedMode(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
-        // Cloud count from weather, scaled modestly by visible area.
-        // Only scale by width ratio to prevent height-only resize from changing cloud count.
-        val screenWidth = width.coerceAtLeast(1f)
-        val widthScale = (screenWidth / RenderConstants.REFERENCE_EXTENDED_WIDTH).coerceIn(1.0f, 1.5f)
+        // Cloud count scales with visible world width (aspect-aware, height-independent).
+        // This ensures landscape shows the same on-screen density as portrait.
+        val visibleWorldWidth = cachedTransform.worldWidth
+        val referenceWorldWidth = RenderConstants.REFERENCE_HEIGHT * 0.5625f  // reference portrait width
+        val widthScale = (visibleWorldWidth / referenceWorldWidth).coerceIn(1.0f, 3.0f)
         val baseCount = state.getCloudCount()
         // Coverage-based: fewer groups drawn larger for same visual coverage, better performance
         val (coverageGroups, sizeMult) = cloudCountToCoverageGroups((baseCount * widthScale).toInt())

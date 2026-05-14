@@ -1557,4 +1557,115 @@ class ParallaxCalculatorTest {
 
         assertTrue("Clamped delta should produce some movement: $x", kotlin.math.abs(x) > 1f)
     }
+
+    // ============== Distance-based return tests ==============
+
+    @Test
+    fun `large offset returns faster than small offset`() {
+        // Test the distance-dependent return: far offsets use RECENTER_DAMPING_FAR,
+        // near offsets use RECENTER_DAMPING_NEAR, so far returns faster per frame.
+        val calcFar = ParallaxCalculator()
+        calcFar.strength = 1.0f
+        calcFar.maxOffsetPercent = 20f
+        calcFar.setCanvasSize(1080f, 1920f)
+        calcFar.smoothing = 0f
+        calcFar.returnSpeed = 0f
+
+        // Establish a LARGE offset
+        rampTilt(calcFar, 1.0f, 0f)
+        val farInitial = calcFar.getOffsetX()
+        assertTrue("Should have large offset", farInitial > 100f)
+
+        val calcSmall = ParallaxCalculator()
+        calcSmall.strength = 1.0f
+        calcSmall.maxOffsetPercent = 20f
+        calcSmall.setCanvasSize(1080f, 1920f)
+        calcSmall.smoothing = 0f
+        calcSmall.returnSpeed = 0f
+
+        // Establish a SMALL offset
+        rampTilt(calcSmall, 0.15f, 0f)
+        val smallInitial = calcSmall.getOffsetX()
+        assertTrue("Should have small offset", smallInitial > 5f)
+        assertTrue("Far > small", farInitial > smallInitial * 2f)
+
+        // Enable return and run a few frames
+        calcFar.returnSpeed = 0.5f
+        calcSmall.returnSpeed = 0.5f
+        calcFar.updateFromSensor(0f, 0f)
+        calcSmall.updateFromSensor(0f, 0f)
+
+        // Let stillness engage (need > 400ms = 25 frames at 16ms)
+        repeat(30) { calcFar.update(16) }
+        repeat(30) { calcSmall.update(16) }
+
+        // Now measure return progress over 5 frames
+        val farBefore = calcFar.getOffsetX()
+        val smallBefore = calcSmall.getOffsetX()
+        repeat(5) { calcFar.update(16) }
+        repeat(5) { calcSmall.update(16) }
+        val farAfter = calcFar.getOffsetX()
+        val smallAfter = calcSmall.getOffsetX()
+
+        val farReduction = (farBefore - farAfter) / farBefore
+        val smallReduction = if (smallBefore > 0.5f) (smallBefore - smallAfter) / smallBefore else 0f
+
+        // Far offset should lose a greater FRACTION per frame than small offset
+        assertTrue("Far offset ($farReduction) should reduce by larger fraction than small ($smallReduction). " +
+            "farBefore=$farBefore, farAfter=$farAfter, smallBefore=$smallBefore, smallAfter=$smallAfter",
+            farReduction > smallReduction
+        )
+    }
+
+    @Test
+    fun `return near center is gentle`() {
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 20f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 0f
+
+        // Small offset
+        rampTilt(calc, 0.1f, 0f)
+        val initial = calc.getOffsetX()
+        assertTrue("Should have small offset", initial > 3f)
+
+        // Enable return, let stillness engage
+        calc.returnSpeed = 0.5f
+        calc.updateFromSensor(0f, 0f)
+        repeat(30) { calc.update(16) }
+
+        // Measure single-frame return at small distance
+        val before = calc.getOffsetX()
+        calc.update(16)
+        val after = calc.getOffsetX()
+
+        // Near center uses RECENTER_DAMPING_NEAR (2.0) — return is gentle
+        val reduction = if (before > 0.5f) (before - after) / before else 0f
+        assertTrue("Near-center return should be gentle (reduction fraction < 0.15): $reduction",
+            reduction < 0.15f
+        )
+    }
+
+    @Test
+    fun `return does not fight active input`() {
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 0.8f
+
+        // Ramp to establish offset
+        rampTilt(calc, 0.6f, 0f)
+        val xAtTilt = calc.getOffsetX()
+        assertTrue("Should have offset", xAtTilt > 30f)
+
+        // Continue tilting more - should still track, not recenter
+        rampTiltFromTo(calc, 0.6f, 0f, 0.9f, 0f)
+        val xAfterMore = calc.getOffsetX()
+        assertTrue("Active input should increase offset (before=$xAtTilt, after=$xAfterMore)",
+            xAfterMore > xAtTilt * 0.9f)
+    }
 }

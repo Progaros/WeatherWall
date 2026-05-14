@@ -48,8 +48,11 @@ class ParallaxCalculator {
         /** Milliseconds of continuous stillness before recenter engages. */
         private const val STILL_HOLD_MS = 400L
 
-        /** Exponential damping rate for return-to-center (higher = faster). */
-        private const val RECENTER_DAMPING = 2.5f
+        /** Exponential damping rate for return-to-center when close (higher = faster). */
+        private const val RECENTER_DAMPING_NEAR = 2.0f
+
+        /** Exponential damping rate for return-to-center when far from center. */
+        private const val RECENTER_DAMPING_FAR = 5.0f
 
         /** Snap position to zero when magnitude is below this (prevents oscillation). */
         private const val SNAP_EPSILON = 0.1f
@@ -312,13 +315,22 @@ class ParallaxCalculator {
             }
         } else {
             // ---- RECENTERING ----
-            val rate = RECENTER_DAMPING * returnSpeed
+            // Distance-dependent return: fast when far from center, gentle near center.
+            // This prevents the "sluggish" feel of constant-rate damping.
+            val rawDist = kotlin.math.sqrt(rawPositionX * rawPositionX + rawPositionY * rawPositionY)
+            val maxDist = effectiveMaxOffset * kotlin.math.max(hComp, vComp)
+            val normalized = if (maxDist > 0f) (rawDist / maxDist).coerceIn(0f, 1.5f) else 0f
+            // Smoothstep blend: 0→NEAR at center, 1→FAR at full max offset
+            val blend = smoothstepF(0f, 1.0f, normalized)
+            val baseDamping = RECENTER_DAMPING_NEAR + (RECENTER_DAMPING_FAR - RECENTER_DAMPING_NEAR) * blend
+            val rate = baseDamping * returnSpeed
             val t = 1f - exp(-rate * dt)
             rawPositionX -= rawPositionX * t
             rawPositionY -= rawPositionY * t
-            // Drain smoothed delta gradually so tracking resumes cleanly
-            smoothedDeltaX *= (1f - t)
-            smoothedDeltaY *= (1f - t)
+            // Drain smoothed delta at fixed rate so movement detection stays responsive
+            val deltaDrain = 1f - exp(-RECENTER_DAMPING_NEAR * returnSpeed * dt)
+            smoothedDeltaX *= (1f - deltaDrain)
+            smoothedDeltaY *= (1f - deltaDrain)
         }
 
         // Compute display position from raw via soft-limit

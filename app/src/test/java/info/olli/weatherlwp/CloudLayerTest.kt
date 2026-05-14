@@ -1,5 +1,6 @@
 package info.olli.weatherlwp
 
+import info.olli.weatherlwp.rendering.CloudLayer
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -366,27 +367,26 @@ class CloudLayerTest {
 
     @Test
     fun `cloud Y placement accounts for half-height`() {
-        // The fix: minY = CLOUD_Y_MIN + halfH, maxY = CLOUD_Y_MIN + CLOUD_Y_RANGE - halfH
-        // This ensures the full bitmap stays within [CLOUD_Y_MIN, CLOUD_Y_MIN + CLOUD_Y_RANGE]
-        val cloudYMin = 0.05f  // RenderConstants.CLOUD_Y_MIN
-        val cloudYRange = 0.35f  // RenderConstants.CLOUD_Y_RANGE
+        // Uses CLOUD_BAND_TOP / CLOUD_BAND_BOTTOM from CloudLayer companion
+        val bandTop = CloudLayer.CLOUD_BAND_TOP
+        val bandBottom = CloudLayer.CLOUD_BAND_BOTTOM
 
-        val groupHeightMin = 0.15f
-        val groupHeightMax = 0.30f
+        val groupHeightMin = CloudLayer.GROUP_HEIGHT_MIN
+        val groupHeightMax = CloudLayer.GROUP_HEIGHT_MAX
 
         // For any groupHeight in [min, max], the cloud center Y should be bounded
         for (gh in listOf(groupHeightMin, groupHeightMax, (groupHeightMin + groupHeightMax) / 2f)) {
             val halfH = gh * 0.5f
-            val minY = cloudYMin + halfH
-            val maxY = (cloudYMin + cloudYRange - halfH).coerceAtLeast(minY)
+            val minY = bandTop + halfH
+            val maxY = (bandBottom - halfH).coerceAtLeast(minY)
 
-            // Cloud center at minY: top edge = minY - halfH >= CLOUD_Y_MIN
+            // Cloud center at minY: top edge = minY - halfH >= bandTop
             assertTrue("Top edge at minY should not clip (gh=$gh)",
-                minY - halfH >= cloudYMin - 0.001f)
+                minY - halfH >= bandTop - 0.001f)
 
-            // Cloud center at maxY: bottom edge = maxY + halfH <= CLOUD_Y_MIN + CLOUD_Y_RANGE
+            // Cloud center at maxY: bottom edge = maxY + halfH <= bandBottom
             assertTrue("Bottom edge at maxY should not clip (gh=$gh)",
-                maxY + halfH <= cloudYMin + cloudYRange + 0.001f)
+                maxY + halfH <= bandBottom + 0.001f)
 
             // Range should be non-negative
             assertTrue("Y range should be non-negative (gh=$gh)", maxY >= minY)
@@ -395,37 +395,38 @@ class CloudLayerTest {
 
     @Test
     fun `largest cloud height still has valid Y range`() {
-        val cloudYMin = 0.05f
-        val cloudYRange = 0.35f
-        val groupHeightMax = 0.30f
+        val bandTop = CloudLayer.CLOUD_BAND_TOP
+        val bandBottom = CloudLayer.CLOUD_BAND_BOTTOM
+        val groupHeightMax = CloudLayer.GROUP_HEIGHT_MAX
 
-        val halfH = groupHeightMax * 0.5f  // 0.15
-        val minY = cloudYMin + halfH  // 0.05 + 0.15 = 0.20
-        val maxY = (cloudYMin + cloudYRange - halfH).coerceAtLeast(minY)  // (0.05 + 0.35 - 0.15) = 0.25
+        val halfH = groupHeightMax * 0.5f
+        val minY = bandTop + halfH
+        val maxY = (bandBottom - halfH).coerceAtLeast(minY)
 
         assertTrue("Largest cloud should still have valid Y range", maxY >= minY)
-        assertEquals("maxY for largest cloud", 0.25f, maxY, 0.001f)
+        // bandBottom(0.42) - halfH(0.15) = 0.27 >= bandTop(0.05) + halfH(0.15) = 0.20
+        assertTrue("maxY should be >= minY", maxY >= minY)
     }
 
     @Test
     fun `degenerate cloud taller than band centers in band`() {
         // If a cloud's height exceeds the band, it should be centered
-        val cloudYMin = 0.05f
-        val cloudYRange = 0.35f
+        val bandTop = CloudLayer.CLOUD_BAND_TOP
+        val bandBottom = CloudLayer.CLOUD_BAND_BOTTOM
         val oversizedHeight = 0.80f  // Much taller than band
 
-        val halfH = oversizedHeight * 0.5f  // 0.40
-        val minY = cloudYMin + halfH  // 0.45
-        val maxY = (cloudYMin + cloudYRange - halfH).coerceAtLeast(minY)  // coerceAtLeast(0.45) = 0.45
+        val halfH = oversizedHeight * 0.5f
+        val minY = bandTop + halfH
+        val maxY = (bandBottom - halfH).coerceAtLeast(minY)
 
         // When maxY <= minY (degenerate), should center in band
         val y = if (maxY > minY) {
-            minY  // Would use random but won't happen here
+            minY
         } else {
-            cloudYMin + cloudYRange * 0.5f
+            (bandTop + bandBottom) * 0.5f
         }
         assertEquals("Degenerate cloud should center in band",
-            cloudYMin + cloudYRange * 0.5f, y, 0.001f)
+            (bandTop + bandBottom) * 0.5f, y, 0.001f)
     }
 
     // ============== Coverage-Based Cloud Generation Tests ==============

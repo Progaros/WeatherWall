@@ -153,4 +153,80 @@ class PreviewCloudDensityTest {
             else -> ((rawCount * 0.4f).toInt().coerceIn(12, 20)) to 1.5f
         }
     }
+
+    // ============== Cloud Distribution Width Tests ==============
+
+    @Test
+    fun `landscape density scale is higher than portrait`() {
+        // Landscape (1920x1080) has wider visible world → higher widthScale → more clouds
+        val refWorldWidth = RenderConstants.REFERENCE_HEIGHT * 0.5625f  // 1080
+        // Portrait (1080x1920): worldWidth = REFERENCE_HEIGHT * (1080/1920) = 1080
+        val portraitWorldWidth = RenderConstants.REFERENCE_HEIGHT * (1080f / 1920f)
+        val portraitScale = (portraitWorldWidth / refWorldWidth).coerceIn(1.0f, 3.0f)
+        // Landscape (1920x1080): worldWidth = REFERENCE_HEIGHT * (1920/1080) ≈ 3413
+        val landscapeWorldWidth = RenderConstants.REFERENCE_HEIGHT * (1920f / 1080f)
+        val landscapeScale = (landscapeWorldWidth / refWorldWidth).coerceIn(1.0f, 3.0f)
+
+        assertTrue(
+            "Landscape scale ($landscapeScale) should be > portrait scale ($portraitScale)",
+            landscapeScale > portraitScale
+        )
+    }
+
+    @Test
+    fun `cloud count independent of height for same aspect`() {
+        // Two viewports with same aspect ratio but different heights should
+        // produce the same widthScale (because worldWidth scales with aspect, not pixels).
+        val refWorldWidth = RenderConstants.REFERENCE_HEIGHT * 0.5625f
+        // Viewport 1: 540x960, aspect=0.5625 → worldWidth = 1920 * 0.5625 = 1080
+        val worldWidth1 = RenderConstants.REFERENCE_HEIGHT * (540f / 960f)
+        // Viewport 2: 1080x1920, aspect=0.5625 → worldWidth = 1920 * 0.5625 = 1080
+        val worldWidth2 = RenderConstants.REFERENCE_HEIGHT * (1080f / 1920f)
+
+        val scale1 = (worldWidth1 / refWorldWidth).coerceIn(1.0f, 3.0f)
+        val scale2 = (worldWidth2 / refWorldWidth).coerceIn(1.0f, 3.0f)
+        assertEquals("Same aspect → same density scale", scale1, scale2, 0.01f)
+    }
+
+    @Test
+    fun `cloud band top below cloud band bottom`() {
+        assertTrue(
+            "CLOUD_BAND_TOP < CLOUD_BAND_BOTTOM",
+            CloudLayer.CLOUD_BAND_TOP < CloudLayer.CLOUD_BAND_BOTTOM
+        )
+    }
+
+    @Test
+    fun `cloud band accommodates largest cloud without clipping`() {
+        val bandHeight = CloudLayer.CLOUD_BAND_BOTTOM - CloudLayer.CLOUD_BAND_TOP
+        val largestCloudHalfH = CloudLayer.GROUP_HEIGHT_MAX * 0.5f
+        // Available range for cloud center = bandHeight - 2 * halfH
+        val centerRange = bandHeight - 2f * largestCloudHalfH
+        assertTrue(
+            "Largest cloud (halfH=$largestCloudHalfH) should fit in band (height=$bandHeight), range=$centerRange",
+            centerRange >= 0f
+        )
+    }
+
+    @Test
+    fun `clouds not clipped at top of band`() {
+        val halfH = CloudLayer.GROUP_HEIGHT_MAX * 0.5f
+        val minY = CloudLayer.CLOUD_BAND_TOP + halfH
+        val topEdge = minY - halfH
+        assertTrue(
+            "Top edge ($topEdge) should be >= CLOUD_BAND_TOP (${CloudLayer.CLOUD_BAND_TOP})",
+            topEdge >= CloudLayer.CLOUD_BAND_TOP - 0.001f
+        )
+    }
+
+    @Test
+    fun `clouds not clipped at bottom of band`() {
+        val halfH = CloudLayer.GROUP_HEIGHT_MAX * 0.5f
+        val maxY = CloudLayer.CLOUD_BAND_BOTTOM - halfH
+        val bottomEdge = maxY + halfH
+        assertTrue(
+            "Bottom edge ($bottomEdge) should be <= CLOUD_BAND_BOTTOM (${CloudLayer.CLOUD_BAND_BOTTOM})",
+            bottomEdge <= CloudLayer.CLOUD_BAND_BOTTOM + 0.001f
+        )
+    }
 }
