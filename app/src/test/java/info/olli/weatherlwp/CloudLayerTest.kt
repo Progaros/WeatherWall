@@ -574,11 +574,12 @@ class CloudLayerTest {
 
     @Test
     fun `cell size derived from band height`() {
+        // FIXED_CELL_SIZE is pre-computed from REFERENCE_HEIGHT * BAND_HEIGHT_FRACTION * CELL_SIZE_FRACTION
+        val cellSize = CloudLayer.FIXED_CELL_SIZE
         val worldHeight = 1920f
         val bandHeight = worldHeight * CloudLayer.BAND_HEIGHT_FRACTION
-        val cellSize = bandHeight * CloudLayer.CELL_SIZE_FRACTION
-        assertTrue("Cell size ($cellSize) should be > 0", cellSize > 0f)
-        assertTrue("Cell size should be < band height", cellSize < bandHeight)
+        assertTrue("Fixed cell size ($cellSize) should be > 0", cellSize > 0f)
+        assertTrue("Fixed cell size should be < band height", cellSize < bandHeight)
     }
 
     @Test
