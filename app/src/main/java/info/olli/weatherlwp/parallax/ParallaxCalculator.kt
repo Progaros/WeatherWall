@@ -60,6 +60,9 @@ class ParallaxCalculator {
         /** Clamp per-frame delta to this maximum (prevents huge jumps, keeps movement). */
         private const val MAX_DELTA_PER_FRAME = 0.10f
 
+        /** Per-frame delta deadzone: deltas smaller than this are zeroed to suppress sensor noise. */
+        private const val NOISE_EPSILON = 0.0025f
+
         /** Only treat as sensor reset if delta exceeds this (much larger than any tilt). */
         private const val SENSOR_RESET_THRESHOLD = 0.6f
 
@@ -204,11 +207,15 @@ class ParallaxCalculator {
             return
         }
 
-        // Per-frame tilt delta
-        var deltaTiltX = filteredTiltX - prevTiltX
-        var deltaTiltY = filteredTiltY - prevTiltY
+        // Per-frame tilt delta with noise deadzone
+        val rawDeltaX = filteredTiltX - prevTiltX
+        val rawDeltaY = filteredTiltY - prevTiltY
         prevTiltX = filteredTiltX
         prevTiltY = filteredTiltY
+
+        // Suppress micro-jitter: zero out deltas below noise floor
+        var deltaTiltX = if (kotlin.math.abs(rawDeltaX) < NOISE_EPSILON) 0f else rawDeltaX
+        var deltaTiltY = if (kotlin.math.abs(rawDeltaY) < NOISE_EPSILON) 0f else rawDeltaY
 
         val motionMagnitude = kotlin.math.sqrt(
             deltaTiltX * deltaTiltX + deltaTiltY * deltaTiltY

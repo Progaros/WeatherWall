@@ -121,6 +121,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
     // Reusable list for draw prioritization (avoids allocation per frame)
     private val drawCandidates = ArrayList<DrawCandidate>(MAX_GROUPS)
 
+    // Reusable Rect for direct bitmap draws (avoids allocation per cloud)
+    private val dstRect = android.graphics.RectF()
+
     /** Lightweight struct for draw prioritization. Reused per frame. */
     private class DrawCandidate(
         val group: CloudGroup,
@@ -129,7 +132,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val paddedWidth: Int,
         val paddedHeight: Int,
         val drawScale: Float,
-        val screenArea: Float
+        val screenArea: Float,
+        val isBackLayer: Boolean
     )
     
     // Background executor for async bitmap rendering (prevents frame stutters)
@@ -595,20 +599,19 @@ class CloudLayer(private val context: Context) : SceneLayer {
         // Apply color tint to all clouds
         drawPaint.colorFilter = getMultiplyFilter(currentCloudColor)
         
-        // Draw all groups directly (back layer first, then front)
-        drawGroupsBitmap(canvas, currentGroups, isBackLayer = true, parallaxCalculator)
-        drawGroupsBitmap(canvas, currentGroups, isBackLayer = false, parallaxCalculator)
+        // Draw all groups sorted by depth layer then size
+        drawGroupsBitmap(canvas, currentGroups, parallaxCalculator)
     }
 
     /**
      * Draw cloud groups as cached bitmaps.
-     * Uses clipRect to prevent edge artifacts. Prioritizes largest clouds
-     * for deterministic draw capping (no flicker).
+     * Uses clipRect to prevent edge artifacts. Sorted by depth layer (back first)
+     * then by screen area descending for deterministic draw capping.
+     * Uses direct drawBitmap with dst rect to avoid per-cloud canvas state changes.
      */
     private fun drawGroupsBitmap(
         canvas: Canvas,
         groups: List<CloudGroup>,
-        isBackLayer: Boolean,
         parallaxCalculator: ParallaxCalculator
     ) {
         val transform = cachedTransform
@@ -619,16 +622,19 @@ class CloudLayer(private val context: Context) : SceneLayer {
         } else {
             transform.heightScale * (1f + (coverageSizeMult - 1f) * 0.5f)
         }
-        val cullMargin = height * CULL_MARGIN_FRACTION
         val maxScreenW = width * MAX_SCREEN_WIDTH_FRACTION
+        val canvasW = width
+        val canvasH = height
 
-        // --- Pass 1: collect visible candidates with their screen area ---
+        // --- Pass 1: collect visible candidates ---
         drawCandidates.clear()
         var i = 0
         while (i < groups.size) {
             val group = groups[i]
             i++
-            if (group.isBackLayer != isBackLayer) continue
+
+            // Skip tiny alpha (invisible clouds waste GPU)
+            if (group.alpha < 3) continue
 
             val px = parallaxCalculator.getOffsetXForDepth(group.depthFactor)
             val py = parallaxCalculator.getOffsetYForDepth(group.depthFactor)
@@ -663,8 +669,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
             val clampedHalfW = paddedWidth / 2f * clampedDrawScale
             val clampedHalfH = paddedHeight / 2f * clampedDrawScale
 
-            if (screenX + clampedHalfW < -cullMargin || screenX - clampedHalfW > width + cullMargin) continue
-            if (screenY + clampedHalfH < -cullMargin || screenY - clampedHalfH > height + cullMargin) continue
+            // Early offscreen rejection (no margin needed — fully outside viewport)
+            if (screenX + clampedHalfW < 0f || screenX - clampedHalfW > canvasW) continue
+            if (screenY + clampedHalfH < 0f || screenY - clampedHalfH > canvasH) continue
             if (clampedHalfW < 1f || clampedHalfH < 1f) continue
 
             // Queue async bitmap render if not ready
@@ -682,23 +689,28 @@ class CloudLayer(private val context: Context) : SceneLayer {
 
             val screenArea = clampedHalfW * clampedHalfH * 4f
             drawCandidates.add(DrawCandidate(group, screenX, screenY,
-                paddedWidth, paddedHeight, clampedDrawScale, screenArea))
+                paddedWidth, paddedHeight, clampedDrawScale, screenArea,
+                group.isBackLayer))
         }
 
-        // --- Pass 2: sort by screen area descending, draw top N ---
-        drawCandidates.sortByDescending { it.screenArea }
+        // --- Pass 2: sort by layer (back first) then area descending, draw top N ---
+        drawCandidates.sortWith(compareBy<DrawCandidate> { !it.isBackLayer }
+            .thenByDescending { it.screenArea })
         val limit = drawCandidates.size.coerceAtMost(MAX_DRAW_PER_FRAME)
 
         canvas.save()
-        canvas.clipRect(0f, 0f, width, height)
+        canvas.clipRect(0f, 0f, canvasW, canvasH)
         for (j in 0 until limit) {
             val c = drawCandidates[j]
             val bitmap = c.group.cachedBitmap ?: continue
-            canvas.save()
-            canvas.translate(c.screenX, c.screenY)
-            canvas.scale(c.drawScale, c.drawScale)
-            canvas.drawBitmap(bitmap, -c.paddedWidth / 2f, -c.paddedHeight / 2f, drawPaint)
-            canvas.restore()
+            // Direct draw via dst rect — avoids per-cloud save/translate/scale/restore
+            val halfW = c.paddedWidth / 2f * c.drawScale
+            val halfH = c.paddedHeight / 2f * c.drawScale
+            dstRect.set(
+                c.screenX - halfW, c.screenY - halfH,
+                c.screenX + halfW, c.screenY + halfH
+            )
+            canvas.drawBitmap(bitmap, null, dstRect, drawPaint)
         }
         canvas.restore()
     }
