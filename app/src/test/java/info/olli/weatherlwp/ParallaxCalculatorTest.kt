@@ -354,7 +354,8 @@ class ParallaxCalculatorTest {
 
     @Test
     fun testSmoothingDelaysResponse() {
-        // With smoothing = 0: delta is applied directly
+        // Smoothing field is accepted but no longer delays input response
+        // (direct delta integration). Both paths should produce identical offset.
         calculator.strength = 1.0f
         calculator.maxOffsetPx = 100f
         calculator.smoothing = 0f
@@ -367,7 +368,7 @@ class ParallaxCalculatorTest {
 
         calculator.reset()
 
-        // With smoothing > 0: delta is filtered, so less immediate movement
+        // With smoothing > 0: direct integration means same result
         calculator.smoothing = 0.5f
         calculator.updateFromSensor(0f, 0f)
         calculator.update(16)
@@ -375,7 +376,9 @@ class ParallaxCalculatorTest {
         calculator.update(16)
         val smoothedOffset = calculator.getOffsetX()
 
-        assertTrue("Smoothing should delay response: direct=$directOffset, smoothed=$smoothedOffset",
-            smoothedOffset < directOffset)
+        assertTrue("Both paths should produce positive offset",
+            directOffset > 0f && smoothedOffset > 0f)
+        assertEquals("Direct integration ignores smoothing setting",
+            directOffset, smoothedOffset, 0.1f)
     }
 }

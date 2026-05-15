@@ -145,7 +145,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         // Group size ranges - relative to minDim (min of width/height) for consistent sizing
         // REDUCED for performance: smaller bitmaps = faster drawing
         const val GROUP_WIDTH_MIN = 0.40f
-        const val GROUP_WIDTH_MAX = 0.80f
+        const val GROUP_WIDTH_MAX = 0.65f
         const val GROUP_HEIGHT_MIN = 0.15f
         const val GROUP_HEIGHT_MAX = 0.30f
         
@@ -158,8 +158,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
         const val MAX_BITMAP_DIMENSION_PREVIEW = 256
         
         // Max groups for overcast conditions (reduced: coverage-based uses fewer, larger groups)
-        const val MAX_GROUPS = 22
-        const val MAX_GROUPS_PREVIEW = 16
+        const val MAX_GROUPS = 18
+        const val MAX_GROUPS_PREVIEW = 14
         
         // Preview cloud visibility: minimum draw scale to prevent tiny preview clouds
         const val PREVIEW_MIN_DRAW_SCALE = 0.65f
@@ -173,8 +173,10 @@ class CloudLayer(private val context: Context) : SceneLayer {
         const val SPAWN_PROB_MIN = 0.4f             // Cell spawn probability at low coverage
         const val SPAWN_PROB_MAX = 0.9f             // Cell spawn probability at overcast
         const val COVERAGE_SCALE_MIN = 0.6f         // Cloud draw-size scale at low coverage
-        const val COVERAGE_SCALE_MAX = 1.8f         // Cloud draw-size scale at overcast
+        const val COVERAGE_SCALE_MAX = 1.4f         // Cloud draw-size scale at overcast (capped to prevent giant clouds)
         const val CULL_MARGIN_FRACTION = 0.25f      // Screen-space culling margin
+        const val MAX_SCREEN_WIDTH_FRACTION = 0.60f  // Max cloud width as fraction of screen width
+        const val MAX_DRAW_PER_FRAME = 12            // Hard cap on draw calls per layer pass
     }
 
     /** When true, reduces bitmap sizes and group count for better preview performance. */
@@ -225,8 +227,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val transform = cachedTransform
         val worldRect = transform.viewport.worldRect
         val parallaxPad = RenderConstants.REFERENCE_HEIGHT * 0.45f
-        val startCell = kotlin.math.floor((worldRect.left - parallaxPad) / cellSize.toDouble()).toInt()
-        val endCell = kotlin.math.ceil((worldRect.right + parallaxPad) / cellSize.toDouble()).toInt()
+        val extraMarginX = worldRect.width * 0.25f  // Extra margin prevents edge pop-in
+        val startCell = kotlin.math.floor((worldRect.left - parallaxPad - extraMarginX) / cellSize.toDouble()).toInt()
+        val endCell = kotlin.math.ceil((worldRect.right + parallaxPad + extraMarginX) / cellSize.toDouble()).toInt()
 
         // Coverage drives spawn probability & draw-size scale
         val cloudCoverage = (cloudCount.toFloat() / effectiveMaxGroups).coerceIn(0f, 1f)
@@ -582,7 +585,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
     }
 
     /**
-     * Legacy cached-bitmap draw path.
+     * Draw cloud groups as cached bitmaps.
+     * Uses clipRect to prevent edge artifacts and caps draw count per pass.
      */
     private fun drawGroupsBitmap(
         canvas: Canvas,
@@ -603,12 +607,21 @@ class CloudLayer(private val context: Context) : SceneLayer {
         }
         // Generous cull margin prevents pop-in at screen edges
         val cullMargin = height * CULL_MARGIN_FRACTION
+        val maxScreenW = width * MAX_SCREEN_WIDTH_FRACTION
 
+        // Clip all cloud drawing to canvas bounds to prevent edge render artifacts
+        canvas.save()
+        canvas.clipRect(0f, 0f, width, height)
+
+        var drawCount = 0
         var i = 0
         while (i < groups.size) {
             val group = groups[i]
             i++
             if (group.isBackLayer != isBackLayer) continue
+
+            // Hard cap on draw calls per layer pass
+            if (drawCount >= MAX_DRAW_PER_FRAME) break
 
             // Parallax offsets in screen pixels, convert to world-space
             val px = parallaxCalculator.getOffsetXForDepth(group.depthFactor)
@@ -641,8 +654,21 @@ class CloudLayer(private val context: Context) : SceneLayer {
             // Screen-space rect-intersects culling with generous margin
             val halfW = paddedWidth / 2f * effectiveDrawScale
             val halfH = paddedHeight / 2f * effectiveDrawScale
-            if (screenX + halfW < -cullMargin || screenX - halfW > width + cullMargin) continue
-            if (screenY + halfH < -cullMargin || screenY - halfH > height + cullMargin) continue
+
+            // Clamp drawn size so no single cloud exceeds MAX_SCREEN_WIDTH_FRACTION of screen
+            val clampedDrawScale = if (halfW * 2f > maxScreenW && maxScreenW > 0f) {
+                effectiveDrawScale * (maxScreenW / (halfW * 2f))
+            } else {
+                effectiveDrawScale
+            }
+            val clampedHalfW = paddedWidth / 2f * clampedDrawScale
+            val clampedHalfH = paddedHeight / 2f * clampedDrawScale
+
+            if (screenX + clampedHalfW < -cullMargin || screenX - clampedHalfW > width + cullMargin) continue
+            if (screenY + clampedHalfH < -cullMargin || screenY - clampedHalfH > height + cullMargin) continue
+
+            // Skip sub-pixel clouds (too small to see)
+            if (clampedHalfW < 1f || clampedHalfH < 1f) continue
 
             // Queue async bitmap render if not ready and not already rendering
             if (group.cachedBitmap == null) {
@@ -666,11 +692,14 @@ class CloudLayer(private val context: Context) : SceneLayer {
             if (bitmap != null) {
                 canvas.save()
                 canvas.translate(screenX, screenY)
-                canvas.scale(effectiveDrawScale, effectiveDrawScale)
+                canvas.scale(clampedDrawScale, clampedDrawScale)
                 canvas.drawBitmap(bitmap, -paddedWidth / 2f, -paddedHeight / 2f, drawPaint)
                 canvas.restore()
+                drawCount++
             }
         }
+
+        canvas.restore()  // Restore clipRect
     }
 
     private fun calculateCloudColor(state: SimulationState): Int {

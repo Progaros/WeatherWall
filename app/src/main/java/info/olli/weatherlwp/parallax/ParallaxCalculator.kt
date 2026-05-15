@@ -263,51 +263,21 @@ class ParallaxCalculator {
 
         if (!shouldRecenter) {
             // ---- TRACKING ----
-            // Smooth the delta (exponential low-pass filter)
-            if (smoothing <= 0.02f) {
-                smoothedDeltaX = deltaTiltX
-                smoothedDeltaY = deltaTiltY
-            } else {
-                val lambda = (1f - smoothing * 0.8f).coerceIn(0.05f, 1f) * 60f
-                val alpha = 1f - exp(-lambda * dt)
-                smoothedDeltaX += (deltaTiltX - smoothedDeltaX) * alpha
-                smoothedDeltaY += (deltaTiltY - smoothedDeltaY) * alpha
-            }
-
-            var moveX = smoothedDeltaX * sensitivityPx * hComp
-            var moveY = smoothedDeltaY * sensitivityPx * vComp
-
-            // Soft resistance near edges: progressively reduce outward movement
-            val maxDist = effectiveMaxOffset * kotlin.math.max(hComp, vComp)
-            if (maxDist > 0f) {
-                val rawDist = kotlin.math.sqrt(rawPositionX * rawPositionX + rawPositionY * rawPositionY)
-                val normalized = rawDist / maxDist
-                // Resistance starts at 65% of max, fully resists at 125%
-                if (normalized > 0.65f && isMovingAwayFromCenter(moveX, moveY)) {
-                    val resistance = 1f - smoothstepF(0.65f, 1.25f, normalized)
-                    moveX *= resistance.coerceAtLeast(0.05f)
-                    moveY *= resistance.coerceAtLeast(0.05f)
-                }
-            }
-
-            // Edge easing: additional directional slow-down near edges
-            if (edgeEasing > 0.01f && isMovingAwayFromCenter(moveX, moveY)) {
-                val xLimit = effectiveMaxOffset * hComp
-                val yLimit = effectiveMaxOffset * vComp
-                val mult = calculateEdgeEasingMultiplier(xLimit, yLimit)
-                moveX *= mult
-                moveY *= mult
-            }
+            // Direct delta integration: no smoothing on the input path.
+            // Raw tilt delta → position change, immediate response.
+            val moveX = deltaTiltX * sensitivityPx * hComp
+            val moveY = deltaTiltY * sensitivityPx * vComp
 
             rawPositionX += moveX
             rawPositionY += moveY
 
             // Gentle pullback if raw position overshoots max by too much
+            val maxDist = effectiveMaxOffset * kotlin.math.max(hComp, vComp)
             if (maxDist > 0f) {
                 val rawDist = kotlin.math.sqrt(rawPositionX * rawPositionX + rawPositionY * rawPositionY)
-                if (rawDist > maxDist * 1.5f) {
+                if (rawDist > maxDist * 1.8f) {
                     val pullback = 1f - exp(-2f * dt)
-                    val targetDist = maxDist * 1.2f
+                    val targetDist = maxDist * 1.4f
                     val scale = (1f - pullback) + pullback * (targetDist / rawDist)
                     rawPositionX *= scale
                     rawPositionY *= scale
@@ -315,22 +285,20 @@ class ParallaxCalculator {
             }
         } else {
             // ---- RECENTERING ----
-            // Distance-dependent return: fast when far from center, gentle near center.
-            // This prevents the "sluggish" feel of constant-rate damping.
-            val rawDist = kotlin.math.sqrt(rawPositionX * rawPositionX + rawPositionY * rawPositionY)
-            val maxDist = effectiveMaxOffset * kotlin.math.max(hComp, vComp)
-            val normalized = if (maxDist > 0f) (rawDist / maxDist).coerceIn(0f, 1.5f) else 0f
-            // Smoothstep blend: 0→NEAR at center, 1→FAR at full max offset
-            val blend = smoothstepF(0f, 1.0f, normalized)
-            val baseDamping = RECENTER_DAMPING_NEAR + (RECENTER_DAMPING_FAR - RECENTER_DAMPING_NEAR) * blend
-            val rate = baseDamping * returnSpeed
+            // Still integrate any incoming deltas so movement cancels recenter.
+            val moveX = deltaTiltX * sensitivityPx * hComp
+            val moveY = deltaTiltY * sensitivityPx * vComp
+            rawPositionX += moveX
+            rawPositionY += moveY
+
+            // Exponential decay toward center
+            val rate = RECENTER_DAMPING_FAR * returnSpeed
             val t = 1f - exp(-rate * dt)
-            rawPositionX -= rawPositionX * t
-            rawPositionY -= rawPositionY * t
-            // Drain smoothed delta at fixed rate so movement detection stays responsive
-            val deltaDrain = 1f - exp(-RECENTER_DAMPING_NEAR * returnSpeed * dt)
-            smoothedDeltaX *= (1f - deltaDrain)
-            smoothedDeltaY *= (1f - deltaDrain)
+            rawPositionX *= (1f - t)
+            rawPositionY *= (1f - t)
+            // Clear smoothed delta so movement detection resets cleanly
+            smoothedDeltaX = 0f
+            smoothedDeltaY = 0f
         }
 
         // Compute display position from raw via soft-limit

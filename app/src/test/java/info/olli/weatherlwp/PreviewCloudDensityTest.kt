@@ -16,8 +16,8 @@ class PreviewCloudDensityTest {
     fun `preview max groups allows sufficient overcast coverage`() {
         // Preview should support enough groups for overcast to look like overcast
         assertTrue(
-            "Preview max groups (${ CloudLayer.MAX_GROUPS_PREVIEW }) should be >= 16",
-            CloudLayer.MAX_GROUPS_PREVIEW >= 16
+            "Preview max groups (${ CloudLayer.MAX_GROUPS_PREVIEW }) should be >= 12",
+            CloudLayer.MAX_GROUPS_PREVIEW >= 12
         )
     }
 
