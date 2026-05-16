@@ -447,8 +447,8 @@ class CloudLayerTest {
         val bandTop = worldTop - margin
         val bandBottom = worldTop + bandHeight + margin
 
-        // Oversized cloud: halfH exceeds entire band
-        val halfHWorld = 0.80f * 0.5f * worldHeight  // 768 world units
+        // Oversized cloud: halfH exceeds entire band (use 200% to guarantee degeneracy)
+        val halfHWorld = 2.0f * 0.5f * (bandBottom - bandTop)
 
         val minY = bandTop + halfHWorld
         val maxY = (bandBottom - halfHWorld).coerceAtLeast(minY)
@@ -473,7 +473,7 @@ class CloudLayerTest {
 
     @Test
     fun `band covers upper portion of screen`() {
-        // The visible cloud content (excluding margin) should be in the upper ~35%
+        // The visible cloud content (excluding margin) should be in the upper ~55%
         val worldHeight = 1920f
         val worldTop = 0.5f - worldHeight / 2f
         val bandHeight = worldHeight * CloudLayer.BAND_HEIGHT_FRACTION
@@ -482,7 +482,7 @@ class CloudLayerTest {
         val contentBottom = worldTop + bandHeight
         // As screen fraction: (contentBottom - worldTop) / worldHeight = BAND_HEIGHT_FRACTION
         val screenFraction = (contentBottom - worldTop) / worldHeight
-        assertEquals("Cloud content covers upper 35%", 0.35f, screenFraction, 0.01f)
+        assertEquals("Cloud content covers upper portion", CloudLayer.BAND_HEIGHT_FRACTION, screenFraction, 0.01f)
     }
 
     @Test

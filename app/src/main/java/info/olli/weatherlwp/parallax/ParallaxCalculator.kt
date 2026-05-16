@@ -46,7 +46,7 @@ class ParallaxCalculator {
         private const val STILL_VELOCITY_EXIT = 0.025f
 
         /** Milliseconds of continuous stillness before recenter engages. */
-        private const val STILL_HOLD_MS = 400L
+        private const val STILL_HOLD_MS = 800L
 
         /** Exponential damping rate for return-to-center when close (higher = faster). */
         private const val RECENTER_DAMPING_NEAR = 2.0f
@@ -55,7 +55,7 @@ class ParallaxCalculator {
         private const val RECENTER_DAMPING_FAR = 5.0f
 
         /** Snap position to zero when magnitude is below this (prevents oscillation). */
-        private const val SNAP_EPSILON = 0.1f
+        private const val SNAP_EPSILON = 0.05f
 
         /** Clamp per-frame delta to this maximum (prevents huge jumps, keeps movement). */
         private const val MAX_DELTA_PER_FRAME = 0.10f
@@ -68,6 +68,9 @@ class ParallaxCalculator {
 
         /** Cap dt to prevent huge position jumps on app resume. */
         private const val MAX_DT_SECONDS = 0.1f
+
+        /** Number of samples for moving-average delta smoothing. */
+        private const val DELTA_SMOOTHING_SAMPLES = 3
     }
 
     // Lock-free tilt input (sensor thread → render thread)
@@ -90,6 +93,14 @@ class ParallaxCalculator {
     // Smoothed tilt delta (exponential filter, controlled by [smoothing])
     private var smoothedDeltaX = 0f
     private var smoothedDeltaY = 0f
+
+    // Moving-average delta smoothing buffers (reduces sensor jitter)
+    private val deltaBufferX = FloatArray(DELTA_SMOOTHING_SAMPLES)
+    private val deltaBufferY = FloatArray(DELTA_SMOOTHING_SAMPLES)
+    private var deltaBufferIndex = 0
+    private var deltaBufferCount = 0
+    private var filteredDeltaX = 0f
+    private var filteredDeltaY = 0f
 
     // Stillness detection with hysteresis
     private var isDeviceStill = false
@@ -225,6 +236,7 @@ class ParallaxCalculator {
         if (motionMagnitude > SENSOR_RESET_THRESHOLD) {
             smoothedDeltaX = 0f
             smoothedDeltaY = 0f
+            resetDeltaSmoothing()
             return
         }
 
@@ -234,6 +246,12 @@ class ParallaxCalculator {
             deltaTiltX *= clampScale
             deltaTiltY *= clampScale
         }
+
+        // Moving-average smoothing: reduces high-frequency sensor noise
+        // while preserving intentional movement direction and magnitude.
+        smoothDelta(deltaTiltX, deltaTiltY)
+        deltaTiltX = filteredDeltaX
+        deltaTiltY = filteredDeltaY
 
         // Stillness hysteresis
         if (isDeviceStill) {
@@ -350,6 +368,7 @@ class ParallaxCalculator {
         hasPreviousTilt = false
         smoothedDeltaX = 0f
         smoothedDeltaY = 0f
+        resetDeltaSmoothing()
         isDeviceStill = false
         stillTimerMs = 0L
         pendingTilt.set(TiltPair(0f, 0f))
@@ -364,6 +383,7 @@ class ParallaxCalculator {
         hasPreviousTilt = false
         smoothedDeltaX = 0f
         smoothedDeltaY = 0f
+        resetDeltaSmoothing()
     }
 
     /** Tanh soft-limit (public for testing). */
@@ -373,6 +393,36 @@ class ParallaxCalculator {
     }
 
     // ---------- Internal helpers ----------
+
+    /** Reset the moving-average smoothing buffers. */
+    private fun resetDeltaSmoothing() {
+        deltaBufferX.fill(0f)
+        deltaBufferY.fill(0f)
+        deltaBufferIndex = 0
+        deltaBufferCount = 0
+        filteredDeltaX = 0f
+        filteredDeltaY = 0f
+    }
+
+    /**
+     * Insert a delta sample into the ring buffer and compute the moving average.
+     * Result is stored in [filteredDeltaX] / [filteredDeltaY] to avoid allocation.
+     */
+    private fun smoothDelta(dx: Float, dy: Float) {
+        deltaBufferX[deltaBufferIndex] = dx
+        deltaBufferY[deltaBufferIndex] = dy
+        deltaBufferIndex = (deltaBufferIndex + 1) % DELTA_SMOOTHING_SAMPLES
+        if (deltaBufferCount < DELTA_SMOOTHING_SAMPLES) deltaBufferCount++
+
+        var sumX = 0f
+        var sumY = 0f
+        for (i in 0 until deltaBufferCount) {
+            sumX += deltaBufferX[i]
+            sumY += deltaBufferY[i]
+        }
+        filteredDeltaX = sumX / deltaBufferCount
+        filteredDeltaY = sumY / deltaBufferCount
+    }
 
     private fun movementMultiplier(depthFactor: Float): Float {
         val d = depthFactor.coerceIn(0f, 1f)

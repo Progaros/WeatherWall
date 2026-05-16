@@ -16,6 +16,7 @@ import info.olli.weatherlwp.simulation.SimulationState
 import info.olli.weatherlwp.util.ColorMath
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.sin
 import kotlin.random.Random
 
 /**
@@ -109,10 +110,14 @@ class CloudLayer(private val context: Context) : SceneLayer {
     private var cloudsEnabled = true
     private var randomSeed = 42
 
-    // World-space cloud band values (recalculated on resize)
-    private var cachedBandTop = 0f
-    private var cachedBandBottom = 0f
-    private var cachedBandHeight = 0f
+    // Accumulated animation time for sinusoidal drift and scale oscillation
+    private var animationTime = 0f
+
+    // World-space cloud band values — ABSOLUTE, computed once from constants.
+    // NOT recalculated on resize. Cloud Y is stable regardless of viewport.
+    private var cachedBandTop = ABS_BAND_TOP
+    private var cachedBandBottom = ABS_BAND_BOTTOM
+    private var cachedBandHeight = ABS_BAND_HEIGHT
 
     // Cell-based generation cache: cellIndex → generated groups
     // Prevents regeneration stalls by caching deterministic cell results
@@ -135,6 +140,10 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val screenArea: Float,
         val isBackLayer: Boolean
     )
+
+    // Reusable comparator: back layer first, then by descending screen area
+    private val drawCandidateComparator = compareBy<DrawCandidate> { !it.isBackLayer }
+        .thenByDescending { it.screenArea }
     
     // Background executor for async bitmap rendering (prevents frame stutters)
     private val bitmapExecutor = Executors.newSingleThreadExecutor { r ->
@@ -175,27 +184,37 @@ class CloudLayer(private val context: Context) : SceneLayer {
         const val MAX_BITMAP_DIMENSION = 512
         const val MAX_BITMAP_DIMENSION_PREVIEW = 256
         
-        // Max groups for overcast conditions (reduced: coverage-based uses fewer, larger groups)
-        const val MAX_GROUPS = 18
-        const val MAX_GROUPS_PREVIEW = 14
+        // Max groups for overcast conditions
+        const val MAX_GROUPS = 28
+        const val MAX_GROUPS_PREVIEW = 18
         
         // Preview cloud visibility: minimum draw scale to prevent tiny preview clouds
         const val PREVIEW_MIN_DRAW_SCALE = 0.65f
         
-        // World-space cloud band (fraction of visible world height).
-        // Clouds exist within a band defined relative to the visible world top,
-        // with extra margin above/below so parallax never causes clipping.
-        const val BAND_HEIGHT_FRACTION = 0.35f      // Cloud content height as fraction of world height
+        // World-space cloud band — ABSOLUTE coordinates derived from REFERENCE_HEIGHT.
+        // These are constant and never recalculated on viewport resize, so cloud Y
+        // positions are stable and never clip due to viewport/parallax drift.
+        const val BAND_HEIGHT_FRACTION = 0.55f      // Cloud content height as fraction of reference height
         const val BAND_MARGIN_FRACTION = 0.20f      // Extra margin above/below for parallax safety
         const val CELL_SIZE_FRACTION = 0.5f         // X-cell width as fraction of band height
-        const val FIXED_CELL_SIZE = 336f             // Fixed world-unit cell size for stable grid (REFERENCE_HEIGHT * 0.35 * 0.5)
-        const val SPAWN_PROB_MIN = 0.4f             // Cell spawn probability at low coverage
-        const val SPAWN_PROB_MAX = 0.9f             // Cell spawn probability at overcast
+        const val FIXED_CELL_SIZE = 336f             // Fixed world-unit cell size for stable grid
+
+        // Absolute cloud band Y coordinates — never change, never clip.
+        // World Y origin: center=0.5, top = 0.5 - REFERENCE_HEIGHT/2 = -959.5
+        private const val ABS_WORLD_TOP = 0.5f - RenderConstants.REFERENCE_HEIGHT / 2f  // -959.5
+        private const val ABS_BAND_HEIGHT = RenderConstants.REFERENCE_HEIGHT * BAND_HEIGHT_FRACTION  // 1056
+        private const val ABS_BAND_MARGIN = RenderConstants.REFERENCE_HEIGHT * BAND_MARGIN_FRACTION  // 384
+        // Band extends from above visible top down to mid-sky, with generous parallax padding
+        val ABS_BAND_TOP = ABS_WORLD_TOP - ABS_BAND_MARGIN          // -1343.5
+        val ABS_BAND_BOTTOM = ABS_WORLD_TOP + ABS_BAND_HEIGHT + ABS_BAND_MARGIN  // 480.5
+        const val SPAWN_PROB_MIN = 0.3f             // Cell spawn probability at low coverage
+        const val SPAWN_PROB_MAX = 0.95f            // Cell spawn probability at overcast
         const val COVERAGE_SCALE_MIN = 0.6f         // Cloud draw-size scale at low coverage
-        const val COVERAGE_SCALE_MAX = 1.4f         // Cloud draw-size scale at overcast (capped to prevent giant clouds)
+        const val COVERAGE_SCALE_MAX = 1.6f         // Cloud draw-size scale at overcast
         const val CULL_MARGIN_FRACTION = 0.25f      // Screen-space culling margin
         const val MAX_SCREEN_WIDTH_FRACTION = 0.60f  // Max cloud width as fraction of screen width
-        const val MAX_DRAW_PER_FRAME = 12            // Hard cap on draw calls per layer pass
+        const val MAX_DRAW_PER_FRAME = 20            // Hard cap on draw calls per layer pass
+        const val MAX_CLOUD_COUNT = 50               // Maximum cloud count from getCloudCount()
     }
 
     /** When true, reduces bitmap sizes and group count for better preview performance. */
@@ -251,8 +270,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val startCell = kotlin.math.floor((worldRect.left - parallaxPad - extraMarginX) / cellSize.toDouble()).toInt()
         val endCell = kotlin.math.ceil((worldRect.right + parallaxPad + extraMarginX) / cellSize.toDouble()).toInt()
 
-        // Coverage drives spawn probability & draw-size scale
-        val cloudCoverage = (cloudCount.toFloat() / effectiveMaxGroups).coerceIn(0f, 1f)
+        // Coverage drives spawn probability & draw-size scale.
+        // Use MAX_CLOUD_COUNT as denominator so overcast (50) reaches full coverage.
+        val cloudCoverage = (cloudCount.toFloat() / MAX_CLOUD_COUNT).coerceIn(0f, 1f)
         val spawnProbability = SPAWN_PROB_MIN + (SPAWN_PROB_MAX - SPAWN_PROB_MIN) * cloudCoverage
         coverageSizeMult = COVERAGE_SCALE_MIN + (COVERAGE_SCALE_MAX - COVERAGE_SCALE_MIN) * cloudCoverage
 
@@ -283,6 +303,14 @@ class CloudLayer(private val context: Context) : SceneLayer {
         // Decide back vs front layer deterministically (75/25 split)
         val isBack = rng.nextFloat() < BACK_LAYER_RATIO
         val cloud = createCloudGroup(rng, isBack, cellX, cellSize)
+
+        // At very high coverage (overcast), allow a second cloud per cell
+        // for dense, overlapping sky coverage
+        if (spawnProbability > 0.85f && rng.nextFloat() < 0.5f) {
+            val cloud2 = createCloudGroup(rng, !isBack, cellX, cellSize)
+            return listOf(cloud, cloud2)
+        }
+
         return listOf(cloud)
     }
     
@@ -293,12 +321,14 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val groupWidth = GROUP_WIDTH_MIN + random.nextFloat() * (GROUP_WIDTH_MAX - GROUP_WIDTH_MIN)
         val groupHeight = GROUP_HEIGHT_MIN + random.nextFloat() * (GROUP_HEIGHT_MAX - GROUP_HEIGHT_MIN)
 
-        // World-space Y: place within the cloud band (with extra margin for parallax).
+        // World-space Y: place within the ABSOLUTE cloud band.
+        // Uses constant band coordinates — never viewport-relative.
         // Cloud centers are clamped by half-height so the full bitmap stays inside the band.
         val bandTop = cachedBandTop
         val bandBottom = cachedBandBottom
-        val worldRect = cachedTransform.viewport.worldRect
-        val halfHWorld = groupHeight * 0.5f * worldRect.height
+        val bandH = cachedBandHeight
+        // Estimate half-height in world units using band height fraction
+        val halfHWorld = groupHeight * 0.5f * bandH
         val minY = bandTop + halfHWorld
         val maxY = (bandBottom - halfHWorld).coerceAtLeast(minY)
         val worldY = if (maxY > minY) {
@@ -476,15 +506,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val parallaxPad = RenderConstants.REFERENCE_HEIGHT * 0.45f
         cachedWrapRange = (worldHalf + parallaxPad) * 2f
 
-        // Compute world-space cloud band from viewport geometry.
-        // Band lives in the upper portion of the visible world with generous
-        // margins so parallax never clips clouds at top or bottom.
-        val worldRect = cachedTransform.viewport.worldRect
-        val worldHeight = worldRect.height
-        cachedBandHeight = worldHeight * BAND_HEIGHT_FRACTION
-        val extraMargin = worldHeight * BAND_MARGIN_FRACTION
-        cachedBandTop = worldRect.top - extraMargin
-        cachedBandBottom = worldRect.top + cachedBandHeight + extraMargin
+        // Cloud band Y is ABSOLUTE — NOT recalculated on resize.
+        // cachedBandTop/Bottom/Height are initialized from ABS_BAND_* constants.
+        // This ensures cloud Y positions never drift when viewport changes.
         
         // Invalidate cached bitmaps on any resize (pixel dimensions changed)
         clearGroupBitmaps()
@@ -523,19 +547,45 @@ class CloudLayer(private val context: Context) : SceneLayer {
             windFactor * (RenderConstants.WIND_CLOUD_SPEED_MAX - RenderConstants.WIND_CLOUD_SPEED_MIN)
         val effectiveSpeed = windSpeed * cloudSpeedMultiplier * stormBoost
         
-        // Get wind direction for X component (-1 to 1, positive = rightward)
-        // Use precalculated value from SimulationState for efficiency
-        val dirX = state.getWindDirX()
+        // Wind direction X component (-1 to 1, positive = rightward).
+        // MINIMUM WIND GUARANTEE: even calm wind produces visible slow drift.
+        // This prevents clouds from appearing frozen at low/perpendicular wind.
+        val rawDirX = state.getWindDirX()
+        val dirX = if (kotlin.math.abs(rawDirX) < 0.30f) {
+            // Wind is near-perpendicular to screen — use fallback rightward drift
+            if (rawDirX >= 0f) 0.30f else -0.30f
+        } else {
+            rawDirX
+        }
         
         // Convert delta time to seconds, cap to prevent jumps
         val deltaSec = (deltaTimeMs / 1000f).coerceAtMost(0.1f)
         
+        // Accumulate animation time for per-cloud drift/oscillation in draw phase
+        animationTime += deltaSec
+        
+        // MINIMUM effective speed: even in dead calm, clouds drift slowly.
+        // This guarantees visible movement at ANY wind speed > 0.
+        val minEffectiveSpeed = RenderConstants.WIND_CLOUD_SPEED_MIN * 0.5f
+        val finalSpeed = effectiveSpeed.coerceAtLeast(minEffectiveSpeed)
+        
         // Update each cloud group's position in world-space
-        // Movement in world-space units per second
+        // Movement in world-space units per second (float accumulation, no quantization)
         val wrapRange = cachedWrapRange
+        val ppu = cachedTransform.viewport.pixelsPerUnit
+        // Minimum world-space movement per frame to guarantee 0.5 screen pixels of motion
+        val minWorldMovement = if (ppu > 0f) 0.5f / ppu else 0.5f
         for (group in currentGroups) {
-            // Move cloud in world-space units
-            val movement = deltaSec * group.speed * effectiveSpeed * RenderConstants.CLOUD_MOVEMENT_SCALE * dirX * wrapRange
+            // Depth-based speed: back clouds (low depth) drift slower, front clouds faster
+            // Simulates atmospheric perspective — nearer objects move faster
+            val depthSpeed = 0.6f + (group.depthFactor - BACK_LAYER_DEPTH_MIN) /
+                (FRONT_LAYER_DEPTH_MAX - BACK_LAYER_DEPTH_MIN) * 0.4f
+            // Move cloud in world-space units — pure float, no toInt() or floor()
+            var movement = deltaSec * group.speed * depthSpeed * finalSpeed * RenderConstants.CLOUD_MOVEMENT_SCALE * dirX * wrapRange
+            // Enforce minimum visible movement: at least 0.5 screen pixels per frame
+            if (kotlin.math.abs(movement) > 0f && kotlin.math.abs(movement) < minWorldMovement) {
+                movement = if (movement > 0f) minWorldMovement else -minWorldMovement
+            }
             var newX = group.currentWorldX + movement
             // Wrap position in world-space (symmetric around center)
             val halfRange = wrapRange / 2f
@@ -581,7 +631,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val referenceWorldWidth = RenderConstants.REFERENCE_HEIGHT * 0.5625f  // reference portrait width
         val widthScale = (visibleWorldWidth / referenceWorldWidth).coerceIn(1.0f, 3.0f)
         val baseCount = state.getCloudCount()
-        val targetCount = (baseCount * widthScale).toInt().coerceIn(0, effectiveMaxGroups)
+        val targetCount = (baseCount * widthScale).toInt().coerceIn(0, MAX_CLOUD_COUNT)
         
         // Regenerate groups if count changed significantly
         if (kotlin.math.abs(targetCount - cloudCount) > 3 || 
@@ -590,7 +640,6 @@ class CloudLayer(private val context: Context) : SceneLayer {
             clearGroupBitmaps()
             cloudCount = targetCount
             generateCloudGroups()
-            android.util.Log.d("CloudPerf", "regenerated: groups=${cloudGroups.size} coverage=${"%.2f".format(coverageSizeMult)} base=$baseCount preview=$isPreviewMode")
         }
         
         val currentGroups = cloudGroups
@@ -644,8 +693,15 @@ class CloudLayer(private val context: Context) : SceneLayer {
             val renderX = group.currentWorldX + worldPX
             val renderY = group.worldY + worldPY
 
-            val screenX = mapper.x(renderX)
-            val screenY = mapper.y(renderY)
+            // Per-cloud sinusoidal drift: breaks uniform straight-line motion.
+            // Each cloud gets a unique phase from its seed, so they drift independently.
+            // This makes the eye detect motion even when wind speed is homogeneous.
+            val phase = (group.seed % 10000L).toFloat()
+            val driftX = sin((animationTime * 0.3 + phase * 0.001).toDouble()).toFloat() * 15f
+            val driftY = sin((animationTime * 0.15 + phase * 0.002).toDouble()).toFloat() * 8f
+
+            val screenX = mapper.x(renderX + driftX)
+            val screenY = mapper.y(renderY + driftY)
 
             val groupWidthPx = (group.groupWidth * minDim).toInt()
                 .coerceIn(50, effectiveMaxDimension)
@@ -669,9 +725,11 @@ class CloudLayer(private val context: Context) : SceneLayer {
             val clampedHalfW = paddedWidth / 2f * clampedDrawScale
             val clampedHalfH = paddedHeight / 2f * clampedDrawScale
 
-            // Early offscreen rejection (no margin needed — fully outside viewport)
-            if (screenX + clampedHalfW < 0f || screenX - clampedHalfW > canvasW) continue
-            if (screenY + clampedHalfH < 0f || screenY - clampedHalfH > canvasH) continue
+            // Early offscreen rejection with small margin to prevent pop-in during parallax
+            val marginX = canvasW * 0.05f
+            val marginY = canvasH * 0.05f
+            if (screenX + clampedHalfW < -marginX || screenX - clampedHalfW > canvasW + marginX) continue
+            if (screenY + clampedHalfH < -marginY || screenY - clampedHalfH > canvasH + marginY) continue
             if (clampedHalfW < 1f || clampedHalfH < 1f) continue
 
             // Queue async bitmap render if not ready
@@ -693,19 +751,31 @@ class CloudLayer(private val context: Context) : SceneLayer {
                 group.isBackLayer))
         }
 
-        // --- Pass 2: sort by layer (back first) then area descending, draw top N ---
-        drawCandidates.sortWith(compareBy<DrawCandidate> { !it.isBackLayer }
-            .thenByDescending { it.screenArea })
-        val limit = drawCandidates.size.coerceAtMost(MAX_DRAW_PER_FRAME)
+        // --- Pass 2: sort by layer (back first) then area descending ---
+        drawCandidates.sortWith(drawCandidateComparator)
+
+        // Layered draw budget: split budget between back and front layers
+        // so both layers get fair representation even at high density
+        val backCount = drawCandidates.count { it.isBackLayer }
+        val frontCount = drawCandidates.size - backCount
+        val halfBudget = MAX_DRAW_PER_FRAME / 2
+        val backBudget = halfBudget.coerceAtMost(backCount)
+        val frontBudget = (MAX_DRAW_PER_FRAME - backBudget).coerceAtMost(frontCount)
+        val limit = backBudget + frontBudget
 
         canvas.save()
         canvas.clipRect(0f, 0f, canvasW, canvasH)
         for (j in 0 until limit) {
             val c = drawCandidates[j]
             val bitmap = c.group.cachedBitmap ?: continue
+            // Subtle scale oscillation: each cloud "breathes" slightly at its own rate.
+            // ±3% size variation makes the scene feel alive without being distracting.
+            val oscPhase = (c.group.seed % 10000L).toFloat()
+            val scaleOsc = 1f + 0.03f * sin((animationTime * 0.25 + oscPhase * 0.003).toDouble()).toFloat()
+            val finalScale = c.drawScale * scaleOsc
             // Direct draw via dst rect — avoids per-cloud save/translate/scale/restore
-            val halfW = c.paddedWidth / 2f * c.drawScale
-            val halfH = c.paddedHeight / 2f * c.drawScale
+            val halfW = c.paddedWidth / 2f * finalScale
+            val halfH = c.paddedHeight / 2f * finalScale
             dstRect.set(
                 c.screenX - halfW, c.screenY - halfH,
                 c.screenX + halfW, c.screenY + halfH

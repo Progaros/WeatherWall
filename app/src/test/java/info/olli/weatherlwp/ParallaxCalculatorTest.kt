@@ -94,6 +94,8 @@ class ParallaxCalculatorTest {
         calculator.maxOffsetPx = 40f
 
         rampTiltFromZero(0.5f, 0f)
+        // Allow smoothing buffer to settle (3 frames of zero delta)
+        repeat(3) { calculator.update(16) }
         val initialOffset = calculator.getOffsetX()
 
         // Hold same tilt (delta = 0 each frame, no return speed)

@@ -19,3 +19,4 @@ __pycache__/
 *.log
 ai.md
 event_renders/
+analysis-output/

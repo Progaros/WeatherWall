@@ -76,10 +76,12 @@ class ParallaxCalculatorTest {
         val xAfterTilt = calculator.getOffsetX()
         assert(xAfterTilt > 50f) { "X should be near max after tilt: $xAfterTilt" }
 
-        // Position should stay stable when tilt is maintained (delta=0, returnSpeed=0)
+        // Allow smoothing buffer to settle, then check stability
+        repeat(3) { calculator.update(16) }
+        val xSettled = calculator.getOffsetX()
         repeat(50) { calculator.update(16) }
         val xStable = calculator.getOffsetX()
-        assertEquals(xAfterTilt, xStable, 1f)
+        assertEquals(xSettled, xStable, 1f)
     }
 
     @Test
@@ -932,6 +934,8 @@ class ParallaxCalculatorTest {
         calc.returnSpeed = 0f
 
         rampTilt(calc, 1.0f, 0f)
+        // Allow smoothing buffer to settle before measuring stable position
+        repeat(3) { calc.update(16) }
         val xFinal = calc.getOffsetX()
 
         // Continue updating with same tilt — no delta, no movement
@@ -1119,7 +1123,7 @@ class ParallaxCalculatorTest {
         rampTilt(calc60, 0.8f, 0f)
         calc60.returnSpeed = 0.8f
         calc60.updateFromSensor(0f, 0f)
-        repeat(30) { calc60.update(16) }  // 480ms to pass hold timer
+        repeat(55) { calc60.update(16) }  // 880ms to pass hold timer (>800ms)
         val x60start = calc60.getOffsetX()
         repeat(60) { calc60.update(16) }  // 960ms of recentering at 60fps
         val x60end = calc60.getOffsetX()
@@ -1135,7 +1139,7 @@ class ParallaxCalculatorTest {
         rampTilt(calc30, 0.8f, 0f)
         calc30.returnSpeed = 0.8f
         calc30.updateFromSensor(0f, 0f)
-        repeat(30) { calc30.update(16) }  // Same 480ms hold
+        repeat(55) { calc30.update(16) }  // Same 880ms hold
         val x30start = calc30.getOffsetX()
         repeat(30) { calc30.update(32) }  // Same 960ms of recentering at 30fps
         val x30end = calc30.getOffsetX()
@@ -1600,9 +1604,9 @@ class ParallaxCalculatorTest {
         calcFar.updateFromSensor(0f, 0f)
         calcSmall.updateFromSensor(0f, 0f)
 
-        // Let stillness engage (need > 400ms = 25 frames at 16ms)
-        repeat(30) { calcFar.update(16) }
-        repeat(30) { calcSmall.update(16) }
+        // Let stillness engage (need > 800ms = 50 frames at 16ms, plus initial delta frame)
+        repeat(55) { calcFar.update(16) }
+        repeat(55) { calcSmall.update(16) }
 
         // Now measure return progress over 5 frames
         val farBefore = calcFar.getOffsetX()
@@ -1643,10 +1647,10 @@ class ParallaxCalculatorTest {
         val initial = calc.getOffsetX()
         assertTrue("Should have small offset", initial > 3f)
 
-        // Enable return, let stillness engage
+        // Enable return, let stillness engage (need > 800ms)
         calc.returnSpeed = 0.5f
         calc.updateFromSensor(0f, 0f)
-        repeat(30) { calc.update(16) }
+        repeat(55) { calc.update(16) }
 
         // Measure single-frame return at small distance
         val before = calc.getOffsetX()
@@ -1679,5 +1683,132 @@ class ParallaxCalculatorTest {
         val xAfterMore = calc.getOffsetX()
         assertTrue("Active input should increase offset (before=$xAtTilt, after=$xAfterMore)",
             xAfterMore > xAtTilt * 0.9f)
+    }
+
+    // ============== Delta Smoothing / Noise Rejection Tests ==============
+
+    @Test
+    fun `noisy sensor input does not accumulate visible jitter`() {
+        val calc = ParallaxCalculator()
+        calc.strength = 0.075f
+        calc.maxOffsetPercent = 20f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 0f
+
+        // First frame: baseline
+        calc.updateFromSensor(0f, 0f)
+        calc.update(16)
+
+        // Feed 200 frames of pseudo-random alternating noise around zero.
+        // Simulates a phone lying flat with sensor jitter.
+        var maxJump = 0f
+        var prevX = calc.getOffsetX()
+        val noiseAmplitude = 0.004f
+        for (i in 1..200) {
+            // Deterministic alternating noise pattern
+            val sign = if (i % 2 == 0) 1f else -1f
+            val noiseX = sign * noiseAmplitude * ((i % 7 + 1) / 7f)
+            val noiseY = -sign * noiseAmplitude * ((i % 5 + 1) / 5f)
+            calc.updateFromSensor(noiseX, noiseY)
+            calc.update(16)
+
+            val currentX = calc.getOffsetX()
+            val jump = kotlin.math.abs(currentX - prevX)
+            if (jump > maxJump) maxJump = jump
+            prevX = currentX
+        }
+
+        val finalOffset = kotlin.math.sqrt(
+            calc.getOffsetX() * calc.getOffsetX() + calc.getOffsetY() * calc.getOffsetY()
+        )
+
+        // With smoothing, noise should not accumulate to more than a few pixels
+        assertTrue("Noise should not accumulate to large offset (got $finalOffset px)",
+            finalOffset < 5f)
+        // Frame-to-frame jumps should be tiny
+        assertTrue("Max frame-to-frame jump should be small (got $maxJump px)",
+            maxJump < 2f)
+    }
+
+    @Test
+    fun `intentional movement remains responsive after smoothing`() {
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 0f
+
+        // Baseline
+        calc.updateFromSensor(0f, 0f)
+        calc.update(16)
+
+        // Feed consistent tilt change over several frames (intentional movement)
+        for (i in 1..20) {
+            calc.updateFromSensor(i * 0.03f, 0f)
+            calc.update(16)
+        }
+
+        val xOffset = calc.getOffsetX()
+        // Should have moved significantly in the positive direction
+        assertTrue("Intentional movement should produce visible offset (got $xOffset)",
+            xOffset > 20f)
+    }
+
+    @Test
+    fun `reset clears smoothing state`() {
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 0f
+
+        // Feed some movement
+        rampTilt(calc, 0.5f, 0.3f)
+        assertTrue("Should have offset before reset", calc.getOffsetX() > 10f)
+
+        // Reset
+        calc.reset()
+        assertEquals("X should be zero after reset", 0f, calc.getOffsetX(), 0.001f)
+        assertEquals("Y should be zero after reset", 0f, calc.getOffsetY(), 0.001f)
+
+        // First sample after reset: should not jump
+        calc.updateFromSensor(0.1f, 0.1f)
+        calc.update(16)
+        val afterReset = kotlin.math.sqrt(
+            calc.getOffsetX() * calc.getOffsetX() + calc.getOffsetY() * calc.getOffsetY()
+        )
+        // First frame after reset just sets baseline, no movement
+        assertEquals("First frame after reset should not move", 0f, afterReset, 0.1f)
+    }
+
+    @Test
+    fun `resetInputBaseline clears smoothing but preserves visual offset`() {
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 0f
+
+        // Build up some offset
+        rampTilt(calc, 0.4f, 0f)
+        val xBefore = calc.getOffsetX()
+        assertTrue("Should have offset", xBefore > 10f)
+
+        // Reset input baseline only
+        calc.resetInputBaseline()
+
+        // Visual offset should be preserved
+        assertEquals("Visual offset should be preserved", xBefore, calc.getOffsetX(), 0.1f)
+
+        // Next sensor sample should become new baseline (no jump)
+        calc.updateFromSensor(0.4f, 0f)
+        calc.update(16)
+        val xAfter = calc.getOffsetX()
+        assertEquals("No movement after baseline reset with same tilt",
+            xBefore, xAfter, 1f)
     }
 }
