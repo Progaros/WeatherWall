@@ -1964,4 +1964,173 @@ class ParallaxCalculatorTest {
         assertEquals("Accumulated multi-event should match single-event total delta",
             xSingle, xMulti, xSingle * 0.3f)
     }
+
+    // ============== Task 7: Hardening tests ==============
+
+    @Test
+    fun `long still period with noise produces no drift`() {
+        // Simulate 10 seconds of sensor noise while device is nominally still.
+        // Position must remain near zero (no accumulated drift).
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 0.5f
+
+        // Initial tilt establishes baseline
+        calc.updateFromSensor(0.2f, 0.1f)
+        calc.update(16)
+
+        // 625 frames ≈ 10 seconds at 16ms: tiny random noise around the baseline
+        val rng = java.util.Random(42)
+        for (i in 0 until 625) {
+            val noiseX = 0.2f + (rng.nextFloat() - 0.5f) * 0.004f  // ±0.002 noise
+            val noiseY = 0.1f + (rng.nextFloat() - 0.5f) * 0.004f
+            calc.updateFromSensor(noiseX, noiseY)
+            calc.update(16)
+        }
+
+        val finalX = calc.getOffsetX()
+        val finalY = calc.getOffsetY()
+        assertTrue("X drift should be near zero after noise (got $finalX)",
+            kotlin.math.abs(finalX) < 5f)
+        assertTrue("Y drift should be near zero after noise (got $finalY)",
+            kotlin.math.abs(finalY) < 5f)
+    }
+
+    @Test
+    fun `alternating frame times produce stable movement`() {
+        // Frame jitter: alternate between 10ms and 30ms frames.
+        // Total tilt change is the same; final position should be similar to uniform 16ms.
+        val calcJittery = ParallaxCalculator()
+        calcJittery.strength = 1.0f
+        calcJittery.maxOffsetPercent = 10f
+        calcJittery.setCanvasSize(1080f, 1920f)
+        calcJittery.smoothing = 0f
+        calcJittery.returnSpeed = 0f
+
+        val calcUniform = ParallaxCalculator()
+        calcUniform.strength = 1.0f
+        calcUniform.maxOffsetPercent = 10f
+        calcUniform.setCanvasSize(1080f, 1920f)
+        calcUniform.smoothing = 0f
+        calcUniform.returnSpeed = 0f
+
+        // Ramp both from 0 to 0.5 over 20 steps
+        calcJittery.updateFromSensor(0f, 0f)
+        calcJittery.update(16)
+        calcUniform.updateFromSensor(0f, 0f)
+        calcUniform.update(16)
+
+        for (i in 1..20) {
+            val tilt = 0.5f * i / 20f
+            calcJittery.updateFromSensor(tilt, 0f)
+            calcJittery.update(if (i % 2 == 0) 10L else 30L)
+
+            calcUniform.updateFromSensor(tilt, 0f)
+            calcUniform.update(16)
+        }
+
+        val jittery = calcJittery.getOffsetX()
+        val uniform = calcUniform.getOffsetX()
+        // Frame normalization should keep them within 30% of each other
+        assertTrue("Jittery frames should produce movement (got $jittery)", jittery > 10f)
+        assertTrue("Uniform frames should produce movement (got $uniform)", uniform > 10f)
+        val ratio = jittery / uniform
+        assertTrue("Jittery/uniform ratio should be near 1.0 (got $ratio)",
+            ratio in 0.5f..2.0f)
+    }
+
+    @Test
+    fun `very small tilt changes produce visible movement`() {
+        // Micro-movement: small but intentional tilt (just above deadzone).
+        // Must produce visible offset, not be over-filtered.
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 0f
+
+        calc.updateFromSensor(0f, 0f)
+        calc.update(16)
+
+        // Slowly tilt to 0.15 (above deadzone of 0.06) in small 0.01 increments
+        for (i in 1..15) {
+            calc.updateFromSensor(i * 0.01f, 0f)
+            calc.update(16)
+        }
+
+        val offset = calc.getOffsetX()
+        assertTrue("Small deliberate tilt should produce visible offset (got $offset)",
+            offset > 5f)
+    }
+
+    @Test
+    fun `extreme rapid sensor changes are clamped without large jumps`() {
+        // Rapid large sensor changes must be clamped, not produce huge position jumps.
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 0f
+
+        calc.updateFromSensor(0f, 0f)
+        calc.update(16)
+
+        // Record position, then apply a rapid sensor jump (within reset threshold)
+        calc.updateFromSensor(0.1f, 0f)
+        calc.update(16)
+        val before = calc.getOffsetX()
+
+        // Large jump: 0.1 → 0.5 in one frame (delta = 0.4, above MAX_DELTA_PER_FRAME)
+        calc.updateFromSensor(0.5f, 0f)
+        calc.update(16)
+        val after = calc.getOffsetX()
+
+        val jump = after - before
+        // The delta should be clamped — max single-frame contribution limited
+        val effectiveMax = 1920f * 0.10f  // maxOffsetPercent=10%, strength=1.0
+        assertTrue("Jump should be positive (got $jump)", jump > 0f)
+        assertTrue("Jump per frame should be bounded (got $jump, max effective ≈$effectiveMax)",
+            jump < effectiveMax * 0.15f)  // Well under maximum possible per-frame move
+    }
+
+    @Test
+    fun `adaptive recenter settles gently near center`() {
+        // Verify adaptive recenter: fast return from far, gentle near center (no oscillation).
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 0.5f
+
+        // Push position far from center
+        rampTilt(calc, 0.5f, 0f)
+        val farOffset = calc.getOffsetX()
+        assertTrue("Should be far from center", farOffset > 30f)
+
+        // Now hold still to trigger recenter
+        val positions = mutableListOf<Float>()
+        for (i in 0 until 200) {
+            calc.updateFromSensor(0.5f, 0f)  // Hold same tilt = zero delta
+            calc.update(16)
+            positions.add(calc.getOffsetX())
+        }
+
+        // Should converge toward zero monotonically (no oscillation)
+        val finalPos = positions.last()
+        assertTrue("Should recenter toward zero (got $finalPos)", finalPos < farOffset * 0.3f)
+
+        // Check no oscillation: once position drops below a threshold, it stays below
+        var minSeen = Float.MAX_VALUE
+        for (pos in positions) {
+            if (pos < minSeen) minSeen = pos
+            assertTrue("Position should not bounce back up (pos=$pos, min=$minSeen)",
+                pos <= minSeen + 1f)
+        }
+    }
 }
