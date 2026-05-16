@@ -1,6 +1,7 @@
 package info.olli.weatherlwp.rendering
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
@@ -57,10 +58,27 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         var index = 0
     }
 
+    /**
+     * Categories of terrain decoration objects for rendering classification.
+     * Static categories are safe to bake into a per-hill Bitmap cache;
+     * they share the hill-layer parallax and do not change per frame.
+     * Frost is excluded: it follows the dynamic snow level every frame.
+     */
+    enum class DecorationCategory { FLOWER, MUSHROOM, FOLIAGE, FROST }
+
     companion object {
         private const val DRAW_KIND_TREE = 0
         private const val DRAW_KIND_BUSH = 1
         private const val DRAW_KIND_ANIMAL = 2
+
+        /** Left+right fractional margin added to decoration bitmaps for parallax headroom. */
+        private const val DECOR_BITMAP_MARGIN = 0.15f
+
+        /** Returns true for decoration categories that can be baked into a static Bitmap. */
+        fun isStaticDecoration(category: DecorationCategory): Boolean =
+            category == DecorationCategory.FLOWER ||
+            category == DecorationCategory.MUSHROOM ||
+            category == DecorationCategory.FOLIAGE
     }
 
     private var drawEntryBuffer = Array(128) { DrawEntry() }
@@ -229,6 +247,21 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private val frostPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val flowerPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val snowPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
+
+    // ===== Static decoration bitmap cache =====
+    // One Bitmap per hill containing pre-rendered flowers, mushrooms, and foliage.
+    // Re-baked when decoration settings, season weights, or ambient color change.
+    // Frost is drawn per-frame and is never baked.
+    @Volatile private var decorationBitmaps: Array<Bitmap?> = emptyArray()
+    /** Top screen-Y from which bitmap coordinate 0 is mapped; equals max(0, hillStartY-0.15)*height. */
+    private var decorationBitmapTopY = 0f
+    private var decorationBitmapW = 0
+    private var decorationBitmapH = 0
+    /** Set to true whenever generateSeasonalDecorations() runs; cleared after baking. */
+    @Volatile private var decorationsDirty = true
+    private var decorationBitmapSeasonBucket = -1
+    private var decorationBitmapAmbientBucket = -1
+    private val decorationBitmapPaint = Paint()
 
     init {
         reloadSettings()
@@ -657,6 +690,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         } else {
             mushroomsByHill = emptyMap()
         }
+        decorationsDirty = true
     }
     
     /** Evaluate hill Y at world-space X using noise. */
@@ -917,6 +951,21 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
             state.nightShadeStrength, state.sunriseHours, state.sunsetHours
         )
+
+        // Lazily rebake static decoration bitmaps when any relevant state changes.
+        // This avoids per-frame individual drawing of flowers, mushrooms, and foliage.
+        val ambientBkt = ambientColorBucket(ambientColor)
+        val seasonBkt = currentSeasonBucket()
+        val sizeChanged = decorationBitmapW != ((width * (1f + 2f * DECOR_BITMAP_MARGIN)).toInt()) ||
+            decorationBitmapH != (height - computeDecorationBitmapTopY()).toInt()
+        if (decorationsDirty || seasonBkt != decorationBitmapSeasonBucket ||
+                ambientBkt != decorationBitmapAmbientBucket || sizeChanged ||
+                decorationBitmaps.size != currentHills.size) {
+            bakeDecorationBitmaps(currentHills.toTypedArray(), ambientColor)
+            decorationsDirty = false
+            decorationBitmapSeasonBucket = seasonBkt
+            decorationBitmapAmbientBucket = ambientBkt
+        }
         
         // Invalidate cached hill gradients only when bucketed ambient or snow changes.
         // This avoids rebuilding gradients on tiny per-frame color deltas.
@@ -967,15 +1016,21 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             // Draw lake at its target depth layer (same z-ordering as river)
             lakeDrawer?.drawAtDepth(canvas, hill.depthFactor, index, currentHills.size)
             
-            // Draw seasonal decorations inside the same canvas.translate(px, py) as
-            // the parent hill. This is the parallax optimization: flowers, mushrooms,
-            // leaves, and other small ground decorations share the hill-layer parallax
-            // offset rather than computing individual per-object parallax. These objects
-            // are too small for individual parallax to be perceptible, and rendering them
-            // at the hill's depth avoids per-object getOffsetForDepth() calls.
+            // Draw static decoration cache + dynamic frost for this hill.
+            // Flowers, mushrooms, and foliage are pre-baked into per-hill Bitmaps to
+            // avoid per-object draw calls every frame. Frost is drawn per-frame because
+            // it follows the dynamic snow level which changes continuously.
             canvas.save()
             canvas.translate(px, py)
-            drawSeasonalDecorations(canvas, index, hill, ambientColor)
+            val decorBitmap = decorationBitmaps.getOrNull(index)
+            if (decorBitmap != null && !decorBitmap.isRecycled) {
+                // Bitmap was drawn with translate(width*MARGIN, -topY); undo both here.
+                canvas.drawBitmap(decorBitmap, -(width * DECOR_BITMAP_MARGIN), decorationBitmapTopY, decorationBitmapPaint)
+                drawFrostOnly(canvas, hill)
+            } else {
+                // OOM fallback: draw per-object (slower but always correct)
+                drawSeasonalDecorations(canvas, index, hill, ambientColor)
+            }
             canvas.restore()
             
             // Get trees and animals for this depth range
@@ -1185,6 +1240,11 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     }
     
     private fun drawSeasonalDecorations(canvas: Canvas, hillIndex: Int, hill: HillData, ambientColor: Int) {
+        drawStaticDecorationsOnCanvas(canvas, hillIndex, hill, ambientColor)
+        drawFrostOnly(canvas, hill)
+    }
+
+    private fun drawStaticDecorationsOnCanvas(canvas: Canvas, hillIndex: Int, hill: HillData, ambientColor: Int) {
         val transform = cachedTransform
         // Viewport culling bounds: skip decorations whose screen X is far offscreen.
         // Use a generous margin to avoid popping at edges with parallax shift.
@@ -1281,13 +1341,16 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             mushroomCapPaint.alpha = 255
         }
         }
-        
+    }
+
+    private fun drawFrostOnly(canvas: Canvas, hill: HillData) {
+        val transform = cachedTransform
         // Frost: visible in winter (already uses smooth blending via getSeasonWeight)
         if (frostEnabled) {
             val frostWeight = if (useWeatherSnow && dynamicSnowLevel > 0.2f) {
                 dynamicSnowLevel.coerceIn(0f, 1f)
             } else {
-                winterWeight
+                getSeasonWeight("winter")
             }
             if (frostWeight > 0.05f) {
                 val frostAlpha = if (useWeatherSnow && dynamicSnowLevel > 0.2f) {
@@ -1316,6 +1379,79 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 }
             }
         }
+    }
+
+    /**
+     * Computes the top Y (screen pixels) for decoration bitmaps based on hillStartY.
+     * Gives 15% extra room above the highest hill for decorations near the top edge.
+     */
+    private fun computeDecorationBitmapTopY(): Float =
+        ((hillStartY - DECOR_BITMAP_MARGIN).coerceAtLeast(0f) * height)
+
+    /**
+     * Bucketizes season weights for cache invalidation (5% steps = 20 buckets per season).
+     * Packs all four season weights into one Int so a single comparison detects changes.
+     */
+    private fun currentSeasonBucket(): Int {
+        val sp = (getSeasonWeight("spring") * 20).toInt()
+        val su = (getSeasonWeight("summer") * 20).toInt()
+        val au = (getSeasonWeight("autumn") * 20).toInt()
+        val wi = (getSeasonWeight("winter") * 20).toInt()
+        return sp or (su shl 5) or (au shl 10) or (wi shl 15)
+    }
+
+    /**
+     * Recycles all decoration bitmaps and clears the array.
+     * Must be called before replacing with new bitmaps, and in destroy().
+     */
+    private fun recycleDecorationBitmaps() {
+        val old = decorationBitmaps
+        decorationBitmaps = emptyArray()
+        old.forEach { it?.recycle() }
+    }
+
+    /**
+     * Bakes static decorations (flowers, mushrooms, foliage) for every hill into
+     * per-hill Bitmaps. Called lazily from draw() when [decorationsDirty] is set
+     * or when season/ambient/size state changes.
+     *
+     * Each bitmap covers screen width * (1 + 2 * DECOR_BITMAP_MARGIN) horizontally
+     * to absorb ±DECOR_BITMAP_MARGIN parallax headroom, and extends from
+     * [computeDecorationBitmapTopY] to the bottom of the screen.
+     *
+     * Ambient tint and season weights are baked into pixel colors at generation time.
+     * On OOM the bitmap slot is left null and the hill falls back to per-object drawing.
+     */
+    private fun bakeDecorationBitmaps(hills: Array<HillData>, ambientColor: Int) {
+        val topY = computeDecorationBitmapTopY()
+        val bmpW = ((width * (1f + 2f * DECOR_BITMAP_MARGIN)).toInt()).coerceAtLeast(1)
+        val bmpH = (height - topY).toInt().coerceAtLeast(1)
+
+        val newBitmaps = arrayOfNulls<Bitmap>(hills.size)
+        for (i in hills.indices) {
+            try {
+                val bmp = Bitmap.createBitmap(bmpW, bmpH, Bitmap.Config.ARGB_8888)
+                val bmpCanvas = android.graphics.Canvas(bmp)
+                // Map screen coordinates into bitmap space:
+                // screen (x, y) → bitmap (x + width*MARGIN, y - topY)
+                bmpCanvas.translate(width * DECOR_BITMAP_MARGIN, -topY)
+                drawStaticDecorationsOnCanvas(bmpCanvas, i, hills[i], ambientColor)
+                newBitmaps[i] = bmp
+            } catch (e: OutOfMemoryError) {
+                android.util.Log.w("TerrainLayer",
+                    "OOM creating decoration bitmap for hill $i (${bmpW}x${bmpH}), using per-object fallback")
+                newBitmaps[i] = null
+            }
+        }
+
+        recycleDecorationBitmaps()
+        decorationBitmaps = newBitmaps
+        decorationBitmapTopY = topY
+        decorationBitmapW = bmpW
+        decorationBitmapH = bmpH
+        android.util.Log.d("TerrainLayer",
+            "Baked decoration bitmaps: ${hills.size} hills, ${bmpW}x${bmpH}px each " +
+            "(~${hills.size * bmpW * bmpH * 4 / 1024 / 1024}MB)")
     }
 
     override fun reloadSettings() {
@@ -1348,8 +1484,24 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val prevMushroomDensity = mushroomDensity
         val prevFrostEnabled = frostEnabled
         val prevFlowerCluster = flowerClusterEnabled
+        val prevFlowerClusterDensity = flowerClusterDensity
+        val prevFlowerClusterRadius = flowerClusterRadius
+        val prevFlowerClusterMinCount = flowerClusterMinCount
+        val prevFlowerClusterMaxCount = flowerClusterMaxCount
+        val prevFlowerClusterFalloff = flowerClusterFalloff
+        val prevFlowerClusterNoise = flowerClusterNoise
         val prevMushroomCluster = mushroomClusterEnabled
+        val prevMushroomClusterDensity = mushroomClusterDensity
+        val prevMushroomClusterRadius = mushroomClusterRadius
+        val prevMushroomClusterMinCount = mushroomClusterMinCount
+        val prevMushroomClusterMaxCount = mushroomClusterMaxCount
+        val prevMushroomClusterFalloff = mushroomClusterFalloff
+        val prevMushroomClusterNoise = mushroomClusterNoise
         val prevFoliageBias = foliageUnderTreeBias
+        val prevFoliageMatchingBias = foliageMatchingTreeBias
+        val prevFoliageWindStrength = foliageWindScatterStrength
+        val prevFoliageWindDir = foliageWindDirection
+        val prevFoliageRandomScatter = foliageRandomScatter
         
         // Random seed for consistent placement
         randomSeed = settings.getInt("pref_random_seed", 42)
@@ -1437,7 +1589,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val treeSettingsChanged = treeRenderer.reloadSettings(settings)
         val bushSettingsChanged = bushRenderer.reloadSettings(settings)
 
-        // Detect decoration setting changes
+        // Detect decoration setting changes (all settings that affect object positions, counts, or appearance)
         val decorationChanged = prevFlowersEnabled != springFlowersEnabled ||
             prevFlowerDensity != springFlowerDensity ||
             kotlin.math.abs(prevFlowerSpread - springFlowerSpread) > 0.001f ||
@@ -1449,8 +1601,24 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             prevMushroomDensity != mushroomDensity ||
             prevFrostEnabled != frostEnabled ||
             prevFlowerCluster != flowerClusterEnabled ||
+            prevFlowerClusterDensity != flowerClusterDensity ||
+            prevFlowerClusterRadius != flowerClusterRadius ||
+            prevFlowerClusterMinCount != flowerClusterMinCount ||
+            prevFlowerClusterMaxCount != flowerClusterMaxCount ||
+            kotlin.math.abs(prevFlowerClusterFalloff - flowerClusterFalloff) > 0.001f ||
+            kotlin.math.abs(prevFlowerClusterNoise - flowerClusterNoise) > 0.001f ||
             prevMushroomCluster != mushroomClusterEnabled ||
-            kotlin.math.abs(prevFoliageBias - foliageUnderTreeBias) > 0.001f
+            prevMushroomClusterDensity != mushroomClusterDensity ||
+            prevMushroomClusterRadius != mushroomClusterRadius ||
+            prevMushroomClusterMinCount != mushroomClusterMinCount ||
+            prevMushroomClusterMaxCount != mushroomClusterMaxCount ||
+            kotlin.math.abs(prevMushroomClusterFalloff - mushroomClusterFalloff) > 0.001f ||
+            kotlin.math.abs(prevMushroomClusterNoise - mushroomClusterNoise) > 0.001f ||
+            kotlin.math.abs(prevFoliageBias - foliageUnderTreeBias) > 0.001f ||
+            kotlin.math.abs(prevFoliageMatchingBias - foliageMatchingTreeBias) > 0.001f ||
+            kotlin.math.abs(prevFoliageWindStrength - foliageWindScatterStrength) > 0.001f ||
+            kotlin.math.abs(prevFoliageWindDir - foliageWindDirection) > 0.5f ||
+            kotlin.math.abs(prevFoliageRandomScatter - foliageRandomScatter) > 0.001f
         
         // Only regenerate hills when hill structural settings change (expensive)
         val structuralChanged = prevSeed != randomSeed ||
@@ -1473,6 +1641,6 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     }
 
     override fun destroy() {
-        // Cleanup
+        recycleDecorationBitmaps()
     }
 }

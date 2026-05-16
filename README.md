@@ -50,7 +50,7 @@ Each layer implements `SceneLayer` (resize, update, draw, reloadSettings).
 The heaviest layer. Manages:
 - **Hill generation**: N hills (default 5), each with fBm noise for contour, sorted by depth factor
 - **Tree/bush rendering**: Delegated to `TreeRenderer` and `BushRenderer`
-- **Seasonal decorations**: Flowers, mushrooms, fallen leaves, snow caps, frost — all pre-generated at terrain-generation time, drawn per-frame with season-weight alpha blending
+- **Seasonal decorations**: Flowers, mushrooms, fallen leaves, snow caps, frost — all pre-generated at terrain-generation time, baked into per-hill Bitmap caches for static objects, drawn per-frame for frost
 
 ### Procedural Generation
 
@@ -103,13 +103,37 @@ Fallen leaves have two placement modes that combine:
 
 Trees and bushes also share the hill parallax offset (not individual), but this matters more for them since they're larger. The sub-pixel error is still invisible at the depth spread within a single hill.
 
+### Rendering and Caching Strategy
+
+Decorations are split into two categories based on whether they change per frame:
+
+| Category | Examples | Baked? | Rationale |
+|----------|----------|--------|-----------|
+| **Static** | Flowers, mushrooms, fallen leaves | ✅ Yes | Position, color, size are fixed until settings change |
+| **Dynamic** | Frost, wind-skewed trees, bushes | ❌ No | Frost follows `dynamicSnowLevel` every frame; trees/bushes need individual wind sway |
+
+**Baking flow** (`bakeDecorationBitmaps()`):
+1. One `Bitmap` per hill, dimensions `(width × 1.3) × (height − topY)` — the 15% left/right margin absorbs parallax headroom
+2. Ambient tint and season weights are baked into pixel colors at generation time
+3. The bitmap is drawn at `(−width×0.15, topY)` in the already-translated hill canvas so parallax is inherited from the parent hill layer with no extra computation
+4. On `OutOfMemoryError`, the bitmap slot stays null and the hill falls back to per-object drawing
+
+**Cache invalidation** — bitmaps are regenerated when any of these change:
+- World seed, terrain geometry, screen size/orientation
+- Season weights (5% quantization = 20 buckets per season, packed into one `Int`)
+- Ambient color bucket (same bucketing as hill gradients)
+- Any decoration setting: density, cluster radius/min/max/falloff/noise, foliage bias, wind scatter, wind direction
+
+**Memory**: ~6 MB per hill at 1080×1920 with `hillStartY=0.60`; 5 hills ≈ 30 MB. Bitmaps are recycled before replacement and in `destroy()`.
+
 ### Performance Design
 
 - **Zero per-frame allocation**: Pre-allocated `Paint`, `Path`, `DrawEntry` buffer, particle pools
-- **Generation-time placement**: All vegetation positions computed in `generateSeasonalDecorations()` and stored in immutable lists. Draw loop only iterates and renders.
+- **Generation-time placement**: All vegetation positions computed in `generateSeasonalDecorations()` and stored in immutable lists
+- **Decoration baking**: Flowers, mushrooms, and foliage are drawn into per-hill `Bitmap` caches; normal draw reuses the cached layer with a single `drawBitmap()` per hill
 - **Gradient caching**: Hill gradients are keyed by (hillIndex, snowFlag) and only rebuilt when bucketed ambient color changes
-- **Viewport culling**: Decorations outside `[-0.15w, 1.15w]` screen bounds are skipped before any draw call
-- **Change detection**: `reloadSettings()` tracks previous values of all generation-affecting settings; only regenerates when something actually changed
+- **Viewport culling**: Decorations outside `[-0.15w, 1.15w]` screen bounds are skipped during baking
+- **Change detection**: `reloadSettings()` tracks previous values of all 30+ generation-affecting settings; only regenerates when something actually changed
 - **Cell-based determinism**: Viewport resizes don't regenerate unless the visible world range escapes the pre-loaded margin (1.25× buffer)
 
 ## Configuration
