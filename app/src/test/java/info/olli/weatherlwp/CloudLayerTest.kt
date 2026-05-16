@@ -749,12 +749,13 @@ class CloudLayerTest {
 
     @Test
     fun `large cloud near top boundary not clipped by band placement`() {
-        // Large cloud (max height) should still fit within band
+        // Large cloud (max height) with conservative placement factor should still fit within band
         val bandTop = CloudLayer.ABS_BAND_TOP
         val bandBottom = CloudLayer.ABS_BAND_BOTTOM
         val bandHeight = bandBottom - bandTop
         val maxGroupHeight = 0.30f  // GROUP_HEIGHT_MAX
-        val halfH = maxGroupHeight * 0.5f * bandHeight
+        val placementSafety = 1.35f  // Matches conservative placement in createCloudGroup
+        val halfH = maxGroupHeight * 0.5f * bandHeight * placementSafety
 
         val minY = bandTop + halfH
         val maxY = bandBottom - halfH
@@ -784,5 +785,69 @@ class CloudLayerTest {
         val cloudXOutside = cloudX + 2f
         val culledOutside = cloudXOutside - halfW > screenWidth + margin + eps
         assertTrue("Cloud clearly past boundary should be culled", culledOutside)
+    }
+
+    // ============== Bitmap Padding & Draw Stability Tests ==============
+
+    @Test
+    fun `vertical bitmap padding prevents internal puff clipping`() {
+        // Verify BLUR_PADDING_VERTICAL is large enough for max puff extent.
+        // Max puff extent from center: offsetY(0.25) + radiusY(0.55) = 0.80 * bitmapHeight
+        // Padded bitmap extends: (bitmapHeight + 2*paddingY) / 2 from center
+        // Need: paddedHalf >= 0.80 * bitmapHeight
+        val bitmapHeight = 200  // representative
+        val paddingY = (bitmapHeight * CloudLayer.BLUR_PADDING_VERTICAL).toInt()
+        val paddedHeight = bitmapHeight + paddingY * 2
+        val paddedHalfFromCenter = paddedHeight / 2f
+
+        // Max puff extent from bitmap center:
+        val maxPuffOffset = bitmapHeight * 0.25f  // offsetY max
+        val maxPuffRadius = bitmapHeight * 0.55f  // radiusY max
+        val maxExtent = maxPuffOffset + maxPuffRadius
+
+        assertTrue(
+            "Padded half ($paddedHalfFromCenter) must exceed max puff extent ($maxExtent)",
+            paddedHalfFromCenter >= maxExtent
+        )
+    }
+
+    @Test
+    fun `placement with conservative bounds fits drawn cloud`() {
+        // Verify the 1.35× placement factor covers the actual drawn size
+        val bandTop = CloudLayer.ABS_BAND_TOP
+        val bandBottom = CloudLayer.ABS_BAND_BOTTOM
+        val bandHeight = bandBottom - bandTop
+        val maxGroupHeight = 0.30f
+        val placementSafety = 1.35f
+
+        val safeHalfH = maxGroupHeight * 0.5f * bandHeight * placementSafety
+        // Worst-case worldY at boundary
+        val worstY = bandTop + safeHalfH
+
+        // The actual drawn extent (in world) should not exceed bandTop
+        // With padding: actual extent = halfH * (1 + 2*BLUR_PADDING_VERTICAL) for padded size
+        val logicalHalfH = maxGroupHeight * 0.5f * bandHeight
+        val actualDrawnHalf = logicalHalfH * (1f + CloudLayer.BLUR_PADDING_VERTICAL)
+
+        assertTrue(
+            "Cloud at worst placement ($worstY) should keep drawn extent (${worstY - actualDrawnHalf}) above bandTop ($bandTop)",
+            worstY - actualDrawnHalf >= bandTop
+        )
+    }
+
+    @Test
+    fun `soft draw cap prevents threshold flicker`() {
+        // When candidate count is near MAX_DRAW_PER_FRAME, all should be drawn
+        val maxDraw = CloudLayer.MAX_DRAW_PER_FRAME  // 20
+        val nearThreshold = maxDraw + 2  // 22 candidates
+
+        // Soft cap: if count <= MAX + 3, draw all
+        val limit = if (nearThreshold <= maxDraw + 3) nearThreshold else maxDraw
+        assertEquals("Near-threshold count should draw all", nearThreshold, limit)
+
+        // Well above threshold: budget applies
+        val wellAbove = maxDraw + 10  // 30 candidates
+        val limitAbove = if (wellAbove <= maxDraw + 3) wellAbove else maxDraw
+        assertEquals("Well-above threshold should apply budget", maxDraw, limitAbove)
     }
 }

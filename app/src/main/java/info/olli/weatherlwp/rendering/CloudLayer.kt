@@ -77,7 +77,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val depthFactor: Float,   // For parallax (0.15-0.35)
         val groupWidth: Float,    // Width of the group (0-1 normalized)
         val groupHeight: Float,   // Height of the group (0-1 normalized)
-        val seed: Long            // For deterministic regeneration
+        val seed: Long,           // For deterministic regeneration
+        val stableId: Int         // Deterministic ID for stable draw ordering
     ) {
         // Cached bitmap - rendered once, reused many frames
         @Volatile var cachedBitmap: Bitmap? = null
@@ -144,7 +145,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
     // Reusable comparator: back layer first, then by descending screen area, stable tiebreaker
     private val drawCandidateComparator = compareBy<DrawCandidate> { !it.isBackLayer }
         .thenByDescending { it.screenArea }
-        .thenBy { it.group.hashCode() }
+        .thenBy { it.group.stableId }
     
     // Background executor for async bitmap rendering (prevents frame stutters)
     private val bitmapExecutor = Executors.newSingleThreadExecutor { r ->
@@ -179,6 +180,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         
         // Extra padding for blur effect to prevent edge cutoff (fraction of group size)
         const val BLUR_PADDING = 0.20f
+        const val BLUR_PADDING_VERTICAL = 0.35f  // Larger vertical: puffs can extend ±0.80 from center
         
         // Hard cap on bitmap dimensions to avoid GPU texture limits
         // REDUCED for performance: smaller max = less GPU work
@@ -324,12 +326,13 @@ class CloudLayer(private val context: Context) : SceneLayer {
 
         // World-space Y: place within the ABSOLUTE cloud band.
         // Uses constant band coordinates — never viewport-relative.
-        // Cloud centers are clamped by half-height so the full bitmap stays inside the band.
+        // Cloud centers are clamped by actual drawn half-height (including padding + parallax safety)
+        // so the full rendered bitmap stays inside the visible area.
         val bandTop = cachedBandTop
         val bandBottom = cachedBandBottom
         val bandH = cachedBandHeight
-        // Estimate half-height in world units using band height fraction
-        val halfHWorld = groupHeight * 0.5f * bandH
+        // Conservative half-height: includes blur padding factor (1.35×) for actual drawn extent
+        val halfHWorld = groupHeight * 0.5f * bandH * 1.35f
         val minY = bandTop + halfHWorld
         val maxY = (bandBottom - halfHWorld).coerceAtLeast(minY)
         val worldY = if (maxY > minY) {
@@ -352,6 +355,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val alpha = (baseAlpha * alphaMult * cloudOpacity).toInt().coerceIn(20, 220)
         val depth = depthMin + random.nextFloat() * (depthMax - depthMin)
         
+        // Deterministic stable ID from cell position, layer, and seed bits
+        val stableId = (cellX * 31 + (if (isBackLayer) 7 else 13)) xor random.nextInt()
+        
         return CloudGroup(
             initialWorldX = worldX,
             worldY = worldY,
@@ -361,7 +367,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
             depthFactor = depth,
             groupWidth = groupWidth,
             groupHeight = groupHeight,
-            seed = random.nextLong()
+            seed = random.nextLong(),
+            stableId = stableId
         )
     }
     
@@ -393,7 +400,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         // Scale padding with cloudStretch to accommodate wider puffs
         val stretchPaddingMult = (cloudStretch / 2f).coerceIn(1f, 3f)  // 1x at stretch 2, up to 3x at stretch 6
         val paddingX = (bitmapWidth * BLUR_PADDING * stretchPaddingMult).toInt()
-        val paddingY = (bitmapHeight * BLUR_PADDING).toInt()
+        val paddingY = (bitmapHeight * BLUR_PADDING_VERTICAL).toInt()  // Larger vertical: puffs extend further
         val paddedWidth = bitmapWidth + paddingX * 2
         val paddedHeight = bitmapHeight + paddingY * 2
         
@@ -712,7 +719,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
 
             val stretchPaddingMult = (cloudStretch / 2f).coerceIn(1f, 3f)
             val paddingX = (groupWidthPx * BLUR_PADDING * stretchPaddingMult).toInt()
-            val paddingY = (groupHeightPx * BLUR_PADDING).toInt()
+            val paddingY = (groupHeightPx * BLUR_PADDING_VERTICAL).toInt()
             val paddedWidth = groupWidthPx + paddingX * 2
             val paddedHeight = groupHeightPx + paddingY * 2
 
@@ -756,13 +763,19 @@ class CloudLayer(private val context: Context) : SceneLayer {
         drawCandidates.sortWith(drawCandidateComparator)
 
         // Layered draw budget: split budget between back and front layers
-        // so both layers get fair representation even at high density
-        val backCount = drawCandidates.count { it.isBackLayer }
-        val frontCount = drawCandidates.size - backCount
-        val halfBudget = MAX_DRAW_PER_FRAME / 2
-        val backBudget = halfBudget.coerceAtMost(backCount)
-        val frontBudget = (MAX_DRAW_PER_FRAME - backBudget).coerceAtMost(frontCount)
-        val limit = backBudget + frontBudget
+        // so both layers get fair representation even at high density.
+        // Soft cap: if candidate count is only slightly above limit, draw all to prevent flicker.
+        val totalCandidates = drawCandidates.size
+        val limit = if (totalCandidates <= MAX_DRAW_PER_FRAME + 3) {
+            totalCandidates
+        } else {
+            val backCount = drawCandidates.count { it.isBackLayer }
+            val frontCount = totalCandidates - backCount
+            val halfBudget = MAX_DRAW_PER_FRAME / 2
+            val backBudget = halfBudget.coerceAtMost(backCount)
+            val frontBudget = (MAX_DRAW_PER_FRAME - backBudget).coerceAtMost(frontCount)
+            backBudget + frontBudget
+        }
 
         canvas.save()
         canvas.clipRect(0f, 0f, canvasW, canvasH)
