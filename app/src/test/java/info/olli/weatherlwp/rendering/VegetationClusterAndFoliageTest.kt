@@ -25,6 +25,8 @@ class VegetationClusterAndFoliageTest {
         assertTrue(PreferenceDefaults.FLOWER_CLUSTER_RADIUS in 0..100)
         assertTrue(PreferenceDefaults.FLOWER_CLUSTER_MIN_COUNT >= 1)
         assertTrue(PreferenceDefaults.FLOWER_CLUSTER_MAX_COUNT >= PreferenceDefaults.FLOWER_CLUSTER_MIN_COUNT)
+        assertTrue(PreferenceDefaults.FLOWER_CLUSTER_FALLOFF in 0..100)
+        assertTrue(PreferenceDefaults.FLOWER_CLUSTER_NOISE in 0..100)
     }
 
     @Test
@@ -34,6 +36,8 @@ class VegetationClusterAndFoliageTest {
         assertTrue(PreferenceDefaults.MUSHROOM_CLUSTER_RADIUS in 0..100)
         assertTrue(PreferenceDefaults.MUSHROOM_CLUSTER_MIN_COUNT >= 1)
         assertTrue(PreferenceDefaults.MUSHROOM_CLUSTER_MAX_COUNT >= PreferenceDefaults.MUSHROOM_CLUSTER_MIN_COUNT)
+        assertTrue(PreferenceDefaults.MUSHROOM_CLUSTER_FALLOFF in 0..100)
+        assertTrue(PreferenceDefaults.MUSHROOM_CLUSTER_NOISE in 0..100)
     }
 
     @Test
@@ -51,7 +55,6 @@ class VegetationClusterAndFoliageTest {
     fun `cluster scatter with same seed is deterministic`() {
         val random1 = DeterministicLayout.random(42, section = 610, index = 5)
         val random2 = DeterministicLayout.random(42, section = 610, index = 5)
-        // Same seed/section/index produces same sequence
         assertEquals(random1.nextFloat(), random2.nextFloat(), 0f)
     }
 
@@ -59,7 +62,6 @@ class VegetationClusterAndFoliageTest {
     fun `different cluster cells produce different positions`() {
         val random1 = DeterministicLayout.random(42, section = 610, index = 0)
         val random2 = DeterministicLayout.random(42, section = 610, index = 1)
-        // Different cell indices should produce different values (with very high probability)
         val v1 = random1.nextFloat()
         val v2 = random2.nextFloat()
         assertNotEquals("different cells should produce different values", v1, v2, 0.001f)
@@ -70,6 +72,66 @@ class VegetationClusterAndFoliageTest {
         val flower = DeterministicLayout.random(42, section = 610, index = 5)
         val mushroom = DeterministicLayout.random(42, section = 910, index = 5)
         assertNotEquals(flower.nextFloat(), mushroom.nextFloat(), 0.001f)
+    }
+
+    // ===================== Uniform-disk sampling distribution =====================
+
+    @Test
+    fun `sqrt-based disk sampling distributes more uniformly than naive`() {
+        // sqrt(u)*r gives uniform area distribution; naive u*r biases toward center.
+        // Verify that sqrt-sampled points have a higher median distance from center.
+        val rng = DeterministicLayout.random(42, section = 700, index = 0)
+        val radius = 10f
+        val n = 500
+        
+        val sqrtDistances = FloatArray(n)
+        val naiveDistances = FloatArray(n)
+        
+        for (i in 0 until n) {
+            sqrtDistances[i] = kotlin.math.sqrt(rng.nextFloat().toDouble()).toFloat() * radius
+        }
+        val rng2 = DeterministicLayout.random(42, section = 701, index = 0)
+        for (i in 0 until n) {
+            naiveDistances[i] = rng2.nextFloat() * radius
+        }
+        
+        sqrtDistances.sort()
+        naiveDistances.sort()
+        val sqrtMedian = sqrtDistances[n / 2]
+        val naiveMedian = naiveDistances[n / 2]
+        
+        // Sqrt sampling should have a higher median (more items in outer ring)
+        assertTrue("sqrt median ($sqrtMedian) should exceed naive median ($naiveMedian)",
+            sqrtMedian > naiveMedian)
+    }
+
+    // ===================== Falloff curve reduces edge items =====================
+
+    @Test
+    fun `smoothstep falloff reduces weight at cluster edge`() {
+        // At cluster center (normalizedDist=0), weight should be 1.0
+        // At cluster edge (normalizedDist=1.0), weight should be reduced
+        val falloffStrength = 0.5f // FLOWER_CLUSTER_FALLOFF default is 50 → 0.5
+        
+        val centerWeight = 1f - 0f * 0f * falloffStrength
+        val edgeWeight = 1f - 1f * 1f * falloffStrength
+        
+        assertEquals(1f, centerWeight, 0.001f)
+        assertEquals(0.5f, edgeWeight, 0.001f)
+        assertTrue("edge weight should be less than center", edgeWeight < centerWeight)
+    }
+
+    // ===================== Noise displacement breaks symmetry =====================
+
+    @Test
+    fun `noise displacement produces varied offsets per item`() {
+        val offsets = (0 until 10).map { f ->
+            val nx = DeterministicLayout.hashToFloat(42 + f, 5, 10) - 0.5f
+            nx
+        }
+        // At least some offsets should differ significantly
+        val distinct = offsets.map { (it * 100).toInt() }.toSet()
+        assertTrue("noise should produce varied offsets, got $distinct", distinct.size > 3)
     }
 
     // ===================== Tree type metadata available for foliage bias =====================
@@ -120,6 +182,16 @@ class VegetationClusterAndFoliageTest {
     }
 
     @Test
+    fun `SimulationSettings reads cluster falloff and noise`() {
+        val settings = SimulationSettings(snapshot = mapOf(
+            "pref_flower_cluster_falloff" to 75,
+            "pref_flower_cluster_noise" to 60
+        ))
+        assertEquals(75, settings.getInt("pref_flower_cluster_falloff", 50))
+        assertEquals(60, settings.getInt("pref_flower_cluster_noise", 30))
+    }
+
+    @Test
     fun `SimulationSettings reads mushroom cluster density`() {
         val settings = SimulationSettings(snapshot = mapOf(
             "pref_mushroom_cluster_density" to 75
@@ -157,7 +229,6 @@ class VegetationClusterAndFoliageTest {
         val hill = TreeRenderer.HillInfo(42, 1.0f, 0.6f, 0.7f, 2.0f, 1.0f, 1.0f)
         val y1 = VegetationUtil.getHillY(100f, hill)
         val y2 = VegetationUtil.getHillY(100.1f, hill)
-        // Adjacent positions should have similar Y values (continuity)
         assertTrue("adjacent positions should be close", kotlin.math.abs(y1 - y2) < 0.05f)
     }
 

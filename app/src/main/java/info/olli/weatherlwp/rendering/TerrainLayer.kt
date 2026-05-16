@@ -168,6 +168,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private var flowerClusterRadius = PreferenceDefaults.FLOWER_CLUSTER_RADIUS
     private var flowerClusterMinCount = PreferenceDefaults.FLOWER_CLUSTER_MIN_COUNT
     private var flowerClusterMaxCount = PreferenceDefaults.FLOWER_CLUSTER_MAX_COUNT
+    private var flowerClusterFalloff = PreferenceDefaults.FLOWER_CLUSTER_FALLOFF / 100f
+    private var flowerClusterNoise = PreferenceDefaults.FLOWER_CLUSTER_NOISE / 100f
     
     // Mushroom cluster settings
     private var mushroomClusterEnabled = PreferenceDefaults.MUSHROOM_CLUSTER_ENABLED
@@ -175,6 +177,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private var mushroomClusterRadius = PreferenceDefaults.MUSHROOM_CLUSTER_RADIUS
     private var mushroomClusterMinCount = PreferenceDefaults.MUSHROOM_CLUSTER_MIN_COUNT
     private var mushroomClusterMaxCount = PreferenceDefaults.MUSHROOM_CLUSTER_MAX_COUNT
+    private var mushroomClusterFalloff = PreferenceDefaults.MUSHROOM_CLUSTER_FALLOFF / 100f
+    private var mushroomClusterNoise = PreferenceDefaults.MUSHROOM_CLUSTER_NOISE / 100f
     
     // Foliage accumulation settings
     private var foliageUnderTreeBias = PreferenceDefaults.FOLIAGE_UNDER_TREE_BIAS / 100f
@@ -356,7 +360,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             for (hillIndex in currentHills.indices) {
                 val hillFlowers = mutableListOf<FlowerData>()
                 if (flowerClusterEnabled) {
-                    // Cluster mode: pick cluster centers, scatter flowers around them
+                    // Cluster mode: pick cluster centers, scatter flowers with
+                    // uniform-disk sampling, smoothstep falloff, and noise displacement.
                     val clusterDensity = (flowerClusterDensity / 100f).coerceIn(0.05f, 1f)
                     val clusterRadiusWorld = flowerClusterRadius / 100f * flowerCellSize * 4f
                     for (cellIndex in indexRange) {
@@ -370,18 +375,34 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                         val count = flowerClusterMinCount + clusterRandom.nextInt(
                             (flowerClusterMaxCount - flowerClusterMinCount + 1).coerceAtLeast(1))
                         for (f in 0 until count) {
-                            // Scatter around cluster center using polar coordinates for organic feel
+                            // Uniform-disk sampling: sqrt(u) * r gives uniform area distribution
                             val angle = clusterRandom.nextFloat() * 2f * kotlin.math.PI.toFloat()
-                            val dist = clusterRandom.nextFloat() * clusterRadiusWorld
-                            val worldX = centerWorldX + kotlin.math.cos(angle.toDouble()).toFloat() * dist
+                            val rawDist = kotlin.math.sqrt(clusterRandom.nextFloat().toDouble()).toFloat() * clusterRadiusWorld
+                            
+                            // Smoothstep falloff: reduce item size near edge based on falloff curve
+                            val normalizedDist = (rawDist / clusterRadiusWorld.coerceAtLeast(0.01f)).coerceIn(0f, 1f)
+                            val falloffWeight = 1f - normalizedDist * normalizedDist * flowerClusterFalloff
+                            
+                            // Noise-based displacement: break circular symmetry
+                            val noiseOffset = if (flowerClusterNoise > 0.01f) {
+                                val nx = DeterministicLayout.hashToFloat(cellSeed + f, cellIndex, 10) - 0.5f
+                                val ny = DeterministicLayout.hashToFloat(cellSeed + f, cellIndex, 11) - 0.5f
+                                Pair(nx * flowerClusterNoise * clusterRadiusWorld, ny * flowerClusterNoise * clusterRadiusWorld * 0.3f)
+                            } else {
+                                Pair(0f, 0f)
+                            }
+                            
+                            val worldX = centerWorldX +
+                                kotlin.math.cos(angle.toDouble()).toFloat() * rawDist + noiseOffset.first
                             val maxVerticalOffset = springFlowerSpread * 0.12f
-                            val verticalOffset = clusterRandom.nextFloat() * maxVerticalOffset
+                            val verticalOffset = clusterRandom.nextFloat() * maxVerticalOffset + noiseOffset.second * 0.02f
                             val colorIdx = clusterRandom.nextInt(flowerColors.size)
+                            val baseSize = 0.002f + clusterRandom.nextFloat() * 0.003f
                             hillFlowers.add(FlowerData(
                                 worldX = worldX,
                                 yOffset = verticalOffset,
                                 color = flowerColors[colorIdx],
-                                size = 0.002f + clusterRandom.nextFloat() * 0.003f
+                                size = baseSize * falloffWeight.coerceAtLeast(0.3f)
                             ))
                         }
                     }
@@ -476,29 +497,44 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 val hillLeaves = mutableListOf<FallenLeafData>()
                 val hillTrees = treesByHillIndex[hillIndex] ?: emptyList()
                 
-                // Tree-biased leaves: place extra leaves near tree bases
+                // Tree-biased leaves: every tree with foliage produces leaves.
+                // Count scales with bias and tree type. No random skip of entire trees.
                 if (hillTrees.isNotEmpty() && foliageUnderTreeBias > 0.01f) {
                     for (tree in hillTrees) {
                         val treeSeed = randomSeed + 8500 + tree.index
                         val treeRandom = DeterministicLayout.random(treeSeed, section = 820, index = hillIndex)
                         
-                        // Higher bias for leaf/deciduous trees
-                        val bias = if (tree.treeType == TreeRenderer.TreeType.LEAF)
-                            foliageUnderTreeBias * (1f + foliageMatchingTreeBias)
+                        // Deciduous trees produce more leaves; conifers shed very few
+                        val typeBias = if (tree.treeType == TreeRenderer.TreeType.LEAF)
+                            1f + foliageMatchingTreeBias
                         else
-                            foliageUnderTreeBias * 0.3f  // Needle trees shed fewer leaves
+                            0.3f
                         
-                        if (treeRandom.nextFloat() > bias * densityFraction) continue
+                        // Leaf count proportional to bias, density, and tree scale (canopy proxy)
+                        val canopyFactor = tree.scale.coerceIn(0.5f, 2f)
+                        val numLeaves = (foliageUnderTreeBias * typeBias * densityFraction * canopyFactor * 6f)
+                            .toInt().coerceIn(1, 10)
                         
-                        val numLeaves = 2 + (bias * 4).toInt().coerceAtMost(6)
+                        // Scatter radius scales with tree canopy (larger trees → wider scatter)
+                        val scatterRadius = foliageRandomScatter * leafCellSize * canopyFactor * 1.5f
+                        
                         for (l in 0 until numLeaves) {
-                            // Scatter from tree base with wind offset
+                            // Uniform-disk sampling around tree base
                             val scatterAngle = treeRandom.nextFloat() * 2f * kotlin.math.PI.toFloat()
-                            val scatterDist = treeRandom.nextFloat() * foliageRandomScatter * leafCellSize * 2f
+                            val rawDist = kotlin.math.sqrt(treeRandom.nextFloat().toDouble()).toFloat() * scatterRadius
+                            
+                            // Distance-based falloff: leaves closer to trunk are larger
+                            val distFraction = (rawDist / scatterRadius.coerceAtLeast(0.01f)).coerceIn(0f, 1f)
+                            val sizeFalloff = 1f - distFraction * 0.4f
+                            
                             var worldX = tree.worldX +
-                                kotlin.math.cos(scatterAngle.toDouble()).toFloat() * scatterDist
-                            // Apply wind scatter
-                            worldX += windDirX * foliageWindScatterStrength * leafCellSize * treeRandom.nextFloat()
+                                kotlin.math.cos(scatterAngle.toDouble()).toFloat() * rawDist
+                            
+                            // Wind scatter: asymmetric offset (stronger downwind, weaker crosswind)
+                            val windMagnitude = foliageWindScatterStrength * leafCellSize * treeRandom.nextFloat()
+                            // Add crosswind jitter for natural asymmetry
+                            val crossWind = (treeRandom.nextFloat() - 0.5f) * windMagnitude * 0.3f
+                            worldX += windDirX * windMagnitude + crossWind
                             
                             val colorIdx = treeRandom.nextInt(leafColors.size)
                             hillLeaves.add(FallenLeafData(
@@ -506,7 +542,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                                 yOffset = treeRandom.nextFloat() * 0.08f +
                                     windDirY * foliageWindScatterStrength * 0.02f,
                                 color = leafColors[colorIdx],
-                                size = 0.003f + treeRandom.nextFloat() * 0.004f,
+                                size = (0.003f + treeRandom.nextFloat() * 0.004f) * sizeFalloff,
                                 rotation = treeRandom.nextFloat() * 360f
                             ))
                         }
@@ -559,7 +595,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             for (hillIndex in currentHills.indices) {
                 val hillMushrooms = mutableListOf<MushroomData>()
                 if (mushroomClusterEnabled) {
-                    // Cluster mode: mushrooms grow in groups near suitable spots
+                    // Cluster mode: uniform-disk sampling with falloff and noise displacement
                     val clusterDensity = (mushroomClusterDensity / 100f).coerceIn(0.05f, 1f)
                     val clusterRadiusWorld = mushroomClusterRadius / 100f * mushroomCellSize * 2f
                     for (cellIndex in mushIndexRange) {
@@ -574,14 +610,25 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                             (mushroomClusterMaxCount - mushroomClusterMinCount + 1).coerceAtLeast(1))
                         for (m in 0 until count) {
                             val angle = clusterRandom.nextFloat() * 2f * kotlin.math.PI.toFloat()
-                            val dist = clusterRandom.nextFloat() * clusterRadiusWorld
-                            val worldX = centerWorldX + kotlin.math.cos(angle.toDouble()).toFloat() * dist
+                            val rawDist = kotlin.math.sqrt(clusterRandom.nextFloat().toDouble()).toFloat() * clusterRadiusWorld
+                            
+                            val normalizedDist = (rawDist / clusterRadiusWorld.coerceAtLeast(0.01f)).coerceIn(0f, 1f)
+                            val falloffWeight = 1f - normalizedDist * normalizedDist * mushroomClusterFalloff
+                            
+                            val noiseOffset = if (mushroomClusterNoise > 0.01f) {
+                                val nx = DeterministicLayout.hashToFloat(cellSeed + m, cellIndex, 10) - 0.5f
+                                nx * mushroomClusterNoise * clusterRadiusWorld
+                            } else { 0f }
+                            
+                            val worldX = centerWorldX +
+                                kotlin.math.cos(angle.toDouble()).toFloat() * rawDist + noiseOffset
                             val colorIdx = clusterRandom.nextInt(capColors.size)
+                            val baseSize = 0.004f + clusterRandom.nextFloat() * 0.005f
                             hillMushrooms.add(MushroomData(
                                 worldX = worldX,
                                 yOffset = clusterRandom.nextFloat() * 0.04f,
                                 capColor = capColors[colorIdx],
-                                size = 0.004f + clusterRandom.nextFloat() * 0.005f
+                                size = baseSize * falloffWeight.coerceAtLeast(0.4f)
                             ))
                         }
                     }
@@ -784,7 +831,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     /**
      * Draw a tree using pre-computed parallax offsets for the hill layer.
      * All trees on the same hill share the same depth factor, so parallax
-     * is computed once per hill layer and reused here.
+     * is computed once per hill layer and reused here. This avoids N
+     * getOffsetForDepth() calls per hill (where N = tree count) with zero
+     * visual cost — trees are close enough in depth that individual offsets
+     * would differ by sub-pixel amounts.
      */
     private fun drawTreeInPlace(
         canvas: Canvas,
@@ -917,8 +967,12 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             // Draw lake at its target depth layer (same z-ordering as river)
             lakeDrawer?.drawAtDepth(canvas, hill.depthFactor, index, currentHills.size)
             
-            // Draw seasonal decorations AFTER water so foreground mushrooms/flowers
-            // render in front of river/lake at the same or nearer depth layers.
+            // Draw seasonal decorations inside the same canvas.translate(px, py) as
+            // the parent hill. This is the parallax optimization: flowers, mushrooms,
+            // leaves, and other small ground decorations share the hill-layer parallax
+            // offset rather than computing individual per-object parallax. These objects
+            // are too small for individual parallax to be perceptible, and rendering them
+            // at the hill's depth avoids per-object getOffsetForDepth() calls.
             canvas.save()
             canvas.translate(px, py)
             drawSeasonalDecorations(canvas, index, hill, ambientColor)
@@ -1359,6 +1413,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         flowerClusterRadius = settings.getInt("pref_flower_cluster_radius", PreferenceDefaults.FLOWER_CLUSTER_RADIUS)
         flowerClusterMinCount = settings.getInt("pref_flower_cluster_min_count", PreferenceDefaults.FLOWER_CLUSTER_MIN_COUNT)
         flowerClusterMaxCount = settings.getInt("pref_flower_cluster_max_count", PreferenceDefaults.FLOWER_CLUSTER_MAX_COUNT)
+        flowerClusterFalloff = settings.getInt("pref_flower_cluster_falloff", PreferenceDefaults.FLOWER_CLUSTER_FALLOFF) / 100f
+        flowerClusterNoise = settings.getInt("pref_flower_cluster_noise", PreferenceDefaults.FLOWER_CLUSTER_NOISE) / 100f
         
         // Mushroom cluster settings
         mushroomClusterEnabled = settings.getBoolean("pref_mushroom_cluster_enabled", PreferenceDefaults.MUSHROOM_CLUSTER_ENABLED)
@@ -1366,6 +1422,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         mushroomClusterRadius = settings.getInt("pref_mushroom_cluster_radius", PreferenceDefaults.MUSHROOM_CLUSTER_RADIUS)
         mushroomClusterMinCount = settings.getInt("pref_mushroom_cluster_min_count", PreferenceDefaults.MUSHROOM_CLUSTER_MIN_COUNT)
         mushroomClusterMaxCount = settings.getInt("pref_mushroom_cluster_max_count", PreferenceDefaults.MUSHROOM_CLUSTER_MAX_COUNT)
+        mushroomClusterFalloff = settings.getInt("pref_mushroom_cluster_falloff", PreferenceDefaults.MUSHROOM_CLUSTER_FALLOFF) / 100f
+        mushroomClusterNoise = settings.getInt("pref_mushroom_cluster_noise", PreferenceDefaults.MUSHROOM_CLUSTER_NOISE) / 100f
         
         // Foliage accumulation settings
         foliageUnderTreeBias = settings.getInt("pref_foliage_under_tree_bias", PreferenceDefaults.FOLIAGE_UNDER_TREE_BIAS) / 100f

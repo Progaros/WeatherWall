@@ -129,6 +129,8 @@ object PreferenceDefaults {
     const val FLOWER_CLUSTER_RADIUS = 30       // 0-100: cluster scatter radius (world units scaled)
     const val FLOWER_CLUSTER_MIN_COUNT = 3     // 1-10: minimum flowers per cluster
     const val FLOWER_CLUSTER_MAX_COUNT = 8     // 2-20: maximum flowers per cluster
+    const val FLOWER_CLUSTER_FALLOFF = 50      // 0-100: 0=uniform disk, 100=strong smoothstep falloff
+    const val FLOWER_CLUSTER_NOISE = 30        // 0-100: noise-based displacement within cluster
     
     // === Mushroom Cluster Settings ===
     const val MUSHROOM_CLUSTER_ENABLED = false  // Off by default (preserves existing placement)
@@ -136,6 +138,8 @@ object PreferenceDefaults {
     const val MUSHROOM_CLUSTER_RADIUS = 25      // 0-100: cluster scatter radius (world units scaled)
     const val MUSHROOM_CLUSTER_MIN_COUNT = 2    // 1-10: minimum mushrooms per cluster
     const val MUSHROOM_CLUSTER_MAX_COUNT = 5    // 2-15: maximum mushrooms per cluster
+    const val MUSHROOM_CLUSTER_FALLOFF = 50     // 0-100: 0=uniform disk, 100=strong smoothstep falloff
+    const val MUSHROOM_CLUSTER_NOISE = 30       // 0-100: noise-based displacement within cluster
     
     // === Foliage Accumulation Settings ===
     const val FOLIAGE_UNDER_TREE_BIAS = 60      // 0-100: probability boost for placing leaves near trees
