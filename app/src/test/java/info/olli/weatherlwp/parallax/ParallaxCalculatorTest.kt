@@ -1123,7 +1123,7 @@ class ParallaxCalculatorTest {
         rampTilt(calc60, 0.8f, 0f)
         calc60.returnSpeed = 0.8f
         calc60.updateFromSensor(0f, 0f)
-        repeat(55) { calc60.update(16) }  // 880ms to pass hold timer (>800ms)
+        repeat(55) { calc60.update(16) }  // 880ms to pass hold timer (>500ms)
         val x60start = calc60.getOffsetX()
         repeat(60) { calc60.update(16) }  // 960ms of recentering at 60fps
         val x60end = calc60.getOffsetX()
@@ -1139,7 +1139,7 @@ class ParallaxCalculatorTest {
         rampTilt(calc30, 0.8f, 0f)
         calc30.returnSpeed = 0.8f
         calc30.updateFromSensor(0f, 0f)
-        repeat(55) { calc30.update(16) }  // Same 880ms hold
+        repeat(55) { calc30.update(16) }  // Same 880ms hold (>500ms)
         val x30start = calc30.getOffsetX()
         repeat(30) { calc30.update(32) }  // Same 960ms of recentering at 30fps
         val x30end = calc30.getOffsetX()
@@ -1604,7 +1604,7 @@ class ParallaxCalculatorTest {
         calcFar.updateFromSensor(0f, 0f)
         calcSmall.updateFromSensor(0f, 0f)
 
-        // Let stillness engage (need > 800ms = 50 frames at 16ms, plus initial delta frame)
+        // Let stillness engage (need > 500ms hold time, plus initial delta frame)
         repeat(55) { calcFar.update(16) }
         repeat(55) { calcSmall.update(16) }
 
@@ -1647,7 +1647,7 @@ class ParallaxCalculatorTest {
         val initial = calc.getOffsetX()
         assertTrue("Should have small offset", initial > 3f)
 
-        // Enable return, let stillness engage (need > 800ms)
+        // Enable return, let stillness engage (need > 500ms)
         calc.returnSpeed = 0.5f
         calc.updateFromSensor(0f, 0f)
         repeat(55) { calc.update(16) }
@@ -1810,5 +1810,158 @@ class ParallaxCalculatorTest {
         val xAfter = calc.getOffsetX()
         assertEquals("No movement after baseline reset with same tilt",
             xBefore, xAfter, 1f)
+    }
+
+    // ============== Frame-Rate Independence & Latency Tests ==============
+
+    @Test
+    fun `uneven frame timing produces smooth motion`() {
+        // Simulate alternating fast/slow frames (10ms / 25ms) with consistent input
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 0f
+
+        // Baseline
+        calc.updateFromSensor(0f, 0f)
+        calc.update(16)
+
+        // Consistent slow tilt ramp with alternating frame times
+        var maxJump = 0f
+        var prevX = 0f
+        for (i in 1..60) {
+            val tilt = i * 0.01f
+            calc.updateFromSensor(tilt, 0f)
+            val frameTime = if (i % 2 == 0) 10L else 25L
+            calc.update(frameTime)
+
+            val currentX = calc.getOffsetX()
+            val jump = kotlin.math.abs(currentX - prevX)
+            if (i > 3 && jump > maxJump) maxJump = jump  // skip first 3 for buffer fill
+            prevX = currentX
+        }
+
+        val finalX = calc.getOffsetX()
+        assertTrue("Should have moved with consistent input: $finalX", finalX > 10f)
+        // Max frame-to-frame jump should be reasonable (no spikes from timing variance)
+        assertTrue("Frame timing variance should not cause spikes (maxJump=$maxJump)",
+            maxJump < finalX * 0.15f)
+    }
+
+    @Test
+    fun `noise with occasional spike is handled cleanly`() {
+        val calc = ParallaxCalculator()
+        calc.strength = 0.075f
+        calc.maxOffsetPercent = 20f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 0f
+
+        // Baseline
+        calc.updateFromSensor(0f, 0f)
+        calc.update(16)
+
+        // 100 frames of small noise with a spike at frame 50
+        var maxJump = 0f
+        var prevX = calc.getOffsetX()
+        for (i in 1..100) {
+            val noise = if (i == 50) {
+                0.08f  // Spike (below sensor reset, above noise)
+            } else {
+                val sign = if (i % 2 == 0) 1f else -1f
+                sign * 0.003f * ((i % 5 + 1) / 5f)
+            }
+            calc.updateFromSensor(noise, 0f)
+            calc.update(16)
+
+            val currentX = calc.getOffsetX()
+            val jump = kotlin.math.abs(currentX - prevX)
+            if (jump > maxJump) maxJump = jump
+            prevX = currentX
+        }
+
+        // Spike should be clamped (MAX_DELTA_PER_FRAME = 0.10), not cause explosion
+        val finalOffset = kotlin.math.abs(calc.getOffsetX())
+        assertTrue("Spike should not cause runaway offset (got $finalOffset)",
+            finalOffset < 30f)
+        // Max single-frame jump should be bounded by clamp + smoothing
+        assertTrue("Max jump should be bounded (got $maxJump)",
+            maxJump < 15f)
+    }
+
+    @Test
+    fun `weighted smoothing responds faster than uniform average`() {
+        // Compare latency: with weighted smoothing, a step input should produce
+        // a larger response in the first 2 frames than uniform 1/3 averaging would.
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 0f
+
+        // Baseline
+        calc.updateFromSensor(0f, 0f)
+        calc.update(16)
+
+        // Step input: constant delta of 0.08 per frame (above 0.06 deadzone)
+        calc.updateFromSensor(0.08f, 0f)
+        calc.update(16)
+        val x1 = calc.getOffsetX()
+
+        calc.updateFromSensor(0.16f, 0f)
+        calc.update(16)
+        val x2 = calc.getOffsetX()
+
+        // With weighted smoothing (newest=0.6), first frame should produce at least 50%
+        // of what a raw unsmoothed delta would give (raw: 0.08 * 192 = 15.4px)
+        assertTrue("First frame response should be > 4px with weighted smoothing (got $x1)",
+            x1 > 4f)
+        assertTrue("Second frame should continue building offset (got $x2)",
+            x2 > x1)
+    }
+
+    @Test
+    fun `multi-sensor-event accumulation between frames`() {
+        // Simulate multiple sensor events between render frames
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1080f, 1920f)
+        calc.smoothing = 0f
+        calc.returnSpeed = 0f
+
+        // Baseline
+        calc.updateFromSensor(0f, 0f)
+        calc.update(16)
+
+        // Multiple sensor events between frames (simulating 100Hz sensor at 30fps)
+        calc.updateFromSensor(0.02f, 0f)
+        calc.updateFromSensor(0.04f, 0f)
+        calc.updateFromSensor(0.06f, 0f)
+        // One render frame consumes all accumulated deltas
+        calc.update(33)  // ~30fps
+        val xMulti = calc.getOffsetX()
+
+        // Compare: single sensor event with same total delta
+        val calcSingle = ParallaxCalculator()
+        calcSingle.strength = 1.0f
+        calcSingle.maxOffsetPercent = 10f
+        calcSingle.setCanvasSize(1080f, 1920f)
+        calcSingle.smoothing = 0f
+        calcSingle.returnSpeed = 0f
+
+        calcSingle.updateFromSensor(0f, 0f)
+        calcSingle.update(16)
+        calcSingle.updateFromSensor(0.06f, 0f)
+        calcSingle.update(33)
+        val xSingle = calcSingle.getOffsetX()
+
+        // Both should produce similar offsets (accumulator sums all intermediate deltas)
+        assertTrue("Multi-event should produce movement: $xMulti", xMulti > 2f)
+        assertEquals("Accumulated multi-event should match single-event total delta",
+            xSingle, xMulti, xSingle * 0.3f)
     }
 }

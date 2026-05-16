@@ -46,7 +46,7 @@ class ParallaxCalculator {
         private const val STILL_VELOCITY_EXIT = 0.025f
 
         /** Milliseconds of continuous stillness before recenter engages. */
-        private const val STILL_HOLD_MS = 800L
+        private const val STILL_HOLD_MS = 500L
 
         /** Exponential damping rate for return-to-center when close (higher = faster). */
         private const val RECENTER_DAMPING_NEAR = 2.0f
@@ -69,13 +69,26 @@ class ParallaxCalculator {
         /** Cap dt to prevent huge position jumps on app resume. */
         private const val MAX_DT_SECONDS = 0.1f
 
-        /** Number of samples for moving-average delta smoothing. */
+        /** Number of samples for weighted delta smoothing. */
         private const val DELTA_SMOOTHING_SAMPLES = 3
+
+        /** Weights for weighted moving average: newest=0.6, mid=0.3, oldest=0.1. */
+        private val SMOOTHING_WEIGHTS = floatArrayOf(0.6f, 0.3f, 0.1f)
     }
 
     // Lock-free tilt input (sensor thread → render thread)
     private data class TiltPair(val x: Float, val y: Float)
     private val pendingTilt = AtomicReference(TiltPair(0f, 0f))
+
+    // Accumulated sensor deltas between frames (sensor thread → render thread).
+    // Ensures frame-rate independent behavior even under variable pacing.
+    private data class DeltaAccum(val dx: Float, val dy: Float, val count: Int)
+    private val accumulatedDelta = AtomicReference(DeltaAccum(0f, 0f, 0))
+
+    // Previous sensor tilt for computing deltas in updateFromSensor (sensor thread)
+    @Volatile private var sensorPrevX = 0f
+    @Volatile private var sensorPrevY = 0f
+    @Volatile private var sensorHasPrevious = false
 
     // Raw accumulated offset (unlimited, render thread only)
     private var rawPositionX = 0f
@@ -189,11 +202,30 @@ class ParallaxCalculator {
     /**
      * Store latest sensor tilt. Thread-safe (lock-free atomic).
      * Values are absolute tilt in -1..1; the calculator computes deltas internally.
+     *
+     * Also accumulates inter-frame deltas so that multiple sensor events between
+     * render frames are properly summed rather than only sampling the latest value.
      */
     fun updateFromSensor(tiltX: Float, tiltY: Float) {
         val adjustedX = if (invertX) -tiltX else tiltX
         val adjustedY = if (invertY) -tiltY else tiltY
         pendingTilt.set(TiltPair(adjustedX, adjustedY))
+
+        // Accumulate delta from sensor thread for frame-rate independence
+        if (sensorHasPrevious) {
+            val dx = adjustedX - sensorPrevX
+            val dy = adjustedY - sensorPrevY
+            // CAS loop to safely accumulate
+            var prev: DeltaAccum
+            var next: DeltaAccum
+            do {
+                prev = accumulatedDelta.get()
+                next = DeltaAccum(prev.dx + dx, prev.dy + dy, prev.count + 1)
+            } while (!accumulatedDelta.compareAndSet(prev, next))
+        }
+        sensorPrevX = adjustedX
+        sensorPrevY = adjustedY
+        sensorHasPrevious = true
     }
 
     /**
@@ -204,6 +236,10 @@ class ParallaxCalculator {
      */
     fun update(deltaTimeMs: Long = 16L) {
         val dt = (deltaTimeMs.coerceAtLeast(1L) / 1000f).coerceAtMost(MAX_DT_SECONDS)
+
+        // Consume accumulated sensor deltas (frame-rate independent).
+        // If multiple sensor events arrived between frames, their sum is used.
+        val accum = accumulatedDelta.getAndSet(DeltaAccum(0f, 0f, 0))
 
         // Read latest tilt and apply deadzone
         val tilt = pendingTilt.get()
@@ -218,9 +254,17 @@ class ParallaxCalculator {
             return
         }
 
-        // Per-frame tilt delta with noise deadzone
-        val rawDeltaX = filteredTiltX - prevTiltX
-        val rawDeltaY = filteredTiltY - prevTiltY
+        // Use accumulated delta if sensor events arrived AND tilt is outside deadzone,
+        // otherwise fallback to frame-based delta (works for tests and single-event-per-frame scenarios).
+        val rawDeltaX: Float
+        val rawDeltaY: Float
+        if (accum.count > 0 && (filteredTiltX != 0f || filteredTiltY != 0f)) {
+            rawDeltaX = accum.dx
+            rawDeltaY = accum.dy
+        } else {
+            rawDeltaX = filteredTiltX - prevTiltX
+            rawDeltaY = filteredTiltY - prevTiltY
+        }
         prevTiltX = filteredTiltX
         prevTiltY = filteredTiltY
 
@@ -237,6 +281,7 @@ class ParallaxCalculator {
             smoothedDeltaX = 0f
             smoothedDeltaY = 0f
             resetDeltaSmoothing()
+            accumulatedDelta.set(DeltaAccum(0f, 0f, 0))
             return
         }
 
@@ -372,6 +417,10 @@ class ParallaxCalculator {
         isDeviceStill = false
         stillTimerMs = 0L
         pendingTilt.set(TiltPair(0f, 0f))
+        accumulatedDelta.set(DeltaAccum(0f, 0f, 0))
+        sensorPrevX = 0f
+        sensorPrevY = 0f
+        sensorHasPrevious = false
     }
 
     /**
@@ -384,6 +433,10 @@ class ParallaxCalculator {
         smoothedDeltaX = 0f
         smoothedDeltaY = 0f
         resetDeltaSmoothing()
+        accumulatedDelta.set(DeltaAccum(0f, 0f, 0))
+        sensorPrevX = 0f
+        sensorPrevY = 0f
+        sensorHasPrevious = false
     }
 
     /** Tanh soft-limit (public for testing). */
@@ -405,7 +458,8 @@ class ParallaxCalculator {
     }
 
     /**
-     * Insert a delta sample into the ring buffer and compute the moving average.
+     * Insert a delta sample into the ring buffer and compute a weighted average.
+     * Weights: newest=0.6, previous=0.3, oldest=0.1 — reduces latency vs uniform average.
      * Result is stored in [filteredDeltaX] / [filteredDeltaY] to avoid allocation.
      */
     private fun smoothDelta(dx: Float, dy: Float) {
@@ -414,14 +468,30 @@ class ParallaxCalculator {
         deltaBufferIndex = (deltaBufferIndex + 1) % DELTA_SMOOTHING_SAMPLES
         if (deltaBufferCount < DELTA_SMOOTHING_SAMPLES) deltaBufferCount++
 
-        var sumX = 0f
-        var sumY = 0f
-        for (i in 0 until deltaBufferCount) {
-            sumX += deltaBufferX[i]
-            sumY += deltaBufferY[i]
+        if (deltaBufferCount < DELTA_SMOOTHING_SAMPLES) {
+            // Not enough samples yet — use uniform average for stability
+            var sumX = 0f
+            var sumY = 0f
+            for (i in 0 until deltaBufferCount) {
+                sumX += deltaBufferX[i]
+                sumY += deltaBufferY[i]
+            }
+            filteredDeltaX = sumX / deltaBufferCount
+            filteredDeltaY = sumY / deltaBufferCount
+        } else {
+            // Full buffer — weighted average (newest=0.6, mid=0.3, oldest=0.1)
+            // deltaBufferIndex points to next-write slot, so newest is at index-1
+            var sumX = 0f
+            var sumY = 0f
+            for (w in 0 until DELTA_SMOOTHING_SAMPLES) {
+                // w=0 → newest (weight 0.6), w=1 → previous (0.3), w=2 → oldest (0.1)
+                val bufIdx = (deltaBufferIndex - 1 - w + DELTA_SMOOTHING_SAMPLES) % DELTA_SMOOTHING_SAMPLES
+                sumX += deltaBufferX[bufIdx] * SMOOTHING_WEIGHTS[w]
+                sumY += deltaBufferY[bufIdx] * SMOOTHING_WEIGHTS[w]
+            }
+            filteredDeltaX = sumX
+            filteredDeltaY = sumY
         }
-        filteredDeltaX = sumX / deltaBufferCount
-        filteredDeltaY = sumY / deltaBufferCount
     }
 
     private fun movementMultiplier(depthFactor: Float): Float {

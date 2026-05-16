@@ -141,7 +141,7 @@ class ParallaxEdgeAndMovementTest {
         rampTilt(calc, 0.8f, 0f)
         val peakPos = calc.getOffsetX()
 
-        // Start recentering (hold still, need > 800ms = 55 frames at 16ms)
+        // Start recentering (hold still, need > 500ms ≈ 32 frames at 16ms, using 55 for margin)
         repeat(55) {
             calc.updateFromSensor(0.8f, 0f)
             calc.update(16)
