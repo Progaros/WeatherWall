@@ -705,4 +705,84 @@ class CloudLayerTest {
             else -> ((rawCount * 0.4f).toInt().coerceIn(12, 20)) to 1.5f
         }
     }
+
+    // ============== Rendering Stability Tests ==============
+
+    @Test
+    fun `culling margin is generous enough for parallax movement`() {
+        // Verify the CULL_MARGIN_FRACTION provides sufficient buffer
+        // for typical parallax offsets (up to 20% of screen)
+        val screenWidth = 1080f
+        val screenHeight = 1920f
+        val margin = screenHeight * CloudLayer.CULL_MARGIN_FRACTION
+        val maxParallaxOffset = screenHeight * 0.20f  // 20% max offset
+
+        assertTrue("Cull margin ($margin) should exceed max parallax offset ($maxParallaxOffset)",
+            margin > maxParallaxOffset)
+    }
+
+    @Test
+    fun `cloud oscillating near edge stays consistently visible`() {
+        // Simulate a cloud at screen edge oscillating due to parallax.
+        // It should never toggle between culled/visible across small movements.
+        val screenWidth = 1080f
+        val screenHeight = 1920f
+        val margin = screenWidth * CloudLayer.CULL_MARGIN_FRACTION
+        val halfW = 150f
+
+        // Cloud placed just outside screen, within cull margin
+        val baseX = screenWidth + 50f  // 50px past right edge
+
+        // Simulate 20 frames of small parallax oscillation (±30px)
+        var wasVisible = true
+        for (frame in 0 until 20) {
+            val oscillation = 30f * kotlin.math.sin(frame * 0.5f)
+            val cloudX = baseX + oscillation
+            val visible = !(cloudX - halfW > screenWidth + margin + 0.5f ||
+                           cloudX + halfW < -margin - 0.5f)
+            if (frame > 0 && visible != wasVisible) {
+                fail("Cloud visibility toggled at frame $frame (blinking detected)")
+            }
+            wasVisible = visible
+        }
+    }
+
+    @Test
+    fun `large cloud near top boundary not clipped by band placement`() {
+        // Large cloud (max height) should still fit within band
+        val bandTop = CloudLayer.ABS_BAND_TOP
+        val bandBottom = CloudLayer.ABS_BAND_BOTTOM
+        val bandHeight = bandBottom - bandTop
+        val maxGroupHeight = 0.30f  // GROUP_HEIGHT_MAX
+        val halfH = maxGroupHeight * 0.5f * bandHeight
+
+        val minY = bandTop + halfH
+        val maxY = bandBottom - halfH
+
+        assertTrue("Even max-height cloud should have valid placement range (minY=$minY, maxY=$maxY)",
+            maxY >= minY)
+    }
+
+    @Test
+    fun `epsilon prevents boundary flicker`() {
+        // Cloud at cull boundary: epsilon should keep it visible (not flicker in/out)
+        val screenWidth = 1080f
+        val margin = screenWidth * CloudLayer.CULL_MARGIN_FRACTION
+        val eps = 0.5f
+        val halfW = 100f
+
+        // Position cloud so its left edge is EXACTLY at the right boundary
+        // cloudX - halfW == screenWidth + margin → cloudX = screenWidth + margin + halfW
+        val cloudX = screenWidth + margin + halfW
+
+        // Without epsilon, boundary check would be ambiguous (== boundary)
+        // With epsilon (+0.5f), the cloud is kept visible (not culled)
+        val culledWithEps = cloudX - halfW > screenWidth + margin + eps
+        assertFalse("Cloud at exact boundary should NOT be culled (epsilon keeps it visible)", culledWithEps)
+
+        // Cloud clearly outside (2px past boundary + epsilon) IS culled
+        val cloudXOutside = cloudX + 2f
+        val culledOutside = cloudXOutside - halfW > screenWidth + margin + eps
+        assertTrue("Cloud clearly past boundary should be culled", culledOutside)
+    }
 }

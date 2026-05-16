@@ -141,9 +141,10 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val isBackLayer: Boolean
     )
 
-    // Reusable comparator: back layer first, then by descending screen area
+    // Reusable comparator: back layer first, then by descending screen area, stable tiebreaker
     private val drawCandidateComparator = compareBy<DrawCandidate> { !it.isBackLayer }
         .thenByDescending { it.screenArea }
+        .thenBy { it.group.hashCode() }
     
     // Background executor for async bitmap rendering (prevents frame stutters)
     private val bitmapExecutor = Executors.newSingleThreadExecutor { r ->
@@ -725,11 +726,11 @@ class CloudLayer(private val context: Context) : SceneLayer {
             val clampedHalfW = paddedWidth / 2f * clampedDrawScale
             val clampedHalfH = paddedHeight / 2f * clampedDrawScale
 
-            // Early offscreen rejection with small margin to prevent pop-in during parallax
-            val marginX = canvasW * 0.05f
-            val marginY = canvasH * 0.05f
-            if (screenX + clampedHalfW < -marginX || screenX - clampedHalfW > canvasW + marginX) continue
-            if (screenY + clampedHalfH < -marginY || screenY - clampedHalfH > canvasH + marginY) continue
+            // Offscreen rejection: use generous margin to prevent pop-in/blinking during parallax
+            val marginX = canvasW * CULL_MARGIN_FRACTION
+            val marginY = canvasH * CULL_MARGIN_FRACTION
+            if (screenX + clampedHalfW < -marginX - 0.5f || screenX - clampedHalfW > canvasW + marginX + 0.5f) continue
+            if (screenY + clampedHalfH < -marginY - 0.5f || screenY - clampedHalfH > canvasH + marginY + 0.5f) continue
             if (clampedHalfW < 1f || clampedHalfH < 1f) continue
 
             // Queue async bitmap render if not ready
