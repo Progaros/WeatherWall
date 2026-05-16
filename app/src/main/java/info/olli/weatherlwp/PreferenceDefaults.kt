@@ -123,6 +123,27 @@ object PreferenceDefaults {
     const val BUSH_DENSITY = 30      // 0-100 percentage
     const val BUSH_SIZE = 100        // 50-200 percentage scale
     
+    // === Flower Cluster Settings ===
+    const val FLOWER_CLUSTER_ENABLED = false   // Off by default (preserves existing uniform placement)
+    const val FLOWER_CLUSTER_DENSITY = 40      // 0-100: probability of a cell being a cluster center
+    const val FLOWER_CLUSTER_RADIUS = 30       // 0-100: cluster scatter radius (world units scaled)
+    const val FLOWER_CLUSTER_MIN_COUNT = 3     // 1-10: minimum flowers per cluster
+    const val FLOWER_CLUSTER_MAX_COUNT = 8     // 2-20: maximum flowers per cluster
+    
+    // === Mushroom Cluster Settings ===
+    const val MUSHROOM_CLUSTER_ENABLED = false  // Off by default (preserves existing placement)
+    const val MUSHROOM_CLUSTER_DENSITY = 30     // 0-100: probability of a cell being a cluster center
+    const val MUSHROOM_CLUSTER_RADIUS = 25      // 0-100: cluster scatter radius (world units scaled)
+    const val MUSHROOM_CLUSTER_MIN_COUNT = 2    // 1-10: minimum mushrooms per cluster
+    const val MUSHROOM_CLUSTER_MAX_COUNT = 5    // 2-15: maximum mushrooms per cluster
+    
+    // === Foliage Accumulation Settings ===
+    const val FOLIAGE_UNDER_TREE_BIAS = 60      // 0-100: probability boost for placing leaves near trees
+    const val FOLIAGE_MATCHING_TREE_BIAS = 80   // 0-100: extra bias when tree type matches (leaf trees)
+    const val FOLIAGE_WIND_SCATTER_STRENGTH = 40 // 0-100: how far wind pushes foliage from trees
+    const val FOLIAGE_WIND_DIRECTION = 0         // 0-360: wind scatter direction in degrees
+    const val FOLIAGE_RANDOM_SCATTER = 30        // 0-100: random scatter radius around placement point
+    
     // === Tree Type Settings ===
     const val LEAF_TREE_RATIO = 50   // 0-100: percentage of deciduous trees (0=all needle, 100=all leaf)
     

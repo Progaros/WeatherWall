@@ -10,69 +10,63 @@
   <img src="app/src/main/res/logo.png" width="128" alt="WeatherWall Logo">
 </p>
 
-## ✨ Features
+## Features
 
-### 🎨 Visual Effects
-- **Low-poly parallax scene** with layered mountains, hills, and pine trees
+### Visual Effects
+- **Low-poly parallax scene** with layered mountains, hills, and trees (conifer and deciduous)
 - **Dynamic day/night cycle** with smooth sky gradients (dawn, day, dusk, night)
 - **Procedural moon phases** with accurate waxing/waning cycle
-- **Weather effects**: Rain, Snow, Lightning with particle systems
+- **Weather effects**: Rain, Snow, Lightning, Hail with particle systems
 - **Fog overlay** for atmospheric depth
 - **Cloud layers** with wind-driven movement and soft blur
-- **Seasonal events**: Christmas stars (Dec 15-26), New Year fireworks (Dec 27 - Jan 7)
+- **Vignette overlay** (optional)
+- **Seasonal events**: Christmas stars, New Year fireworks, Chinese New Year, St. Patrick's rainbow
+- **River and Lake** water features with flow animation (optional)
 
-### 🦅 Random Events
-Animated wildlife and sky events appear randomly throughout the day:
-- **Day**: Airplanes with contrails, bird flocks, eagles, butterflies, hot air balloons
-- **Night**: Shooting stars, fireflies, owls, UFOs (very rare!)
-- **Any time**: Rabbits hopping, foxes walking
+### Random Events
+Animated wildlife and sky events appear randomly:
+- **Day**: Airplanes with contrails, bird flocks, eagles, butterflies, dragonflies, hot air balloons, ducks
+- **Night**: Shooting stars, fireflies, owls, bats, snowflakes, UFOs (very rare!)
+- **Any time**: Rabbits, foxes, deer, squirrels, frogs, fish jumps
 
-### 🌲 Terrain System
+### Terrain System
 - Layered hills with Perlin noise-based procedural generation
-- Pine trees distributed along hillsides with configurable density and spread
-- Realistic wind-based tree sway with ambient movement
-- Sparsity control for natural treeline gaps
+- Two tree types: **needle (conifer)** and **leaf (deciduous)** with configurable ratio
+- Bushes with berry decorations
+- Seasonal decorations: flowers (with cluster grouping), mushrooms (with cluster grouping), fallen leaves, pinecones, frost overlay
+- **Foliage accumulation**: leaves pile up preferentially under deciduous trees, with configurable wind scatter
+- Realistic wind-based tree and bush sway
+- Configurable hill count, amplitude, frequency, roughness
 
-### 🔋 Battery-First Design
-- Adaptive FPS (10-60 FPS configurable)
+### Battery-First Design
+- Adaptive FPS (idle mode reduces to configurable FPS)
 - Sensors only active when wallpaper is visible
 - Zero per-frame allocations (pre-allocated paints, paths, particle pools)
+- **Parallax optimization**: small decorations (flowers, mushrooms, leaves) share hill-layer parallax instead of individual per-object computation
 - Efficient low-poly rendering without complex shaders
 
-### 🔒 Privacy-First
+### Privacy-First
 - No trackers, analytics, or ads
 - No INTERNET permission required
 - Optional Breezy Weather integration for real weather data
 - All processing done locally on device
 
-### ☀️ Breezy Weather Integration
-WeatherWall can receive real-time weather data from [Breezy Weather](https://github.com/breezy-weather/breezy-weather) (privacy-friendly weather app):
+### Breezy Weather Integration
+WeatherWall can receive real-time weather data from [Breezy Weather](https://github.com/breezy-weather/breezy-weather):
 
 **Supported data:**
-- **Sunrise/sunset times** - Accurate dawn and dusk transitions based on your location
-- **Weather conditions** - Rain, snow, thunderstorm, fog, clouds affect visual effects
-- **Wind speed & direction** - Drives cloud movement and tree sway
-- **Cloud cover** - Adjusts cloud layer density
-- **Moon phase & times** - Accurate lunar cycle display
+- Sunrise/sunset times, weather conditions (rain, snow, thunderstorm, fog, clouds)
+- Wind speed & direction (drives cloud movement and tree sway)
+- Cloud cover, moon phase & times, temperature, humidity, pressure
 
 **Setup:**
 1. Install Breezy Weather from F-Droid or GitHub
 2. Open Breezy Weather → Settings → External Modules
 3. Enable "Send Gadgetbridge data" → "Broadcast to all"
-4. Weather data will be received automatically
 
 Without Breezy Weather, sensible defaults are used (sunrise 6:00, sunset 20:00).
 
-### ⚙️ Customization
-- Parallax strength, smoothing, return speed, and depth separation
-- Sun/moon arc height, celestial size, moon enable/disable
-- Tree density, spread, sparsity, and sway speed
-- Cloud speed, opacity, density, and stretch
-- Individual event toggles (enable/disable specific animals)
-- Mountain and hill count, height, roughness
-- Simulation mode for testing time, weather, wind, moon phase
-
-## 📱 Screenshots
+## Screenshots
 
 <p align="center">
   <img src="docs/screenshots/Screenshot_1.png" width="180" alt="Dawn clouds">
@@ -82,137 +76,130 @@ Without Breezy Weather, sensible defaults are used (sunrise 6:00, sunset 20:00).
   <img src="docs/screenshots/Screenshot_5.png" width="180" alt="Night sky">
 </p>
 
-## 🚀 Quick Start
+## Configuration
 
-### Build from Source
+All settings are accessible through the wallpaper preferences UI. Key configuration options and their defaults:
+
+| Setting | Key | Default | Range | Description |
+|---------|-----|---------|-------|-------------|
+| Parallax Enabled | `pref_parallax_enabled` | `true` | bool | Enable 3D parallax via gyroscope/rotation |
+| Parallax Strength | `pref_parallax_strength` | `16` | 1–100 | Log-scale input sensitivity |
+| Parallax Depth | `pref_parallax_depth` | `70` | 0–100 | Layer separation intensity |
+| Cloud Speed | `pref_cloud_speed` | `45` | 0–100 | Cloud movement speed |
+| Cloud Density | `pref_cloud_density` | `100` | 50–300 | Cloud count multiplier |
+| Tree Density | `pref_tree_density` | `30` | 0–200 | Tree coverage (50=normal, 200=dense) |
+| Leaf Tree Ratio | `pref_leaf_tree_ratio` | `50` | 0–100 | % deciduous trees |
+| Bush Density | `pref_bush_density` | `30` | 0–100 | Bush coverage |
+| Hill Amplitude | `pref_hill_amplitude` | `354` | 0–1000 | Hill vertical height |
+| Hill Frequency | `pref_hill_frequency` | `170` | 25–200 | Hill density pattern |
+| River Enabled | `pref_river_enabled` | `false` | bool | Water river overlay |
+| Lake Enabled | `pref_lake_enabled` | `false` | bool | Lake overlay |
+| **Flower Cluster** | `pref_flower_cluster_enabled` | `false` | bool | Group flowers in clusters |
+| Flower Cluster Density | `pref_flower_cluster_density` | `40` | 0–100 | Cluster center probability |
+| Flower Cluster Radius | `pref_flower_cluster_radius` | `30` | 0–100 | Scatter radius |
+| Flower Cluster Min/Max | `pref_flower_cluster_min/max_count` | `3/8` | 1–20 | Flowers per cluster |
+| **Mushroom Cluster** | `pref_mushroom_cluster_enabled` | `false` | bool | Group mushrooms in clusters |
+| Mushroom Cluster Density | `pref_mushroom_cluster_density` | `30` | 0–100 | Cluster center probability |
+| Mushroom Cluster Radius | `pref_mushroom_cluster_radius` | `25` | 0–100 | Scatter radius |
+| Mushroom Cluster Min/Max | `pref_mushroom_cluster_min/max_count` | `2/5` | 1–15 | Mushrooms per cluster |
+| **Foliage Under Tree Bias** | `pref_foliage_under_tree_bias` | `60` | 0–100 | % boost for leaves near trees |
+| Foliage Matching Tree Bias | `pref_foliage_matching_tree_bias` | `80` | 0–100 | Extra bias for deciduous trees |
+| Foliage Wind Scatter | `pref_foliage_wind_scatter_strength` | `40` | 0–100 | Wind pushes leaves from trees |
+| Foliage Wind Direction | `pref_foliage_wind_direction` | `0` | 0–360 | Scatter direction (degrees) |
+| Foliage Random Scatter | `pref_foliage_random_scatter` | `30` | 0–100 | Random scatter radius |
+
+## Build
+
 ```bash
-# Clone the repository
+# Clone and build
 git clone https://git.olli.info/Oliver/WeatherWall.git
 cd WeatherWall
-
-# Build debug APK
 ./gradlew assembleDebug
-
-# Install on connected device
 adb install app/build/outputs/apk/debug/app-debug.apk
 ```
 
-### Build with Docker (Recommended for CI)
-
-For faster repeated builds, use the pre-cached Docker image.
-**Note:** You must mount your current directory to `/workspace` so the builder can access your source code.
+### Docker Build (Recommended for CI)
 
 ```bash
-# 1. Build the cached builder image (run once or when dependencies change)
+# Build cached builder image (once)
 docker build -t weatherwall-builder -f Dockerfile.build .
 
-# 2. Run commands (mounts current directory to /workspace)
-# Run Unit Tests
+# Run tests
 docker run --rm -v "$PWD":/workspace -w /workspace weatherwall-builder ./gradlew test --no-daemon
 
-# Run Lint Checks
-docker run --rm -v "$PWD":/workspace -w /workspace weatherwall-builder ./gradlew lintDebug --no-daemon
-
-# Build Debug APK
+# Build debug APK
 docker run --rm -v "$PWD":/workspace -w /workspace weatherwall-builder ./gradlew assembleDebug --no-daemon
 ```
 
-## 🧪 Testing
-
-The project includes 600+ unit tests covering all major features:
+## Testing
 
 ```bash
-# Run all tests locally
-./gradlew test
-
-# Run lint checks
-./gradlew lintDebug
-
-# View test report
-open app/build/reports/tests/testDebugUnitTest/index.html
+./gradlew test              # Unit tests
+./gradlew lintDebug         # Lint checks
+./gradlew pitest            # PIT mutation testing
 ```
 
-**CI Pipeline:**
-- Lint checks (Android Lint)
-- Unit tests (600+ tests)
-- Debug APK build
-- Release publishing (on version bump)
-
-**Test Coverage:**
-- `ParallaxSceneTest` - Terrain baseline, parallax factors, color transitions
-- `ParallaxSensorManagerTest` - Rotation matrix, orientation extraction, latency optimization
-- `ParallaxCalculatorTest` - Return speed, tilt thresholds, latency optimization
-- `DayNightCycleTest` - Time periods, sunset colors, manual time override
-- `WeatherRepositoryTest` - Data freshness, staleness detection
-- `SeasonalEventsTest` - Christmas/New Year detection, debug overrides
-- `CloudLayerTest` - Soft edges, density levels, bitmap sizing
-- `SkyLayerTest` - Moon phases, celestial rendering
-- `TreeRenderingTest` - Placement, depth coloring, scaling
-- `HillsTerrainTest` - Layer ordering, parallax matching
-- `BuildConfigTest` - Version codes, surface lifecycle
-
-## 🏗️ Project Structure
+## Architecture
 
 ```
 app/src/main/java/info/olli/weatherlwp/
-├── MainActivity.kt              # Settings activity
+├── PreferenceDefaults.kt           # Single source of truth for all defaults
 ├── parallax/
-│   ├── ParallaxCalculator.kt    # Parallax offset calculations
-│   └── ParallaxSensorManager.kt # Accelerometer-based parallax input
-├── prefs/
-│   └── SettingsFragment.kt      # Preferences UI with event spawning
+│   ├── ParallaxCalculator.kt       # Delta-based parallax physics
+│   └── ParallaxSensorManager.kt    # Gyroscope/rotation vector input
 ├── rendering/
-│   ├── CloudLayer.kt            # Animated cloud shapes with caching
-│   ├── MountainLayer.kt         # Background mountain silhouettes
-│   ├── ParallaxScene.kt         # Main scene renderer and layer orchestration
-│   ├── RandomEventLayer.kt      # Wildlife and sky event management
-│   ├── RenderConstants.kt       # Shared rendering constants
-│   ├── SceneLayer.kt            # Layer interface for all renderers
-│   ├── SeasonalEvents.kt        # Christmas/New Year effects
-│   ├── SkyLayer.kt              # Gradient sky, sun/moon with phases
-│   ├── TerrainLayer.kt          # Hills and trees with wind animation
-│   ├── WeatherLayer.kt          # Rain/Snow/Lightning particles
-│   └── events/                  # Individual event implementations
-│       ├── AirplaneEvent.kt
-│       ├── AlienEvent.kt
-│       ├── BirdFlockEvent.kt
-│       ├── ButterflyEvent.kt
-│       ├── EagleEvent.kt
-│       ├── FireflyEvent.kt
-│       ├── FoxEvent.kt
-│       ├── HotAirBalloonEvent.kt
-│       ├── OwlEvent.kt
-│       ├── RabbitEvent.kt
-│       ├── RandomEvent.kt       # Event interface and EventLayer enum
-│       └── ShootingStarEvent.kt
+│   ├── ParallaxScene.kt            # Main scene orchestrator
+│   ├── SceneLayer.kt               # Layer interface
+│   ├── SkyLayer.kt                 # Sky gradient, sun/moon, stars
+│   ├── CloudLayer.kt               # Animated clouds with caching
+│   ├── MountainLayer.kt            # Background mountain silhouettes
+│   ├── TerrainLayer.kt             # Hills, trees, bushes, seasonal decorations
+│   ├── TreeRenderer.kt             # Needle/leaf tree generation and rendering
+│   ├── BushRenderer.kt             # Bush generation with berries
+│   ├── VegetationUtil.kt           # Shared noise, color, season utilities
+│   ├── RiverLayer.kt / LakeLayer.kt  # Water features
+│   ├── WeatherLayer.kt             # Rain/snow/lightning particles
+│   ├── SeasonalEvents.kt           # Christmas/New Year/St. Patrick's
+│   ├── RandomEventLayer.kt         # Wildlife and sky event management
+│   ├── RenderConstants.kt          # All rendering constants
+│   ├── DeterministicLayout.kt      # Stable seed derivation
+│   ├── WorldViewportTransform.kt   # World-to-screen coordinate mapping
+│   └── events/                     # 20 individual event implementations
 ├── simulation/
-│   ├── SimulationClock.kt       # Time-based day/night calculations
-│   ├── SimulationController.kt  # Main simulation state manager
-│   ├── SimulationSettings.kt    # Preference reader
-│   └── SimulationState.kt       # Immutable state snapshot per frame
+│   ├── SimulationController.kt     # Main simulation state manager
+│   ├── SimulationClock.kt          # Time calculations
+│   ├── SimulationSettings.kt       # Immutable settings snapshot
+│   ├── SimulationState.kt          # Immutable per-frame state
+│   ├── WindSimulator.kt            # Wind gust simulation
+│   └── WeatherHistory.kt           # Snow/rain accumulation tracking
+├── settings/                       # Preferences UI fragments
 ├── wallpaper/
-│   └── WeatherWallpaper.kt      # WallpaperService implementation
+│   └── WeatherWallpaper.kt         # WallpaperService implementation
 └── weather/
-    ├── BreezyWeatherReceiver.kt # Broadcast receiver for weather updates
-    ├── WeatherRepository.kt     # Weather data storage
-    └── WeatherType.kt           # Weather type enumeration
+    ├── BreezyWeatherReceiver.kt    # Broadcast receiver
+    ├── WeatherRepository.kt        # Weather data storage
+    └── WeatherType.kt              # Weather type enumeration
 ```
 
-## 🔧 Requirements
+## Performance Notes
+
+- **Hill-layer parallax sharing**: Trees, bushes, and small decorations on the same hill share a single parallax offset computation instead of per-object calls
+- **Cell-based generation**: All vegetation uses deterministic cell indices for stable placement across viewport changes
+- **Zero-allocation rendering**: Pre-allocated Paint, Path, and particle pool objects
+- **Gradient caching**: Hill gradients are cached and only regenerated on bucketed ambient color changes
+- **Viewport culling**: Off-screen objects are skipped before any draw calls
+
+## Requirements
 
 - Android 8.0+ (API 26)
-- Android Studio Hedgehog or newer (for development)
+- Android Studio Hedgehog or newer
 - Gradle 8.13+
 
-## 📄 License
+## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License — see [LICENSE](LICENSE).
 
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## 🔗 Links
+## Links
 
 - **Repository**: [git.olli.info/Oliver/WeatherWall](https://git.olli.info/Oliver/WeatherWall)
 - **CI/CD**: [ci.olli.info](https://ci.olli.info/repos/4)
