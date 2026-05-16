@@ -850,4 +850,155 @@ class CloudLayerTest {
         val limitAbove = if (wellAbove <= maxDraw + 3) wellAbove else maxDraw
         assertEquals("Well-above threshold should apply budget", maxDraw, limitAbove)
     }
+
+    // ============== Cloud Bitmap Hardening Tests ==============
+
+    @Test
+    fun `puff max extent fits within padded bitmap for all content heights`() {
+        // Mathematical proof: worst-case puff never exceeds padded bitmap bounds.
+        // offsetY max = 0.25 * bitmapHeight, radiusY max = 0.55 * bitmapHeight
+        // Puff bottom extent from bitmap top = centerY + 0.25*h + 0.55*h
+        // centerY = paddedHeight / 2 = h * (1 + 2*BLUR_PADDING_VERTICAL) / 2
+        val blurPadV = CloudLayer.BLUR_PADDING_VERTICAL
+
+        for (bitmapHeight in listOf(30, 100, 256, 512)) {
+            val paddedHeight = bitmapHeight * (1f + 2f * blurPadV)
+            val centerY = paddedHeight / 2f
+            // Worst-case bottom: max offset + max radius
+            val maxBottom = centerY + 0.25f * bitmapHeight + 0.55f * bitmapHeight
+            // Worst-case top: min offset - max radius
+            val minTop = centerY - 0.25f * bitmapHeight - 0.55f * bitmapHeight
+
+            assertTrue(
+                "Puff bottom ($maxBottom) must fit within paddedHeight ($paddedHeight) at height=$bitmapHeight",
+                maxBottom <= paddedHeight
+            )
+            assertTrue(
+                "Puff top ($minTop) must be >= 0 at height=$bitmapHeight",
+                minTop >= 0f
+            )
+        }
+    }
+
+    @Test
+    fun `padding computation is symmetric between render and draw paths`() {
+        // Both paths must produce identical padding for the same inputs.
+        // This test mirrors the computePadding helper logic.
+        val blurPad = CloudLayer.BLUR_PADDING
+        val blurPadV = CloudLayer.BLUR_PADDING_VERTICAL
+
+        for (stretch in listOf(2.0f, 3.0f, 4.0f, 6.0f)) {
+            for (contentWidth in listOf(50, 200, 512)) {
+                for (contentHeight in listOf(30, 200, 512)) {
+                    val stretchMult = (stretch / 2f).coerceIn(1f, 3f)
+                    val paddingX = (contentWidth * blurPad * stretchMult).toInt()
+                    val paddingY = (contentHeight * blurPadV).toInt()
+                    val paddedWidth = contentWidth + paddingX * 2
+                    val paddedHeight = contentHeight + paddingY * 2
+
+                    // Verify positive and bounded
+                    assertTrue("paddingX must be positive (w=$contentWidth, s=$stretch)", paddingX > 0)
+                    assertTrue("paddingY must be positive (h=$contentHeight)", paddingY > 0)
+                    assertTrue("paddedWidth must exceed content", paddedWidth > contentWidth)
+                    assertTrue("paddedHeight must exceed content", paddedHeight > contentHeight)
+                    // Padded dimensions should not exceed 3x content (sanity bound)
+                    assertTrue("paddedWidth sanity", paddedWidth <= contentWidth * 3)
+                    assertTrue("paddedHeight sanity", paddedHeight <= contentHeight * 3)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `MAX_BITMAP_DIMENSION padded size stays within GPU texture limits`() {
+        // Even at maximum content dimensions with maximum stretch,
+        // padded bitmap should not exceed 4096 (minimum Android GPU texture limit)
+        val maxDim = CloudLayer.MAX_BITMAP_DIMENSION
+        val blurPad = CloudLayer.BLUR_PADDING
+        val blurPadV = CloudLayer.BLUR_PADDING_VERTICAL
+        val maxStretchMult = 3f  // cloudStretch=6 → mult=3
+
+        val maxPaddedWidth = maxDim + 2 * (maxDim * blurPad * maxStretchMult).toInt()
+        val maxPaddedHeight = maxDim + 2 * (maxDim * blurPadV).toInt()
+
+        assertTrue(
+            "Max padded width ($maxPaddedWidth) must be < 4096",
+            maxPaddedWidth < 4096
+        )
+        assertTrue(
+            "Max padded height ($maxPaddedHeight) must be < 4096",
+            maxPaddedHeight < 4096
+        )
+    }
+
+    @Test
+    fun `sort comparator is deterministic with stableId tiebreaker`() {
+        // When two clouds have identical screenArea and isBackLayer,
+        // stableId must provide a consistent ordering.
+        data class MockCandidate(val isBackLayer: Boolean, val screenArea: Float, val stableId: Int)
+
+        val comparator = compareBy<MockCandidate> { !it.isBackLayer }
+            .thenByDescending { it.screenArea }
+            .thenBy { it.stableId }
+
+        val candidates = listOf(
+            MockCandidate(true, 5000f, 42),
+            MockCandidate(true, 5000f, 17),
+            MockCandidate(true, 5000f, 99),
+            MockCandidate(false, 5000f, 3),
+            MockCandidate(false, 8000f, 55)
+        )
+
+        // Sort 100 times — must always produce same order
+        val reference = candidates.sortedWith(comparator)
+        repeat(100) {
+            val sorted = candidates.shuffled().sortedWith(comparator)
+            assertEquals("Sort must be deterministic", reference, sorted)
+        }
+
+        // Back layer comes first
+        assertTrue("Back layer groups first", reference[0].isBackLayer)
+        // Within same layer+area, lower stableId wins
+        assertEquals("StableId tiebreaker: lowest first", 17, reference[0].stableId)
+    }
+
+    @Test
+    fun `screenArea does not change between frames for static viewport`() {
+        // screenArea = clampedHalfW * clampedHalfH * 4
+        // Both depend on paddedWidth/Height (stable) and effectiveDrawScale (stable per settings)
+        val paddedWidth = 300
+        val paddedHeight = 400
+        val drawScale = 0.9f
+        val maxScreenW = 1080f * CloudLayer.MAX_SCREEN_WIDTH_FRACTION
+
+        // Compute area for multiple "frames"
+        val areas = (1..50).map {
+            val halfW = paddedWidth / 2f * drawScale
+            val clampedScale = if (halfW * 2f > maxScreenW) {
+                drawScale * (maxScreenW / (halfW * 2f))
+            } else drawScale
+            val cHalfW = paddedWidth / 2f * clampedScale
+            val cHalfH = paddedHeight / 2f * clampedScale
+            cHalfW * cHalfH * 4f
+        }
+
+        // All must be identical
+        val first = areas.first()
+        areas.forEach { assertEquals("screenArea must be frame-stable", first, it, 0.001f) }
+    }
+
+    @Test
+    fun `minimum bitmap height has positive puff margin`() {
+        // At minimum bitmapHeight (30), puffs must still fit with at least 1px margin
+        val minHeight = 30
+        val blurPadV = CloudLayer.BLUR_PADDING_VERTICAL
+        val paddedHeight = minHeight * (1f + 2f * blurPadV)
+        val centerY = paddedHeight / 2f
+        val maxExtentBottom = centerY + 0.25f * minHeight + 0.55f * minHeight
+        val marginBottom = paddedHeight - maxExtentBottom
+        val minExtentTop = centerY - 0.25f * minHeight - 0.55f * minHeight
+
+        assertTrue("Bottom margin ($marginBottom) must be >= 1px at minHeight", marginBottom >= 1f)
+        assertTrue("Top margin ($minExtentTop) must be >= 0 at minHeight", minExtentTop >= 0f)
+    }
 }

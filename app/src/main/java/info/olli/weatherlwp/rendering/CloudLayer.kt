@@ -395,12 +395,16 @@ class CloudLayer(private val context: Context) : SceneLayer {
      * fluffinessMultiplier controls how many puffs make up each cloud (more puffs = denser/fluffier).
      * Clouds are rendered as WHITE - color tint applied at draw time for performance.
      */
+    /** Compute padding for a cloud bitmap. Shared between render and draw paths for consistency. */
+    private fun computePadding(contentWidth: Int, contentHeight: Int, stretch: Float): Pair<Int, Int> {
+        val stretchPaddingMult = (stretch / 2f).coerceIn(1f, 3f)
+        val paddingX = (contentWidth * BLUR_PADDING * stretchPaddingMult).toInt()
+        val paddingY = (contentHeight * BLUR_PADDING_VERTICAL).toInt()
+        return paddingX to paddingY
+    }
+
     private fun renderGroupToBitmap(group: CloudGroup, bitmapWidth: Int, bitmapHeight: Int) {
-        // Add padding for blur effect to prevent edge cutoff
-        // Scale padding with cloudStretch to accommodate wider puffs
-        val stretchPaddingMult = (cloudStretch / 2f).coerceIn(1f, 3f)  // 1x at stretch 2, up to 3x at stretch 6
-        val paddingX = (bitmapWidth * BLUR_PADDING * stretchPaddingMult).toInt()
-        val paddingY = (bitmapHeight * BLUR_PADDING_VERTICAL).toInt()  // Larger vertical: puffs extend further
+        val (paddingX, paddingY) = computePadding(bitmapWidth, bitmapHeight, cloudStretch)
         val paddedWidth = bitmapWidth + paddingX * 2
         val paddedHeight = bitmapHeight + paddingY * 2
         
@@ -413,10 +417,15 @@ class CloudLayer(private val context: Context) : SceneLayer {
             oldBitmap.recycle()
         }
         
-        // Create or reuse bitmap with padding
-        val bitmap = group.cachedBitmap ?: Bitmap.createBitmap(
-            paddedWidth, paddedHeight, Bitmap.Config.ARGB_8888
-        )
+        // Create or reuse bitmap with padding; bail on OOM without crashing
+        val bitmap = try {
+            group.cachedBitmap ?: Bitmap.createBitmap(
+                paddedWidth, paddedHeight, Bitmap.Config.ARGB_8888
+            )
+        } catch (_: OutOfMemoryError) {
+            group.cachedBitmap = null
+            return
+        }
         
         val canvas = Canvas(bitmap)
         canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
@@ -717,9 +726,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
             val groupHeightPx = (group.groupHeight * heightRef).toInt()
                 .coerceIn(30, effectiveMaxDimension)
 
-            val stretchPaddingMult = (cloudStretch / 2f).coerceIn(1f, 3f)
-            val paddingX = (groupWidthPx * BLUR_PADDING * stretchPaddingMult).toInt()
-            val paddingY = (groupHeightPx * BLUR_PADDING_VERTICAL).toInt()
+            val (paddingX, paddingY) = computePadding(groupWidthPx, groupHeightPx, cloudStretch)
             val paddedWidth = groupWidthPx + paddingX * 2
             val paddedHeight = groupHeightPx + paddingY * 2
 
