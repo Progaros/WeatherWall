@@ -61,7 +61,7 @@ class ParallaxCalculator {
         private const val MAX_DELTA_PER_FRAME = 0.10f
 
         /** Per-frame delta deadzone: deltas smaller than this are zeroed to suppress sensor noise. */
-        private const val NOISE_EPSILON = 0.0025f
+        private const val NOISE_EPSILON = 0.0015f
 
         /** Only treat as sensor reset if delta exceeds this (much larger than any tilt). */
         private const val SENSOR_RESET_THRESHOLD = 0.6f
@@ -72,14 +72,11 @@ class ParallaxCalculator {
         /** Number of samples for weighted delta smoothing. */
         private const val DELTA_SMOOTHING_SAMPLES = 3
 
-        /** Weights for weighted moving average: newest=0.7, mid=0.2, oldest=0.1. */
-        private val SMOOTHING_WEIGHTS = floatArrayOf(0.7f, 0.2f, 0.1f)
+        /** Weights for weighted moving average: newest=0.75, mid=0.2, oldest=0.05. */
+        private val SMOOTHING_WEIGHTS = floatArrayOf(0.75f, 0.2f, 0.05f)
 
-        /** Max accumulated delta magnitude per frame (prevents drift from many tiny events). */
-        private const val MAX_ACCUMULATED_DELTA = 0.15f
-
-        /** Accumulated deltas below this magnitude are zeroed (suppresses drift when still). */
-        private const val ACCUM_EPSILON = 0.001f
+        /** Max accumulated delta magnitude per frame (prevents huge jumps from burst events). */
+        private const val MAX_ACCUMULATED_DELTA = 0.25f
     }
 
     // Lock-free tilt input (sensor thread → render thread)
@@ -275,12 +272,8 @@ class ParallaxCalculator {
                 prevTiltX = filteredTiltX
                 prevTiltY = filteredTiltY
                 return
-            } else if (accumMag < ACCUM_EPSILON) {
-                // Too small to be intentional — treat as noise
-                rawDeltaX = 0f
-                rawDeltaY = 0f
             } else if (accumMag > MAX_ACCUMULATED_DELTA) {
-                // Clamp accumulated magnitude to prevent drift from many tiny events
+                // Clamp accumulated magnitude to prevent huge jumps from burst events
                 val clamp = MAX_ACCUMULATED_DELTA / accumMag
                 rawDeltaX = accum.dx * clamp
                 rawDeltaY = accum.dy * clamp
@@ -319,20 +312,11 @@ class ParallaxCalculator {
             deltaTiltY *= clampScale
         }
 
-        // Normalize deltas to 16ms-equivalent before smoothing buffer.
-        // This ensures smoothing produces consistent results regardless of frame timing.
-        val frameNorm = 16f / deltaTimeMs.coerceAtLeast(1L).toFloat()
-        val normDeltaX = deltaTiltX * frameNorm
-        val normDeltaY = deltaTiltY * frameNorm
-
         // Moving-average smoothing: reduces high-frequency sensor noise
         // while preserving intentional movement direction and magnitude.
-        smoothDelta(normDeltaX, normDeltaY)
-
-        // Scale smoothed output back to actual frame duration
-        val frameScale = deltaTimeMs.coerceAtLeast(1L).toFloat() / 16f
-        deltaTiltX = filteredDeltaX * frameScale
-        deltaTiltY = filteredDeltaY * frameScale
+        smoothDelta(deltaTiltX, deltaTiltY)
+        deltaTiltX = filteredDeltaX
+        deltaTiltY = filteredDeltaY
 
         // Stillness hysteresis
         if (isDeviceStill) {
@@ -403,7 +387,7 @@ class ParallaxCalculator {
             val maxDist = effectiveMaxOffset * kotlin.math.max(hComp, vComp)
             val rawDist = kotlin.math.sqrt(rawPositionX * rawPositionX + rawPositionY * rawPositionY)
             val distanceRatio = if (maxDist > 0f) (rawDist / maxDist).coerceIn(0f, 1f) else 0f
-            val rate = (RECENTER_DAMPING_NEAR + distanceRatio * (RECENTER_DAMPING_FAR - RECENTER_DAMPING_NEAR)) * returnSpeed
+            val rate = (RECENTER_DAMPING_NEAR + distanceRatio * distanceRatio * (RECENTER_DAMPING_FAR - RECENTER_DAMPING_NEAR)) * returnSpeed
             val t = 1f - exp(-rate * dt)
             rawPositionX *= (1f - t)
             rawPositionY *= (1f - t)
@@ -500,7 +484,7 @@ class ParallaxCalculator {
 
     /**
      * Insert a delta sample into the ring buffer and compute a weighted average.
-     * Weights: newest=0.7, previous=0.2, oldest=0.1 — reduces latency vs uniform average.
+     * Weights: newest=0.75, previous=0.2, oldest=0.05 — reduces latency vs uniform average.
      * Result is stored in [filteredDeltaX] / [filteredDeltaY] to avoid allocation.
      */
     private fun smoothDelta(dx: Float, dy: Float) {
