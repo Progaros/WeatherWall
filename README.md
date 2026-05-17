@@ -113,10 +113,10 @@ Decorations are split into two categories based on whether they change per frame
 | **Dynamic** | Frost, wind-skewed trees, bushes | ❌ No | Frost follows `dynamicSnowLevel` every frame; trees/bushes need individual wind sway |
 
 **Baking flow** (`bakeDecorationBitmaps()`):
-1. One `Bitmap` per hill, dimensions `(width × 1.3) × (height − topY)` — the 15% left/right margin absorbs parallax headroom
+1. One `Bitmap` per hill, width `(width × 1.3)` — the 15% left/right margin absorbs the full parallax X range; height = `height − (hill.heightOffset − 0.15) × height`, sized individually per hill so background hills get larger bitmaps than foreground hills
 2. Ambient tint and season weights are baked into pixel colors at generation time
-3. The bitmap is drawn at `(−width×0.15, topY)` in the already-translated hill canvas so parallax is inherited from the parent hill layer with no extra computation
-4. On `OutOfMemoryError`, the bitmap slot stays null and the hill falls back to per-object drawing
+3. The bitmap is drawn at `(−width×0.15, perHillTopY)` in the already-translated hill canvas so parallax is inherited from the parent hill layer with no extra computation
+4. On `OutOfMemoryError`, the bitmap slot stays null, the hill falls back to per-object drawing, and further retries are suppressed until decoration settings or screen size change
 
 **Cache invalidation** — bitmaps are regenerated when any of these change:
 - World seed, terrain geometry, screen size/orientation
@@ -124,7 +124,7 @@ Decorations are split into two categories based on whether they change per frame
 - Ambient color bucket (same bucketing as hill gradients)
 - Any decoration setting: density, cluster radius/min/max/falloff/noise, foliage bias, wind scatter, wind direction
 
-**Memory**: ~6 MB per hill at 1080×1920 with `hillStartY=0.60`; 5 hills ≈ 30 MB. Bitmaps are recycled before replacement and in `destroy()`.
+**Memory**: Per-hill bitmap heights vary by hill depth — background hills (e.g., `heightOffset=0.60`) are tallest, foreground hills (e.g., `heightOffset=0.95`) are shortest. At 1080×2400 with 5 hills: ~24 MB total (vs ~35 MB with uniform height). Bitmaps are recycled before replacement and in `destroy()`.
 
 ### Performance Design
 

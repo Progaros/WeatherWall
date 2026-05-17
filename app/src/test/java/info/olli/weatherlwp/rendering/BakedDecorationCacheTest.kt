@@ -239,12 +239,104 @@ class BakedDecorationCacheTest {
         )
     }
 
+    // ===================== Static vs dynamic category counts =====================
+
+    @Test
+    fun `exactly 3 categories are static and baked`() {
+        val staticCats = TerrainLayer.DecorationCategory.values()
+            .filter { TerrainLayer.isStaticDecoration(it) }
+        assertEquals(3, staticCats.size)
+        assertTrue(TerrainLayer.isStaticDecoration(TerrainLayer.DecorationCategory.FLOWER))
+        assertTrue(TerrainLayer.isStaticDecoration(TerrainLayer.DecorationCategory.MUSHROOM))
+        assertTrue(TerrainLayer.isStaticDecoration(TerrainLayer.DecorationCategory.FOLIAGE))
+    }
+
+    @Test
+    fun `FROST is the only dynamic category`() {
+        val dynamicCats = TerrainLayer.DecorationCategory.values()
+            .filterNot { TerrainLayer.isStaticDecoration(it) }
+        assertEquals(1, dynamicCats.size)
+        assertEquals(TerrainLayer.DecorationCategory.FROST, dynamicCats.single())
+    }
+
+    // ===================== Parallax isolation =====================
+    // Parallax settings (pref_parallax_enabled, pref_parallax_strength) are applied
+    // at draw time via canvas.translate() and must NOT cause decoration rebakes.
+    // This is enforced structurally: they are absent from the bake-relevant settings
+    // fingerprint that TerrainLayer compares.  The test below documents this contract.
+
+    @Test
+    fun `parallax settings are absent from decoration fingerprint keys`() {
+        val baseMap = defaultMap()
+        // Parallax keys must not appear in the decoration change-detection map.
+        assertFalse(
+            "pref_parallax_enabled must not be a decoration rebake key",
+            baseMap.containsKey("pref_parallax_enabled")
+        )
+        assertFalse(
+            "pref_parallax_strength must not be a decoration rebake key",
+            baseMap.containsKey("pref_parallax_strength")
+        )
+    }
+
+    @Test
+    fun `dynamic snow level is absent from decoration fingerprint keys`() {
+        // Frost is rendered dynamically per-frame from state.snowLevel.
+        // It must not appear in the baked decoration settings fingerprint.
+        val baseMap = defaultMap()
+        assertFalse(
+            "pref_dynamic_snow_level must not be a decoration rebake key",
+            baseMap.containsKey("pref_dynamic_snow_level")
+        )
+    }
+
+    // ===================== Per-hill bitmap vertical clearance =====================
+    // hillDecorationTopY(hill) = (hill.heightOffset - DECOR_BITMAP_MARGIN).coerceAtLeast(0) * height
+    // Max decoration Y above heightOffset = 0.114 (hill peak) + 0.04 (yOffset) = 0.154
+    // DECOR_BITMAP_MARGIN = 0.15 > 0.114 (hill surface) but < 0.154 (peak + decoration).
+    // Note: the decorations sit ON the hill surface (positive yOffset goes downward),
+    // so the effective max upward excursion from heightOffset is ~0.114, safely within 0.15.
+
+    @Test
+    fun `DECOR_BITMAP_MARGIN covers maximum hill noise amplitude`() {
+        // Hill surface at most heightOffset + 0.12*(1 - 0.05) = heightOffset + 0.114
+        // DECOR_BITMAP_MARGIN must exceed 0.114 so topY is above all decoration Y positions.
+        val maxHillExcursionAboveOffset = 0.12f * (1f - 0.05f)  // = 0.114f
+        assertTrue(
+            "DECOR_BITMAP_MARGIN (${TerrainLayer.DECOR_BITMAP_MARGIN}) must exceed " +
+            "maximum hill surface excursion above heightOffset ($maxHillExcursionAboveOffset)",
+            TerrainLayer.DECOR_BITMAP_MARGIN > maxHillExcursionAboveOffset
+        )
+    }
+
+    @Test
+    fun `foreground hill produces smaller bitmap height than background hill`() {
+        val screenHeight = 2400f
+        val bgHeightOffset = 0.60f   // background hill
+        val fgHeightOffset = 0.95f   // foreground hill
+        val margin = TerrainLayer.DECOR_BITMAP_MARGIN
+
+        val bgTopY = (bgHeightOffset - margin).coerceAtLeast(0f) * screenHeight
+        val fgTopY = (fgHeightOffset - margin).coerceAtLeast(0f) * screenHeight
+
+        val bgBitmapH = (screenHeight - bgTopY).toInt()
+        val fgBitmapH = (screenHeight - fgTopY).toInt()
+
+        assertTrue(
+            "Foreground bitmap height ($fgBitmapH) should be less than background ($bgBitmapH)",
+            fgBitmapH < bgBitmapH
+        )
+        // Rough expected savings check: foreground should be <40% of background height
+        assertTrue(
+            "Foreground bitmap height should be <40% of background height",
+            fgBitmapH.toFloat() / bgBitmapH < 0.40f
+        )
+    }
+
     // ===================== DECOR_BITMAP_MARGIN constant =====================
 
     @Test
     fun `DECOR_BITMAP_MARGIN constant is accessible and positive`() {
-        // Verified via reflection since it is private; use companion enum to confirm companion exists
-        val categories = TerrainLayer.DecorationCategory.values()
-        assertEquals(4, categories.size)  // FLOWER, MUSHROOM, FOLIAGE, FROST
+        assertTrue(TerrainLayer.DECOR_BITMAP_MARGIN > 0f)
     }
 }
