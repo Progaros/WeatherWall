@@ -1,6 +1,6 @@
 # WeatherWall
 
-https://ci.olli.info/api/badges/4/status.svg](https://ci.olli.info/repos/4)
+[![Build Status](https://ci.olli.info/api/badges/4/status.svg)](https://ci.olli.info/repos/4)
 
 📥 **https://git.olli.info/Oliver/WeatherWall/releases/latest**
 
@@ -9,17 +9,17 @@ Android live wallpaper with a low-poly procedural landscape, weather effects, se
 No analytics. No internet permission.
 
 <p align="center">
-  app/src/main/res/logo.png
+  <img src="app/src/main/res/logo.png" width="128" alt="WeatherWall Logo">
 </p>
 
 ## Screenshots
 
 <p align="center">
-  docs/screenshots/Screenshot_1.png
-  docs/screenshots/Screenshot_2.png
-  docs/screenshots/Screenshot_3.png
-  docs/screenshots/Screenshot_4.png
-  docs/screenshots/Screenshot_5.png
+  <img src="docs/screenshots/Screenshot_1.png" width="180" alt="Dawn clouds">
+  <img src="docs/screenshots/Screenshot_2.png" width="180" alt="Clear day">
+  <img src="docs/screenshots/Screenshot_3.png" width="180" alt="Snowy day">
+  <img src="docs/screenshots/Screenshot_4.png" width="180" alt="Rainy dusk">
+  <img src="docs/screenshots/Screenshot_5.png" width="180" alt="Night sky">
 </p>
 
 ## Features
