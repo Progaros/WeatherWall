@@ -59,6 +59,13 @@ class WeatherWallpaper : WallpaperService() {
         // Track atmosphere phase for notifyColorsChanged()
         private var lastAtmospherePhase = -1
 
+        private fun fallbackSkyClearColor(phase: Int): Int = when (phase) {
+            1 -> RenderConstants.SKY_DAWN_TOP
+            2 -> RenderConstants.SKY_DAY_TOP
+            3 -> RenderConstants.SKY_DUSK_TOP
+            else -> RenderConstants.SKY_NIGHT_TOP
+        }
+
         // Preferences
         private var targetFps = 30
 
@@ -406,8 +413,8 @@ class WeatherWallpaper : WallpaperService() {
                     return
                 }
 
-                // Base black
-                canvas.drawColor(Color.BLACK)
+                // Clear canvas with sky-matched color (defensive: invisible if overscan is correct)
+                canvas.drawColor(fallbackSkyClearColor(lastAtmospherePhase))
 
                 // Parallax scene (sky, clouds, mountains, trees, weather overlays, seasonal)
                 // Pass actual frame delta for accurate physics/smoothing

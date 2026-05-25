@@ -294,9 +294,26 @@ data class SimulationState(
             WeatherType.THUNDERSTORM -> 45
             // Fog still needs full coverage for atmospheric effect
             WeatherType.FOG -> 50
-            // All other weather types: use cloudCover data from Breezy Weather
-            // This includes RAIN, SNOW, HAIL - they don't automatically create clouds
-            else -> cloudCoverToCloudCount(cloudCover)
+            // Other weather types: use cloudCover, but enforce a weather-appropriate
+            // minimum so missing/incomplete API cover data still looks correct.
+            else -> cloudCoverToCloudCount(effectiveAutoCloudCover(weather, cloudCover))
+        }
+    }
+
+    /**
+     * Enforce minimum cloud cover based on weather type.
+     * Weather APIs may report 0% cover even for CLOUDY/OVERCAST conditions
+     * (missing data or incomplete report). This ensures the visual matches
+     * the weather type regardless of API data quality.
+     */
+    internal fun effectiveAutoCloudCover(weather: WeatherType, cloudCover: Float): Float {
+        val cover = cloudCover.coerceIn(0f, 1f)
+        return when (weather) {
+            WeatherType.OVERCAST -> cover.coerceAtLeast(0.90f)
+            WeatherType.CLOUDY -> cover.coerceAtLeast(0.72f)
+            WeatherType.PARTLY_CLOUDY -> cover.coerceAtLeast(0.35f)
+            WeatherType.RAIN, WeatherType.SNOW, WeatherType.HAIL -> cover.coerceAtLeast(0.55f)
+            else -> cover
         }
     }
     

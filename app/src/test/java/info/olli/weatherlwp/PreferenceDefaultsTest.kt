@@ -75,6 +75,8 @@ class PreferenceDefaultsTest {
             
             // Tree/Terrain settings
             "pref_tree_density" to PreferenceDefaults.TREE_DENSITY,
+            "pref_tree_spread" to PreferenceDefaults.TREE_SPREAD,
+            "pref_tree_sparsity" to PreferenceDefaults.TREE_SPARSITY,
             "pref_tree_size_randomness" to PreferenceDefaults.TREE_SIZE_RANDOMNESS,
             "pref_tree_color_variation" to PreferenceDefaults.TREE_COLOR_VARIATION,
             "pref_tree_sway_speed" to PreferenceDefaults.TREE_SWAY_SPEED,

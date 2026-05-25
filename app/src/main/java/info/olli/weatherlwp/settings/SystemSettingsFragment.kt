@@ -1,6 +1,8 @@
 package info.olli.weatherlwp.settings
 
 import android.os.Bundle
+import androidx.appcompat.app.AlertDialog
+import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import info.olli.weatherlwp.R
 
@@ -15,6 +17,29 @@ class SystemSettingsFragment : PreferenceFragmentCompat() {
         migrateIdleTimeoutPreference()
         
         setPreferencesFromResource(R.xml.pref_system, rootKey)
+
+        findPreference<Preference>("pref_reset_defaults")?.setOnPreferenceClickListener {
+            showResetConfirmationDialog()
+            true
+        }
+    }
+
+    private fun showResetConfirmationDialog() {
+        AlertDialog.Builder(requireContext())
+            .setTitle("Reset All Settings")
+            .setMessage("This will restore all preferences to their default values. This cannot be undone.")
+            .setPositiveButton("Reset") { _, _ ->
+                SettingsResetManager.resetAllToDefaults(requireContext())
+                // Reload this fragment to reflect the changes
+                preferenceScreen.removeAll()
+                setPreferencesFromResource(R.xml.pref_system, null)
+                findPreference<Preference>("pref_reset_defaults")?.setOnPreferenceClickListener {
+                    showResetConfirmationDialog()
+                    true
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
     
     /**

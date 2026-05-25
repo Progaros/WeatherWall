@@ -55,4 +55,11 @@
             app:fragment="info.olli.weatherlwp.settings.SystemAboutFragment" />
     </PreferenceCategory>
 
+    <PreferenceCategory android:title="Maintenance">
+        <Preference
+            android:key="pref_reset_defaults"
+            android:title="Reset All Settings"
+            android:summary="Restore all preferences to defaults" />
+    </PreferenceCategory>
+
 </PreferenceScreen>

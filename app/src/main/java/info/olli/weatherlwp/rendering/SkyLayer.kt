@@ -286,13 +286,22 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         // Use getOffsetForDepth for proper perspective support
         // PARALLAX_SKY is the depth factor (0 = background, 1 = foreground)
         val (skyPx, skyPy) = parallaxCalculator.getOffsetForDepth(RenderConstants.PARALLAX_SKY)
-        
-        // Sky moves opposite to create depth illusion (infinite distance)
-        val overscan = 300f + abs(skyPx) * 0.4f + abs(skyPy) * 0.4f
+
+        // Sky draw rect must cover the viewport even at maximum translate offset.
+        // Since the sky layer has the highest parallax multiplier (lowest depth = most
+        // movement with perspective=1.0), its own max offset is the relevant bound.
+        val skyMax = parallaxCalculator.getMaxOffsetForDepth(RenderConstants.PARALLAX_SKY)
+        val safeRect = LayerViewportMath.computeParallaxSafeDrawRect(
+            viewportWidth = width,
+            viewportHeight = height,
+            maxOffsetX = skyMax.first,
+            maxOffsetY = skyMax.second,
+            safetyPx = 4f
+        )
         
         canvas.save()
         canvas.translate(skyPx, skyPy)
-        canvas.drawRect(-overscan, -overscan, width + overscan, height + overscan, skyPaint)
+        canvas.drawRect(safeRect, skyPaint)
         canvas.restore()
 
         // Stars visible at night, dusk, and dawn (fading as sunrise approaches)

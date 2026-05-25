@@ -25,7 +25,7 @@
             android:key="pref_parallax_max_offset"
             android:title="Max Movement"
             android:summary="Scene shift as % of screen height (2-40%)"
-            android:defaultValue="40"
+            android:defaultValue="30"
             android:max="40"
             app:min="2"
             app:showSeekBarValue="true"

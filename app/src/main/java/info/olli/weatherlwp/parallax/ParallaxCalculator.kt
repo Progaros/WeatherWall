@@ -1,5 +1,6 @@
 package info.olli.weatherlwp.parallax
 
+import info.olli.weatherlwp.BuildConfig
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.exp
 import kotlin.math.pow
@@ -400,6 +401,15 @@ class ParallaxCalculator {
         val maxDist = effectiveMaxOffset * kotlin.math.max(hComp, vComp)
         applyRadialSoftLimit(maxDist)
 
+        // Debug validation: position must never exceed soft-limit bound
+        if (BuildConfig.DEBUG) {
+            val posMag = kotlin.math.sqrt(positionX * positionX + positionY * positionY)
+            if (posMag > maxDist + 1f) {
+                android.util.Log.w("ParallaxCalc",
+                    "Position exceeded max: |pos|=$posMag > max=$maxDist")
+            }
+        }
+
         // Snap to zero
         val rawLen = kotlin.math.sqrt(rawPositionX * rawPositionX + rawPositionY * rawPositionY)
         if (rawLen < SNAP_EPSILON) {
@@ -418,14 +428,42 @@ class ParallaxCalculator {
 
     fun getOffsetForDepth(depthFactor: Float): Pair<Float, Float> {
         val mult = movementMultiplier(depthFactor)
-        return Pair(curvedOffset(positionX, mult), curvedOffset(positionY, mult))
+        val max = getMaxOffsetForDepth(depthFactor)
+        val x = curvedOffset(positionX, mult).coerceIn(-max.first, max.first)
+        val y = curvedOffset(positionY, mult).coerceIn(-max.second, max.second)
+        return Pair(x, y)
     }
 
-    fun getOffsetXForDepth(depthFactor: Float): Float =
-        curvedOffset(positionX, movementMultiplier(depthFactor))
+    fun getOffsetXForDepth(depthFactor: Float): Float {
+        val max = getMaxOffsetForDepth(depthFactor)
+        return curvedOffset(positionX, movementMultiplier(depthFactor)).coerceIn(-max.first, max.first)
+    }
 
-    fun getOffsetYForDepth(depthFactor: Float): Float =
-        curvedOffset(positionY, movementMultiplier(depthFactor))
+    fun getOffsetYForDepth(depthFactor: Float): Float {
+        val max = getMaxOffsetForDepth(depthFactor)
+        return curvedOffset(positionY, movementMultiplier(depthFactor)).coerceIn(-max.second, max.second)
+    }
+
+    /**
+     * Conservative max per-axis offset for a layer depth.
+     * Used by render layers to compute overscan that is guaranteed to cover the viewport.
+     */
+    fun getMaxOffsetForDepth(depthFactor: Float): Pair<Float, Float> {
+        val effectiveMaxOffset = getEffectiveMaxOffset()
+        val mult = movementMultiplier(depthFactor)
+
+        val hComp: Float
+        val vComp: Float
+        if (canvasWidth >= canvasHeight) {
+            hComp = 1f
+            vComp = aspectRatioCompensation
+        } else {
+            hComp = aspectRatioCompensation
+            vComp = 1f
+        }
+
+        return Pair(effectiveMaxOffset * hComp * mult, effectiveMaxOffset * vComp * mult)
+    }
 
     /** Reset visual offset to center AND clear input baseline. */
     fun reset() {

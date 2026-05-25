@@ -84,6 +84,18 @@ class TreeRenderer {
     companion object {
         /** World-space cell size for tree placement. ~10 world units per cell. */
         const val TREE_CELL_SIZE = 10f
+
+        /**
+         * Minimum world-space distance between adjacent trees on the same hill.
+         * Prevents visual clustering when cells are small relative to tree crown size.
+         */
+        fun minimumTreeSpacingWorld(density: Int, sparsity: Float): Float {
+            // Higher density → smaller spacing. Sparsity adds breathing room.
+            val base = TREE_CELL_SIZE * 0.55f
+            val sparsityBonus = sparsity * TREE_CELL_SIZE * 0.3f
+            val densityReduction = (density / 200f).coerceIn(0f, 0.4f) * base
+            return (base + sparsityBonus - densityReduction).coerceAtLeast(TREE_CELL_SIZE * 0.3f)
+        }
     }
 
     private val treePaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
@@ -238,6 +250,8 @@ class TreeRenderer {
             val hill = hills[hillIndex]
             val depthFactor = hill.depthFactor
             val hillRandom = DeterministicLayout.random(randomSeed + 2000, section = 300, index = hillIndex)
+            val minTreeSpacingWorld = minimumTreeSpacingWorld(treeDensity, treeSparsity)
+            var lastPlacedWorldX = Float.NEGATIVE_INFINITY
 
             // Generate clearings (Lichtungen) for this hill layer
             // Clearings use worldX ranges instead of ratios for infinite-world compatibility
@@ -262,6 +276,9 @@ class TreeRenderer {
                 // World-space position: cell center + jitter
                 val worldX = cellIndex * treeCellSize +
                     (treeRandom.nextFloat() - 0.5f) * treeCellSize * 0.8f
+
+                // Enforce minimum spacing to prevent visual clustering
+                if (worldX - lastPlacedWorldX < minTreeSpacingWorld) continue
 
                 // Skip tree if it falls within a clearing (Lichtung)
                 val inClearing = clearings.any { (start, end) -> worldX in start..end }
@@ -309,6 +326,7 @@ class TreeRenderer {
 
                 newTrees.add(TreeData(worldX, yRatio, scale, depthFactor, dayColor, stableId,
                     type, crown, branches))
+                lastPlacedWorldX = worldX
             }
         }
         // Sort by depthFactor: LOWER depthFactor (background) draws first
@@ -880,10 +898,10 @@ class TreeRenderer {
         leafTreeRatio = settings.getInt("pref_leaf_tree_ratio", PreferenceDefaults.LEAF_TREE_RATIO)
 
         // Tree spread: how far along hills trees spread (0=peaks only, 100=full hillside)
-        treeSpread = settings.getInt("pref_tree_spread", 80) / 100f
+        treeSpread = settings.getInt("pref_tree_spread", PreferenceDefaults.TREE_SPREAD) / 100f
 
         // Tree sparsity: gap probability between trees (0=dense, 100=sparse)
-        treeSparsity = settings.getInt("pref_tree_sparsity", 30) / 100f
+        treeSparsity = settings.getInt("pref_tree_sparsity", PreferenceDefaults.TREE_SPARSITY) / 100f
 
         // Tree size randomness: variation in tree sizes (0=uniform, 100=very varied)
         treeSizeRandomness = settings.getInt("pref_tree_size_randomness", PreferenceDefaults.TREE_SIZE_RANDOMNESS) / 100f

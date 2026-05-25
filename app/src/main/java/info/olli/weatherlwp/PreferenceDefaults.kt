@@ -29,7 +29,7 @@ object PreferenceDefaults {
     // === Parallax Settings ===
     const val PARALLAX_ENABLED = true
     const val PARALLAX_STRENGTH = 16  // 1-100%, log scale (subtle but responsive)
-    const val PARALLAX_MAX_OFFSET = 40  // % of screen height (full range for immersive depth)
+    const val PARALLAX_MAX_OFFSET = 30  // % of screen height (balanced depth vs edge coverage)
     const val PARALLAX_RETURN_SPEED = 47  // 0-100 (faster re-centering)
     const val PARALLAX_SMOOTHING = 1  // 1-100 (very responsive, minimal lag)
     const val PARALLAX_DEPTH = 70  // 0-100 (strong 3D layer separation)
@@ -44,12 +44,14 @@ object PreferenceDefaults {
     // === Cloud Settings ===
     const val CLOUDS_ENABLED = true
     const val CLOUD_SPEED = 45  // 0-100, visible cloud movement
-    const val CLOUD_OPACITY = 60  // 10-100, clearly visible clouds
+    const val CLOUD_OPACITY = 68  // 10-100, clearly visible clouds
     const val CLOUD_STRETCH = 300  // stretch factor
-    const val CLOUD_DENSITY = 100  // 50-300
+    const val CLOUD_DENSITY = 120  // 50-300
     
     // === Tree/Terrain Settings ===
     const val TREE_DENSITY = 30  // 0-200 (30 = light coverage, 100 = normal, 200 = dense)
+    const val TREE_SPREAD = 75  // 0-100, horizontal spread/spacing of trees
+    const val TREE_SPARSITY = 38  // 0-100, clearing frequency and gap size
     const val TREE_SIZE_RANDOMNESS = 50  // 0-100 (natural variation)
     const val TREE_COLOR_VARIATION = 50  // 0-100 (moderate diversity)
     const val TREE_SWAY_SPEED = 100  // 0-300
