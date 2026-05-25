@@ -205,13 +205,12 @@ class ParallaxScene(
     fun getSimulationState(): SimulationState? = lastState
 
     fun start() {
-        sensor.start()
-        // Reset parallax offset to center when wallpaper becomes visible.
-        // Prevents extreme offsets accumulated while hidden from causing
-        // unrendered areas on the first visible frame.
+        // Reset parallax to center BEFORE starting sensors.
+        // Ensures the first visible frame renders centered — no stale offset,
+        // no visible slide-back-to-center animation.
         parallaxCalculator.reset()
-        // Reset timing to avoid delta spikes after visibility changes
         simulationController.resetTiming()
+        sensor.start()
     }
 
     fun stop() {

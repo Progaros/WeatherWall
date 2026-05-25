@@ -2133,4 +2133,89 @@ class ParallaxCalculatorTest {
                 pos <= minSeen + 1f)
         }
     }
+
+    // ============== Visibility lifecycle reset (the actual bug fix) ==============
+
+    @Test
+    fun `visibility lifecycle - extreme offset then reset produces zero on next frame`() {
+        // Simulates: user tilts to extreme → goes to app → returns to home
+        // The bug: stale extreme offset rendered on first visible frame
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 30f
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.smoothing = 0f
+
+        // Accumulate extreme parallax offset
+        rampTilt(calculator, 0.8f, 0.6f)
+        val extremeX = calculator.getOffsetX()
+        val extremeY = calculator.getOffsetY()
+        assertTrue("Should have significant X offset", kotlin.math.abs(extremeX) > 50f)
+        assertTrue("Should have significant Y offset", kotlin.math.abs(extremeY) > 50f)
+
+        // === Visibility lifecycle: wallpaper becomes visible ===
+        // This is what ParallaxScene.start() does:
+        calculator.reset()
+
+        // Verify: offset is zero IMMEDIATELY after reset (before any update/render)
+        assertEquals("X must be zero after reset", 0f, calculator.getOffsetX(), 0.001f)
+        assertEquals("Y must be zero after reset", 0f, calculator.getOffsetY(), 0.001f)
+
+        // Verify: first update() after reset does not produce movement
+        calculator.update(16)
+        assertEquals("X must stay zero on first frame", 0f, calculator.getOffsetX(), 0.001f)
+        assertEquals("Y must stay zero on first frame", 0f, calculator.getOffsetY(), 0.001f)
+    }
+
+    @Test
+    fun `visibility lifecycle - first sensor event after reset sets baseline without jump`() {
+        // After reset, the first sensor event must establish a reference point
+        // without producing any movement (no delta from 0 to current tilt)
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 30f
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.smoothing = 0f
+
+        // Build up offset, then reset (simulating hide → show)
+        rampTilt(calculator, 0.5f, 0.4f)
+        calculator.reset()
+
+        // Simulate: device is tilted when wallpaper becomes visible again
+        // This sensor event should establish baseline, not cause movement
+        calculator.updateFromSensor(0.3f, 0.2f)
+        calculator.update(16)
+
+        assertEquals("First sensor after reset must not jump X", 0f, calculator.getOffsetX(), 0.5f)
+        assertEquals("First sensor after reset must not jump Y", 0f, calculator.getOffsetY(), 0.5f)
+
+        // Second sensor event with slightly different tilt — should produce small movement
+        calculator.updateFromSensor(0.32f, 0.22f)
+        calculator.update(16)
+        // Small movement is fine, but not a huge jump
+        assertTrue("Second event should produce small movement",
+            kotlin.math.abs(calculator.getOffsetX()) < 20f)
+    }
+
+    @Test
+    fun `visibility lifecycle - getOffsetForDepth is zero after reset`() {
+        val calculator = ParallaxCalculator()
+        calculator.strength = 1.0f
+        calculator.maxOffsetPercent = 30f
+        calculator.depthSeparation = 1.32f
+        calculator.perspective = 1.0f
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.smoothing = 0f
+
+        rampTilt(calculator, 0.7f, 0.5f)
+        calculator.reset()
+
+        // All layers must see zero offset immediately after reset
+        val skyOffset = calculator.getOffsetForDepth(0.05f)
+        val hillOffset = calculator.getOffsetForDepth(0.80f)
+        assertEquals("Sky X must be zero", 0f, skyOffset.first, 0.001f)
+        assertEquals("Sky Y must be zero", 0f, skyOffset.second, 0.001f)
+        assertEquals("Hill X must be zero", 0f, hillOffset.first, 0.001f)
+        assertEquals("Hill Y must be zero", 0f, hillOffset.second, 0.001f)
+    }
 }

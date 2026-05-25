@@ -136,9 +136,10 @@ class WeatherWallpaper : WallpaperService() {
             try {
                 if (visible) {
                     Log.d(TAG, "Wallpaper visible - starting render loop and sensors")
-                    // Reset frame timing to avoid large delta on first frame after resume
                     lastFrameTimeMs = 0L
                     preferHardwareCanvas = true
+                    // scene.start() resets parallax to center and starts sensors.
+                    // First frame will always render centered (no stale offset).
                     runCatching { scene.start() }
                         .onFailure { Log.e(TAG, "scene.start() failed, continuing without sensors", it) }
                     startRender()
