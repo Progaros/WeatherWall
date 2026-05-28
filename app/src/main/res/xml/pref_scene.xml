@@ -55,8 +55,8 @@
         <SeekBarPreference
             android:key="pref_tree_density"
             android:title="Tree Density"
-            android:summary="Coverage (0=none, 30=light, 100=normal, 200=dense)"
-            android:defaultValue="30"
+            android:summary="Coverage (0=none, 45=moderate, 100=normal, 200=dense)"
+            android:defaultValue="45"
             android:max="200"
             app:min="0"
             app:showSeekBarValue="true"

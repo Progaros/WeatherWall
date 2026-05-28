@@ -49,9 +49,9 @@ object PreferenceDefaults {
     const val CLOUD_DENSITY = 120  // 50-300
     
     // === Tree/Terrain Settings ===
-    const val TREE_DENSITY = 30  // 0-200 (30 = light coverage, 100 = normal, 200 = dense)
+    const val TREE_DENSITY = 45  // 0-200 (45 = moderate coverage, 100 = normal, 200 = dense)
     const val TREE_SPREAD = 75  // 0-100, horizontal spread/spacing of trees
-    const val TREE_SPARSITY = 38  // 0-100, clearing frequency and gap size
+    const val TREE_SPARSITY = 25  // 0-100, clearing frequency and gap size
     const val TREE_SIZE_RANDOMNESS = 50  // 0-100 (natural variation)
     const val TREE_COLOR_VARIATION = 50  // 0-100 (moderate diversity)
     const val TREE_SWAY_SPEED = 100  // 0-300
@@ -126,8 +126,8 @@ object PreferenceDefaults {
     const val BUSH_SIZE = 100        // 50-200 percentage scale
     
     // === Flower Cluster Settings ===
-    const val FLOWER_CLUSTER_ENABLED = false   // Off by default (preserves existing uniform placement)
-    const val FLOWER_CLUSTER_DENSITY = 40      // 0-100: probability of a cell being a cluster center
+    const val FLOWER_CLUSTER_ENABLED = true    // Natural-looking grouped flower patches
+    const val FLOWER_CLUSTER_DENSITY = 50      // 0-100: probability of a cell being a cluster center
     const val FLOWER_CLUSTER_RADIUS = 30       // 0-100: cluster scatter radius (world units scaled)
     const val FLOWER_CLUSTER_MIN_COUNT = 3     // 1-10: minimum flowers per cluster
     const val FLOWER_CLUSTER_MAX_COUNT = 8     // 2-20: maximum flowers per cluster

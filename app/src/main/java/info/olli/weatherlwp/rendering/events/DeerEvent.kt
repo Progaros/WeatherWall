@@ -140,13 +140,13 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         val legSwing = if (isGrazing) 0f else sin(walkPhase) * 0.13f
         
         // Calculate body position (head lowers when grazing)
-        val headLower = if (isGrazing) unit * 3f else 0f
-        val bodyY = -unit * 8f
-        val headX = unit * 5.5f
-        val headY = bodyY - unit * 7f + headLower
+        val headLower = if (isGrazing) unit * 5f else 0f
+        val bodyY = -unit * 6.5f
+        val headX = unit * 4f
+        val headY = bodyY - unit * 3.8f + headLower
 
         // Legs (4 legs with walking animation) — split by depth: back before body, front after body.
-        val legWidth = unit * 0.6f
+        val legWidth = unit * 0.8f
         val frontLegX1 = unit * 2f
         val frontLegX2 = unit * 0.5f
         val frontSwing1 = legSwing
@@ -165,13 +165,13 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         // Back legs (behind body)
         path.reset()
         path.moveTo(backLegX1, bodyY + unit * 1.5f)
-        path.quadTo(backLegX1 + backSwing1 * unit * 3f, bodyY + unit * 4f,
+        path.quadTo(backLegX1 + backSwing1 * unit * 3f, bodyY + unit * 3f,
             backLegX1 + backSwing1 * unit * 2f, 0f)
         canvas.drawPath(path, strokePaint)
 
         path.reset()
         path.moveTo(backLegX2, bodyY + unit * 1.5f)
-        path.quadTo(backLegX2 + backSwing2 * unit * 3f, bodyY + unit * 4f,
+        path.quadTo(backLegX2 + backSwing2 * unit * 3f, bodyY + unit * 3f,
             backLegX2 + backSwing2 * unit * 2f, 0f)
         canvas.drawPath(path, strokePaint)
 
@@ -209,20 +209,20 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         
         paint.color = bodyColor
         
-        // Neck (overlaps torso/head slightly so joints read as connected in all poses)
+        // Neck (wide tapered shape connecting body to head, curves down when grazing)
         path.reset()
-        path.moveTo(unit * 1.8f, bodyY - unit * 0.2f)
-        path.quadTo(unit * 3.4f, bodyY - unit * 3.8f + headLower * 0.2f,
-            headX - unit * 0.25f, headY - unit * 0.55f)
-        path.lineTo(headX - unit * 1.05f, headY + unit * 0.1f)
-        path.quadTo(unit * 3.1f, bodyY - unit * 2.2f + headLower * 0.15f,
-            unit * 2.0f, bodyY + unit * 0.25f)
+        path.moveTo(unit * 2.5f, bodyY - unit * 1.5f)
+        path.quadTo(unit * 3.2f, bodyY - unit * 2.5f + headLower * 0.4f,
+            headX - unit * 0.2f, headY - unit * 0.3f)
+        path.lineTo(headX - unit * 1.2f, headY + unit * 0.5f)
+        path.quadTo(unit * 2.6f, bodyY - unit * 1f + headLower * 0.35f,
+            unit * 1.2f, bodyY + unit * 0.8f)
         path.close()
         canvas.drawPath(path, paint)
         
-        // Head
-        canvas.drawOval(headX - unit * 1.5f, headY - unit * 1f, 
-                        headX + unit * 2f, headY + unit * 1.2f, paint)
+        // Head (slightly larger for better proportions with shorter neck)
+        canvas.drawOval(headX - unit * 1.8f, headY - unit * 1.2f, 
+                        headX + unit * 2f, headY + unit * 1.3f, paint)
         
         // Muzzle (lighter patch)
         val muzzleColor = if (isFawn) Color.rgb(220, 200, 170) else Color.rgb(190, 160, 130)
@@ -296,14 +296,14 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         
         path.reset()
         path.moveTo(frontLegX1, bodyY + unit * 1.5f)
-        path.quadTo(frontLegX1 + frontSwing1 * unit * 3f, bodyY + unit * 4f, 
+        path.quadTo(frontLegX1 + frontSwing1 * unit * 3f, bodyY + unit * 3f, 
                     frontLegX1 + frontSwing1 * unit * 2f, 0f)
         canvas.drawPath(path, strokePaint)
         
         // Front left leg
         path.reset()
         path.moveTo(frontLegX2, bodyY + unit * 1.5f)
-        path.quadTo(frontLegX2 + frontSwing2 * unit * 3f, bodyY + unit * 4f,
+        path.quadTo(frontLegX2 + frontSwing2 * unit * 3f, bodyY + unit * 3f,
                     frontLegX2 + frontSwing2 * unit * 2f, 0f)
         canvas.drawPath(path, strokePaint)
 

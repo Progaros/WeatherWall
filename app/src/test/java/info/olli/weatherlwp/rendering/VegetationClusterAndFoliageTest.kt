@@ -20,7 +20,7 @@ class VegetationClusterAndFoliageTest {
 
     @Test
     fun `flower cluster defaults are within valid ranges`() {
-        assertFalse(PreferenceDefaults.FLOWER_CLUSTER_ENABLED)
+        assertTrue(PreferenceDefaults.FLOWER_CLUSTER_ENABLED)
         assertTrue(PreferenceDefaults.FLOWER_CLUSTER_DENSITY in 0..100)
         assertTrue(PreferenceDefaults.FLOWER_CLUSTER_RADIUS in 0..100)
         assertTrue(PreferenceDefaults.FLOWER_CLUSTER_MIN_COUNT >= 1)
@@ -210,7 +210,7 @@ class VegetationClusterAndFoliageTest {
     @Test
     fun `SimulationSettings uses defaults when keys are absent`() {
         val settings = SimulationSettings(snapshot = emptyMap<String, Any?>())
-        assertFalse(settings.getBoolean("pref_flower_cluster_enabled", PreferenceDefaults.FLOWER_CLUSTER_ENABLED))
+        assertTrue(settings.getBoolean("pref_flower_cluster_enabled", PreferenceDefaults.FLOWER_CLUSTER_ENABLED))
         assertEquals(PreferenceDefaults.FOLIAGE_UNDER_TREE_BIAS,
             settings.getInt("pref_foliage_under_tree_bias", PreferenceDefaults.FOLIAGE_UNDER_TREE_BIAS))
     }

@@ -83,8 +83,8 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         val groundY = hillHeightProvider?.invoke(x, depthFactor) ?: fallbackGroundY
         val cy = (groundY + groundOffset) * height
         
-        val unit = minOf(width, height)
-        val s = size * unit * 0.012f
+        val unit = height
+        val s = size * unit * 0.009f
         val flip = if (direction > 0) 1f else -1f
         
         canvas.save()

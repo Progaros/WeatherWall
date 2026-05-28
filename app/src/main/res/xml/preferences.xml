@@ -156,8 +156,8 @@
         <SeekBarPreference
             android:key="pref_tree_density"
             android:title="Tree Density"
-            android:summary="Tree coverage (0=none, 30=light, 100=normal, 200=dense)"
-            android:defaultValue="30"
+            android:summary="Tree coverage (0=none, 45=moderate, 100=normal, 200=dense)"
+            android:defaultValue="45"
             android:max="200"
             app:min="0"
             app:showSeekBarValue="true"
@@ -176,8 +176,8 @@
         <SeekBarPreference
             android:key="pref_tree_sparsity"
             android:title="Tree Sparsity"
-            android:summary="Gap size (0=uniform, 30=natural, 80=sparse)"
-            android:defaultValue="38"
+            android:summary="Gap size (0=uniform, 25=natural, 80=sparse)"
+            android:defaultValue="25"
             android:max="100"
             app:min="0"
             app:showSeekBarValue="true"

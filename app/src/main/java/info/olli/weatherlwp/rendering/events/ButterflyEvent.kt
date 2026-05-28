@@ -134,16 +134,16 @@ class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
         val spotColor = RenderConstants.blendWithAmbient(
             Color.argb(140, 40, 30, 20), ambientColor, 0.2f)
         paint.color = spotColor
-        // Spots scale with wing opening
+        // Spots scale with wing opening — positions must be inside wing cubic boundaries
         canvas.save()
         canvas.scale(leftScale, 1f, currentX, currentY)
         canvas.drawCircle(currentX - size * 1.2f, currentY - size * 0.6f, size * 0.25f, paint)
-        canvas.drawCircle(currentX - size * 0.8f, currentY + size * 0.5f, size * 0.18f, paint)
+        canvas.drawCircle(currentX - size * 0.55f, currentY + size * 0.8f, size * 0.18f, paint)
         canvas.restore()
         canvas.save()
         canvas.scale(rightScale, 1f, currentX, currentY)
         canvas.drawCircle(currentX + size * 1.2f, currentY - size * 0.6f, size * 0.25f, paint)
-        canvas.drawCircle(currentX + size * 0.8f, currentY + size * 0.5f, size * 0.18f, paint)
+        canvas.drawCircle(currentX + size * 0.55f, currentY + size * 0.8f, size * 0.18f, paint)
         canvas.restore()
         
         // Body (thin dark line between wings)

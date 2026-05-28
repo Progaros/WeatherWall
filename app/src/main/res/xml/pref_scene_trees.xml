@@ -28,8 +28,8 @@
         <SeekBarPreference
             android:key="pref_tree_sparsity"
             android:title="Tree Gaps"
-            android:summary="Gap size (0=uniform, 30=natural, 80=sparse)"
-            android:defaultValue="38"
+            android:summary="Gap size (0=uniform, 25=natural, 80=sparse)"
+            android:defaultValue="25"
             android:max="100"
             app:min="0"
             app:showSeekBarValue="true"
