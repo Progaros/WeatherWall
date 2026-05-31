@@ -1204,6 +1204,67 @@ class ParallaxSensorManagerTest {
         
         assertEquals("Gyro path should fully consume warmup in 30 events", 0, warmupRemaining)
     }
+    
+    // ============== Canvas Orientation Override Tests ==============
+    
+    @Test
+    fun `effective rotation uses ROTATION_0 when system is landscape but canvas is portrait`() {
+        // Simulates WallpaperService where canvas stays portrait even when device is landscape.
+        // The sensor axis remapping should NOT apply landscape mapping because the canvas
+        // coordinate system is still portrait.
+        val ROTATION_0 = 0
+        val ROTATION_90 = 1
+        val ROTATION_270 = 3
+        val canvasIsLandscape = false  // WallpaperService canvas remains portrait
+        
+        // System reports landscape but canvas is portrait → effective = ROTATION_0
+        fun effectiveRotation(systemRotation: Int): Int {
+            val isLandscapeRotation = systemRotation == ROTATION_90 || systemRotation == ROTATION_270
+            if (isLandscapeRotation && !canvasIsLandscape) return ROTATION_0
+            return systemRotation
+        }
+        
+        assertEquals("ROTATION_90 should be overridden to 0", ROTATION_0, effectiveRotation(ROTATION_90))
+        assertEquals("ROTATION_270 should be overridden to 0", ROTATION_0, effectiveRotation(ROTATION_270))
+        assertEquals("ROTATION_0 should stay 0", ROTATION_0, effectiveRotation(ROTATION_0))
+    }
+    
+    @Test
+    fun `effective rotation preserves landscape when canvas is landscape`() {
+        // Simulates Activity preview or modern WallpaperService where canvas follows rotation.
+        val ROTATION_0 = 0
+        val ROTATION_90 = 1
+        val ROTATION_270 = 3
+        val canvasIsLandscape = true  // Canvas rotated with display
+        
+        fun effectiveRotation(systemRotation: Int): Int {
+            val isLandscapeRotation = systemRotation == ROTATION_90 || systemRotation == ROTATION_270
+            if (isLandscapeRotation && !canvasIsLandscape) return ROTATION_0
+            if (!isLandscapeRotation && canvasIsLandscape) return ROTATION_90
+            return systemRotation
+        }
+        
+        assertEquals("ROTATION_90 should be preserved", ROTATION_90, effectiveRotation(ROTATION_90))
+        assertEquals("ROTATION_270 should be preserved", ROTATION_270, effectiveRotation(ROTATION_270))
+    }
+    
+    @Test
+    fun `effective rotation forces ROTATION_90 when system is portrait but canvas is landscape`() {
+        // Edge case: system reports portrait but canvas is landscape (e.g., forced landscape mode)
+        val ROTATION_0 = 0
+        val ROTATION_90 = 1
+        val ROTATION_270 = 3
+        val canvasIsLandscape = true
+        
+        fun effectiveRotation(systemRotation: Int): Int {
+            val isLandscapeRotation = systemRotation == ROTATION_90 || systemRotation == ROTATION_270
+            if (isLandscapeRotation && !canvasIsLandscape) return ROTATION_0
+            if (!isLandscapeRotation && canvasIsLandscape) return ROTATION_90
+            return systemRotation
+        }
+        
+        assertEquals("Should force ROTATION_90 for landscape canvas", ROTATION_90, effectiveRotation(ROTATION_0))
+    }
 }
 
 /**

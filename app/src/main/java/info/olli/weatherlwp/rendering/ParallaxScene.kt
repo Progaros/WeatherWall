@@ -283,6 +283,9 @@ class ParallaxScene(
                 simulationController.resize(w, h)
                 // Update parallax calculator with canvas size for proportional scaling
                 parallaxCalculator.setCanvasSize(w, h)
+                // Inform sensor manager of actual canvas orientation so axis remapping
+                // matches the canvas coordinate system (fixes wallpaper landscape parallax)
+                sensor.setCanvasOrientation(w, h)
             }
             
             // Get current simulation state (single source of truth)

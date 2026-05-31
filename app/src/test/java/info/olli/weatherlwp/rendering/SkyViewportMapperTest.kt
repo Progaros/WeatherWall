@@ -35,13 +35,39 @@ class SkyViewportMapperTest {
     }
 
     @Test
-    fun `landscape uses screen width as field width`() {
-        // On 1920x1080, fieldWidth = max(1080*0.5625, 1920) = 1920, offset = 0
+    fun `landscape 16-9 maps to screen width with no overflow`() {
+        // On 1920x1080 (16:9, same ratio as reference), scaleFactor = 1.0
         val width = 1920f
         val height = 1080f
 
         assertEquals(0f, SkyViewportMapper.toScreenX(0f, width, height), 0.0001f)
         assertEquals(width, SkyViewportMapper.toScreenX(1f, width, height), 0.0001f)
+    }
+
+    @Test
+    fun `wider landscape expands in all directions`() {
+        // On 2400x1080 (20:9), scaleFactor = (2400/1080) / (16/9) = 1.25
+        // fieldWidth = 2400 * 1.25 = 3000, offset = 300
+        val width = 2400f
+        val height = 1080f
+
+        val left = SkyViewportMapper.toScreenX(0f, width, height)
+        val right = SkyViewportMapper.toScreenX(1f, width, height)
+        val center = SkyViewportMapper.toScreenX(0.5f, width, height)
+
+        assertTrue("Left edge should be off-screen", left < 0f)
+        assertTrue("Right edge should be off-screen", right > width)
+        assertEquals(width / 2f, center, 0.0001f)
+        assertEquals(3000f, right - left, 0.01f)
+
+        // Y should also overflow symmetrically
+        val top = SkyViewportMapper.toScreenY(0f, width, height)
+        val bottom = SkyViewportMapper.toScreenY(1f, width, height)
+        val centerY = SkyViewportMapper.toScreenY(0.5f, width, height)
+
+        assertTrue("Top edge should be off-screen", top < 0f)
+        assertTrue("Bottom edge should be off-screen", bottom > height)
+        assertEquals(height / 2f, centerY, 0.0001f)
     }
 
     @Test

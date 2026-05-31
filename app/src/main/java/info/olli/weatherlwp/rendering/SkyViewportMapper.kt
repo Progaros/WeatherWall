@@ -12,10 +12,21 @@ object SkyViewportMapper {
 
     /**
      * Compute the virtual field width used for X mapping.
-     * Scales with height (proportional to reference aspect), clamped to at least screen width.
+     * Ensures overflow (elements beyond screen edges) in ALL orientations,
+     * including landscape where the old formula produced no overflow.
+     *
+     * For portrait (reference 9:16): identical to the previous formula.
+     * For landscape: scales width by how much wider the aspect ratio is
+     * compared to the reference, guaranteeing symmetric overflow.
      */
-    fun fieldWidth(width: Float, height: Float): Float =
-        maxOf(height * RenderConstants.REFERENCE_ASPECT_RATIO, width)
+    fun fieldWidth(width: Float, height: Float): Float {
+        val maxDim = maxOf(width, height)
+        val minDim = minOf(width, height).coerceAtLeast(1f)
+        val aspectRatio = maxDim / minDim
+        val referenceAspectRatio = 1f / RenderConstants.REFERENCE_ASPECT_RATIO // 16/9
+        val scaleFactor = (aspectRatio / referenceAspectRatio).coerceAtLeast(1f)
+        return width * scaleFactor
+    }
 
     /**
      * Compute the virtual field height used for Y mapping.
