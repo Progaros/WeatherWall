@@ -58,12 +58,20 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     private var width = 0f
     private var height = 0f
     
-    // Extended canvas dimensions for parallax content
+    // Extended canvas dimensions for height-based field scaling
     private var extendedWidth = 0f
     private var extendedOffset = 0f
     
     // Ratio of visible viewport to extended world width (1.0 landscape, <1.0 portrait)
     private var viewportRatio = 1.0f
+
+    /**
+     * Convert an event's normalized x (in extended field space) to the
+     * equivalent screen-width ratio (0 = left edge, 1 = right edge).
+     * Used by hillHeightProvider to look up terrain at the correct world position.
+     */
+    fun eventXToScreenRatio(x: Float): Float =
+        if (width > 0f) (x * extendedWidth - extendedOffset) / width else x
 
     // Cached per-frame ambient color (computed in update, used by multiple draw methods)
     private var cachedAmbientColor = 0
@@ -176,10 +184,11 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     override fun resize(w: Float, h: Float) {
         width = w
         height = h
-        // extendedWidth/extendedOffset retained for legacy RandomEvent API compatibility
-        extendedWidth = w
-        extendedOffset = 0f
-        viewportRatio = 1.0f
+        // Height-based field scaling: extendedWidth scales with height so that events
+        // spread uniformly in both X and Y. Uses the same field as SkyViewportMapper.
+        extendedWidth = SkyViewportMapper.fieldWidth(w, h)
+        extendedOffset = SkyViewportMapper.fieldOffset(w, h)
+        viewportRatio = w / extendedWidth
 
         // Clear frame-scoped draw context and pooled entry references on geometry changes.
         // This prevents stale canvas/state/event references from surviving rotations.

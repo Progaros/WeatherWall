@@ -314,6 +314,7 @@ class SeasonHelperTest {
     @Test
     fun `November is autumn`() {
         val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.DAY_OF_MONTH, 15)
         cal.set(java.util.Calendar.MONTH, java.util.Calendar.NOVEMBER)
         assertEquals(TerrainSeason.AUTUMN, SeasonHelper.getSeasonForDate(cal))
     }
@@ -335,6 +336,7 @@ class SeasonHelperTest {
     @Test
     fun `February is winter`() {
         val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.DAY_OF_MONTH, 15)
         cal.set(java.util.Calendar.MONTH, java.util.Calendar.FEBRUARY)
         assertEquals(TerrainSeason.WINTER, SeasonHelper.getSeasonForDate(cal))
     }

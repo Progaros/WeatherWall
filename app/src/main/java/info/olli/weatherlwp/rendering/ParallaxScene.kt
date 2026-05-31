@@ -130,7 +130,9 @@ class ParallaxScene(
         // Set up hill height provider so ground events can follow terrain contour
         @Suppress("DEPRECATION")
         randomEventLayer.hillHeightProvider = { xRatio, depthFactor ->
-            terrainLayer.getHillYAtPosition(xRatio, depthFactor)
+            // Convert from extended-field normalized x to screen-width ratio for terrain lookup
+            val screenRatio = randomEventLayer.eventXToScreenRatio(xRatio)
+            terrainLayer.getHillYAtPosition(screenRatio, depthFactor)
         }
         randomEventLayer.hillHeightWorldProvider = { worldX, depthFactor ->
             terrainLayer.getHillYAtWorldX(worldX, depthFactor)

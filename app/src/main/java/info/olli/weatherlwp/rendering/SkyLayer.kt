@@ -318,8 +318,8 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
                 val alpha = (starAlphaBase + 50 * twinkle).toInt().coerceIn(5, 220)
                 starPaint.alpha = alpha
 
-                // Map normalized coordinates directly to viewport for full-sky coverage.
-                val x = SkyViewportMapper.toScreenX(star[0], width, starPx)
+                // Map normalized coordinates using height-based field scaling.
+                val x = SkyViewportMapper.toScreenX(star[0], width, height, starPx)
                 val y = SkyViewportMapper.toScreenY(star[1], height, starPy)
                 val radiusScale = SkyViewportMapper.starRadiusScale(width, height)
 
@@ -443,8 +443,10 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         val dayDuration = sunsetHour - sunriseHour
         val dayProgress = ((hour - sunriseHour) / dayDuration).coerceIn(0f, 1f)
         
-        // X position: left to right across screen
-        val sunX = width * (0.1f + dayProgress * 0.8f)
+        // X position: left to right across height-based field (uniform with Y scaling)
+        val fieldWidth = SkyViewportMapper.fieldWidth(width, height)
+        val fieldOffset = SkyViewportMapper.fieldOffset(width, height)
+        val sunX = fieldWidth * (0.1f + dayProgress * 0.8f) - fieldOffset
         
         // Y position: parabolic arc, highest at noon
         // At progress 0.5 (noon), should be at top. At 0 and 1, near horizon.
@@ -456,8 +458,8 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         val arcProgress = 1f - 4f * (dayProgress - 0.5f) * (dayProgress - 0.5f)  // Parabola: 0 at edges, 1 at center
         val sunY = baseY - arcHeight * arcProgress
         
-        // Sun size
-        val baseRadius = kotlin.math.min(width, height) * 0.04f
+        // Sun size (height-based for uniform scaling)
+        val baseRadius = height * 0.04f * RenderConstants.REFERENCE_ASPECT_RATIO
         val radius = baseRadius * celestialSize
         
         // Sun glow gradient - color shifts with elevation (atmospheric scattering)
@@ -534,8 +536,10 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
             ((24f - sunsetHour) + hour) / nightDuration
         }
         
-        // X position: left to right across screen
-        val moonX = width * (0.1f + nightProgress * 0.8f) + parallaxX
+        // X position: left to right across height-based field (uniform with Y scaling)
+        val fieldWidth = SkyViewportMapper.fieldWidth(width, height)
+        val fieldOffset = SkyViewportMapper.fieldOffset(width, height)
+        val moonX = fieldWidth * (0.1f + nightProgress * 0.8f) - fieldOffset + parallaxX
         
         // Y position: parabolic arc, highest at midnight
         // celestialArcHeight: 1.0 = full arc (high), 0.0 = near horizon
@@ -546,8 +550,8 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         val arcProgress = 1f - 4f * (nightProgress - 0.5f) * (nightProgress - 0.5f)
         val moonY = baseY - arcHeight * arcProgress + parallaxY
         
-        // Moon size
-        val baseRadius = kotlin.math.min(width, height) * 0.03f
+        // Moon size (height-based for uniform scaling)
+        val baseRadius = height * 0.03f * RenderConstants.REFERENCE_ASPECT_RATIO
         val radius = baseRadius * celestialSize
         
         // Draw moon phase using procedural rendering
