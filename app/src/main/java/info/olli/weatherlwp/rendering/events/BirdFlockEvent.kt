@@ -100,6 +100,7 @@ class BirdFlockEvent(random: Random, override val spawnTimeMs: Long = System.cur
         strokePaint.color = RenderConstants.blendWithAmbient(
             Color.argb((255 * alpha).toInt(), 30, 30, 30), ambientColor, 0.4f)
         strokePaint.style = Paint.Style.STROKE
+        strokePaint.strokeCap = Paint.Cap.ROUND
         
         for (bird in birds) {
             val size = bird.sizeVariation * unit * 4f
@@ -115,18 +116,17 @@ class BirdFlockEvent(random: Random, override val spawnTimeMs: Long = System.cur
             val baseWingUp = size * 0.4f
             
             // Wing lift oscillates around base position, always keeping wings angled up
-            // Use abs(sin) to keep wings always curved upward, varying lift amount
             val sineValue = sin(elapsedSec * wingBeatSpeed + bird.wingPhase)
             val wingLift = baseWingUp + sineValue * wingAmplitude
             
-            strokePaint.strokeWidth = (size * 0.25f).coerceAtLeast(1.5f)
+            strokePaint.strokeWidth = (size * 0.15f).coerceAtLeast(1.2f)
             
             // Draw bird as smooth curved V-shape (wings always curve up from body)
             // Wingtips are above body (birdY - wingLift), body is at center
             path.reset()
             path.moveTo(birdX - size, birdY - wingLift)  // Left wingtip (above body)
-            path.quadTo(birdX - size * 0.3f, birdY - wingLift * 0.3f, birdX, birdY)  // Left wing curves down to body
-            path.quadTo(birdX + size * 0.3f, birdY - wingLift * 0.3f, birdX + size, birdY - wingLift)  // Right wing curves up to tip
+            path.quadTo(birdX - size * 0.35f, birdY - wingLift * 0.25f, birdX, birdY)  // Left wing curves down to body
+            path.quadTo(birdX + size * 0.35f, birdY - wingLift * 0.25f, birdX + size, birdY - wingLift)  // Right wing curves up to tip
             canvas.drawPath(path, strokePaint)
         }
         canvas.restore()

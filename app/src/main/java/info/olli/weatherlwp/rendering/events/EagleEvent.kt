@@ -80,58 +80,60 @@ class EagleEvent(random: Random, override val spawnTimeMs: Long = System.current
         val wingspan = size * 2.2f
         val bodyLen = size * 0.8f
         
-        // Body - elongated oval (thicker for visible silhouette)
+        // Body - elongated streamlined shape
         path.reset()
         path.addOval(currentX - bodyLen * 0.5f, currentY - size * 0.18f,
                      currentX + bodyLen * 0.5f, currentY + size * 0.18f, Path.Direction.CW)
         canvas.drawPath(path, paint)
         
-        // Left wing - broad with slight upward curve (soaring position)
-        // Wings are thicker with more depth
+        // Left wing - smooth flat soaring shape with slight dihedral (upward angle)
         path.reset()
-        path.moveTo(currentX - size * 0.15f, currentY - size * 0.05f)
+        path.moveTo(currentX - size * 0.15f, currentY - size * 0.10f)
+        // Leading edge curves gently upward to wing tip
         path.quadTo(currentX - wingspan * 0.5f, currentY - size * 0.45f,
-                    currentX - wingspan, currentY - size * 0.15f)
-        // Wing tip - splayed primary feathers
-        path.lineTo(currentX - wingspan * 0.95f, currentY + size * 0.05f)
-        path.lineTo(currentX - wingspan * 0.88f, currentY + size * 0.12f)
-        path.quadTo(currentX - wingspan * 0.5f, currentY - size * 0.05f,
-                    currentX - size * 0.15f, currentY + size * 0.12f)
+                    currentX - wingspan, currentY - size * 0.35f)
+        // Wing tip rounds back smoothly (no jagged feather points)
+        path.quadTo(currentX - wingspan * 0.97f, currentY - size * 0.12f,
+                    currentX - wingspan * 0.85f, currentY + size * 0.08f)
+        // Trailing edge curves back to body
+        path.quadTo(currentX - wingspan * 0.5f, currentY + size * 0.18f,
+                    currentX - size * 0.15f, currentY + size * 0.18f)
         path.close()
         canvas.drawPath(path, paint)
         
-        // Right wing - mirror
+        // Right wing - mirror of left
         path.reset()
-        path.moveTo(currentX + size * 0.15f, currentY - size * 0.05f)
+        path.moveTo(currentX + size * 0.15f, currentY - size * 0.10f)
         path.quadTo(currentX + wingspan * 0.5f, currentY - size * 0.45f,
-                    currentX + wingspan, currentY - size * 0.15f)
-        // Wing tip - splayed primary feathers
-        path.lineTo(currentX + wingspan * 0.95f, currentY + size * 0.05f)
-        path.lineTo(currentX + wingspan * 0.88f, currentY + size * 0.12f)
-        path.quadTo(currentX + wingspan * 0.5f, currentY - size * 0.05f,
-                    currentX + size * 0.15f, currentY + size * 0.12f)
+                    currentX + wingspan, currentY - size * 0.35f)
+        path.quadTo(currentX + wingspan * 0.97f, currentY - size * 0.12f,
+                    currentX + wingspan * 0.85f, currentY + size * 0.08f)
+        path.quadTo(currentX + wingspan * 0.5f, currentY + size * 0.18f,
+                    currentX + size * 0.15f, currentY + size * 0.18f)
         path.close()
         canvas.drawPath(path, paint)
         
-        // Tail - fan shape (wider, more prominent)
+        // Tail - short wedge trailing behind body
         path.reset()
-        path.moveTo(currentX - bodyLen * 0.4f, currentY)
-        path.lineTo(currentX - bodyLen * 0.7f, currentY - size * 0.22f)
-        path.lineTo(currentX - bodyLen * 1.0f, currentY)
-        path.lineTo(currentX - bodyLen * 0.7f, currentY + size * 0.22f)
+        path.moveTo(currentX - bodyLen * 0.4f, currentY - size * 0.05f)
+        path.lineTo(currentX - bodyLen * 1.0f, currentY - size * 0.15f)
+        path.lineTo(currentX - bodyLen * 1.15f, currentY)
+        path.lineTo(currentX - bodyLen * 1.0f, currentY + size * 0.15f)
+        path.lineTo(currentX - bodyLen * 0.4f, currentY + size * 0.05f)
         path.close()
         canvas.drawPath(path, paint)
         
-        // Head (slightly larger, more visible)
-        canvas.drawCircle(currentX + bodyLen * 0.45f, currentY - size * 0.02f, size * 0.16f, paint)
+        // Head (small, extends forward from body)
+        canvas.drawOval(currentX + bodyLen * 0.3f, currentY - size * 0.12f,
+                        currentX + bodyLen * 0.7f, currentY + size * 0.08f, paint)
         
         // Beak (hooked, characteristic of raptors)
         paint.color = RenderConstants.blendWithAmbient(
             Color.argb((220 * alpha).toInt(), 200, 180, 60), ambientColor, 0.3f)
         path.reset()
-        path.moveTo(currentX + bodyLen * 0.6f, currentY - size * 0.04f)
-        path.lineTo(currentX + bodyLen * 0.75f, currentY + size * 0.02f)
-        path.lineTo(currentX + bodyLen * 0.6f, currentY + size * 0.06f)
+        path.moveTo(currentX + bodyLen * 0.65f, currentY - size * 0.03f)
+        path.lineTo(currentX + bodyLen * 0.82f, currentY + size * 0.02f)
+        path.lineTo(currentX + bodyLen * 0.65f, currentY + size * 0.06f)
         path.close()
         canvas.drawPath(path, paint)
         

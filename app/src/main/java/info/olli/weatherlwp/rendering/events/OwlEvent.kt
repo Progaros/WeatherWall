@@ -181,6 +181,22 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         path.close()
         canvas.drawPath(path, paint)
         canvas.restore()
+
+        // Right wing (lower wing, partially visible below body)
+        canvas.save()
+        canvas.rotate(wingAngle * 0.7f, currentX + bodyW * 0.1f, currentY)
+        paint.color = darkColor
+        path.reset()
+        path.moveTo(currentX + bodyW * 0.1f, currentY + bodyH * 0.2f)
+        path.quadTo(currentX + bodyW * 0.5f, currentY + wingSpan * 0.5f,
+                    currentX + wingSpan * 0.7f, currentY + wingSpan * 0.2f)
+        path.quadTo(currentX + wingSpan * 0.75f, currentY + bodyH * 0.4f,
+                    currentX + wingSpan * 0.6f, currentY + bodyH * 0.45f)
+        path.quadTo(currentX + bodyW * 0.3f, currentY + bodyH * 0.5f,
+                    currentX + bodyW * 0.1f, currentY + bodyH * 0.35f)
+        path.close()
+        canvas.drawPath(path, paint)
+        canvas.restore()
         
         // === TAIL ===
         // Short, broad tail

@@ -77,15 +77,15 @@ class BatEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         canvas.save()
         canvas.translate(px, py)
         
-        // Scale: small bat silhouettes
-        val unit = height * 0.002f * sizeScale
+        // Scale: bat silhouettes - slightly larger for visibility
+        val unit = height * 0.003f * sizeScale
         
         // Distant bats are more faded
         val alpha = (1f - distance * 0.4f)
         
-        // Dark silhouette - blends with night sky
+        // Dark silhouette - slightly lighter than pure black for visibility against night sky
         paint.color = RenderConstants.blendWithAmbient(
-            Color.argb((180 * alpha).toInt(), 20, 20, 25), ambientColor, 0.3f)
+            Color.argb((220 * alpha).toInt(), 45, 40, 50), ambientColor, 0.2f)
         paint.style = Paint.Style.FILL
         
         for (bat in bats) {
