@@ -843,7 +843,7 @@ class ParallaxCalculatorTest {
     // ============== Landscape orientation ==============
 
     @Test
-    fun `landscape orientation swaps aspect ratio compensation axes`() {
+    fun `landscape orientation applies aspect ratio compensation to vertical`() {
         val calcLandscape = ParallaxCalculator()
         calcLandscape.strength = 1.0f
         calcLandscape.maxOffsetPercent = 10f
@@ -857,8 +857,143 @@ class ParallaxCalculatorTest {
         val xLand = kotlin.math.abs(calcLandscape.getOffsetX())
         val yLand = kotlin.math.abs(calcLandscape.getOffsetY())
 
+        // vComp=2.0 > hComp=1920/1080≈1.778, so Y should still exceed X
         assertTrue("In landscape, Y should be larger with aspect ratio 2.0 (x=$xLand, y=$yLand)",
-            yLand > xLand * 1.3f)
+            yLand > xLand)
+    }
+
+    @Test
+    fun `landscape horizontal offset scales with aspect ratio`() {
+        // With height-based effectiveMaxOffset, landscape hComp compensates for smaller canvasHeight.
+        // Landscape: sensitivity_X = canvasHeight * pct * hComp = 1080 * 0.1 * 1.778 ≈ 192
+        // Portrait:  sensitivity_X = canvasHeight * pct * hComp = 1920 * 0.1 * 1.0   = 192
+        // Both end up with the same effective X sensitivity and maxDist, so X offsets should match.
+        val calcLandscape = ParallaxCalculator()
+        calcLandscape.strength = 1.0f
+        calcLandscape.maxOffsetPercent = 10f
+        calcLandscape.setCanvasSize(1920f, 1080f)
+        calcLandscape.smoothing = 0f
+        calcLandscape.aspectRatioCompensation = 1.0f
+        calcLandscape.returnSpeed = 0f
+
+        rampTilt(calcLandscape, 0.5f, 0f)
+        val xLand = kotlin.math.abs(calcLandscape.getOffsetX())
+
+        val calcPortrait = ParallaxCalculator()
+        calcPortrait.strength = 1.0f
+        calcPortrait.maxOffsetPercent = 10f
+        calcPortrait.setCanvasSize(1080f, 1920f)
+        calcPortrait.smoothing = 0f
+        calcPortrait.aspectRatioCompensation = 1.0f
+        calcPortrait.returnSpeed = 0f
+
+        rampTilt(calcPortrait, 0.5f, 0f)
+        val xPortrait = kotlin.math.abs(calcPortrait.getOffsetX())
+
+        // Height-based offset + hComp compensation means landscape X ≈ portrait X
+        val ratio = if (xPortrait > 0f) xLand / xPortrait else 1f
+        assertTrue("Landscape and portrait X offsets should be similar (land=$xLand, port=$xPortrait, ratio=$ratio)",
+            ratio in 0.85f..1.15f)
+    }
+
+    @Test
+    fun `landscape default gives more horizontal than vertical movement`() {
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1920f, 1080f)
+        calc.smoothing = 0f
+        calc.aspectRatioCompensation = 1.0f
+        calc.returnSpeed = 0f
+
+        rampTilt(calc, 0.5f, 0.5f)
+
+        val x = kotlin.math.abs(calc.getOffsetX())
+        val y = kotlin.math.abs(calc.getOffsetY())
+
+        // hComp = 1920/1080 ≈ 1.78, vComp = 1.0: horizontal should be larger
+        assertTrue("In landscape with default compensation, X should exceed Y (x=$x, y=$y)",
+            x > y * 1.5f)
+    }
+
+    @Test
+    fun `landscape getMaxOffsetForDepth horizontal exceeds vertical`() {
+        val calc = ParallaxCalculator()
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1920f, 1080f)
+        calc.aspectRatioCompensation = 1.0f
+        calc.depthSeparation = 1.0f
+
+        val (maxX, maxY) = calc.getMaxOffsetForDepth(0.5f)
+
+        // hComp = 1920/1080 ≈ 1.78, so maxX should be ~1.78x maxY
+        val expectedRatio = 1920f / 1080f
+        assertEquals("Max X/Y ratio should match aspect ratio",
+            expectedRatio, maxX / maxY, 0.01f)
+    }
+
+    @Test
+    fun `landscape depth offset X reaches full range without clipping`() {
+        // Regression test: curvedOffset must normalize by per-axis max (not base effectiveMaxOffset)
+        // In landscape, X axis max is effectiveMaxOffset * (width/height), not just effectiveMaxOffset
+        val calc = ParallaxCalculator()
+        calc.strength = 1.0f
+        calc.maxOffsetPercent = 10f
+        calc.setCanvasSize(1920f, 1080f)
+        calc.smoothing = 0f
+        calc.aspectRatioCompensation = 1.0f
+        calc.depthSeparation = 1.0f
+        calc.returnSpeed = 0f
+
+        // Tilt fully in X direction to saturate position
+        rampTilt(calc, 1.0f, 0f, steps = 80)
+
+        val depthX = kotlin.math.abs(calc.getOffsetXForDepth(0.5f))
+        val (maxX, _) = calc.getMaxOffsetForDepth(0.5f)
+
+        // Offset should reach at least 60% of max (before fix it was clipped at ~56% of max)
+        assertTrue(
+            "Landscape X depth offset ($depthX) should reach >60% of max ($maxX)",
+            depthX > maxX * 0.6f
+        )
+    }
+
+    @Test
+    fun `landscape depth offset ratio matches portrait behavior`() {
+        // In portrait, depth offset X can reach close to max. In landscape it should too.
+        val calcPortrait = ParallaxCalculator()
+        calcPortrait.strength = 1.0f
+        calcPortrait.maxOffsetPercent = 10f
+        calcPortrait.setCanvasSize(1080f, 1920f)
+        calcPortrait.smoothing = 0f
+        calcPortrait.aspectRatioCompensation = 1.0f
+        calcPortrait.depthSeparation = 1.0f
+        calcPortrait.returnSpeed = 0f
+
+        rampTilt(calcPortrait, 1.0f, 0f, steps = 80)
+        val depthPortrait = kotlin.math.abs(calcPortrait.getOffsetXForDepth(0.5f))
+        val (maxPortrait, _) = calcPortrait.getMaxOffsetForDepth(0.5f)
+        val ratioPortrait = depthPortrait / maxPortrait
+
+        val calcLandscape = ParallaxCalculator()
+        calcLandscape.strength = 1.0f
+        calcLandscape.maxOffsetPercent = 10f
+        calcLandscape.setCanvasSize(1920f, 1080f)
+        calcLandscape.smoothing = 0f
+        calcLandscape.aspectRatioCompensation = 1.0f
+        calcLandscape.depthSeparation = 1.0f
+        calcLandscape.returnSpeed = 0f
+
+        rampTilt(calcLandscape, 1.0f, 0f, steps = 80)
+        val depthLandscape = kotlin.math.abs(calcLandscape.getOffsetXForDepth(0.5f))
+        val (maxLandscape, _) = calcLandscape.getMaxOffsetForDepth(0.5f)
+        val ratioLandscape = depthLandscape / maxLandscape
+
+        // Both orientations should achieve similar saturation ratios (within 15%)
+        assertEquals(
+            "Landscape saturation ratio ($ratioLandscape) should match portrait ($ratioPortrait)",
+            ratioPortrait, ratioLandscape, 0.15f
+        )
     }
 
     // ============== Delta time scaling ==============

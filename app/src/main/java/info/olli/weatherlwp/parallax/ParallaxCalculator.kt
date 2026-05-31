@@ -348,7 +348,7 @@ class ParallaxCalculator {
         val hComp: Float
         val vComp: Float
         if (canvasWidth >= canvasHeight) {
-            hComp = 1f; vComp = aspectRatioCompensation
+            hComp = canvasWidth / canvasHeight; vComp = aspectRatioCompensation
         } else {
             hComp = aspectRatioCompensation; vComp = 1f
         }
@@ -429,19 +429,25 @@ class ParallaxCalculator {
     fun getOffsetForDepth(depthFactor: Float): Pair<Float, Float> {
         val mult = movementMultiplier(depthFactor)
         val max = getMaxOffsetForDepth(depthFactor)
-        val x = curvedOffset(positionX, mult).coerceIn(-max.first, max.first)
-        val y = curvedOffset(positionY, mult).coerceIn(-max.second, max.second)
+        val (hComp, vComp) = getAxisCompensation()
+        val effectiveMax = getEffectiveMaxOffset()
+        val x = curvedOffset(positionX, mult, effectiveMax * hComp).coerceIn(-max.first, max.first)
+        val y = curvedOffset(positionY, mult, effectiveMax * vComp).coerceIn(-max.second, max.second)
         return Pair(x, y)
     }
 
     fun getOffsetXForDepth(depthFactor: Float): Float {
         val max = getMaxOffsetForDepth(depthFactor)
-        return curvedOffset(positionX, movementMultiplier(depthFactor)).coerceIn(-max.first, max.first)
+        val (hComp, _) = getAxisCompensation()
+        val effectiveMax = getEffectiveMaxOffset()
+        return curvedOffset(positionX, movementMultiplier(depthFactor), effectiveMax * hComp).coerceIn(-max.first, max.first)
     }
 
     fun getOffsetYForDepth(depthFactor: Float): Float {
         val max = getMaxOffsetForDepth(depthFactor)
-        return curvedOffset(positionY, movementMultiplier(depthFactor)).coerceIn(-max.second, max.second)
+        val (_, vComp) = getAxisCompensation()
+        val effectiveMax = getEffectiveMaxOffset()
+        return curvedOffset(positionY, movementMultiplier(depthFactor), effectiveMax * vComp).coerceIn(-max.second, max.second)
     }
 
     /**
@@ -455,7 +461,7 @@ class ParallaxCalculator {
         val hComp: Float
         val vComp: Float
         if (canvasWidth >= canvasHeight) {
-            hComp = 1f
+            hComp = canvasWidth / canvasHeight
             vComp = aspectRatioCompensation
         } else {
             hComp = aspectRatioCompensation
@@ -570,10 +576,9 @@ class ParallaxCalculator {
         return tan(clamped * MAX_TILT_ANGLE) * TAN_NORMALIZER
     }
 
-    private fun curvedOffset(position: Float, mult: Float): Float {
-        val effectiveMaxOffset = getEffectiveMaxOffset()
-        val normalized = if (effectiveMaxOffset > 0) position / effectiveMaxOffset else 0f
-        return applyTanCurve(normalized) * effectiveMaxOffset * mult
+    private fun curvedOffset(position: Float, mult: Float, axisMax: Float): Float {
+        val normalized = if (axisMax > 0) position / axisMax else 0f
+        return applyTanCurve(normalized) * axisMax * mult
     }
 
     private fun getEffectiveMaxOffset(): Float {
@@ -581,6 +586,19 @@ class ParallaxCalculator {
             canvasHeight * (maxOffsetPercent / 100f)
         } else {
             maxOffsetPx * scaleFactor
+        }
+    }
+
+    /**
+     * Per-axis compensation factors for landscape/portrait orientation.
+     * In landscape: horizontal is scaled by aspect ratio, vertical by user preference.
+     * In portrait: horizontal uses user preference, vertical is 1.0.
+     */
+    private fun getAxisCompensation(): Pair<Float, Float> {
+        return if (canvasWidth >= canvasHeight) {
+            Pair(canvasWidth / canvasHeight, aspectRatioCompensation)
+        } else {
+            Pair(aspectRatioCompensation, 1f)
         }
     }
 
