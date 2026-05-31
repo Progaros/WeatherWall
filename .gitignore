@@ -20,3 +20,4 @@ __pycache__/
 ai.md
 event_renders/
 analysis-output/
+*.patch

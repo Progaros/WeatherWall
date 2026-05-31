@@ -362,7 +362,7 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
      * @return Smoothly interpolated alpha value (0 during full day)
      */
     private fun computeNightAlpha(state: SimulationState, nightVal: Int, duskVal: Int, dawnVal: Int): Int {
-        val hour = state.timeOfDayHours
+        val hour = state.smoothedTimeOfDayHours
         val sunrise = state.sunriseHours
         val sunset = state.sunsetHours
         

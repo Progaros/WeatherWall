@@ -106,7 +106,7 @@ class FrogEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         canvas.scale(flip, 1f)
 
         // Throat pulsing (breathing animation when sitting)
-        val isHopping = progress in hopStartProgress..hopEndProgress
+        val isHopping = progress >= hopStartProgress && progress <= hopEndProgress
         val throatPulse = if (!isHopping) abs(sin(absoluteTimeMs * 0.004f)) * 0.15f * s else 0f
 
         // Body (dark green)

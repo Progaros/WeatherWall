@@ -162,6 +162,11 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
     // Global frame counter for time-based rocket explosions (Long to avoid overflow)
     private var frameCounter = 0L
 
+    // Cached season result to avoid Calendar allocations every frame (3× per frame)
+    private var cachedSeason: Season = Season.NONE
+    private var cachedSeasonTimeMs: Long = 0L
+    private val SEASON_CACHE_TTL_MS = 10_000L  // Re-check season every 10 seconds
+
     private var fireworkTimer = 0
     private val fireworkColors = intArrayOf(
         Color.RED, Color.YELLOW, Color.GREEN, Color.CYAN,
@@ -309,31 +314,47 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
     }
 
     fun getCurrentSeason(): Season {
+        val now = System.currentTimeMillis()
+        if (now - cachedSeasonTimeMs < SEASON_CACHE_TTL_MS) {
+            return cachedSeason
+        }
+
         val settings = currentSettings
 
         // Check if seasonal events are enabled
         try {
             val seasonalEnabled = settings.getBoolean("pref_seasonal_enabled", true)
             if (!seasonalEnabled) {
+                cachedSeason = Season.NONE
+                cachedSeasonTimeMs = now
                 return Season.NONE
             }
 
             val debugEnabled = settings.getBoolean("pref_debug_enabled", false)
             if (debugEnabled) {
                 val debugSeason = settings.getString("pref_debug_season", "auto")
-                when (debugSeason) {
-                    "christmas" -> return Season.CHRISTMAS
-                    "newyear" -> return Season.NEW_YEAR
-                    "cn_newyear" -> return Season.CN_NEW_YEAR
-                    "st_patricks" -> return Season.ST_PATRICKS
-                    "none" -> return Season.NONE
+                val result = when (debugSeason) {
+                    "christmas" -> Season.CHRISTMAS
+                    "newyear" -> Season.NEW_YEAR
+                    "cn_newyear" -> Season.CN_NEW_YEAR
+                    "st_patricks" -> Season.ST_PATRICKS
+                    "none" -> Season.NONE
+                    else -> null
+                }
+                if (result != null) {
+                    cachedSeason = result
+                    cachedSeasonTimeMs = now
+                    return result
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error reading debug prefs", e)
         }
 
-        return getSeasonByDate()
+        val result = getSeasonByDate()
+        cachedSeason = result
+        cachedSeasonTimeMs = now
+        return result
     }
 
     /**
@@ -1014,6 +1035,9 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
     // ========== CHINESE NEW YEAR ==========
     
     private var dragonPhase = 0f
+    // Pre-allocated dragon segment positions to avoid per-frame Array+Pair allocations
+    private val dragonSegmentX = FloatArray(12)
+    private val dragonSegmentY = FloatArray(12)
     private val dragonColors = intArrayOf(
         Color.rgb(200, 30, 30),    // Red (body)
         Color.rgb(255, 200, 50),   // Gold (accents)
@@ -1054,21 +1078,24 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
         val baseX = screenWidth + (margin + 100f) * heightScale - (dragonPhase * 40f * heightScale) % wrapDistance
         val baseY = screenHeight * 0.18f
         
-        val segmentPositions = Array(segmentCount) { i ->
+        for (i in 0 until segmentCount) {
             val t = i.toFloat()
             // Wave motion
             val wave1 = kotlin.math.sin((dragonPhase * 3f - t * 0.5f).toDouble()).toFloat() * 25f * scale
             val wave2 = kotlin.math.sin((dragonPhase * 5f - t * 0.8f).toDouble()).toFloat() * 8f * scale
-            val x = baseX + t * segmentSpacing
-            val y = baseY + wave1 + wave2
-            Pair(x, y)
+            dragonSegmentX[i] = baseX + t * segmentSpacing
+            dragonSegmentY[i] = baseY + wave1 + wave2
         }
         
         // --- VISIBILITY CHECK ---
         // Skip rendering if dragon is completely off-screen
         // Use generous margin to include head features that extend beyond segment positions
-        val leftmostX = segmentPositions.minOf { it.first }
-        val rightmostX = segmentPositions.maxOf { it.first }
+        var leftmostX = dragonSegmentX[0]
+        var rightmostX = dragonSegmentX[0]
+        for (i in 1 until segmentCount) {
+            if (dragonSegmentX[i] < leftmostX) leftmostX = dragonSegmentX[i]
+            if (dragonSegmentX[i] > rightmostX) rightmostX = dragonSegmentX[i]
+        }
         
         // Dragon moves right-to-left, so skip if entirely past left edge or waiting to enter from right
         if (rightmostX < -margin || leftmostX > screenWidth + margin) {
@@ -1078,7 +1105,8 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
         // --- 2. DRAW BODY (Tail to Neck) ---
         // Stop at i=1 so head (i=0) is drawn last on top
         for (i in (segmentCount - 1) downTo 1) {
-            val (x, y) = segmentPositions[i]
+            val x = dragonSegmentX[i]
+            val y = dragonSegmentY[i]
             // Taper tail
             val sizeFactor = 1f - (i.toFloat() / segmentCount) * 0.4f
             val radius = segmentRadius * sizeFactor
@@ -1098,7 +1126,8 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
         }
         
         // --- 3. DRAW HEAD (Complex Path) ---
-        val (headX, headY) = segmentPositions[0]
+        val headX = dragonSegmentX[0]
+        val headY = dragonSegmentY[0]
         val headSize = segmentRadius * 2.4f 
 
         // A. Rear Antlers (Solid Fill, not just lines)

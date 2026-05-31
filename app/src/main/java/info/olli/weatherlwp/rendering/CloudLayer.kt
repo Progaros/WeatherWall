@@ -499,8 +499,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
 
     private fun clearGroupBitmaps() {
         for (group in cloudGroups) {
-            group.cachedBitmap?.recycle()
-            group.cachedBitmap = null
+            val bmp = group.cachedBitmap
+            group.cachedBitmap = null  // Clear reference first to prevent use-after-recycle
+            bmp?.recycle()
             group.lastWidth = 0
             group.lastHeight = 0
         }

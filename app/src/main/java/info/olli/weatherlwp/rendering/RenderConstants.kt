@@ -596,15 +596,15 @@ object RenderConstants {
                 val dawnStart = sunriseHours - 1.0f
                 val duskEnd = sunsetHours + 1.0f
                 when {
-                    h in dawnStart..sunriseHours -> {
+                    h >= dawnStart && h <= sunriseHours -> {
                         val t = ((h - dawnStart) / 1.0f).coerceIn(0f, 1f)
                         1f - t * t * (3f - 2f * t)
                     }
-                    h in sunsetHours..duskEnd -> {
+                    h >= sunsetHours && h <= duskEnd -> {
                         val t = ((h - sunsetHours) / 1.0f).coerceIn(0f, 1f)
                         t * t * (3f - 2f * t)
                     }
-                    h in sunriseHours..sunsetHours -> 0f
+                    h >= sunriseHours && h <= sunsetHours -> 0f
                     else -> 1f
                 }
             } else {

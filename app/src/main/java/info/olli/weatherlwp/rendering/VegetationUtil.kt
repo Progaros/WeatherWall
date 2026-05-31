@@ -103,10 +103,13 @@ object VegetationUtil {
     fun autumnColor(baseColor: Int, weight: Float, itemIndex: Int): Int {
         if (weight <= 0f) return baseColor
         val hueShift = (itemIndex * 37) % 3
-        val (targetR, targetG, targetB) = when (hueShift) {
-            0 -> Triple(200, 90, 20)    // Orange
-            1 -> Triple(180, 140, 30)   // Golden
-            else -> Triple(190, 60, 25) // Red-orange
+        val targetR: Int
+        val targetG: Int
+        val targetB: Int
+        when (hueShift) {
+            0 -> { targetR = 200; targetG = 90; targetB = 20 }    // Orange
+            1 -> { targetR = 180; targetG = 140; targetB = 30 }   // Golden
+            else -> { targetR = 190; targetG = 60; targetB = 25 } // Red-orange
         }
         val r = Color.red(baseColor)
         val g = Color.green(baseColor)

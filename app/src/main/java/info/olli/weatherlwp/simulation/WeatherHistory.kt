@@ -451,7 +451,8 @@ class WeatherHistory(private val context: Context) {
     }
 
     private fun dayIdFrom(cal: Calendar): Int {
-        // Days since epoch (unix day number)
-        return (cal.timeInMillis / (24L * 60 * 60 * 1000)).toInt()
+        // Days since epoch in local timezone (ensures day rollover at local midnight)
+        val localMs = cal.timeInMillis + cal.get(Calendar.ZONE_OFFSET) + cal.get(Calendar.DST_OFFSET)
+        return (localMs / (24L * 60 * 60 * 1000)).toInt()
     }
 }
