@@ -318,9 +318,9 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
                 val alpha = (starAlphaBase + 50 * twinkle).toInt().coerceIn(5, 220)
                 starPaint.alpha = alpha
 
-                // Map normalized coordinates using height-based field scaling.
+                // Map normalized coordinates using uniform field scaling.
                 val x = SkyViewportMapper.toScreenX(star[0], width, height, starPx)
-                val y = SkyViewportMapper.toScreenY(star[1], height, starPy)
+                val y = SkyViewportMapper.toScreenY(star[1], width, height, starPy)
                 val radiusScale = SkyViewportMapper.starRadiusScale(width, height)
 
                 canvas.drawCircle(x, y, star[2] * radiusScale, starPaint)
@@ -448,13 +448,13 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         val fieldOffset = SkyViewportMapper.fieldOffset(width, height)
         val sunX = fieldWidth * (0.1f + dayProgress * 0.8f) - fieldOffset
         
-        // Y position: parabolic arc, highest at noon
-        // At progress 0.5 (noon), should be at top. At 0 and 1, near horizon.
-        // celestialArcHeight: 1.0 = full arc (high), 0.0 = near horizon
-        val maxArcHeight = height * 0.7f  // Maximum arc height at setting = 100
-        val minArcHeight = height * 0.15f  // Minimum arc height at setting = 0
+        // Y position: parabolic arc, highest at noon (uniform field scaling)
+        val fieldHeight = SkyViewportMapper.fieldHeight(width, height)
+        val fieldOffsetY = SkyViewportMapper.fieldOffsetY(width, height)
+        val maxArcHeight = fieldHeight * 0.7f
+        val minArcHeight = fieldHeight * 0.15f
         val arcHeight = minArcHeight + (maxArcHeight - minArcHeight) * celestialArcHeight
-        val baseY = height * 0.85f  // Horizon level
+        val baseY = fieldHeight * 0.85f - fieldOffsetY
         val arcProgress = 1f - 4f * (dayProgress - 0.5f) * (dayProgress - 0.5f)  // Parabola: 0 at edges, 1 at center
         val sunY = baseY - arcHeight * arcProgress
         
@@ -541,12 +541,13 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         val fieldOffset = SkyViewportMapper.fieldOffset(width, height)
         val moonX = fieldWidth * (0.1f + nightProgress * 0.8f) - fieldOffset + parallaxX
         
-        // Y position: parabolic arc, highest at midnight
-        // celestialArcHeight: 1.0 = full arc (high), 0.0 = near horizon
-        val maxArcHeight = height * 0.6f  // Maximum arc height at setting = 100
-        val minArcHeight = height * 0.12f  // Minimum arc height at setting = 0
+        // Y position: parabolic arc, highest at midnight (uniform field scaling)
+        val fieldHeight = SkyViewportMapper.fieldHeight(width, height)
+        val fieldOffsetY = SkyViewportMapper.fieldOffsetY(width, height)
+        val maxArcHeight = fieldHeight * 0.6f
+        val minArcHeight = fieldHeight * 0.12f
         val arcHeight = minArcHeight + (maxArcHeight - minArcHeight) * celestialArcHeight
-        val baseY = height * 0.85f
+        val baseY = fieldHeight * 0.85f - fieldOffsetY
         val arcProgress = 1f - 4f * (nightProgress - 0.5f) * (nightProgress - 0.5f)
         val moonY = baseY - arcHeight * arcProgress + parallaxY
         

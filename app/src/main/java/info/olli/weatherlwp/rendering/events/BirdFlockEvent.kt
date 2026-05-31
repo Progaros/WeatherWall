@@ -66,7 +66,7 @@ class BirdFlockEvent(random: Random, override val spawnTimeMs: Long = System.cur
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
-                      hillHeightProvider: HillHeightProvider?) {
+                      hillHeightProvider: HillHeightProvider?, extendedOffsetY: Float) {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val elapsedSec = elapsedMs / 1000f
         
@@ -105,7 +105,7 @@ class BirdFlockEvent(random: Random, override val spawnTimeMs: Long = System.cur
         for (bird in birds) {
             val size = bird.sizeVariation * unit * 4f
             val birdX = (x + bird.offsetX) * width - extendedOffset
-            val birdY = (y + bird.offsetY) * height
+            val birdY = EventTraversal.mapFieldY(y + bird.offsetY, height, extendedOffsetY)
             
             // Smooth wing animation using sine
             // During flap: fast wing beats with larger amplitude

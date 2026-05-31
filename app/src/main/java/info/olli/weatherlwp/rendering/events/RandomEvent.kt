@@ -166,10 +166,12 @@ interface RandomEvent {
      * @param extendedOffset Offset to center content (subtract from X to convert extended coords to screen coords)
      * @param absoluteTimeMs Current absolute time in milliseconds (use for elapsed time calculation)
      * @param hillHeightProvider Optional function to get hill Y at given X and depth (for ground events)
+     * @param extendedOffsetY Vertical offset for uniform field scaling (sky events subtract from Y)
      */
     fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint, 
              parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
              timeSeconds: Float, ambientColor: Int, extendedOffset: Float = 0f,
              absoluteTimeMs: Long = System.currentTimeMillis(),
-             hillHeightProvider: HillHeightProvider? = null)
+             hillHeightProvider: HillHeightProvider? = null,
+             extendedOffsetY: Float = 0f)
 }

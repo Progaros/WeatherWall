@@ -57,7 +57,7 @@ class SnowflakeEvent(random: Random, override val spawnTimeMs: Long = System.cur
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
-                      hillHeightProvider: HillHeightProvider?) {
+                      hillHeightProvider: HillHeightProvider?, extendedOffsetY: Float) {
         val unit = height * 0.004f * sizeScale
         
         val elapsedMs = absoluteTimeMs - spawnTimeMs
@@ -76,7 +76,7 @@ class SnowflakeEvent(random: Random, override val spawnTimeMs: Long = System.cur
         canvas.translate(px, py)
         
         val screenX = x * width - extendedOffset
-        val screenY = y * height
+        val screenY = EventTraversal.mapFieldY(y, height, extendedOffsetY)
         
         // Snowflake color - white with slight blue tint, adapts to ambient
         val baseColor = Color.argb(230, 240, 248, 255)

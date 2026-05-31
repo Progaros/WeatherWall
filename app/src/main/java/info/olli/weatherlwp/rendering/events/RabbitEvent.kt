@@ -63,7 +63,7 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
-                      hillHeightProvider: HillHeightProvider?) {
+                      hillHeightProvider: HillHeightProvider?, extendedOffsetY: Float) {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         
         val hopPhase = (elapsedMs * 0.006f) % (2f * 3.14159f)  // Slower hop animation

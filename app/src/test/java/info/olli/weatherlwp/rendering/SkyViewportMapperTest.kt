@@ -13,8 +13,8 @@ class SkyViewportMapperTest {
 
         assertEquals(0f, SkyViewportMapper.toScreenX(0f, width, height), 0.0001f)
         assertEquals(width, SkyViewportMapper.toScreenX(1f, width, height), 0.0001f)
-        assertEquals(0f, SkyViewportMapper.toScreenY(0f, height), 0.0001f)
-        assertEquals(height, SkyViewportMapper.toScreenY(1f, height), 0.0001f)
+        assertEquals(0f, SkyViewportMapper.toScreenY(0f, width, height), 0.0001f)
+        assertEquals(height, SkyViewportMapper.toScreenY(1f, width, height), 0.0001f)
     }
 
     @Test
@@ -45,11 +45,28 @@ class SkyViewportMapperTest {
     }
 
     @Test
+    fun `taller device spreads Y beyond screen edges`() {
+        // On 1080x2400, fieldWidth=1350, fieldHeight=3000, offsetY=300
+        val width = 1080f
+        val height = 2400f
+
+        val top = SkyViewportMapper.toScreenY(0f, width, height)
+        val bottom = SkyViewportMapper.toScreenY(1f, width, height)
+        val center = SkyViewportMapper.toScreenY(0.5f, width, height)
+
+        assertTrue("Top edge should be off-screen", top < 0f)
+        assertTrue("Bottom edge should be off-screen", bottom > height)
+        assertEquals(height / 2f, center, 0.0001f)
+        // fieldHeight = height * fieldWidth / width = 2400 * 1350 / 1080 = 3000
+        assertEquals(3000f, bottom - top, 0.01f)
+    }
+
+    @Test
     fun `projection applies parallax offsets`() {
         val width = 1080f
         val height = 1920f
         val x = SkyViewportMapper.toScreenX(0.5f, width, height, parallaxX = 12f)
-        val y = SkyViewportMapper.toScreenY(0.5f, height, parallaxY = -20f)
+        val y = SkyViewportMapper.toScreenY(0.5f, width, height, parallaxY = -20f)
 
         assertEquals(552f, x, 0.0001f)
         assertEquals(940f, y, 0.0001f)

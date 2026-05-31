@@ -65,7 +65,7 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
-                      hillHeightProvider: HillHeightProvider?) {
+                      hillHeightProvider: HillHeightProvider?, extendedOffsetY: Float) {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val traversalElapsed = EventTraversal.scaledElapsed(elapsedMs, height)
         val x = startX + direction * speed * traversalElapsed

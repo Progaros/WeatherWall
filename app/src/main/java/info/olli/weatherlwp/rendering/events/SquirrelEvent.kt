@@ -85,7 +85,7 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
-                      hillHeightProvider: HillHeightProvider?) {
+                      hillHeightProvider: HillHeightProvider?, extendedOffsetY: Float) {
         val unit = height * 0.006f * sizeScale
         
         val elapsedMs = absoluteTimeMs - spawnTimeMs

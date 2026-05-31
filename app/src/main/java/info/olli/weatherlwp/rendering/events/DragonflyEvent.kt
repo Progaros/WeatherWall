@@ -77,7 +77,7 @@ class DragonflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
-                      hillHeightProvider: HillHeightProvider?) {
+                      hillHeightProvider: HillHeightProvider?, extendedOffsetY: Float) {
         val unit = height * 0.002f * sizeScale
         
         val elapsedMs = absoluteTimeMs - spawnTimeMs
@@ -100,7 +100,7 @@ class DragonflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
         canvas.translate(px, py)
         
         val screenX = x * width - extendedOffset
-        val screenY = y * height
+        val screenY = EventTraversal.mapFieldY(y, height, extendedOffsetY)
         
         // Very fast wing beat
         val wingBeat = sin(timeSeconds * 40f + wingPhase)

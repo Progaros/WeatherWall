@@ -3,10 +3,10 @@ package info.olli.weatherlwp.rendering
 /**
  * Centralized mapping from normalized sky coordinates (0..1) to screen space.
  *
- * Uses height-based uniform scaling so that elements spread equally in both
- * X and Y when the rendering height changes. The "field width" scales with
- * height (maintaining [RenderConstants.REFERENCE_ASPECT_RATIO]), with a floor
- * of [width] to guarantee full coverage in landscape orientations.
+ * Uses uniform scaling so that elements spread equally in both X and Y.
+ * The "field" scales with the dominant screen dimension (maintaining
+ * [RenderConstants.REFERENCE_ASPECT_RATIO]), pushing elements off-screen
+ * symmetrically on all sides for a true zoom-from-center effect.
  */
 object SkyViewportMapper {
 
@@ -18,11 +18,28 @@ object SkyViewportMapper {
         maxOf(height * RenderConstants.REFERENCE_ASPECT_RATIO, width)
 
     /**
+     * Compute the virtual field height used for Y mapping.
+     * Ensures the same overflow ratio as X so the zoom is uniform on all sides.
+     */
+    fun fieldHeight(width: Float, height: Float): Float {
+        val fw = fieldWidth(width, height)
+        return height * fw / width
+    }
+
+    /**
      * Horizontal offset to center the field on the screen.
      */
     fun fieldOffset(width: Float, height: Float): Float {
         val fw = fieldWidth(width, height)
         return (fw - width) / 2f
+    }
+
+    /**
+     * Vertical offset to center the field on the screen.
+     */
+    fun fieldOffsetY(width: Float, height: Float): Float {
+        val fh = fieldHeight(width, height)
+        return (fh - height) / 2f
     }
 
     /**
@@ -38,8 +55,15 @@ object SkyViewportMapper {
         return normalizedX * fw - offset + parallaxX
     }
 
-    fun toScreenY(normalizedY: Float, height: Float, parallaxY: Float = 0f): Float {
-        return normalizedY * height + parallaxY
+    /**
+     * Map a normalized Y (0..1) to screen pixels using the same uniform scaling as X.
+     * On the reference device this equals `normalizedY * height`. On non-reference
+     * aspect ratios the field extends above/below the screen symmetrically.
+     */
+    fun toScreenY(normalizedY: Float, width: Float, height: Float, parallaxY: Float = 0f): Float {
+        val fh = fieldHeight(width, height)
+        val offset = (fh - height) / 2f
+        return normalizedY * fh - offset + parallaxY
     }
 
     /**

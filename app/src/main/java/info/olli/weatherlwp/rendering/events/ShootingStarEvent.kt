@@ -57,7 +57,7 @@ class ShootingStarEvent(random: Random, override val spawnTimeMs: Long = System.
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
-                      hillHeightProvider: HillHeightProvider?) {
+                      hillHeightProvider: HillHeightProvider?, extendedOffsetY: Float) {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         
         // Don't draw during the delay period
@@ -88,12 +88,12 @@ class ShootingStarEvent(random: Random, override val spawnTimeMs: Long = System.
         canvas.translate(px, py)
         
         val headX = (startX + cos(angle) * progress * 0.5f) * width - extendedOffset
-        val headY = (startY + sin(angle) * progress * 0.5f) * height
+        val headY = EventTraversal.mapFieldY(startY + sin(angle) * progress * 0.5f, height, extendedOffsetY)
         
         // Tail length shrinks during fade-out (meteor burning up)
         val effectiveLength = length * (0.3f + 0.7f * fadeAlpha)
         val tailX = (startX + cos(angle) * (progress - effectiveLength) * 0.5f) * width - extendedOffset
-        val tailY = (startY + sin(angle) * (progress - effectiveLength) * 0.5f) * height
+        val tailY = EventTraversal.mapFieldY(startY + sin(angle) * (progress - effectiveLength) * 0.5f, height, extendedOffsetY)
         
         // Apply fade alpha to all colors
         val headAlpha = (255 * fadeAlpha).toInt()

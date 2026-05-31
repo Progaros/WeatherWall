@@ -52,7 +52,7 @@ class EagleEvent(random: Random, override val spawnTimeMs: Long = System.current
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
-                      hillHeightProvider: HillHeightProvider?) {
+                      hillHeightProvider: HillHeightProvider?, extendedOffsetY: Float) {
         // Scale: ~1-1.5% of height based on distance
         val unit = height * 0.005f * sizeScale
         val size = unit * 5f
@@ -68,7 +68,7 @@ class EagleEvent(random: Random, override val spawnTimeMs: Long = System.current
         
         val currentX = -0.1f * width + 1.4f * width * progress - extendedOffset
         val soarOffset = sin(timeSeconds * 0.8f + soarPhase) * 0.015f * sizeScale
-        val currentY = (baseY + soarOffset) * height
+        val currentY = EventTraversal.mapFieldY(baseY + soarOffset, height, extendedOffsetY)
         
         // Alpha based on distance
         val alpha = (1f - distance * 0.25f)

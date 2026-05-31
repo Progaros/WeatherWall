@@ -61,6 +61,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     // Extended canvas dimensions for height-based field scaling
     private var extendedWidth = 0f
     private var extendedOffset = 0f
+    private var extendedOffsetY = 0f
     
     // Ratio of visible viewport to extended world width (1.0 landscape, <1.0 portrait)
     private var viewportRatio = 1.0f
@@ -188,6 +189,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         // spread uniformly in both X and Y. Uses the same field as SkyViewportMapper.
         extendedWidth = SkyViewportMapper.fieldWidth(w, h)
         extendedOffset = SkyViewportMapper.fieldOffset(w, h)
+        extendedOffsetY = SkyViewportMapper.fieldOffsetY(w, h)
         viewportRatio = w / extendedWidth
 
         // Clear frame-scoped draw context and pooled entry references on geometry changes.
@@ -521,11 +523,15 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
                     // Events use screen-relative ratio-based positions and speeds.
                     // This is intentional: events are overlay content whose apparent speed
                     // is independent of world zoom. No canvas scaling is applied.
+                    // Sky events get extendedOffsetY for uniform vertical field scaling;
+                    // ground events get 0 since hillHeightProvider returns screen-space ratios.
+                    val offsetY = if (event.layer == EventLayer.GROUND) 0f else extendedOffsetY
                     event.draw(
                         canvas, paint, strokePaint, parallaxCalculator, extendedWidth, height,
                         state.timeSeconds, ambientColor, extendedOffset, state.absoluteTimeMs,
                         @Suppress("DEPRECATION")
-                        if (event.layer == EventLayer.GROUND) hillHeightProvider else null
+                        if (event.layer == EventLayer.GROUND) hillHeightProvider else null,
+                        offsetY
                     )
                 } catch (e: Exception) {
                     android.util.Log.e("RandomEventLayer", "Error drawing event ${event.javaClass.simpleName}", e)

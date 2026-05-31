@@ -64,7 +64,7 @@ class HotAirBalloonEvent(random: Random, override val spawnTimeMs: Long = System
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
-                      hillHeightProvider: HillHeightProvider?) {
+                      hillHeightProvider: HillHeightProvider?, extendedOffsetY: Float) {
         // Scale: 0.4-0.8% of height based on distance (was 1%)
         val unit = height * 0.005f * sizeScale
         val size = unit * 6f
@@ -82,7 +82,7 @@ class HotAirBalloonEvent(random: Random, override val spawnTimeMs: Long = System
         // Less bobbing for distant balloons
         val bobIntensity = sizeScale * 0.15f
         val bobOffset = sin(timeSeconds * 0.4f + bobPhase) * size * bobIntensity
-        val currentY = y * height + bobOffset
+        val currentY = EventTraversal.mapFieldY(y, height, extendedOffsetY) + bobOffset
         
         val balloonHeight = size * 2.0f
         val balloonWidth = size * 1.6f

@@ -61,7 +61,7 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         canvas: Canvas, paint: Paint, strokePaint: Paint,
         parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
         timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
-        hillHeightProvider: HillHeightProvider?
+        hillHeightProvider: HillHeightProvider?, extendedOffsetY: Float
     ) {
         // Scale: ~0.8-1.2% of height based on distance
         val unit = height * 0.005f * sizeScale
@@ -77,9 +77,9 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
 
         val eased = smoothstep01((progress + 0.15f) / 1.15f)
         val currentX = (-0.2f + eased * 1.4f) * width - extendedOffset
-        val baseY = y * height
+        val baseScreenY = EventTraversal.mapFieldY(y, height, extendedOffsetY)
         val bob = sin(localTime * 0.7f + bobPhase) * size * 0.04f
-        val currentY = baseY + bob
+        val currentY = baseScreenY + bob
 
         // Flap animation - owls have slow, deep wing beats
         val cycleT = (localTime + wingPhase) % flapInterval

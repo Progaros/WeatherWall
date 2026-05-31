@@ -57,7 +57,7 @@ class AlienEvent(random: Random, override val spawnTimeMs: Long = System.current
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
-                      hillHeightProvider: HillHeightProvider?) {
+                      hillHeightProvider: HillHeightProvider?, extendedOffsetY: Float) {
         // Scale: ~0.6-1% of height - distant UFO
         val unit = height * 0.004f * sizeScale
         val size = unit * 5f  // About 2% saucer width max (40px on 2000px screen)
@@ -83,7 +83,7 @@ class AlienEvent(random: Random, override val spawnTimeMs: Long = System.current
         // Very subtle wobble
         val wobbleX = sin(wobblePhase) * size * 0.15f
         val wobbleY = sin(hoverPhase * 1.3f) * size * 0.2f
-        val currentY = y * height + wobbleY
+        val currentY = EventTraversal.mapFieldY(y, height, extendedOffsetY) + wobbleY
         
         // Tilt based on movement - very subtle
         canvas.save()

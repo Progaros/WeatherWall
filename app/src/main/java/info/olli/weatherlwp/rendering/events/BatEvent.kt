@@ -64,7 +64,7 @@ class BatEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
-                      hillHeightProvider: HillHeightProvider?) {
+                      hillHeightProvider: HillHeightProvider?, extendedOffsetY: Float) {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val elapsedSec = elapsedMs / 1000f
         
@@ -96,7 +96,7 @@ class BatEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
                         sin(elapsedSec * bat.jerkFreqY * 2.3f) * bat.jerkAmpY * 0.4f
             
             val batX = (baseX + bat.offsetX + jerkX) * width - extendedOffset
-            val batY = (baseY + bat.offsetY + jerkY) * height
+            val batY = EventTraversal.mapFieldY(baseY + bat.offsetY + jerkY, height, extendedOffsetY)
             
             val size = bat.sizeVariation * unit * 4f
             

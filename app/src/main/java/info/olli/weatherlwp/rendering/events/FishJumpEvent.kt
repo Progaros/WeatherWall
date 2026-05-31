@@ -50,7 +50,7 @@ class FishJumpEvent(random: Random, override val spawnTimeMs: Long = System.curr
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float,
-                      absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?) {
+                  absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?, extendedOffsetY: Float) {
         val progress = getProgress(absoluteTimeMs)
         if (progress < 0f || progress > 1f) return
 

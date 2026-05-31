@@ -82,6 +82,17 @@ object EventTraversal {
     fun xAtProgress(path: HorizontalPath, progress: Float): Float {
         return path.startX + (path.endX - path.startX) * progress
     }
+
+    /**
+     * Map a Y ratio (0..1) to screen pixels using the same uniform field scaling
+     * as [SkyViewportMapper]. Keeps sizing based on [height] (screen height) while
+     * applying the vertical field overflow from [extendedOffsetY].
+     *
+     * Formula: `yRatio * (height + 2*extendedOffsetY) - extendedOffsetY`
+     * which equals `yRatio * fieldHeight - offsetY`.
+     */
+    fun mapFieldY(yRatio: Float, height: Float, extendedOffsetY: Float): Float =
+        yRatio * (height + 2f * extendedOffsetY) - extendedOffsetY
 }
 
 /**
