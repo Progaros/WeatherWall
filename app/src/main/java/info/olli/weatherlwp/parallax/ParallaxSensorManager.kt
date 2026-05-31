@@ -152,8 +152,8 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
     // Maximum tilt angle in radians (18 degrees: 0.31415927)
     private val MAX_TILT_RAD = (18f * PI / 180f).toFloat()
     
-    private var listener: Listener? = null
-    private var shakeListener: ShakeListener? = null
+    @Volatile private var listener: Listener? = null
+    @Volatile private var shakeListener: ShakeListener? = null
     private var isStarted = false
     
     // Shake detection state - gForce-based approach
@@ -991,20 +991,25 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
 internal class Averager(private val bufferSize: Int) {
     private val values = FloatArray(bufferSize)
     private var index = 0
+    private var count = 0
     
     fun add(value: Float): Averager {
         values[index] = value
         index = (index + 1) % bufferSize
+        if (count < bufferSize) count++
         return this
     }
     
     fun calc(): Float {
+        if (count == 0) return 0f
         var sum = 0f
-        for (v in values) sum += v
-        return sum / bufferSize
+        for (i in 0 until count) sum += values[i]
+        return sum / count
     }
     
     fun reset(value: Float = 0f) {
         for (i in values.indices) values[i] = value
+        index = 0
+        count = bufferSize  // After reset with a value, buffer is considered full
     }
 }

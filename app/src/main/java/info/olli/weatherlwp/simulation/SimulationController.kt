@@ -28,6 +28,7 @@ class SimulationController(private val context: Context) {
     
     // Frame delta tracking
     private var lastUpdateMs = 0L
+    private var lastRecordAttemptMs = 0L
 
     init {
         val snapshot = PreferenceManager.getDefaultSharedPreferences(context).all
@@ -148,19 +149,22 @@ class SimulationController(private val context: Context) {
         val isBlueHour = rawTime in (sunriseHours - blueHourDuration)..sunriseHours ||
                          rawTime in sunsetHours..(sunsetHours + blueHourDuration)
         
-        // Record weather history (deduplicates internally to once per hour)
+        // Record weather history (throttled to once per minute; deduplicates internally to once per hour)
         // In debug mode, pass the effective (overridden) weather so history tracks simulated conditions
-        if (currentSettings.debugEnabled) {
-            val overridePrecipProb = when (effectiveWeather) {
-                WeatherType.RAIN, WeatherType.THUNDERSTORM, WeatherType.SNOW, WeatherType.HAIL -> 0.85f
-                else -> 0f
+        if (currentMs - lastRecordAttemptMs >= 60_000L) {
+            lastRecordAttemptMs = currentMs
+            if (currentSettings.debugEnabled) {
+                val overridePrecipProb = when (effectiveWeather) {
+                    WeatherType.RAIN, WeatherType.THUNDERSTORM, WeatherType.SNOW, WeatherType.HAIL -> 0.85f
+                    else -> 0f
+                }
+                weatherHistory.recordCurrentWeather(
+                    overrideWeather = effectiveWeather,
+                    overridePrecipProb = overridePrecipProb
+                )
+            } else {
+                weatherHistory.recordCurrentWeather()
             }
-            weatherHistory.recordCurrentWeather(
-                overrideWeather = effectiveWeather,
-                overridePrecipProb = overridePrecipProb
-            )
-        } else {
-            weatherHistory.recordCurrentWeather()
         }
         val historySnapshot = weatherHistory.getSnapshot()
         
@@ -241,7 +245,13 @@ class SimulationController(private val context: Context) {
             return rawTime
         }
         
-        val timeDelta = kotlin.math.abs(rawTime - lastSmoothedTime)
+        // Use circular (modular) distance to handle midnight wrap-around correctly.
+        // Without this, 23.99→0.01 would compute delta=23.98 and lerp through all hours.
+        var delta = rawTime - lastSmoothedTime
+        if (delta > 12f) delta -= 24f
+        if (delta < -12f) delta += 24f
+        
+        val timeDelta = kotlin.math.abs(delta)
         
         // Very small delta: just use raw time to avoid floating point drift
         if (timeDelta < 0.001f) {
@@ -261,7 +271,7 @@ class SimulationController(private val context: Context) {
         // Frame-rate-independent factor: convert per-second rate to per-frame
         val lerpFactor = (baseRate * deltaSec).coerceIn(0f, 1f)
         
-        lastSmoothedTime = lastSmoothedTime + (rawTime - lastSmoothedTime) * lerpFactor
+        lastSmoothedTime = (lastSmoothedTime + delta * lerpFactor).mod(24f)
         return lastSmoothedTime
     }
     

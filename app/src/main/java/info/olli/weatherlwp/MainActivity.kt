@@ -343,6 +343,18 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
         updateFabVisibility()
         // ParallaxScene.loadPrefs() handles all layer settings including weather and seasonal
         previewScene?.loadPrefs()
+        // Resume sensor and render loop if surface is ready
+        previewScene?.start()
+        if (surfaceReady) {
+            startPreview()
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Stop render loop and sensor when activity is not visible to save battery
+        stopPreview()
+        previewScene?.stop()
     }
     
     /**
@@ -589,6 +601,9 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
     }
     
     override fun onDestroy() {
+        // Cancel any pending preference reload to avoid leaking this Activity
+        pendingPrefReload?.let { mainHandler.removeCallbacks(it) }
+        pendingPrefReload = null
         // Unregister preference listener
         PreferenceManager.getDefaultSharedPreferences(this)
             .unregisterOnSharedPreferenceChangeListener(prefListener)

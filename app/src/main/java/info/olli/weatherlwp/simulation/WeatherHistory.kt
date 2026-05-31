@@ -43,6 +43,7 @@ class WeatherHistory(private val context: Context) {
 
         private const val HOUR_MS = 60L * 60L * 1000L
         private const val MAX_CATCH_UP_HOURS = MAX_HISTORY_DAYS * 24
+        private const val MAX_BATCH_HOURS = 24  // Cap per-call work to avoid blocking render thread
 
         // Physics tuning
         private const val SNOW_ACCUMULATION_RATE = 0.06f   // per hour of heavy snow
@@ -109,14 +110,11 @@ class WeatherHistory(private val context: Context) {
     // ========================= Public API =========================
 
     /**
-     * Thread-safe snapshot for the render thread.
-     * Call from SimulationController.getState() without synchronization.
+     * Lock-free snapshot read for the render thread.
+     * Safe because [cachedSnapshot] is @Volatile and Snapshot is an immutable data class.
+     * Catch-up work is performed in [recordCurrentWeather] instead.
      */
-    @Synchronized
-    fun getSnapshot(): Snapshot {
-        catchUpIfNeeded()
-        return cachedSnapshot
-    }
+    fun getSnapshot(): Snapshot = cachedSnapshot
 
     /**
      * Record current weather conditions. Call periodically (e.g., every frame or on weather update).
@@ -357,6 +355,7 @@ class WeatherHistory(private val context: Context) {
     /**
      * Apply offline progression when enough real-world time elapsed since the last physics update.
      * Uses the last known weather state so snow/river levels evolve while wallpaper rendering is paused.
+     * Batches to MAX_BATCH_HOURS per call to avoid blocking the render thread.
      */
     private fun catchUpIfNeeded() {
         val nowMs = System.currentTimeMillis()
@@ -373,14 +372,16 @@ class WeatherHistory(private val context: Context) {
         val missedHours = (elapsedMs / HOUR_MS).toInt().coerceIn(0, MAX_CATCH_UP_HOURS)
         if (missedHours <= 0) return
 
+        // Batch to avoid blocking render thread for hundreds of iterations
+        val batch = missedHours.coerceAtMost(MAX_BATCH_HOURS)
         var hour = 0
-        while (hour < missedHours) {
+        while (hour < batch) {
             updateLevelsForHour(lastKnownWeatherType, lastKnownTempCelsius, lastKnownPrecipProb)
             hour++
         }
 
         // Advance by the simulated amount so sub-hour remainder carries into future calls.
-        lastPhysicsUpdateMs += missedHours * HOUR_MS
+        lastPhysicsUpdateMs += batch * HOUR_MS
         saveToPrefs()
         updateSnapshot()
     }

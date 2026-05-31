@@ -56,8 +56,8 @@ object DebugTracer {
      * Disable tracing and return the report.
      */
     fun disable(): String {
-        enabled = false
         log("Tracing", "Session ended")
+        enabled = false
         return generateReport()
     }
     

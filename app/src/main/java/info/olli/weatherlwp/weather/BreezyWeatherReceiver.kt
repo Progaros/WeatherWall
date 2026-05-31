@@ -28,7 +28,7 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
 
         /** Convert a temperature that may be in Kelvin or Celsius to Celsius. */
         fun kelvinOrCelsiusToC(value: Double): Float {
-            return if (!value.isNaN() && value > 100) (value - 273.15).toFloat()
+            return if (!value.isNaN() && value > 200) (value - 273.15).toFloat()
                    else if (!value.isNaN()) value.toFloat()
                    else Float.NaN
         }
@@ -74,7 +74,9 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
                 in 200..232 -> WeatherType.THUNDERSTORM  // Thunderstorm
                 in 300..321 -> WeatherType.RAIN          // Drizzle
                 in 500..531 -> WeatherType.RAIN          // Rain
-                in 600..622 -> WeatherType.SNOW          // Snow
+                in 600..610 -> WeatherType.SNOW          // Snow
+                in 611..616 -> WeatherType.HAIL          // Sleet/Hail
+                in 617..622 -> WeatherType.SNOW          // Snow shower variants
                 in 701..781 -> WeatherType.FOG           // Atmosphere (fog, mist, etc.)
                 800 -> WeatherType.CLEAR                 // Clear
                 801 -> WeatherType.PARTLY_CLOUDY         // Few clouds (11-25%)

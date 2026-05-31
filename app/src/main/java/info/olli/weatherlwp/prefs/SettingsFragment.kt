@@ -186,17 +186,23 @@ class SettingsFragment : PreferenceFragmentCompat() {
                     "logcat", "-d", "-t", "200", "-v", "time",
                     "WeatherWallpaper:E", "ParallaxScene:E", "MainActivity:E", "*:S"
                 ))
-                val reader = BufferedReader(InputStreamReader(process.inputStream))
-                var line: String?
-                var errorCount = 0
-                while (reader.readLine().also { line = it } != null && errorCount < 50) {
-                    sb.appendLine(line)
-                    errorCount++
-                }
-                reader.close()
-                process.waitFor()
-                if (errorCount == 0) {
-                    sb.appendLine("(No recent errors found)")
+                try {
+                    val reader = BufferedReader(InputStreamReader(process.inputStream))
+                    var line: String?
+                    var errorCount = 0
+                    while (reader.readLine().also { line = it } != null && errorCount < 50) {
+                        sb.appendLine(line)
+                        errorCount++
+                    }
+                    reader.close()
+                    if (!process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)) {
+                        process.destroy()
+                    }
+                    if (errorCount == 0) {
+                        sb.appendLine("(No recent errors found)")
+                    }
+                } finally {
+                    process.destroy()
                 }
             } catch (e: Exception) {
                 sb.appendLine("(Could not read logcat: ${e.message})")
@@ -210,17 +216,23 @@ class SettingsFragment : PreferenceFragmentCompat() {
                     "logcat", "-d", "-t", "100", "-v", "time",
                     "WeatherWallpaper:*", "ParallaxScene:*", "MainActivity:*", "CloudLayer:*", "*:S"
                 ))
-                val reader = BufferedReader(InputStreamReader(process.inputStream))
-                var line: String?
-                var logCount = 0
-                while (reader.readLine().also { line = it } != null && logCount < 100) {
-                    sb.appendLine(line)
-                    logCount++
-                }
-                reader.close()
-                process.waitFor()
-                if (logCount == 0) {
-                    sb.appendLine("(No recent logs found)")
+                try {
+                    val reader = BufferedReader(InputStreamReader(process.inputStream))
+                    var line: String?
+                    var logCount = 0
+                    while (reader.readLine().also { line = it } != null && logCount < 100) {
+                        sb.appendLine(line)
+                        logCount++
+                    }
+                    reader.close()
+                    if (!process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)) {
+                        process.destroy()
+                    }
+                    if (logCount == 0) {
+                        sb.appendLine("(No recent logs found)")
+                    }
+                } finally {
+                    process.destroy()
                 }
             } catch (e: Exception) {
                 sb.appendLine("(Could not read logcat: ${e.message})")

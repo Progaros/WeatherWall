@@ -2353,4 +2353,82 @@ class ParallaxCalculatorTest {
         assertEquals("Hill X must be zero", 0f, hillOffset.first, 0.001f)
         assertEquals("Hill Y must be zero", 0f, hillOffset.second, 0.001f)
     }
+
+    // ============== Frame-rate independence tests ==============
+
+    @Test
+    fun `frame rate independence - 30fps and 60fps produce similar final position`() {
+        // Simulate the same tilt ramp over 2 seconds at different frame rates.
+        // Both should arrive at approximately the same position.
+        val targetTiltX = 0.6f
+        val targetTiltY = 0.3f
+        val durationMs = 2000L
+
+        fun simulateAtFps(fps: Int): Pair<Float, Float> {
+            val calc = ParallaxCalculator()
+            calc.strength = 1.0f
+            calc.maxOffsetPercent = 20f
+            calc.maxOffsetPx = 0f
+            calc.setCanvasSize(1080f, 1920f)
+            calc.smoothing = 0.134f
+
+            val dtMs = 1000L / fps
+            val totalFrames = (durationMs / dtMs).toInt()
+            for (i in 1..totalFrames) {
+                val t = i.toFloat() / totalFrames
+                calc.updateFromSensor(targetTiltX * t, targetTiltY * t)
+                calc.update(dtMs)
+            }
+            // Let settle for 500ms more at final tilt
+            val settleFrames = (500L / dtMs).toInt()
+            repeat(settleFrames) {
+                calc.updateFromSensor(targetTiltX, targetTiltY)
+                calc.update(dtMs)
+            }
+            return calc.getOffset()
+        }
+
+        val (x30, y30) = simulateAtFps(30)
+        val (x60, y60) = simulateAtFps(60)
+
+        // Positions should be within 15% of each other (smoothing causes minor variance)
+        val xDiff = kotlin.math.abs(x30 - x60)
+        val yDiff = kotlin.math.abs(y30 - y60)
+        val xRef = kotlin.math.abs(x30).coerceAtLeast(1f)
+        val yRef = kotlin.math.abs(y30).coerceAtLeast(1f)
+
+        assertTrue(
+            "X offset at 30fps ($x30) vs 60fps ($x60) differ by ${xDiff / xRef * 100}% — should be <15%",
+            xDiff / xRef < 0.15f
+        )
+        assertTrue(
+            "Y offset at 30fps ($y30) vs 60fps ($y60) differ by ${yDiff / yRef * 100}% — should be <15%",
+            yDiff / yRef < 0.15f
+        )
+    }
+
+    @Test
+    fun `pullback clamp - scale never exceeds 1`() {
+        // Force position far beyond max, then verify pullback doesn't amplify
+        val calculator = ParallaxCalculator()
+        calculator.strength = 3.0f  // High sensitivity
+        calculator.maxOffsetPercent = 5f  // Very small max
+        calculator.maxOffsetPx = 0f
+        calculator.setCanvasSize(1080f, 1920f)
+        calculator.smoothing = 0f
+
+        // Rapidly ramp to extreme position
+        rampTilt(calculator, 1.0f, 1.0f, steps = 5)
+        val posAfterRamp = calculator.getOffsetX()
+
+        // Update with zero delta — pullback should reduce, not amplify
+        calculator.updateFromSensor(1.0f, 1.0f)
+        calculator.update(16)
+        val posAfterPullback = calculator.getOffsetX()
+
+        assertTrue(
+            "Pullback should not amplify position: before=$posAfterRamp, after=$posAfterPullback",
+            kotlin.math.abs(posAfterPullback) <= kotlin.math.abs(posAfterRamp) + 1f
+        )
+    }
 }

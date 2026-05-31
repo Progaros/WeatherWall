@@ -369,9 +369,9 @@ class ParallaxCalculator {
             if (maxDist > 0f) {
                 val rawDist = kotlin.math.sqrt(rawPositionX * rawPositionX + rawPositionY * rawPositionY)
                 if (rawDist > maxDist * 1.8f) {
-                    val pullback = 1f - exp(-2f * dt)
+                    val pullback = (1f - exp(-2f * dt)).coerceAtMost(1f)
                     val targetDist = maxDist * 1.4f
-                    val scale = (1f - pullback) + pullback * (targetDist / rawDist)
+                    val scale = ((1f - pullback) + pullback * (targetDist / rawDist)).coerceAtMost(1f)
                     rawPositionX *= scale
                     rawPositionY *= scale
                 }

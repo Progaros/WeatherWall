@@ -101,8 +101,10 @@ class DebugOverlayPreference @JvmOverloads constructor(
                     .putStringSet("pref_debug_overlay_items", selectedItems)
                     .apply()
                 mainHandler.post {
-                    updateSummaryText()
-                    notifyChanged()
+                    if (preferenceManager != null) {
+                        updateSummaryText()
+                        notifyChanged()
+                    }
                 }
             }
             .setNegativeButton("Cancel", null)

@@ -143,6 +143,16 @@ class EventPreviewView @JvmOverloads constructor(
         removeCallbacks(animator)
     }
 
+    override fun onVisibilityChanged(changedView: View, visibility: Int) {
+        super.onVisibilityChanged(changedView, visibility)
+        if (visibility == VISIBLE) {
+            removeCallbacks(animator)
+            post(animator)
+        } else {
+            removeCallbacks(animator)
+        }
+    }
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 

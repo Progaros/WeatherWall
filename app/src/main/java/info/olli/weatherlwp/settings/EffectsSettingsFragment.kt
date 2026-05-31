@@ -28,7 +28,13 @@ class EffectsSettingsFragment : PreferenceFragmentCompat() {
         // Only migrate once
         if (prefs.getBoolean(migrationKey, false)) return
         
-        val currentValue = prefs.getInt(key, -1)
+        val currentValue = try {
+            prefs.getInt(key, -1)
+        } catch (_: ClassCastException) {
+            // Preference stored as a different type (e.g. String from old version)
+            prefs.edit().remove(key).apply()
+            -1
+        }
         val newValue = when {
             currentValue <= 0 -> 1  // Off → minimum (1%)
             currentValue > 50 -> currentValue.coerceIn(1, 100)  // Already 1-100 scale

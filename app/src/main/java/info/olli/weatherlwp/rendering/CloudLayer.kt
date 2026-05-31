@@ -14,6 +14,7 @@ import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
 import info.olli.weatherlwp.util.ColorMath
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.sin
@@ -122,7 +123,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
 
     // Cell-based generation cache: cellIndex → generated groups
     // Prevents regeneration stalls by caching deterministic cell results
-    private val cellCache = mutableMapOf<Int, List<CloudGroup>>()
+    // ConcurrentHashMap: accessed from render thread (getOrPut/removeAll) and main thread (clear)
+    private val cellCache = ConcurrentHashMap<Int, List<CloudGroup>>()
 
     // Reusable list for draw prioritization (avoids allocation per frame)
     private val drawCandidates = ArrayList<DrawCandidate>(MAX_GROUPS)
@@ -281,7 +283,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
 
         val allGroups = mutableListOf<CloudGroup>()
         for (cellX in startCell..endCell) {
-            val groups = cellCache.getOrPut(cellX) {
+            val groups = cellCache.computeIfAbsent(cellX) {
                 generateCellClouds(cellX, cellSize, spawnProbability)
             }
             allGroups.addAll(groups)
@@ -789,6 +791,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         for (j in 0 until limit) {
             val c = drawCandidates[j]
             val bitmap = c.group.cachedBitmap ?: continue
+            if (bitmap.isRecycled) continue  // Guard against race with background recycle
             // Subtle scale oscillation: each cloud "breathes" slightly at its own rate.
             // ±3% size variation makes the scene feel alive without being distracting.
             val oscPhase = (c.group.seed % 10000L).toFloat()

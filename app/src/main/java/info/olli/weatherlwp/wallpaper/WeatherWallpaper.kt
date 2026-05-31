@@ -177,6 +177,7 @@ class WeatherWallpaper : WallpaperService() {
             if (::scene.isInitialized) {
                 runCatching {
                     scene.stop()
+                    sensorManager.clearCallbacks()
                     scene.destroy()
                 }.onFailure { Log.e(TAG, "Error destroying scene", it) }
             }
