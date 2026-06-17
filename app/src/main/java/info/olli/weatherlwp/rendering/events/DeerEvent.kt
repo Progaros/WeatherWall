@@ -135,26 +135,43 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         canvas.translate(deerX, deerY)
         if (direction < 0) canvas.scale(-1f, 1f)
         
+        // Smooth grazing transition: the head eases down and back up instead of snapping,
+        // and the legs settle to a planted stance as the deer stops to graze.
+        val grazeTransitionMs = 400f
+        val grazeProgress = if (isGrazing) {
+            val grazeElapsed = (cycleTime - grazeInterval).toFloat()
+            val ramp = grazeTransitionMs.coerceAtMost(grazeDuration / 2f)
+            val rampIn = (grazeElapsed / ramp).coerceIn(0f, 1f)
+            val rampOut = ((grazeDuration.toFloat() - grazeElapsed) / ramp).coerceIn(0f, 1f)
+            RenderConstants.easeInOutCubic(minOf(rampIn, rampOut))
+        } else 0f
+        val gaitActivity = 1f - grazeProgress
+
         // Leg animation (elapsed-time based for stable motion independent of frame pacing).
-        val walkPhase = if (isGrazing) 0f else movingTime * 0.003f + legPhaseOffset
-        val legSwing = if (isGrazing) 0f else sin(walkPhase) * 0.13f
-        
-        // Calculate body position (head lowers when grazing)
-        val headLower = if (isGrazing) unit * 5f else 0f
-        val bodyY = -unit * 6.5f
+        val walkPhase = movingTime * 0.003f + legPhaseOffset
+        val legSwing = sin(walkPhase) * 0.13f * gaitActivity
+
+        // Subtle vertical body bob synced to the stride (rises twice per gait cycle).
+        val bodyBob = sin(walkPhase * 2f) * unit * 0.2f * gaitActivity
+
+        // Calculate body position (head lowers smoothly when grazing)
+        val headLower = grazeProgress * unit * 5f
+        val bodyY = -unit * 6.5f + bodyBob
         val headX = unit * 4f
         val headY = bodyY - unit * 3.8f + headLower
 
-        // Legs (4 legs with walking animation) — split by depth: back before body, front after body.
+        // Legs (4 legs with a diagonal walking gait) — split by depth: back before body, front after body.
+        // Diagonal pairs swing together: (front-near + back-far) oppose (front-far + back-near),
+        // giving a natural alternating step instead of all legs moving in unison.
         val legWidth = unit * 0.8f
         val frontLegX1 = unit * 2f
         val frontLegX2 = unit * 0.5f
-        val frontSwing1 = legSwing
-        val frontSwing2 = -legSwing * 0.8f
+        val frontSwing1 = legSwing          // front near leg
+        val frontSwing2 = -legSwing         // front far leg (opposite phase)
         val backLegX1 = -unit * 2f
         val backLegX2 = -unit * 3.5f
-        val backSwing1 = -legSwing * 0.9f
-        val backSwing2 = legSwing * 0.7f
+        val backSwing1 = -legSwing          // back near leg (diagonal with front far)
+        val backSwing2 = legSwing           // back far leg (diagonal with front near)
         val hoofSize = unit * 0.35f
         
         strokePaint.color = bodyColor

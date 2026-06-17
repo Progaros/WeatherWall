@@ -199,7 +199,7 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         val sunset = bucket.sunset
         val dawnStart = (sunrise - 1.0f).coerceAtLeast(3.0f)   // 1h before sunrise
         val dawnEnd = sunrise + 0.5f                            // 30min after sunrise
-        val duskStart = sunset - 0.5f                           // 30min before sunset
+        val duskStart = sunset - 1.5f                           // 1.5h before sunset (gradual warm-up)
         val duskEnd = (sunset + 1.0f).coerceAtMost(23.0f)      // 1h after sunset
         
         // 3-stop gradient: Top, Middle (40% down), Horizon

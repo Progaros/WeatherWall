@@ -143,7 +143,7 @@
             android:key="pref_mushroom_density"
             android:title="Mushroom Density"
             android:summary="How many mushrooms appear (0=few, 100=many)"
-            android:defaultValue="20"
+            android:defaultValue="12"
             android:max="100"
             app:min="0"
             app:showSeekBarValue="true"

@@ -3,12 +3,32 @@ package info.olli.weatherlwp.rendering
 /**
  * Centralized mapping from normalized sky coordinates (0..1) to screen space.
  *
- * Uses uniform scaling so that elements spread equally in both X and Y.
- * The "field" scales with the dominant screen dimension (maintaining
- * [RenderConstants.REFERENCE_ASPECT_RATIO]), pushing elements off-screen
- * symmetrically on all sides for a true zoom-from-center effect.
+ * Two related projections live here:
+ *  - Stars use an ISOTROPIC square field ([toScreenX]/[toScreenY]/[starFieldExtent]).
+ *    A unit step in X covers exactly as many pixels as a unit step in Y, so the star
+ *    pattern keeps uniform, round spacing in every orientation. The square field is
+ *    centered on the screen, so changing the viewport shape reveals stars symmetrically
+ *    in ALL directions instead of stretching them along the long axis.
+ *  - Celestial bodies (sun/moon) and random events use the dimension-scaled field
+ *    ([fieldWidth]/[fieldHeight]/[fieldOffset]/[fieldOffsetY]), which tracks the screen
+ *    aspect so the sun/moon arc stays within the visible area.
  */
 object SkyViewportMapper {
+
+    /**
+     * Overscan applied to the isotropic star field so it always extends past every screen
+     * edge (in any orientation, even as parallax shifts it), preventing empty star borders.
+     */
+    private const val STAR_FIELD_OVERSCAN = 1.15f
+
+    /**
+     * Side length (in pixels) of the square, isotropic field used to place stars.
+     * Identical for X and Y so stars are distributed uniformly in all directions.
+     * Based on the larger screen dimension so the field always overflows every edge.
+     */
+    fun starFieldExtent(width: Float, height: Float): Float {
+        return maxOf(width, height) * STAR_FIELD_OVERSCAN
+    }
 
     /**
      * Compute the virtual field width used for X mapping.
@@ -54,27 +74,24 @@ object SkyViewportMapper {
     }
 
     /**
-     * Map a normalized X (0..1) to screen pixels using height-based field scaling.
-     * On the reference device (1080×1920) this produces the same result as
-     * `normalizedX * width`. On taller devices the field extends beyond the
-     * screen edges, pushing some elements off-screen while maintaining uniform
-     * density with Y.
+     * Map a normalized X (0..1) to screen pixels using the isotropic star field.
+     * The square field is centered on the screen, so the midpoint (0.5) maps to the
+     * horizontal center and stars spread symmetrically off both edges. A unit step in X
+     * covers the same pixel distance as a unit step in Y, keeping the pattern undistorted.
      */
     fun toScreenX(normalizedX: Float, width: Float, height: Float, parallaxX: Float = 0f): Float {
-        val fw = fieldWidth(width, height)
-        val offset = (fw - width) / 2f
-        return normalizedX * fw - offset + parallaxX
+        val extent = starFieldExtent(width, height)
+        return width / 2f + (normalizedX - 0.5f) * extent + parallaxX
     }
 
     /**
-     * Map a normalized Y (0..1) to screen pixels using the same uniform scaling as X.
-     * On the reference device this equals `normalizedY * height`. On non-reference
-     * aspect ratios the field extends above/below the screen symmetrically.
+     * Map a normalized Y (0..1) to screen pixels using the same isotropic star field as X.
+     * The midpoint (0.5) maps to the vertical center and stars spread symmetrically off the
+     * top and bottom edges, matching the horizontal behavior for a true zoom-from-center look.
      */
     fun toScreenY(normalizedY: Float, width: Float, height: Float, parallaxY: Float = 0f): Float {
-        val fh = fieldHeight(width, height)
-        val offset = (fh - height) / 2f
-        return normalizedY * fh - offset + parallaxY
+        val extent = starFieldExtent(width, height)
+        return height / 2f + (normalizedY - 0.5f) * extent + parallaxY
     }
 
     /**

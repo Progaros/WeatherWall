@@ -6,85 +6,72 @@ import org.junit.Test
 
 class SkyViewportMapperTest {
     @Test
-    fun `reference device maps normalized to full viewport`() {
-        // On reference device (1080x1920), fieldWidth = max(1920*0.5625, 1080) = 1080
+    fun `reference device centers the star field and overflows symmetrically`() {
+        // Isotropic square field: extent = max(1080, 1920) * 1.15 = 2208
         val width = 1080f
         val height = 1920f
 
-        assertEquals(0f, SkyViewportMapper.toScreenX(0f, width, height), 0.0001f)
-        assertEquals(width, SkyViewportMapper.toScreenX(1f, width, height), 0.0001f)
-        assertEquals(0f, SkyViewportMapper.toScreenY(0f, width, height), 0.0001f)
-        assertEquals(height, SkyViewportMapper.toScreenY(1f, width, height), 0.0001f)
-    }
+        // Midpoint maps to the screen center in both axes
+        assertEquals(width / 2f, SkyViewportMapper.toScreenX(0.5f, width, height), 0.0001f)
+        assertEquals(height / 2f, SkyViewportMapper.toScreenY(0.5f, width, height), 0.0001f)
 
-    @Test
-    fun `taller device spreads X beyond screen edges`() {
-        // On 1080x2400, fieldWidth = 2400*0.5625 = 1350, offset = 135
-        val width = 1080f
-        val height = 2400f
-
+        // Edges overflow the screen symmetrically about the center
         val left = SkyViewportMapper.toScreenX(0f, width, height)
         val right = SkyViewportMapper.toScreenX(1f, width, height)
-        val center = SkyViewportMapper.toScreenX(0.5f, width, height)
-
-        assertTrue("Left edge should be off-screen", left < 0f)
-        assertTrue("Right edge should be off-screen", right > width)
-        assertEquals(width / 2f, center, 0.0001f)
-        // Field extent equals height * REFERENCE_ASPECT_RATIO
-        assertEquals(height * RenderConstants.REFERENCE_ASPECT_RATIO, right - left, 0.01f)
-    }
-
-    @Test
-    fun `landscape 16-9 maps to screen width with no overflow`() {
-        // On 1920x1080 (16:9, same ratio as reference), scaleFactor = 1.0
-        val width = 1920f
-        val height = 1080f
-
-        assertEquals(0f, SkyViewportMapper.toScreenX(0f, width, height), 0.0001f)
-        assertEquals(width, SkyViewportMapper.toScreenX(1f, width, height), 0.0001f)
-    }
-
-    @Test
-    fun `wider landscape expands in all directions`() {
-        // On 2400x1080 (20:9), scaleFactor = (2400/1080) / (16/9) = 1.25
-        // fieldWidth = 2400 * 1.25 = 3000, offset = 300
-        val width = 2400f
-        val height = 1080f
-
-        val left = SkyViewportMapper.toScreenX(0f, width, height)
-        val right = SkyViewportMapper.toScreenX(1f, width, height)
-        val center = SkyViewportMapper.toScreenX(0.5f, width, height)
-
-        assertTrue("Left edge should be off-screen", left < 0f)
-        assertTrue("Right edge should be off-screen", right > width)
-        assertEquals(width / 2f, center, 0.0001f)
-        assertEquals(3000f, right - left, 0.01f)
-
-        // Y should also overflow symmetrically
-        val top = SkyViewportMapper.toScreenY(0f, width, height)
-        val bottom = SkyViewportMapper.toScreenY(1f, width, height)
-        val centerY = SkyViewportMapper.toScreenY(0.5f, width, height)
-
-        assertTrue("Top edge should be off-screen", top < 0f)
-        assertTrue("Bottom edge should be off-screen", bottom > height)
-        assertEquals(height / 2f, centerY, 0.0001f)
-    }
-
-    @Test
-    fun `taller device spreads Y beyond screen edges`() {
-        // On 1080x2400, fieldWidth=1350, fieldHeight=3000, offsetY=300
-        val width = 1080f
-        val height = 2400f
+        assertTrue("Left edge off-screen", left < 0f)
+        assertTrue("Right edge off-screen", right > width)
+        assertEquals("X edges symmetric about center", width, left + right, 0.001f)
 
         val top = SkyViewportMapper.toScreenY(0f, width, height)
         val bottom = SkyViewportMapper.toScreenY(1f, width, height)
-        val center = SkyViewportMapper.toScreenY(0.5f, width, height)
+        assertTrue("Top edge off-screen", top < 0f)
+        assertTrue("Bottom edge off-screen", bottom > height)
+        assertEquals("Y edges symmetric about center", height, top + bottom, 0.001f)
+    }
 
-        assertTrue("Top edge should be off-screen", top < 0f)
-        assertTrue("Bottom edge should be off-screen", bottom > height)
-        assertEquals(height / 2f, center, 0.0001f)
-        // fieldHeight = height * fieldWidth / width = 2400 * 1350 / 1080 = 3000
-        assertEquals(3000f, bottom - top, 0.01f)
+    @Test
+    fun `star field is isotropic - equal pixel span in X and Y`() {
+        // A unit step in X must cover the same pixels as a unit step in Y in every orientation,
+        // so the star pattern keeps round, undistorted spacing.
+        for ((w, h) in listOf(1080f to 1920f, 1920f to 1080f, 2400f to 1080f, 1080f to 2400f, 1440f to 1440f)) {
+            val spanX = SkyViewportMapper.toScreenX(1f, w, h) - SkyViewportMapper.toScreenX(0f, w, h)
+            val spanY = SkyViewportMapper.toScreenY(1f, w, h) - SkyViewportMapper.toScreenY(0f, w, h)
+            assertEquals("Span should be isotropic for ${w}x${h}", spanX, spanY, 0.0001f)
+        }
+    }
+
+    @Test
+    fun `field overflows every edge in all orientations`() {
+        for ((w, h) in listOf(1080f to 1920f, 1920f to 1080f, 2400f to 1080f, 1080f to 2400f)) {
+            assertTrue("left<0 for ${w}x${h}", SkyViewportMapper.toScreenX(0f, w, h) < 0f)
+            assertTrue("right>w for ${w}x${h}", SkyViewportMapper.toScreenX(1f, w, h) > w)
+            assertTrue("top<0 for ${w}x${h}", SkyViewportMapper.toScreenY(0f, w, h) < 0f)
+            assertTrue("bottom>h for ${w}x${h}", SkyViewportMapper.toScreenY(1f, w, h) > h)
+        }
+    }
+
+    @Test
+    fun `widening viewport does not stretch stars horizontally`() {
+        // While height stays the dominant dimension, widening the screen keeps the field
+        // extent constant, so existing stars keep their spacing (no horizontal stretch);
+        // the wider viewport simply reveals more of the centered field.
+        val height = 1920f
+        val narrowSpan = SkyViewportMapper.toScreenX(1f, 1080f, height) - SkyViewportMapper.toScreenX(0f, 1080f, height)
+        val wideSpan = SkyViewportMapper.toScreenX(1f, 1400f, height) - SkyViewportMapper.toScreenX(0f, 1400f, height)
+        assertEquals("Star spacing unchanged when widening", narrowSpan, wideSpan, 0.0001f)
+    }
+
+    @Test
+    fun `extent grows with the larger dimension and is square`() {
+        // Extending the long axis scales the whole isotropic field, so stars spread out
+        // uniformly in all directions rather than only along one axis.
+        val baseExtent = SkyViewportMapper.starFieldExtent(1080f, 1920f)
+        val taller = SkyViewportMapper.starFieldExtent(1080f, 2400f)
+        val wider = SkyViewportMapper.starFieldExtent(2400f, 1080f)
+        assertTrue("Taller screen grows field", taller > baseExtent)
+        assertTrue("Wider screen grows field", wider > baseExtent)
+        // Field is square: extent is identical whether the long side is width or height
+        assertEquals(taller, wider, 0.0001f)
     }
 
     @Test

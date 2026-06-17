@@ -5,8 +5,10 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.hardware.display.DisplayManager
 import android.os.Build
 import android.util.Log
+import android.view.Display
 import android.view.Surface
 import android.view.WindowManager
 import kotlin.math.PI
@@ -137,9 +139,9 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
     // Track display rotation for reset on rotation change
     private var lastDisplayRotation = Surface.ROTATION_0
     
-    // Canvas orientation: when the canvas doesn't rotate with the display (common in
-    // WallpaperService), sensor axis remapping must use ROTATION_0 even if the display
-    // reports landscape. This flag is set via setCanvasOrientation().
+    // Canvas orientation fallback: used ONLY when the real display rotation cannot be read.
+    // The reliable rotation source is DisplayManager (see getCurrentDisplayRotation()); this
+    // flag is a last-resort hint set via setCanvasOrientation().
     @Volatile private var canvasIsLandscape = false
     
     // ==== Gyroscope mode state approach) ====
@@ -417,35 +419,44 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
 
     fun isRunning(): Boolean = isStarted
     
-    @Suppress("DEPRECATION")
     private fun getCurrentDisplayRotation(): Int {
-        val systemRotation = try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                context.display?.rotation ?: Surface.ROTATION_0
-            } else {
-                (context.getSystemService(Context.WINDOW_SERVICE) as WindowManager)
-                    .defaultDisplay?.rotation ?: Surface.ROTATION_0
-            }
+        // Read the REAL display rotation. In a WallpaperService the engine runs on a
+        // non-visual Service context, where Context.getDisplay() is unreliable (it throws
+        // UnsupportedOperationException on Android R+, which the catch below turns into a
+        // constant ROTATION_0). That made the wallpaper ignore device rotation entirely, so
+        // in landscape the parallax axes were remapped as if still portrait (swapped /
+        // "barely moves" tilt). DisplayManager.getDisplay(DEFAULT_DISPLAY) returns the actual
+        // default-display rotation from ANY context, including a Service, and is reliable.
+        val rotation = readDisplayRotation()
+        if (rotation != null) return rotation
+        // Fallback only when no display rotation is available: infer from the canvas
+        // orientation that parallax offsets are actually applied to.
+        return if (canvasIsLandscape) Surface.ROTATION_90 else Surface.ROTATION_0
+    }
+
+    @Suppress("DEPRECATION")
+    private fun readDisplayRotation(): Int? {
+        return try {
+            val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
+            val display = displayManager?.getDisplay(Display.DEFAULT_DISPLAY)
+                ?: if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    context.display
+                } else {
+                    (context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager)?.defaultDisplay
+                }
+            display?.rotation
         } catch (_: Exception) {
-            Surface.ROTATION_0
+            null
         }
-        // If the system reports a landscape rotation but the canvas is actually portrait
-        // (common in WallpaperService where the compositor handles rotation), the sensor
-        // axes should NOT be remapped — the canvas is still in device-natural orientation.
-        val isLandscapeRotation = systemRotation == Surface.ROTATION_90 || systemRotation == Surface.ROTATION_270
-        if (isLandscapeRotation && !canvasIsLandscape) return Surface.ROTATION_0
-        if (!isLandscapeRotation && canvasIsLandscape) return Surface.ROTATION_90
-        return systemRotation
     }
     
     /**
      * Inform the sensor manager of the actual canvas orientation.
-     * Call this when the canvas/surface size changes so that sensor axis remapping
-     * matches the coordinate system that parallax offsets are applied to.
+     * Call this when the canvas/surface size changes.
      *
-     * In WallpaperService the canvas may stay portrait even when the display is landscape
-     * (the compositor rotates the output). Without this call the sensor axes would be
-     * remapped for a landscape frame that doesn't exist, causing swapped movement directions.
+     * This is now only a FALLBACK hint: the primary rotation source is the real display
+     * rotation read via DisplayManager (reliable even from a WallpaperService context).
+     * The canvas orientation is consulted only if that rotation is unavailable.
      */
     fun setCanvasOrientation(width: Float, height: Float) {
         canvasIsLandscape = width > height

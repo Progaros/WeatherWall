@@ -69,7 +69,6 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     companion object {
         private const val DRAW_KIND_TREE = 0
         private const val DRAW_KIND_BUSH = 1
-        private const val DRAW_KIND_ANIMAL = 2
 
         /**
          * Left+right width fraction added to decoration bitmaps for parallax headroom.
@@ -1072,9 +1071,20 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             // Get animals for this depth range (may be empty)
             val animals = groundEventDrawer?.getEventsInRange(hill.depthFactor, nextDepth) ?: emptyList()
 
+            // Draw animals first so same-band trees and bushes render *over* them.
+            // Without this, an animal whose feet sit slightly downhill of a tree would
+            // sort in front of the trunk and appear to walk through it. Cross-band
+            // ordering is unchanged (nearer bands draw later), so animals still appear
+            // in front of more distant tree layers and behind nearer ones.
+            var animalDrawIdx = 0
+            while (animalDrawIdx < animals.size) {
+                animals[animalDrawIdx].draw()
+                animalDrawIdx++
+            }
+
             // Fast path: trees only, already Y-sorted during generation.
             // Parallax offset is shared for all items on this hill layer.
-            if (animals.isEmpty() && hillBushes.isEmpty()) {
+            if (hillBushes.isEmpty()) {
                 var treeIdx = 0
                 while (treeIdx < hillTrees.size) {
                     drawTreeInPlace(
@@ -1089,8 +1099,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                     treeIdx++
                 }
             } else {
-                // Merge trees, bushes, and animals into reusable draw-entry buffer.
-                val totalItems = hillTrees.size + hillBushes.size + animals.size
+                // Merge trees and bushes into reusable draw-entry buffer (Y-sorted).
+                val totalItems = hillTrees.size + hillBushes.size
                 ensureDrawEntryCapacity(totalItems)
 
                 var entryCount = 0
@@ -1115,16 +1125,6 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                     bushIdx++
                 }
 
-                var animalIdx = 0
-                while (animalIdx < animals.size) {
-                    val entry = drawEntryBuffer[entryCount]
-                    entry.y = animals[animalIdx].yRatio
-                    entry.kind = DRAW_KIND_ANIMAL
-                    entry.index = animalIdx
-                    entryCount++
-                    animalIdx++
-                }
-
                 // Sort by Y (lower Y = further away, drawn first; higher Y = closer, drawn last)
                 sortDrawEntriesByY(entryCount)
 
@@ -1143,7 +1143,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                             treeAutumnWeight
                         )
 
-                        DRAW_KIND_BUSH -> drawBushInPlace(
+                        else -> drawBushInPlace(
                             canvas,
                             hillBushes[entry.index],
                             state,
@@ -1151,8 +1151,6 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                             py,
                             ambientColor
                         )
-
-                        else -> animals[entry.index].draw()
                     }
                     drawIdx++
                 }

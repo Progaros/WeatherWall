@@ -256,7 +256,7 @@ class BushRenderer {
                 val bushRandom = DeterministicLayout.random(randomSeed + 8000, section = 510, index = stableId)
                 if (bushRandom.nextFloat() > berryProbability) continue
                 val bushBerries = mutableListOf<BerryData>()
-                val numBerries = 2 + bushRandom.nextInt(4)  // 2-5 berries per bush
+                val numBerries = 1 + bushRandom.nextInt(3)  // 1-3 berries per bush (lowered from 2-5 to calm the scene)
                 for (b in 0 until numBerries) {
                     bushBerries.add(BerryData(
                         xOffset = (bushRandom.nextFloat() - 0.5f) * 0.8f,
