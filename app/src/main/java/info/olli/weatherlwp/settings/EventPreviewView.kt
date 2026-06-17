@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.util.AttributeSet
+import android.util.Log
 import android.view.View
 import androidx.core.graphics.withSave
 import info.olli.weatherlwp.parallax.ParallaxCalculator
@@ -221,8 +222,9 @@ class EventPreviewView @JvmOverloads constructor(
                     absoluteTimeMs = absoluteTimeMs,
                     hillHeightProvider = previewHillProvider
                 )
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 // Keep settings responsive if one event renderer throws.
+                Log.w("EventPreviewView", "Preview event renderer threw", e)
             }
         }
     }

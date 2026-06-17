@@ -135,6 +135,16 @@ class SettingsExporterTest {
         )
     }
 
+    @Test
+    fun formatEntry_stringEscapesQuotesNewlinesAndBackslash() {
+        // Quote, newline, carriage return and backslash must be escaped so they
+        // cannot break the `key = "value"` line format.
+        assertEquals(
+            "pref_x = \"a\\\"b\\nc\\rd\\\\e\"  # String",
+            SettingsExporter.formatEntry("pref_x", "a\"b\nc\rd\\e")
+        )
+    }
+
     // --- Integration-style: realistic prefs ---
 
     @Test

@@ -61,7 +61,7 @@ object SettingsExporter {
             is Int     -> "$key = $value  # Int"
             is Long    -> "$key = $value  # Long"
             is Float   -> "$key = $value  # Float"
-            is String  -> "$key = \"$value\"  # String"
+            is String  -> "$key = \"${escapeString(value)}\"  # String"
             is Set<*>  -> {
                 val items = value.filterIsInstance<String>().sorted().joinToString(", ")
                 "$key = [$items]  # StringSet"
@@ -69,4 +69,16 @@ object SettingsExporter {
             else       -> "$key = $value  # ${value::class.simpleName}"
         }
     }
+
+    /**
+     * Escape characters that would otherwise break the `key = "value"` line format:
+     * backslash, double-quote, and CR/LF. Backslash is escaped first so the later
+     * replacements are not double-escaped.
+     */
+    private fun escapeString(value: String): String =
+        value
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\r", "\\r")
+            .replace("\n", "\\n")
 }

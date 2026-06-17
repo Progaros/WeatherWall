@@ -36,27 +36,30 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         Log.d(TAG, "Received intent: ${intent.action}")
-        
-        if (intent.action == ACTION_WEATHER) {
-            // Use goAsync() to avoid ANR - JSON parsing can take time
-            val pendingResult = goAsync()
-            
-            executor.execute {
-                try {
-                    // Data is sent as JSON string
-                    val jsonString = intent.getStringExtra("WeatherJson")
-                    if (jsonString != null) {
-                        Log.d(TAG, "Received weather JSON: ${jsonString.take(200)}...")
-                        parseWeatherData(context, jsonString)
-                    } else {
-                        Log.w(TAG, "No WeatherJson in intent")
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error parsing weather data", e)
-                } finally {
-                    // Must call finish() to release the BroadcastReceiver
-                    pendingResult.finish()
-                }
+
+        // Fail fast: ignore broadcasts that are not our weather action.
+        if (intent.action != ACTION_WEATHER) return
+
+        // Validate the payload on the caller thread before acquiring an async token
+        // and dispatching to the worker. A missing or blank extra means there is
+        // nothing to parse, so there is no reason to keep the receiver alive.
+        val jsonString = intent.getStringExtra("WeatherJson")
+        if (jsonString.isNullOrBlank()) {
+            Log.w(TAG, "No WeatherJson in intent")
+            return
+        }
+
+        // Use goAsync() to avoid ANR - JSON parsing can take time.
+        val pendingResult = goAsync()
+        executor.execute {
+            try {
+                Log.d(TAG, "Received weather JSON: ${jsonString.take(200)}...")
+                parseWeatherData(context, jsonString)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error parsing weather data", e)
+            } finally {
+                // Must call finish() to release the BroadcastReceiver
+                pendingResult.finish()
             }
         }
     }
@@ -113,9 +116,9 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
             
             // Extended weather data
             val extendedData = WeatherRepository.ExtendedWeatherData(
-                precipProbability = data.optInt("precipProbability", 0),
-                cloudCover = data.optInt("cloudCover", 0),
-                humidity = data.optInt("currentHumidity", data.optInt("humidity", 0)),
+                precipProbability = data.optInt("precipProbability", 0).coerceIn(0, 100),
+                cloudCover = data.optInt("cloudCover", 0).coerceIn(0, 100),
+                humidity = data.optInt("currentHumidity", data.optInt("humidity", 0)).coerceIn(0, 100),
                 visibility = data.optInt("visibility", 10000),
                 pressure = data.optInt("pressure", 1013),
                 moonPhase = data.optInt("moonPhase", 0),

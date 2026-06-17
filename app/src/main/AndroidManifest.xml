@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.VIBRATE" />
 
@@ -43,11 +44,18 @@
                 android:resource="@xml/wallpaper" />
         </service>
         
-        <!-- Breezy Weather integration via Gadgetbridge intent -->
+        <!--
+            Breezy Weather integration via Gadgetbridge intent.
+            Intentionally exported without a permission: third-party weather apps
+            (Breezy Weather / Gadgetbridge) broadcast ACTION_GENERIC_WEATHER and do
+            not hold a custom permission. Untrusted broadcast input is validated and
+            clamped in BreezyWeatherReceiver before use.
+        -->
         <receiver
             android:name=".weather.BreezyWeatherReceiver"
             android:exported="true"
-            android:enabled="true">
+            android:enabled="true"
+            tools:ignore="ExportedReceiver">
             <intent-filter>
                 <action android:name="nodomain.freeyourgadget.gadgetbridge.ACTION_GENERIC_WEATHER" />
             </intent-filter>

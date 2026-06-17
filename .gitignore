@@ -21,3 +21,6 @@ ai.md
 event_renders/
 analysis-output/
 *.patch
+
+# Local-only engineering audit notes (kept on disk, not version-controlled)
+docs/audit/

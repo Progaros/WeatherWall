@@ -81,7 +81,7 @@ data class SimulationSettings(
                 else -> {
                     try {
                         WeatherType.valueOf(override.uppercase())
-                    } catch (_: Exception) {
+                    } catch (_: IllegalArgumentException) {
                         realWeather
                     }
                 }

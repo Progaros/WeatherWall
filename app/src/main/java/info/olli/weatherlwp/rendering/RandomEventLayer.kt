@@ -136,6 +136,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
             val parallaxCalculator = groundDrawParallaxCalculator ?: return
 
             try {
+                resetEventPaints()
                 currentEvent.draw(
                     canvas,
                     paint,
@@ -154,6 +155,23 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
                 android.util.Log.e("RandomEventLayer", "Error drawing event ${currentEvent.javaClass.simpleName}", e)
             }
         }
+    }
+
+    /**
+     * Restore the shared [paint] and [strokePaint] to their baseline configuration
+     * before each event draws. Events mutate these shared instances (style, strokeWidth,
+     * shader, color); resetting first prevents state from one event leaking into the next.
+     */
+    private fun resetEventPaints() {
+        paint.reset()
+        paint.isAntiAlias = true
+        paint.style = Paint.Style.FILL
+        strokePaint.reset()
+        strokePaint.isAntiAlias = true
+        strokePaint.style = Paint.Style.STROKE
+        strokePaint.strokeWidth = 2f
+        strokePaint.strokeCap = Paint.Cap.ROUND
+        strokePaint.strokeJoin = Paint.Join.ROUND
     }
 
     private fun ensureGroundEntryPoolSize(required: Int) {
@@ -526,6 +544,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
                     // Sky events get extendedOffsetY for uniform vertical field scaling;
                     // ground events get 0 since hillHeightProvider returns screen-space ratios.
                     val offsetY = if (event.layer == EventLayer.GROUND) 0f else extendedOffsetY
+                    resetEventPaints()
                     event.draw(
                         canvas, paint, strokePaint, parallaxCalculator, extendedWidth, height,
                         state.timeSeconds, ambientColor, extendedOffset, state.absoluteTimeMs,
