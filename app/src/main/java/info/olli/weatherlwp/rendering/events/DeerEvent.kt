@@ -62,6 +62,9 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
     private val isFawn = random.nextFloat() < 0.2f
     private val fawnScale = if (isFawn) 0.6f else 1.0f
 
+    // Adult bucks (60% of adults) carry antlers; fawns never do.
+    private val hasAntlers = !isFawn && random.nextFloat() < 0.6f
+
     private fun movingElapsedMs(absoluteTimeMs: Long): Long {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val cycleTime = elapsedMs % (grazeInterval + grazeDuration)
@@ -147,63 +150,79 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         } else 0f
         val gaitActivity = 1f - grazeProgress
 
-        // Leg animation (elapsed-time based for stable motion independent of frame pacing).
-        val walkPhase = movingTime * 0.003f + legPhaseOffset
-        val legSwing = sin(walkPhase) * 0.13f * gaitActivity
+        // Leg + gait animation (elapsed-time based for stable motion independent of frame pacing).
+        val walkPhase = movingTime * 0.004f + legPhaseOffset
 
         // Subtle vertical body bob synced to the stride (rises twice per gait cycle).
-        val bodyBob = sin(walkPhase * 2f) * unit * 0.2f * gaitActivity
+        val bodyBob = sin(walkPhase * 2f) * unit * 0.15f * gaitActivity
 
-        // Calculate body position (head lowers smoothly when grazing)
-        val headLower = grazeProgress * unit * 5f
+        // Body + head positions. When grazing the head eases all the way down so the
+        // muzzle reaches the ground in front of the deer; otherwise it is held high/alert.
+        val headLower = grazeProgress * unit * 9.5f
         val bodyY = -unit * 6.5f + bodyBob
         val headX = unit * 4f
         val headY = bodyY - unit * 3.8f + headLower
 
-        // Legs (4 legs with a diagonal walking gait) — split by depth: back before body, front after body.
-        // Diagonal pairs swing together: (front-near + back-far) oppose (front-far + back-near),
-        // giving a natural alternating step instead of all legs moving in unison.
-        val legWidth = unit * 0.8f
-        val frontLegX1 = unit * 2f
-        val frontLegX2 = unit * 0.5f
-        val frontSwing1 = legSwing          // front near leg
-        val frontSwing2 = -legSwing         // front far leg (opposite phase)
-        val backLegX1 = -unit * 2f
-        val backLegX2 = -unit * 3.5f
-        val backSwing1 = -legSwing          // back near leg (diagonal with front far)
-        val backSwing2 = legSwing           // back far leg (diagonal with front near)
-        val hoofSize = unit * 0.35f
-        
-        strokePaint.color = bodyColor
-        strokePaint.strokeWidth = legWidth
-        strokePaint.style = Paint.Style.STROKE
-        strokePaint.strokeCap = Paint.Cap.ROUND
+        // Diagonal trot gait: each diagonal pair (front-near + back-far) opposes the other
+        // (front-far + back-near) so legs alternate naturally instead of moving in unison.
+        val swingA = sin(walkPhase)
+        val swingB = sin(walkPhase + Math.PI.toFloat())
 
-        // Back legs (behind body)
-        path.reset()
-        path.moveTo(backLegX1, bodyY + unit * 1.5f)
-        path.quadTo(backLegX1 + backSwing1 * unit * 3f, bodyY + unit * 3f,
-            backLegX1 + backSwing1 * unit * 2f, 0f)
-        canvas.drawPath(path, strokePaint)
+        val legWidth = unit * 0.85f
+        val hoofSize = unit * 0.38f
+        val hipY = bodyY + unit * 1.5f
+        val strideAmp = unit * 0.65f
+        val liftAmp = unit * 0.5f
+        val hoofColor = Color.argb((190 * alpha).toInt(), 45, 35, 28)
 
-        path.reset()
-        path.moveTo(backLegX2, bodyY + unit * 1.5f)
-        path.quadTo(backLegX2 + backSwing2 * unit * 3f, bodyY + unit * 3f,
-            backLegX2 + backSwing2 * unit * 2f, 0f)
-        canvas.drawPath(path, strokePaint)
+        // Slightly darker shade for the far-side legs to add depth separation.
+        val legFarColor = RenderConstants.blendWithAmbient(
+            Color.argb((220 * alpha).toInt(),
+                (Color.red(brownBase) * 0.72f).toInt(),
+                (Color.green(brownBase) * 0.72f).toInt(),
+                (Color.blue(brownBase) * 0.72f).toInt()),
+            ambientColor, 0.25f)
 
-        // Back hooves remain behind body as well.
-        paint.color = Color.argb((180 * alpha).toInt(), 50, 40, 30)
-        canvas.drawOval(backLegX1 + backSwing1 * unit * 2f - hoofSize, -hoofSize,
-            backLegX1 + backSwing1 * unit * 2f + hoofSize, hoofSize * 0.5f, paint)
-        canvas.drawOval(backLegX2 + backSwing2 * unit * 2f - hoofSize, -hoofSize,
-            backLegX2 + backSwing2 * unit * 2f + hoofSize, hoofSize * 0.5f, paint)
+        // Jointed-leg renderer: hip -> knee -> hoof with a forward stride and a small lift
+        // on the swing phase. kneeBend shapes the joint (fore legs bend forward, hind back).
+        fun drawLeg(hipX: Float, swing: Float, kneeBend: Float, legColor: Int) {
+            val stride = swing * strideAmp * gaitActivity
+            val lift = maxOf(0f, swing) * liftAmp * gaitActivity
+            val hoofX = hipX + stride
+            val hoofY = -lift
+            val kneeX = hipX + stride * 0.4f + kneeBend
+            val kneeY = hipY * 0.46f
+            strokePaint.color = legColor
+            strokePaint.strokeWidth = legWidth
+            strokePaint.style = Paint.Style.STROKE
+            strokePaint.strokeCap = Paint.Cap.ROUND
+            strokePaint.strokeJoin = Paint.Join.ROUND
+            path.reset()
+            path.moveTo(hipX, hipY)
+            path.lineTo(kneeX, kneeY)
+            path.lineTo(hoofX, hoofY)
+            canvas.drawPath(path, strokePaint)
+            paint.color = hoofColor
+            canvas.drawOval(hoofX - hoofSize, hoofY - hoofSize, hoofX + hoofSize, hoofY + hoofSize * 0.5f, paint)
+        }
+
+        // Leg anchors (profile view): a near and far leg for each pair; far drawn darker.
+        val frontNearX = unit * 2.3f
+        val frontFarX = unit * 1.6f
+        val backNearX = -unit * 2.3f
+        val backFarX = -unit * 3.0f
+        val frontKneeBend = unit * 0.2f
+        val backKneeBend = -unit * 0.45f
+
+        // --- Back legs (drawn behind the body) ---
+        drawLeg(backFarX, swingA, backKneeBend, legFarColor)
+        drawLeg(backNearX, swingB, backKneeBend, bodyColor)
 
         paint.color = bodyColor
 
         // Body (horizontal oval)
         canvas.drawOval(-unit * 4f, bodyY - unit * 2.5f, unit * 4f, bodyY + unit * 2.5f, paint)
-        
+
         // Belly (lighter underside)
         val bellyBase = if (isFawn) Color.rgb(210, 180, 150) else Color.rgb(180, 150, 120)
         paint.color = RenderConstants.blendWithAmbient(
@@ -211,7 +230,7 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
                        Color.red(bellyBase), Color.green(bellyBase), Color.blue(bellyBase)),
             ambientColor, 0.25f)
         canvas.drawOval(-unit * 3f, bodyY - unit * 0.5f, unit * 3f, bodyY + unit * 2f, paint)
-        
+
         // Fawn spots (white dots on flanks)
         if (isFawn) {
             paint.color = Color.argb((120 * alpha).toInt(), 255, 250, 240)
@@ -223,24 +242,36 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
                 i += 2
             }
         }
-        
+
+        // Tail (small, white-tipped) against the rump.
+        val tailColor = RenderConstants.blendWithAmbient(
+            Color.argb((200 * alpha).toInt(), 220, 210, 190), ambientColor, 0.25f)
+        paint.color = tailColor
+        canvas.drawOval(-unit * 4.5f, bodyY - unit * 0.5f, -unit * 3.5f, bodyY + unit * 1f, paint)
+
         paint.color = bodyColor
-        
-        // Neck (wide tapered shape connecting body to head, curves down when grazing)
+
+        // Neck: tapered band from shoulder to head base; follows the head up (alert) or down (graze).
+        val shoulderX = unit * 2.2f
+        val shoulderTopY = bodyY - unit * 1.9f
+        val shoulderBotY = bodyY + unit * 0.4f
+        val headBaseX = headX - unit * 1.3f
+        val headTopY = headY - unit * 0.7f
+        val headBotY = headY + unit * 0.9f
         path.reset()
-        path.moveTo(unit * 2.5f, bodyY - unit * 1.5f)
-        path.quadTo(unit * 3.2f, bodyY - unit * 2.5f + headLower * 0.4f,
-            headX - unit * 0.2f, headY - unit * 0.3f)
-        path.lineTo(headX - unit * 1.2f, headY + unit * 0.5f)
-        path.quadTo(unit * 2.6f, bodyY - unit * 1f + headLower * 0.35f,
-            unit * 1.2f, bodyY + unit * 0.8f)
+        path.moveTo(shoulderX, shoulderTopY)
+        path.quadTo((shoulderX + headBaseX) * 0.5f + unit * 0.4f,
+            (shoulderTopY + headTopY) * 0.5f, headBaseX, headTopY)
+        path.lineTo(headBaseX, headBotY)
+        path.quadTo((shoulderX + headBaseX) * 0.5f,
+            (shoulderBotY + headBotY) * 0.5f, shoulderX, shoulderBotY)
         path.close()
         canvas.drawPath(path, paint)
-        
-        // Head (slightly larger for better proportions with shorter neck)
-        canvas.drawOval(headX - unit * 1.8f, headY - unit * 1.2f, 
+
+        // Head
+        canvas.drawOval(headX - unit * 1.8f, headY - unit * 1.2f,
                         headX + unit * 2f, headY + unit * 1.3f, paint)
-        
+
         // Muzzle (lighter patch)
         val muzzleColor = if (isFawn) Color.rgb(220, 200, 170) else Color.rgb(190, 160, 130)
         paint.color = RenderConstants.blendWithAmbient(
@@ -249,88 +280,70 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
             ambientColor, 0.25f)
         canvas.drawOval(headX + unit * 0.5f, headY - unit * 0.3f,
                         headX + unit * 1.8f, headY + unit * 0.8f, paint)
-        
+
         // Eye
         paint.color = Color.argb((180 * alpha).toInt(), 30, 25, 20)
         canvas.drawCircle(headX + unit * 0.3f, headY - unit * 0.2f, unit * 0.25f, paint)
-        
+
         // Nose
         paint.color = Color.argb((200 * alpha).toInt(), 40, 35, 30)
         canvas.drawCircle(headX + unit * 1.7f, headY + unit * 0.3f, unit * 0.2f, paint)
-        
+
         paint.color = bodyColor
-        
-        // Ears (larger, alert)
+
+        // Ears (angled back from the head base)
         path.reset()
-        path.moveTo(headX - unit * 0.5f, headY - unit * 0.8f)
-        path.lineTo(headX - unit * 1f, headY - unit * 2.5f)
-        path.lineTo(headX + unit * 0.3f, headY - unit * 0.5f)
+        path.moveTo(headBaseX + unit * 0.2f, headY - unit * 0.6f)
+        path.lineTo(headBaseX - unit * 0.6f, headY - unit * 2.2f)
+        path.lineTo(headBaseX + unit * 1.0f, headY - unit * 0.4f)
+        path.close()
         canvas.drawPath(path, paint)
-        
+
         path.reset()
-        path.moveTo(headX + unit * 0.8f, headY - unit * 0.8f)
-        path.lineTo(headX + unit * 0.5f, headY - unit * 2.5f)
-        path.lineTo(headX + unit * 1.5f, headY - unit * 0.5f)
+        path.moveTo(headBaseX + unit * 0.9f, headY - unit * 0.7f)
+        path.lineTo(headBaseX + unit * 1.0f, headY - unit * 2.3f)
+        path.lineTo(headBaseX + unit * 1.8f, headY - unit * 0.5f)
+        path.close()
         canvas.drawPath(path, paint)
-        
-        // Antlers (only on adult males, 50% of adults)
-        if (!isFawn && direction > 0) {  // Simplified: only show antlers when facing right
+
+        // Antlers (adult bucks only): symmetric branched beams with two tines each.
+        if (hasAntlers) {
             strokePaint.color = RenderConstants.blendWithAmbient(
-                Color.argb((200 * alpha).toInt(), 120, 90, 60), ambientColor, 0.25f)
-            strokePaint.strokeWidth = unit * 0.4f
+                Color.argb((210 * alpha).toInt(), 150, 120, 80), ambientColor, 0.25f)
+            strokePaint.strokeWidth = unit * 0.32f
             strokePaint.style = Paint.Style.STROKE
-            
-            // Left antler
+            strokePaint.strokeCap = Paint.Cap.ROUND
+            strokePaint.strokeJoin = Paint.Join.ROUND
+            val baseY = headY - unit * 1.1f
+            // Back beam + tines
             path.reset()
-            path.moveTo(headX - unit * 0.3f, headY - unit * 1.5f)
-            path.lineTo(headX - unit * 1.5f, headY - unit * 4f)
-            path.moveTo(headX - unit * 1f, headY - unit * 3f)
-            path.lineTo(headX - unit * 2f, headY - unit * 3.5f)
+            path.moveTo(headX - unit * 0.2f, baseY)
+            path.quadTo(headX - unit * 1.4f, baseY - unit * 2.2f,
+                headX - unit * 1.0f, baseY - unit * 4.2f)
+            path.moveTo(headX - unit * 1.05f, baseY - unit * 1.9f)
+            path.lineTo(headX - unit * 2.3f, baseY - unit * 2.4f)
+            path.moveTo(headX - unit * 1.02f, baseY - unit * 3.1f)
+            path.lineTo(headX - unit * 2.1f, baseY - unit * 3.9f)
             canvas.drawPath(path, strokePaint)
-            
-            // Right antler
+            // Front beam + tines
             path.reset()
-            path.moveTo(headX + unit * 0.5f, headY - unit * 1.5f)
-            path.lineTo(headX + unit * 1.5f, headY - unit * 4f)
-            path.moveTo(headX + unit * 1f, headY - unit * 3f)
-            path.lineTo(headX + unit * 2f, headY - unit * 3.5f)
+            path.moveTo(headX + unit * 0.5f, baseY)
+            path.quadTo(headX + unit * 1.5f, baseY - unit * 2.2f,
+                headX + unit * 1.1f, baseY - unit * 4.2f)
+            path.moveTo(headX + unit * 1.15f, baseY - unit * 1.9f)
+            path.lineTo(headX + unit * 2.4f, baseY - unit * 2.4f)
+            path.moveTo(headX + unit * 1.12f, baseY - unit * 3.1f)
+            path.lineTo(headX + unit * 2.2f, baseY - unit * 3.9f)
             canvas.drawPath(path, strokePaint)
         }
-        
-        // Tail (small, white-tipped)
-        val tailColor = RenderConstants.blendWithAmbient(
-            Color.argb((200 * alpha).toInt(), 220, 210, 190), ambientColor, 0.25f)
-        paint.color = tailColor
-        canvas.drawOval(-unit * 4.5f, bodyY - unit * 0.5f, -unit * 3.5f, bodyY + unit * 1f, paint)
-        
-        paint.color = bodyColor
 
-        // Front legs (in front of body)
-        strokePaint.color = bodyColor
-        strokePaint.strokeWidth = legWidth
-        strokePaint.style = Paint.Style.STROKE
-        strokePaint.strokeCap = Paint.Cap.ROUND
-        
-        path.reset()
-        path.moveTo(frontLegX1, bodyY + unit * 1.5f)
-        path.quadTo(frontLegX1 + frontSwing1 * unit * 3f, bodyY + unit * 3f, 
-                    frontLegX1 + frontSwing1 * unit * 2f, 0f)
-        canvas.drawPath(path, strokePaint)
-        
-        // Front left leg
-        path.reset()
-        path.moveTo(frontLegX2, bodyY + unit * 1.5f)
-        path.quadTo(frontLegX2 + frontSwing2 * unit * 3f, bodyY + unit * 3f,
-                    frontLegX2 + frontSwing2 * unit * 2f, 0f)
-        canvas.drawPath(path, strokePaint)
+        // --- Front legs (drawn in front of the body) ---
+        drawLeg(frontFarX, swingB, frontKneeBend, legFarColor)
+        drawLeg(frontNearX, swingA, frontKneeBend, bodyColor)
 
-        // Front hooves (in front layer)
-        paint.color = Color.argb((180 * alpha).toInt(), 50, 40, 30)
-        canvas.drawOval(frontLegX1 + frontSwing1 * unit * 2f - hoofSize, -hoofSize,
-                        frontLegX1 + frontSwing1 * unit * 2f + hoofSize, hoofSize * 0.5f, paint)
-        canvas.drawOval(frontLegX2 + frontSwing2 * unit * 2f - hoofSize, -hoofSize,
-                        frontLegX2 + frontSwing2 * unit * 2f + hoofSize, hoofSize * 0.5f, paint)
-        
+        // Restore shared stroke join to the default for subsequent events.
+        strokePaint.strokeJoin = Paint.Join.MITER
+
         canvas.restore()
         canvas.restore()
     }

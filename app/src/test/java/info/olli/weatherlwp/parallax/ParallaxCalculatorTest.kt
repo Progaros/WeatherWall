@@ -843,7 +843,7 @@ class ParallaxCalculatorTest {
     // ============== Landscape orientation ==============
 
     @Test
-    fun `landscape orientation applies aspect ratio compensation to vertical`() {
+    fun `landscape aspect ratio compensation biases horizontal consistently`() {
         val calcLandscape = ParallaxCalculator()
         calcLandscape.strength = 1.0f
         calcLandscape.maxOffsetPercent = 10f
@@ -857,9 +857,10 @@ class ParallaxCalculatorTest {
         val xLand = kotlin.math.abs(calcLandscape.getOffsetX())
         val yLand = kotlin.math.abs(calcLandscape.getOffsetY())
 
-        // vComp=2.0 > hComp=1920/1080≈1.778, so Y should still exceed X
-        assertTrue("In landscape, Y should be larger with aspect ratio 2.0 (x=$xLand, y=$yLand)",
-            yLand > xLand)
+        // The aspect-ratio knob biases the horizontal axis the same way in every
+        // orientation (hComp=2.0, vComp=1.0), so X should exceed Y.
+        assertTrue("In landscape, X should be larger with aspect ratio 2.0 (x=$xLand, y=$yLand)",
+            xLand > yLand)
     }
 
     @Test
@@ -897,7 +898,7 @@ class ParallaxCalculatorTest {
     }
 
     @Test
-    fun `landscape default gives more horizontal than vertical movement`() {
+    fun `landscape default gives symmetric horizontal and vertical movement`() {
         val calc = ParallaxCalculator()
         calc.strength = 1.0f
         calc.maxOffsetPercent = 10f
@@ -911,13 +912,14 @@ class ParallaxCalculatorTest {
         val x = kotlin.math.abs(calc.getOffsetX())
         val y = kotlin.math.abs(calc.getOffsetY())
 
-        // hComp = 1920/1080 ≈ 1.78, vComp = 1.0: horizontal should be larger
-        assertTrue("In landscape with default compensation, X should exceed Y (x=$x, y=$y)",
-            x > y * 1.5f)
+        // With default compensation the long-edge offset budget makes both axes
+        // equally responsive, so up/down matches left/right in landscape.
+        assertEquals("In landscape with default compensation, X and Y should match (x=$x, y=$y)",
+            x, y, kotlin.math.max(x, y) * 0.05f + 1f)
     }
 
     @Test
-    fun `landscape getMaxOffsetForDepth horizontal exceeds vertical`() {
+    fun `landscape getMaxOffsetForDepth is symmetric by default`() {
         val calc = ParallaxCalculator()
         calc.maxOffsetPercent = 10f
         calc.setCanvasSize(1920f, 1080f)
@@ -926,10 +928,10 @@ class ParallaxCalculatorTest {
 
         val (maxX, maxY) = calc.getMaxOffsetForDepth(0.5f)
 
-        // hComp = 1920/1080 ≈ 1.78, so maxX should be ~1.78x maxY
-        val expectedRatio = 1920f / 1080f
-        assertEquals("Max X/Y ratio should match aspect ratio",
-            expectedRatio, maxX / maxY, 0.01f)
+        // With default compensation the per-axis max offset is identical, so the
+        // overscan budget (and thus movement range) matches on both axes.
+        assertEquals("Max X/Y ratio should be 1.0 by default",
+            1.0f, maxX / maxY, 0.01f)
     }
 
     @Test

@@ -339,19 +339,12 @@ class ParallaxCalculator {
         val shouldRecenter =
             isDeviceStill && stillTimerMs > STILL_HOLD_MS && returnSpeed > 0.001f
 
-        // Effective max offset and aspect compensation
-        val effectiveMaxOffset = if (maxOffsetPercent > 0) {
-            canvasHeight * (maxOffsetPercent / 100f)
-        } else {
-            maxOffsetPx * scaleFactor
-        }
-        val hComp: Float
-        val vComp: Float
-        if (canvasWidth >= canvasHeight) {
-            hComp = canvasWidth / canvasHeight; vComp = aspectRatioCompensation
-        } else {
-            hComp = aspectRatioCompensation; vComp = 1f
-        }
+        // Effective max offset and aspect compensation.
+        // Both are derived from the shared helpers so horizontal and vertical movement
+        // stay consistent across portrait and landscape (see getEffectiveMaxOffset /
+        // getAxisCompensation).
+        val effectiveMaxOffset = getEffectiveMaxOffset()
+        val (hComp, vComp) = getAxisCompensation()
         val sensitivityPx = effectiveMaxOffset * strength
 
         if (!shouldRecenter) {
@@ -457,17 +450,7 @@ class ParallaxCalculator {
     fun getMaxOffsetForDepth(depthFactor: Float): Pair<Float, Float> {
         val effectiveMaxOffset = getEffectiveMaxOffset()
         val mult = movementMultiplier(depthFactor)
-
-        val hComp: Float
-        val vComp: Float
-        if (canvasWidth >= canvasHeight) {
-            hComp = canvasWidth / canvasHeight
-            vComp = aspectRatioCompensation
-        } else {
-            hComp = aspectRatioCompensation
-            vComp = 1f
-        }
-
+        val (hComp, vComp) = getAxisCompensation()
         return Pair(effectiveMaxOffset * hComp * mult, effectiveMaxOffset * vComp * mult)
     }
 
@@ -582,24 +565,27 @@ class ParallaxCalculator {
     }
 
     private fun getEffectiveMaxOffset(): Float {
+        // Base the offset budget on the LONG edge so the movement magnitude does not
+        // collapse when the device is rotated to landscape (where the height becomes the
+        // short edge). In portrait the long edge is the height, so this is unchanged.
         return if (maxOffsetPercent > 0) {
-            canvasHeight * (maxOffsetPercent / 100f)
+            kotlin.math.max(canvasWidth, canvasHeight) * (maxOffsetPercent / 100f)
         } else {
             maxOffsetPx * scaleFactor
         }
     }
 
     /**
-     * Per-axis compensation factors for landscape/portrait orientation.
-     * In landscape: horizontal is scaled by aspect ratio, vertical by user preference.
-     * In portrait: horizontal uses user preference, vertical is 1.0.
+     * Per-axis compensation factors.
+     *
+     * Movement is symmetric by default: because [getEffectiveMaxOffset] is based on the
+     * long edge, a tilt produces the same pixel offset on both axes regardless of
+     * orientation. The user aspect-ratio knob ([aspectRatioCompensation]) scales the
+     * horizontal axis only, so vertical movement always matches across portrait and
+     * landscape (fixes "up/down barely moves in landscape").
      */
     private fun getAxisCompensation(): Pair<Float, Float> {
-        return if (canvasWidth >= canvasHeight) {
-            Pair(canvasWidth / canvasHeight, aspectRatioCompensation)
-        } else {
-            Pair(aspectRatioCompensation, 1f)
-        }
+        return Pair(aspectRatioCompensation, 1f)
     }
 
     private fun applyRadialSoftLimit(maxOffset: Float) {
