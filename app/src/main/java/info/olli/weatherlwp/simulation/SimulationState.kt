@@ -116,7 +116,13 @@ data class SimulationState(
      * - Day: sunrise to sunset
      * - Dusk: sunset to sunset+1h (smooth transition)
      */
-    fun getLightLevel(): Float {
+    // Light level is frame-global and read many times per frame (every layer plus
+    // ~3× per drawn tree), so it is computed once per immutable state and cached.
+    private val cachedLightLevel: Float = computeLightLevel()
+
+    fun getLightLevel(): Float = cachedLightLevel
+
+    private fun computeLightLevel(): Float {
         val hour = timeOfDayHours
         val transitionDuration = 1.0f  // 1 hour for full transition
         
@@ -186,13 +192,16 @@ data class SimulationState(
      * Note: Callers should check mountainShadowsEnabled or treeShadowsEnabled first.
      * @return 0.0 = no shadow, 1.0 = full shadow intensity
      */
-    fun getEffectiveShadowStrength(): Float {
-        val light = getLightLevel()  // 0.15 (night) to 1.0 (day), smooth transitions
+    fun getEffectiveShadowStrength(): Float = cachedEffectiveShadowStrength
+
+    // Effective shadow strength is frame-global and read once per drawn tree; cache it.
+    private val cachedEffectiveShadowStrength: Float = run {
+        val light = cachedLightLevel  // 0.15 (night) to 1.0 (day), smooth transitions
         // Normalized day factor: 0 at deep night, 1 during full day
         val dayFactor = ((light - 0.15f) / 0.85f).coerceIn(0f, 1f)
         // Smoothly blend: day shadows scale with sunlight, night shadows with moonlight
         val lightFactor = dayFactor * light + (1f - dayFactor) * moonIllumination * 0.4f
-        return shadowStrength * lightFactor
+        shadowStrength * lightFactor
     }
     
     /**
@@ -266,6 +275,19 @@ data class SimulationState(
         val dy = shadowLength * 0.4f  // Shadow projects forward onto ground
         
         return Pair(dx, dy)
+    }
+
+    /**
+     * Horizontal shadow offset only, allocation-free. Equivalent to `getShadowOffset(objectHeight).first`
+     * but avoids the per-tree [Pair] boxing. Tree rendering only consumes the horizontal (dx) component.
+     */
+    fun getShadowDx(objectHeight: Float = 1f): Float {
+        if (!shadowsEnabled) return 0f
+        // Shadow length based on light angle (longer shadows at sunrise/sunset)
+        val lightHeight = shadowSin.coerceIn(0.1f, 1f)
+        val shadowLength = (1.5f / lightHeight).coerceIn(0.5f, 4f) * objectHeight * cachedEffectiveShadowStrength
+        // Shadow direction is opposite to light source (dx determines left/right)
+        return -shadowCos * shadowLength
     }
     
     /**

@@ -852,6 +852,20 @@ class TerrainLayer(private val context: Context) : SceneLayer {
      */
     private fun ambientColorBucket(color: Int): Int = ColorMath.ambientColorBucket(color)
 
+    /**
+     * Coarser ambient bucket (4 bits/channel, step 16) used ONLY to gate the expensive
+     * decoration bitmap rebake (per-hill Bitmap.createBitmap + full decoration redraw).
+     * Halves the number of dawn/dusk rebakes versus the fine gradient bucket, cutting
+     * transition-time hitches. Hill gradients keep the fine bucket so sky/hill color
+     * stays perfectly smooth; only tiny decoration tints step slightly coarser.
+     */
+    private fun decorationAmbientBucket(color: Int): Int {
+        val r = ((color ushr 16) and 0xFF) shr 4
+        val g = ((color ushr 8) and 0xFF) shr 4
+        val b = (color and 0xFF) shr 4
+        return (r shl 8) or (g shl 4) or b
+    }
+
     /** Ensure reusable draw-entry buffer can hold this hill's interleaved items. */
     private fun ensureDrawEntryCapacity(required: Int) {
         if (required <= drawEntryBuffer.size) return
@@ -971,10 +985,12 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
             state.nightShadeStrength, state.sunriseHours, state.sunsetHours
         )
-
+        // Share the frame-global ambient tint with the tree renderer so it is not
+        // recomputed once per drawn tree (needle pinecones + leaf trunks/crowns).
+        treeRenderer.cachedAmbientColor = ambientColor
         // Lazily rebake static decoration bitmaps when any relevant state changes.
         // This avoids per-frame individual drawing of flowers, mushrooms, and foliage.
-        val ambientBkt = ambientColorBucket(ambientColor)
+        val ambientBkt = decorationAmbientBucket(ambientColor)
         val seasonBkt = currentSeasonBucket()
         val newBmpW = (width * (1f + 2f * DECOR_BITMAP_MARGIN)).toInt()
         val sizeChanged = decorationBitmapW != newBmpW ||

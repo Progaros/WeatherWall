@@ -344,7 +344,9 @@ class ParallaxCalculator {
         // stay consistent across portrait and landscape (see getEffectiveMaxOffset /
         // getAxisCompensation).
         val effectiveMaxOffset = getEffectiveMaxOffset()
-        val (hComp, vComp) = getAxisCompensation()
+        // Horizontal carries the user aspect-ratio knob; vertical is always 1f.
+        val hComp = aspectRatioCompensation
+        val vComp = 1f
         val sensitivityPx = effectiveMaxOffset * strength
 
         if (!shouldRecenter) {
@@ -420,38 +422,37 @@ class ParallaxCalculator {
     fun getOffsetY(): Float = positionY
 
     fun getOffsetForDepth(depthFactor: Float): Pair<Float, Float> {
-        val mult = movementMultiplier(depthFactor)
-        val max = getMaxOffsetForDepth(depthFactor)
-        val (hComp, vComp) = getAxisCompensation()
-        val effectiveMax = getEffectiveMaxOffset()
-        val x = curvedOffset(positionX, mult, effectiveMax * hComp).coerceIn(-max.first, max.first)
-        val y = curvedOffset(positionY, mult, effectiveMax * vComp).coerceIn(-max.second, max.second)
-        return Pair(x, y)
+        // Delegates to the allocation-free scalar accessors. This convenience Pair
+        // form is only used off the tight per-object loops (e.g. sky/stars once/frame).
+        return Pair(getOffsetXForDepth(depthFactor), getOffsetYForDepth(depthFactor))
     }
 
     fun getOffsetXForDepth(depthFactor: Float): Float {
-        val max = getMaxOffsetForDepth(depthFactor)
-        val (hComp, _) = getAxisCompensation()
-        val effectiveMax = getEffectiveMaxOffset()
-        return curvedOffset(positionX, movementMultiplier(depthFactor), effectiveMax * hComp).coerceIn(-max.first, max.first)
+        // Allocation-free: called per cloud/hill/mountain/star every frame. Horizontal
+        // axis carries the user aspect-ratio compensation.
+        val mult = movementMultiplier(depthFactor)
+        val axisMax = getEffectiveMaxOffset() * aspectRatioCompensation
+        val maxOffset = axisMax * mult
+        return curvedOffset(positionX, mult, axisMax).coerceIn(-maxOffset, maxOffset)
     }
 
     fun getOffsetYForDepth(depthFactor: Float): Float {
-        val max = getMaxOffsetForDepth(depthFactor)
-        val (_, vComp) = getAxisCompensation()
-        val effectiveMax = getEffectiveMaxOffset()
-        return curvedOffset(positionY, movementMultiplier(depthFactor), effectiveMax * vComp).coerceIn(-max.second, max.second)
+        // Allocation-free: vertical axis compensation is always 1f (see getMaxOffsetForDepth).
+        val mult = movementMultiplier(depthFactor)
+        val axisMax = getEffectiveMaxOffset()
+        val maxOffset = axisMax * mult
+        return curvedOffset(positionY, mult, axisMax).coerceIn(-maxOffset, maxOffset)
     }
 
     /**
      * Conservative max per-axis offset for a layer depth.
      * Used by render layers to compute overscan that is guaranteed to cover the viewport.
+     * Vertical compensation is always 1f; horizontal carries [aspectRatioCompensation].
      */
     fun getMaxOffsetForDepth(depthFactor: Float): Pair<Float, Float> {
         val effectiveMaxOffset = getEffectiveMaxOffset()
         val mult = movementMultiplier(depthFactor)
-        val (hComp, vComp) = getAxisCompensation()
-        return Pair(effectiveMaxOffset * hComp * mult, effectiveMaxOffset * vComp * mult)
+        return Pair(effectiveMaxOffset * aspectRatioCompensation * mult, effectiveMaxOffset * mult)
     }
 
     /** Reset visual offset to center AND clear input baseline. */
@@ -575,18 +576,11 @@ class ParallaxCalculator {
         }
     }
 
-    /**
-     * Per-axis compensation factors.
-     *
-     * Movement is symmetric by default: because [getEffectiveMaxOffset] is based on the
-     * long edge, a tilt produces the same pixel offset on both axes regardless of
-     * orientation. The user aspect-ratio knob ([aspectRatioCompensation]) scales the
-     * horizontal axis only, so vertical movement always matches across portrait and
-     * landscape (fixes "up/down barely moves in landscape").
-     */
-    private fun getAxisCompensation(): Pair<Float, Float> {
-        return Pair(aspectRatioCompensation, 1f)
-    }
+    // Per-axis compensation is intentionally implicit: horizontal uses the user
+    // aspect-ratio knob ([aspectRatioCompensation]); vertical is always 1f. Because
+    // [getEffectiveMaxOffset] is based on the long edge, a tilt produces the same pixel
+    // offset on both axes regardless of orientation ("up/down barely moves in landscape"
+    // is fixed). Callers inline these two factors to avoid per-frame Pair allocation.
 
     private fun applyRadialSoftLimit(maxOffset: Float) {
         if (maxOffset <= 0f) { positionX = 0f; positionY = 0f; return }

@@ -129,20 +129,51 @@ class CloudLayer(private val context: Context) : SceneLayer {
     // Reusable list for draw prioritization (avoids allocation per frame)
     private val drawCandidates = ArrayList<DrawCandidate>(MAX_GROUPS)
 
+    // Grow-only pool of DrawCandidate objects, reused across frames so pass 1 never
+    // allocates a new candidate per visible cloud.
+    private val drawCandidatePool = ArrayList<DrawCandidate>(MAX_GROUPS)
+    private var drawCandidatePoolUsed = 0
+
     // Reusable Rect for direct bitmap draws (avoids allocation per cloud)
     private val dstRect = android.graphics.RectF()
 
-    /** Lightweight struct for draw prioritization. Reused per frame. */
-    private class DrawCandidate(
-        val group: CloudGroup,
-        val screenX: Float,
-        val screenY: Float,
-        val paddedWidth: Int,
-        val paddedHeight: Int,
-        val drawScale: Float,
-        val screenArea: Float,
-        val isBackLayer: Boolean
-    )
+    /** Lightweight mutable struct for draw prioritization. Pooled and reused per frame. */
+    private class DrawCandidate {
+        lateinit var group: CloudGroup
+        var screenX: Float = 0f
+        var screenY: Float = 0f
+        var paddedWidth: Int = 0
+        var paddedHeight: Int = 0
+        var drawScale: Float = 0f
+        var screenArea: Float = 0f
+        var isBackLayer: Boolean = false
+
+        fun set(
+            group: CloudGroup, screenX: Float, screenY: Float,
+            paddedWidth: Int, paddedHeight: Int, drawScale: Float,
+            screenArea: Float, isBackLayer: Boolean
+        ) {
+            this.group = group
+            this.screenX = screenX
+            this.screenY = screenY
+            this.paddedWidth = paddedWidth
+            this.paddedHeight = paddedHeight
+            this.drawScale = drawScale
+            this.screenArea = screenArea
+            this.isBackLayer = isBackLayer
+        }
+    }
+
+    /** Fetch a reusable pooled DrawCandidate, growing the pool only when needed. */
+    private fun obtainDrawCandidate(): DrawCandidate {
+        val pooled = if (drawCandidatePoolUsed < drawCandidatePool.size) {
+            drawCandidatePool[drawCandidatePoolUsed]
+        } else {
+            DrawCandidate().also { drawCandidatePool.add(it) }
+        }
+        drawCandidatePoolUsed++
+        return pooled
+    }
 
     // Reusable comparator: back layer first, then by descending screen area, stable tiebreaker
     private val drawCandidateComparator = compareBy<DrawCandidate> { !it.isBackLayer }
@@ -697,6 +728,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
 
         // --- Pass 1: collect visible candidates ---
         drawCandidates.clear()
+        drawCandidatePoolUsed = 0
         var i = 0
         while (i < groups.size) {
             val group = groups[i]
@@ -764,9 +796,11 @@ class CloudLayer(private val context: Context) : SceneLayer {
             }
 
             val screenArea = clampedHalfW * clampedHalfH * 4f
-            drawCandidates.add(DrawCandidate(group, screenX, screenY,
-                paddedWidth, paddedHeight, clampedDrawScale, screenArea,
-                group.isBackLayer))
+            drawCandidates.add(obtainDrawCandidate().apply {
+                set(group, screenX, screenY,
+                    paddedWidth, paddedHeight, clampedDrawScale, screenArea,
+                    group.isBackLayer)
+            })
         }
 
         // --- Pass 2: sort by layer (back first) then area descending ---

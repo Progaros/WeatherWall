@@ -167,6 +167,10 @@ class TreeRenderer {
     @Volatile var cachedPrevSeason: String = "summer"
     var dynamicSnowLevel: Float = 0f  // Snow from weather history (0-1)
 
+    // Frame-global ambient (time-of-day) tint, set once per frame by TerrainLayer.
+    // Avoids recomputing RenderConstants.getAmbientColor() for every drawn tree.
+    @Volatile var cachedAmbientColor: Int = 0
+
     // ========================================================================
     // Public helpers
     // ========================================================================
@@ -550,7 +554,7 @@ class TreeRenderer {
 
         // Get shadow offset from light source (sun/moon position)
         val shadowStrength = if (state.treeShadowsEnabled) state.getEffectiveShadowStrength() else 0f
-        val (shadowDx, _) = state.getShadowOffset(tree.scale)
+        val shadowDx = state.getShadowDx(tree.scale)
 
         // Draw shadow first (if shadows enabled)
         if (shadowStrength > 0.01f) {
@@ -681,9 +685,7 @@ class TreeRenderer {
         val pineconeAlpha = (getSeasonWeight("autumn") + getSeasonWeight("winter")).coerceIn(0f, 1f)
         if (pineconeAlpha > 0.01f) {
             pineconesByTree[treeIndex]?.let { cones ->
-                val ambientColor = RenderConstants.getAmbientColor(
-                    state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
-                    state.nightShadeStrength, state.sunriseHours, state.sunsetHours)
+                val ambientColor = cachedAmbientColor
                 for (cone in cones) {
                     val segIndex = (cone.yRatio * treeSegments).toInt().coerceIn(0, treeSegments - 1)
                     val segBaseY = groundY - segIndex * segmentHeight * 0.7f
@@ -765,7 +767,7 @@ class TreeRenderer {
 
         // Shadow (same style as needle trees)
         val shadowStrength = if (state.treeShadowsEnabled) state.getEffectiveShadowStrength() else 0f
-        val (shadowDx, _) = state.getShadowOffset(tree.scale)
+        val shadowDx = state.getShadowDx(tree.scale)
         if (shadowStrength > 0.01f) {
             val shadowAlpha = (20f + 130f * shadowStrength).toInt().coerceIn(20, 150)
             shadowPaint.color = Color.argb(shadowAlpha, 0, 0, 0)
@@ -794,10 +796,7 @@ class TreeRenderer {
 
         // Trunk color (brown)
         val trunkColor = Color.rgb(90, 65, 40)
-        val ambientColor = RenderConstants.getAmbientColor(
-            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
-            state.nightShadeStrength, state.sunriseHours, state.sunsetHours
-        )
+        val ambientColor = cachedAmbientColor
         trunkPaint.color = RenderConstants.blendWithAmbient(trunkColor, ambientColor, 0.2f)
         trunkPaint.strokeWidth = trunkWidth
         trunkPaint.style = Paint.Style.STROKE
