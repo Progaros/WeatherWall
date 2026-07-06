@@ -30,6 +30,10 @@ class WeatherWallpaper : WallpaperService() {
     companion object {
         private const val TAG = "WeatherWallpaper"
 
+        // Small pacing slack (< one vsync period) so a frame landing just before the target
+        // interval still renders instead of waiting a whole extra vsync (vsync quantization).
+        // Without it a 60fps cap on a 120Hz panel drops to ~50, and 30 -> ~26.
+        private const val FRAME_PACING_SLACK_NANOS = 4_000_000L
         /** Bucket atmosphere phase into discrete categories: 0=night, 1=golden hour, 2=day, 3=blue hour. */
         private fun bucketAtmospherePhase(phaseVal: Float): Int = when {
             phaseVal >= 0.5f -> 2
@@ -342,8 +346,9 @@ class WeatherWallpaper : WallpaperService() {
                 // Cap rendering frequency while staying synced to display vsync callbacks.
                 val effectiveFps = (if (isIdle) idleFps else targetFps).coerceAtLeast(1)
                 val minFrameIntervalNanos = 1_000_000_000L / effectiveFps.toLong()
+                val renderThresholdNanos = (minFrameIntervalNanos - FRAME_PACING_SLACK_NANOS).coerceAtLeast(1L)
                 val shouldRender =
-                    lastDrawFrameNanos == 0L || (frameTimeNanos - lastDrawFrameNanos) >= minFrameIntervalNanos
+                    lastDrawFrameNanos == 0L || (frameTimeNanos - lastDrawFrameNanos) >= renderThresholdNanos
 
                 if (shouldRender) {
                     val start = SystemClock.uptimeMillis()

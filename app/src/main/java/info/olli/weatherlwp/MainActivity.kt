@@ -46,8 +46,12 @@ import androidx.preference.PreferenceFragmentCompat
 class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceStartFragmentCallback {
     companion object {
         private const val TAG = "MainActivity"
-        // Match wallpaper FPS (30) for consistent parallax preview
+        // Fallback preview FPS; the actual target is read from pref_max_fps into previewTargetFps.
         private const val TARGET_FPS = 30
+        // Small pacing slack (< one vsync period) so a frame landing just before the target
+        // interval still renders instead of waiting a whole extra vsync (vsync quantization).
+        // Without it a 60fps cap on a 120Hz panel drops to ~50, and 30 -> ~26.
+        private const val FRAME_PACING_SLACK_NANOS = 4_000_000L
         private const val PREF_RELOAD_THROTTLE_MS = 150L  // Max ~7 reloads per second
         
         // Preview resize constants
@@ -80,6 +84,7 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
     private var lastDrawFrameNanos = 0L
     private var lastFrameTimeMs = 0L
     private var preferHardwareCanvas = true
+    private var previewTargetFps = TARGET_FPS
     
     // Preference change throttling
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -498,6 +503,9 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
         lastDrawFrameNanos = 0L
         lastFrameTimeMs = 0L
         preferHardwareCanvas = true
+        // Honor the user's max-FPS setting in the preview too (matches the wallpaper's [10,60] range).
+        previewTargetFps = PreferenceManager.getDefaultSharedPreferences(this)
+            .getString("pref_max_fps", TARGET_FPS.toString())?.toIntOrNull()?.coerceIn(10, 60) ?: TARGET_FPS
         
         choreographer = Choreographer.getInstance()
         postNextFrame()
@@ -511,9 +519,11 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
     private val frameCallback = Choreographer.FrameCallback { frameTimeNanos ->
         if (!previewRunning || !surfaceReady) return@FrameCallback
         
-        // FPS limiting: skip frame if too soon
-        val minFrameIntervalNanos = 1_000_000_000L / TARGET_FPS.toLong()
-        if (lastDrawFrameNanos != 0L && (frameTimeNanos - lastDrawFrameNanos) < minFrameIntervalNanos) {
+        // FPS limiting: honor pref_max_fps, with a pacing slack so vsync quantization on
+        // high-refresh panels doesn't drop us a whole frame below the target rate.
+        val minFrameIntervalNanos = 1_000_000_000L / previewTargetFps.toLong()
+        val renderThresholdNanos = (minFrameIntervalNanos - FRAME_PACING_SLACK_NANOS).coerceAtLeast(1L)
+        if (lastDrawFrameNanos != 0L && (frameTimeNanos - lastDrawFrameNanos) < renderThresholdNanos) {
             postNextFrame()
             return@FrameCallback
         }
