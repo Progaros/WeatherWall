@@ -1,9 +1,14 @@
 package info.olli.weatherlwp.wallpaper
 
 import android.app.WallpaperColors
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Canvas
 import android.graphics.Color
 import android.os.Build
+import android.os.PowerManager
 import android.os.SystemClock
 import android.os.Trace
 import android.service.wallpaper.WallpaperService
@@ -34,6 +39,9 @@ class WeatherWallpaper : WallpaperService() {
         // interval still renders instead of waiting a whole extra vsync (vsync quantization).
         // Without it a 60fps cap on a 120Hz panel drops to ~50, and 30 -> ~26.
         private const val FRAME_PACING_SLACK_NANOS = 4_000_000L
+        // When the OS Battery Saver is active, cap the active frame rate to conserve power.
+        // This only ever lowers the rate; idle mode still applies its own (lower) cap.
+        private const val POWER_SAVE_MAX_FPS = 30
         /** Bucket atmosphere phase into discrete categories: 0=night, 1=golden hour, 2=day, 3=blue hour. */
         private fun bucketAtmospherePhase(phaseVal: Float): Int = when {
             phaseVal >= 0.5f -> 2
@@ -51,6 +59,11 @@ class WeatherWallpaper : WallpaperService() {
         @Volatile private var isVisible: Boolean = false
         private var lastDrawFrameNanos = 0L
         private var preferHardwareCanvas = true
+
+        // OS Battery Saver awareness: cached flag updated via broadcast, capping FPS when active.
+        private var powerManager: PowerManager? = null
+        @Volatile private var powerSaveActive = false
+        private var powerSaveReceiver: BroadcastReceiver? = null
 
         private lateinit var scene: ParallaxScene
         private val sensorManager = ParallaxSensorManager(this@WeatherWallpaper)
@@ -80,6 +93,9 @@ class WeatherWallpaper : WallpaperService() {
             setOffsetNotificationsEnabled(false)
             try {
                 choreographer = Choreographer.getInstance()
+                powerManager = this@WeatherWallpaper.getSystemService(Context.POWER_SERVICE) as? PowerManager
+                powerSaveActive = powerManager?.isPowerSaveMode == true
+                registerPowerSaveReceiver()
                 settingsRepository = SimulationSettingsRepository(this@WeatherWallpaper)
                 currentSettings = settingsRepository.settingsFlow.value
                 scene = ParallaxScene(this@WeatherWallpaper, sensorManager, weatherRepo)
@@ -159,6 +175,9 @@ class WeatherWallpaper : WallpaperService() {
 
         override fun onDestroy() {
             isVisible = false
+
+            runCatching { unregisterPowerSaveReceiver() }
+                .onFailure { Log.e(TAG, "Error unregistering power-save receiver", it) }
 
             // Always stop frame callbacks first.
             runCatching { stopRender() }
@@ -248,6 +267,28 @@ class WeatherWallpaper : WallpaperService() {
                     applySettings(settings)
                 }
             }
+        }
+
+        private fun registerPowerSaveReceiver() {
+            if (powerSaveReceiver != null) return
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    powerSaveActive = powerManager?.isPowerSaveMode == true
+                }
+            }
+            powerSaveReceiver = receiver
+            runCatching {
+                this@WeatherWallpaper.registerReceiver(
+                    receiver, IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
+                )
+            }.onFailure { Log.e(TAG, "Failed to register power-save receiver", it) }
+        }
+
+        private fun unregisterPowerSaveReceiver() {
+            val receiver = powerSaveReceiver ?: return
+            powerSaveReceiver = null
+            runCatching { this@WeatherWallpaper.unregisterReceiver(receiver) }
+                .onFailure { Log.e(TAG, "Failed to unregister power-save receiver", it) }
         }
 
         private fun applySettings(settings: SimulationSettings) {
@@ -344,7 +385,9 @@ class WeatherWallpaper : WallpaperService() {
                 }
 
                 // Cap rendering frequency while staying synced to display vsync callbacks.
-                val effectiveFps = (if (isIdle) idleFps else targetFps).coerceAtLeast(1)
+                // In OS Battery Saver mode, cap the active rate to reduce power draw.
+                val activeFps = if (powerSaveActive) minOf(targetFps, POWER_SAVE_MAX_FPS) else targetFps
+                val effectiveFps = (if (isIdle) idleFps else activeFps).coerceAtLeast(1)
                 val minFrameIntervalNanos = 1_000_000_000L / effectiveFps.toLong()
                 val renderThresholdNanos = (minFrameIntervalNanos - FRAME_PACING_SLACK_NANOS).coerceAtLeast(1L)
                 val shouldRender =

@@ -50,11 +50,11 @@ object VegetationUtil {
         hillRoughness: Float
     ): Float {
         val noiseX = (worldX / RenderConstants.REFERENCE_EXTENDED_WIDTH + 0.5f) * hillFrequency * 5.0f
-        var noiseVal = noise(noiseX, noiseSeed) * 1.0f
+        var noiseVal = noise(noiseX, noiseSeed)
         noiseVal += noise(noiseX * 2f, noiseSeed + 100) * 0.5f * hillRoughness
         noiseVal += noise(noiseX * 4f, noiseSeed + 200) * 0.25f * hillRoughness
         noiseVal += noise(noiseX * 8f, noiseSeed + 300) * 0.125f * hillRoughness
-        val maxAmp = 1.0f + 0.5f * hillRoughness + 0.25f * hillRoughness + 0.125f * hillRoughness
+        val maxAmp = 1.0f + 0.875f * hillRoughness
         return noiseVal / maxAmp
     }
 

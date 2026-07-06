@@ -313,6 +313,7 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
             
             val (starPx, starPy) = parallaxCalculator.getOffsetForDepth(RenderConstants.PARALLAX_STARS)
             
+            val radiusScale = SkyViewportMapper.starRadiusScale(width, height)
             for (star in stars) {
                 val twinkle = sin((time * RenderConstants.STAR_TWINKLE_SPEED + star[0] * 10).toDouble())
                 val alpha = (starAlphaBase + 50 * twinkle).toInt().coerceIn(5, 220)
@@ -321,7 +322,6 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
                 // Map normalized coordinates using uniform field scaling.
                 val x = SkyViewportMapper.toScreenX(star[0], width, height, starPx)
                 val y = SkyViewportMapper.toScreenY(star[1], width, height, starPy)
-                val radiusScale = SkyViewportMapper.starRadiusScale(width, height)
 
                 canvas.drawCircle(x, y, star[2] * radiusScale, starPaint)
             }

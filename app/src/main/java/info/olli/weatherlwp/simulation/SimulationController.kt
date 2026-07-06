@@ -30,6 +30,15 @@ class SimulationController(private val context: Context) {
     private var lastUpdateMs = 0L
     private var lastRecordAttemptMs = 0L
 
+    // Season blend is date-based (changes ~once/day) yet getEffectiveSeasonBlend allocates
+    // Calendars; cache it and recompute only when the local day or a relevant setting changes.
+    private var cachedSeasonBlend: SeasonHelper.SeasonBlend? = null
+    private var seasonCacheDayBucket = Long.MIN_VALUE
+    private var seasonCacheDebug = false
+    private var seasonCacheOverride: String? = null
+    private var seasonCacheTransitionDays = Int.MIN_VALUE
+    private var seasonCacheDayOverride = Int.MIN_VALUE
+
     init {
         val snapshot = PreferenceManager.getDefaultSharedPreferences(context).all
         applySettings(SimulationSettings.fromSnapshot(snapshot))
@@ -78,6 +87,38 @@ class SimulationController(private val context: Context) {
         screenHeight = height
     }
     
+    /**
+     * Effective season blend, cached across frames. Recomputes only when the local calendar
+     * day rolls over or a season-related setting changes, avoiding per-frame Calendar allocation.
+     */
+    private fun effectiveSeasonBlend(s: SimulationSettings): SeasonHelper.SeasonBlend {
+        val offsetMs = java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()).toLong()
+        val dayBucket = (System.currentTimeMillis() + offsetMs) / 86_400_000L
+        val cached = cachedSeasonBlend
+        if (cached != null &&
+            dayBucket == seasonCacheDayBucket &&
+            s.debugEnabled == seasonCacheDebug &&
+            s.terrainSeasonOverride == seasonCacheOverride &&
+            s.seasonTransitionDays == seasonCacheTransitionDays &&
+            s.seasonDayOfYearOverride == seasonCacheDayOverride
+        ) {
+            return cached
+        }
+        val blend = SeasonHelper.getEffectiveSeasonBlend(
+            s.debugEnabled,
+            s.terrainSeasonOverride,
+            s.seasonTransitionDays,
+            s.seasonDayOfYearOverride
+        )
+        cachedSeasonBlend = blend
+        seasonCacheDayBucket = dayBucket
+        seasonCacheDebug = s.debugEnabled
+        seasonCacheOverride = s.terrainSeasonOverride
+        seasonCacheTransitionDays = s.seasonTransitionDays
+        seasonCacheDayOverride = s.seasonDayOfYearOverride
+        return blend
+    }
+
     /**
      * Get current simulation state.
      * This is called every frame to get the latest state.
@@ -174,14 +215,9 @@ class SimulationController(private val context: Context) {
         val effectiveRiverLevel = if (currentSettings.useSimulatedWeatherHistory)
             currentSettings.simulatedRiverLevel else historySnapshot.riverLevel
         
-        // Season transition blend
+        // Season transition blend (cached; recomputed only on day rollover or setting change)
         val seasonTransitionDays = currentSettings.seasonTransitionDays
-        val seasonBlend = SeasonHelper.getEffectiveSeasonBlend(
-            currentSettings.debugEnabled,
-            currentSettings.terrainSeasonOverride,
-            seasonTransitionDays,
-            currentSettings.seasonDayOfYearOverride
-        )
+        val seasonBlend = effectiveSeasonBlend(currentSettings)
         
         return SimulationState(
             timeOfDayHours = rawTime,
