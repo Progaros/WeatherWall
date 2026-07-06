@@ -117,6 +117,10 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
     private val stars = Array(30) { Star() }
     private val fireworks = Array(2000) { Firework() }  // Large pool for shake fireworks (prevents late-exploding rockets from disappearing)
     private val rockets = Array(50) { Rocket() }  // Up to 50 rockets in flight for shake fireworks
+
+    // Set true whenever a rocket/firework is activated; lets renderBehindTerrain skip the
+    // full pool scan while nothing is in flight. Self-clears once a scan finds none active.
+    @Volatile private var fireworksPossiblyActive = false
     private val trailParticles = Array(20) { TrailParticle() }
     private var christmasStar: ChristmasStar? = null
     
@@ -475,8 +479,16 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
      */
     fun renderBehindTerrain(canvas: Canvas, enabled: Boolean) {
         // Check for active fireworks first - shake fireworks should work independent of season/master switch
-        // if user has enabled the specific shake setting
-        val hasActiveFireworks = rockets.any { it.active } || fireworks.any { it.life > 0 }
+        // if user has enabled the specific shake setting.
+        // The fireworksPossiblyActive gate lets us skip the O(rockets+fireworks) scan in the common
+        // idle case (no fireworks launched), which otherwise runs every frame year-round for all users.
+        val hasActiveFireworks = if (fireworksPossiblyActive) {
+            val active = rockets.any { it.active } || fireworks.any { it.life > 0 }
+            if (!active) fireworksPossiblyActive = false
+            active
+        } else {
+            false
+        }
 
         if (!enabled && !hasActiveFireworks) return
         try {
@@ -853,6 +865,7 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
                 r.colors = List(numColors) { fireworkColors[Random.nextInt(fireworkColors.size)] }
                 
                 r.active = true
+                fireworksPossiblyActive = true
                 r.trailX1 = r.x
                 r.trailY1 = r.y
                 r.trailX2 = r.x
@@ -896,6 +909,7 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
                 f.color = colors[Random.nextInt(colors.size)]
                 f.maxLife = 50 + Random.nextInt(40)
                 f.life = f.maxLife
+                fireworksPossiblyActive = true
                 f.size = 2.5f + Random.nextFloat() * 3f
                 f.hasSparkle = Random.nextFloat() > 0.4f  // 60% have sparkle trails
                 f.sparkleTrailX = cx

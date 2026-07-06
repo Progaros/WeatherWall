@@ -548,7 +548,8 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
             val ch = canvas.height
             
             if (cw <= 0 || ch <= 0) {
-                holder.unlockCanvasAndPost(canvas)
+                // Canvas is unusable this frame; let the finally block do the single
+                // unlockCanvasAndPost (avoids a double post + swallowed IllegalStateException).
                 postNextFrame()
                 return@FrameCallback
             }

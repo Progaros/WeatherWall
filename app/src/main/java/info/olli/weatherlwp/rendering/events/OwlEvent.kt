@@ -212,6 +212,8 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         
         // Tail barring (dark stripes)
         paint.color = darkColor
+        strokePaint.color = darkColor
+        strokePaint.strokeWidth = size * 0.05f
         val tailCx = currentX - bodyW * 1.0f
         val tailCy = currentY + bodyH * 0.35f
         canvas.drawLine(tailCx - size * 0.08f, tailCy - size * 0.06f,

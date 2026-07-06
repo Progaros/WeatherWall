@@ -578,11 +578,13 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
         // ROTATION_0:   tiltX = -pitch, tiltY = yaw
         // ROTATION_90:  tiltX = -yaw,   tiltY = -pitch  
         // ROTATION_270: tiltX = yaw,    tiltY = pitch
-        val (rawTiltX, rawTiltY) = when (displayRotation) {
-            Surface.ROTATION_90 -> Pair(-gyroYaw, -gyroPitch)
-            Surface.ROTATION_180 -> Pair(gyroPitch, -gyroYaw)  // Interpolated from pattern
-            Surface.ROTATION_270 -> Pair(gyroYaw, gyroPitch)
-            else -> Pair(-gyroPitch, gyroYaw)  // ROTATION_0
+        val rawTiltX: Float
+        val rawTiltY: Float
+        when (displayRotation) {
+            Surface.ROTATION_90 -> { rawTiltX = -gyroYaw; rawTiltY = -gyroPitch }
+            Surface.ROTATION_180 -> { rawTiltX = gyroPitch; rawTiltY = -gyroYaw }  // Interpolated from pattern
+            Surface.ROTATION_270 -> { rawTiltX = gyroYaw; rawTiltY = gyroPitch }
+            else -> { rawTiltX = -gyroPitch; rawTiltY = gyroYaw }  // ROTATION_0
         }
         
         // Convert angles from radians to normalized -1..1 range.
@@ -856,11 +858,13 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
         
         // Remap coordinate system based on display rotation
         // This ensures sensor data matches what the user sees on screen
-        val (axisX, axisY) = when (displayRotation) {
-            Surface.ROTATION_90 -> Pair(SensorManager.AXIS_Y, SensorManager.AXIS_MINUS_X)
-            Surface.ROTATION_180 -> Pair(SensorManager.AXIS_MINUS_X, SensorManager.AXIS_MINUS_Y)
-            Surface.ROTATION_270 -> Pair(SensorManager.AXIS_MINUS_Y, SensorManager.AXIS_X)
-            else -> Pair(SensorManager.AXIS_X, SensorManager.AXIS_Y)
+        val axisX: Int
+        val axisY: Int
+        when (displayRotation) {
+            Surface.ROTATION_90 -> { axisX = SensorManager.AXIS_Y; axisY = SensorManager.AXIS_MINUS_X }
+            Surface.ROTATION_180 -> { axisX = SensorManager.AXIS_MINUS_X; axisY = SensorManager.AXIS_MINUS_Y }
+            Surface.ROTATION_270 -> { axisX = SensorManager.AXIS_MINUS_Y; axisY = SensorManager.AXIS_X }
+            else -> { axisX = SensorManager.AXIS_X; axisY = SensorManager.AXIS_Y }
         }
         SensorManager.remapCoordinateSystem(rotationMatrix, axisX, axisY, remappedMatrix)
         
@@ -889,11 +893,13 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
         // Gravity/accelerometer sensors report values in the DEVICE coordinate system
         // (X right, Y up, Z out of screen in default orientation). We must remap them
         // based on displayRotation so the user sees consistent behavior in any rotation.
-        val (gx, gy) = when (displayRotation) {
-            Surface.ROTATION_90 -> Pair(values[1], -values[0])
-            Surface.ROTATION_180 -> Pair(-values[0], -values[1])
-            Surface.ROTATION_270 -> Pair(-values[1], values[0])
-            else -> Pair(values[0], values[1])
+        val gx: Float
+        val gy: Float
+        when (displayRotation) {
+            Surface.ROTATION_90 -> { gx = values[1]; gy = -values[0] }
+            Surface.ROTATION_180 -> { gx = -values[0]; gy = -values[1] }
+            Surface.ROTATION_270 -> { gx = -values[1]; gy = values[0] }
+            else -> { gx = values[0]; gy = values[1] }
         }
         val gz = values[2]
         

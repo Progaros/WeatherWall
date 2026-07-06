@@ -94,15 +94,15 @@ class WindSimulator {
      * Smooth wind direction, handling 0/360 wraparound properly.
      */
     fun smoothDirection(targetDirection: Float, deltaSec: Float): Float {
-        var delta = targetDirection - smoothedWindDirection
-        while (delta > 180f) delta -= 360f
-        while (delta < -180f) delta += 360f
+        // Modulo normalization is O(1) regardless of input magnitude, so an out-of-range
+        // targetDirection (e.g. from an untrusted broadcast) can never spin these loops.
+        var delta = (targetDirection - smoothedWindDirection) % 360f
+        if (delta > 180f) delta -= 360f else if (delta < -180f) delta += 360f
 
         val smoothFactor = 0.5f * deltaSec
         smoothedWindDirection += delta * smoothFactor.coerceIn(0f, 1f)
 
-        while (smoothedWindDirection < 0f) smoothedWindDirection += 360f
-        while (smoothedWindDirection >= 360f) smoothedWindDirection -= 360f
+        smoothedWindDirection = ((smoothedWindDirection % 360f) + 360f) % 360f
 
         return smoothedWindDirection
     }

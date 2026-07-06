@@ -154,8 +154,13 @@ class SettingsFragment : PreferenceFragmentCompat() {
     }
 
     private fun exportDebugLog() {
+        // Runtime.exec("logcat") + waitFor can block for seconds; build the log off the
+        // UI thread to avoid ANRs, then post the share intent back on the main thread.
+        val appContext = requireContext().applicationContext
+        val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        Thread {
         try {
-            val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
+            val prefs = PreferenceManager.getDefaultSharedPreferences(appContext)
             val sb = StringBuilder()
             val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
 
@@ -234,15 +239,26 @@ class SettingsFragment : PreferenceFragmentCompat() {
             
             sb.appendLine("=== End of Log ===")
 
-            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_TEXT, sb.toString())
-                putExtra(Intent.EXTRA_SUBJECT, "WeatherWall Debug Log")
+            val logText = sb.toString()
+            mainHandler.post {
+                if (!isAdded) return@post
+                try {
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, logText)
+                        putExtra(Intent.EXTRA_SUBJECT, "WeatherWall Debug Log")
+                    }
+                    startActivity(Intent.createChooser(shareIntent, "Share Log"))
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Failed to export log: ${e.message}", Toast.LENGTH_LONG).show()
+                }
             }
-            startActivity(Intent.createChooser(shareIntent, "Share Log"))
         } catch (e: Exception) {
-            Toast.makeText(context, "Failed to export log: ${e.message}", Toast.LENGTH_LONG).show()
+            mainHandler.post {
+                if (isAdded) Toast.makeText(context, "Failed to export log: ${e.message}", Toast.LENGTH_LONG).show()
+            }
         }
+        }.start()
     }
     
     private fun handleVersionTap() {

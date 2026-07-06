@@ -124,7 +124,7 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
                 moonPhase = data.optInt("moonPhase", 0),
                 moonRise = data.optLong("moonRise", -1L),
                 moonSet = data.optLong("moonSet", -1L),
-                windDirection = data.optInt("windDirection", 0),
+                windDirection = ((data.optInt("windDirection", 0) % 360) + 360) % 360,
                 temperatureCelsius = tempC,
                 feelsLikeCelsius = feelsC,
                 dewPointCelsius = dewC

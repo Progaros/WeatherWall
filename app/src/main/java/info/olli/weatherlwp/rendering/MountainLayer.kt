@@ -124,6 +124,10 @@ class MountainLayer(private val context: Context) : SceneLayer {
     private var terrainSeasonOverride = "auto"
     private var winterSnowEnabled = true
     private var winterSnowCoverage = 50   // 0-100 how much of mountain tops are covered
+
+    // Frame-constant terrain season, resolved once per draw() instead of per mountain
+    // (getCurrentTerrainSeason() allocates a Calendar via SeasonHelper).
+    private var frameSeason: String = "summer"
     
     init {
         reloadSettings()
@@ -329,6 +333,10 @@ class MountainLayer(private val context: Context) : SceneLayer {
         // mountains field, so withIndex() gives stable original indices suitable
         // for gradient cache keys.
         val currentMountains = mountains
+
+        // Season is frame-constant; resolve once here (skips a per-mountain Calendar alloc,
+        // and avoids the season lookup entirely when winter snow is disabled).
+        frameSeason = if (winterSnowEnabled) getCurrentTerrainSeason() else "summer"
         
         // Get ambient color for atmospheric blending
         val ambientColor = RenderConstants.getAmbientColor(
@@ -354,7 +362,8 @@ class MountainLayer(private val context: Context) : SceneLayer {
         // Build transform for world-to-screen projection with height-based zoom
         val transform = cachedTransform
 
-        for ((mountainIdx, mountain) in currentMountains.withIndex()) {
+        for (mountainIdx in currentMountains.indices) {
+            val mountain = currentMountains[mountainIdx]
             val peakCenterX = transform.worldToScreenX(mountain.worldX)
             val halfWidthPx = height * mountain.width * 0.25f
             if (!ViewportCulling.isVisibleHorizontally(
@@ -589,7 +598,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
         paint.shader = null
         
         // Draw snow cap if winter and snow enabled
-        val season = getCurrentTerrainSeason()
+        val season = frameSeason
         if (winterSnowEnabled && season == "winter") {
             val snowDepth = (winterSnowCoverage / 100f).coerceIn(0.15f, 0.5f)
             val snowSegmentCount = (segments * snowDepth).toInt().coerceIn(1, segments)

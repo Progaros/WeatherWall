@@ -726,7 +726,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
      * @return Y position as ratio of screen height (0.0=top, 1.0=bottom)
      */
     fun getHillYAtWorldX(worldX: Float, depthFactor: Float): Float {
-        return getHillInfoAtWorldX(worldX, depthFactor).first
+        // Allocation-free: this is called in tight per-frame sampling loops (river/lake
+        // contour sampling, ground events), so it must not build the Pair from getHillInfoAtWorldX.
+        val closest = findClosestHill(depthFactor) ?: return 0.85f
+        return getHillY(worldX, closest)
     }
 
     /**
@@ -749,22 +752,28 @@ class TerrainLayer(private val context: Context) : SceneLayer {
      * @return Pair of (Y ratio, actual hill depthFactor)
      */
     fun getHillInfoAtWorldX(worldX: Float, requestedDepthFactor: Float): Pair<Float, Float> {
+        val closest = findClosestHill(requestedDepthFactor)
+            ?: return Pair(0.85f, requestedDepthFactor)
+        return Pair(getHillY(worldX, closest), closest.depthFactor)
+    }
+
+    /** Find the hill whose depthFactor is closest to [requestedDepthFactor]. Allocation-free (indexed). */
+    private fun findClosestHill(requestedDepthFactor: Float): HillData? {
         val currentHills = hills
-        if (currentHills.isEmpty()) return Pair(0.85f, requestedDepthFactor)
-        
+        if (currentHills.isEmpty()) return null
         var closestHill: HillData? = null
         var closestDistance = Float.MAX_VALUE
-        
-        for (hill in currentHills) {
+        var i = 0
+        while (i < currentHills.size) {
+            val hill = currentHills[i]
             val distance = kotlin.math.abs(hill.depthFactor - requestedDepthFactor)
             if (distance < closestDistance) {
                 closestDistance = distance
                 closestHill = hill
             }
+            i++
         }
-        
-        return closestHill?.let { Pair(getHillY(worldX, it), it.depthFactor) } 
-            ?: Pair(0.85f, requestedDepthFactor)
+        return closestHill
     }
 
     /**
