@@ -182,17 +182,18 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         canvas.drawPath(path, paint)
         canvas.restore()
 
-        // Right wing (lower wing, partially visible below body)
+        // Right wing (far wing, sweeps back under the body like the near one -
+        // projecting it forward put a dark wedge in front of the owl's face).
         canvas.save()
         canvas.rotate(wingAngle * 0.7f, currentX + bodyW * 0.1f, currentY)
         paint.color = darkColor
         path.reset()
         path.moveTo(currentX + bodyW * 0.1f, currentY + bodyH * 0.2f)
-        path.quadTo(currentX + bodyW * 0.5f, currentY + wingSpan * 0.5f,
-                    currentX + wingSpan * 0.7f, currentY + wingSpan * 0.2f)
-        path.quadTo(currentX + wingSpan * 0.75f, currentY + bodyH * 0.4f,
-                    currentX + wingSpan * 0.6f, currentY + bodyH * 0.45f)
-        path.quadTo(currentX + bodyW * 0.3f, currentY + bodyH * 0.5f,
+        path.quadTo(currentX - bodyW * 0.4f, currentY + wingSpan * 0.45f,
+                    currentX - wingSpan * 0.65f, currentY + wingSpan * 0.28f)
+        path.quadTo(currentX - wingSpan * 0.72f, currentY + bodyH * 0.55f,
+                    currentX - wingSpan * 0.5f, currentY + bodyH * 0.62f)
+        path.quadTo(currentX - bodyW * 0.3f, currentY + bodyH * 0.55f,
                     currentX + bodyW * 0.1f, currentY + bodyH * 0.35f)
         path.close()
         canvas.drawPath(path, paint)

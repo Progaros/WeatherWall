@@ -93,11 +93,11 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         
         paint.color = RenderConstants.blendWithAmbient(Color.rgb(200, 90, 30), ambientColor, 0.3f)
         
-        // Tail (bushy brush, low angle with an offset white tip)
+        // Tail (bushy but slimmer than the torso, tapering from the rump to the tip)
         path.reset()
-        path.moveTo(-2.0f*s, -0.7f*s)
-        path.cubicTo(-3.4f*s, -1.2f*s, -4.4f*s, -0.9f*s, -4.5f*s, -0.2f*s)
-        path.cubicTo(-4.4f*s, 0.4f*s, -3.4f*s, 0.6f*s, -2.0f*s, 0.3f*s)
+        path.moveTo(-1.9f*s, -0.85f*s)
+        path.cubicTo(-3.0f*s, -1.15f*s, -3.9f*s, -0.95f*s, -4.1f*s, -0.35f*s)
+        path.cubicTo(-3.8f*s, 0.05f*s, -3.0f*s, 0.15f*s, -1.9f*s, 0.05f*s)
         path.close()
         canvas.drawPath(path, paint)
 
@@ -131,7 +131,7 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         
         // Tail tip (white), seated inside the brush end
         paint.color = Color.rgb(250, 250, 250)
-        canvas.drawCircle(-4.25f*s, -0.2f*s, 0.45f*s, paint)
+        canvas.drawCircle(-3.8f*s, -0.35f*s, 0.3f*s, paint)
         
         // Ears
         paint.color = RenderConstants.blendWithAmbient(Color.rgb(200, 90, 30), ambientColor, 0.3f)

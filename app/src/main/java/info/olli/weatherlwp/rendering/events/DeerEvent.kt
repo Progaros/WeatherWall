@@ -207,8 +207,10 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         }
 
         // Leg anchors (profile view): a near and far leg for each pair; far drawn darker.
-        val frontNearX = unit * 2.3f
-        val frontFarX = unit * 1.6f
+        // Front and rear pairs are kept equidistant from the body centre, otherwise the
+        // stance reads as lopsided.
+        val frontNearX = unit * 2.9f
+        val frontFarX = unit * 2.2f
         val backNearX = -unit * 2.3f
         val backFarX = -unit * 3.0f
         val frontKneeBend = unit * 0.2f
@@ -222,6 +224,25 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
 
         // Body (horizontal oval)
         canvas.drawOval(-unit * 4f, bodyY - unit * 2.5f, unit * 4f, bodyY + unit * 2.5f, paint)
+
+        // Neck: tapered band from shoulder to head base; follows the head up (alert) or down (graze).
+        // Drawn before the belly so its wide shoulder anchor can sit deep inside the torso -
+        // the belly oval then covers the overlap instead of leaving a seam across the underside.
+        val shoulderX = unit * 1.2f
+        val shoulderTopY = bodyY - unit * 1.9f
+        val shoulderBotY = bodyY + unit * 0.4f
+        val headBaseX = headX - unit * 1.7f
+        val headTopY = headY - unit * 0.7f
+        val headBotY = headY + unit * 0.9f
+        path.reset()
+        path.moveTo(shoulderX, shoulderTopY)
+        path.quadTo((shoulderX + headBaseX) * 0.5f + unit * 0.4f,
+            (shoulderTopY + headTopY) * 0.5f, headBaseX, headTopY)
+        path.lineTo(headBaseX, headBotY)
+        path.quadTo((shoulderX + headBaseX) * 0.5f,
+            (shoulderBotY + headBotY) * 0.5f, shoulderX, shoulderBotY)
+        path.close()
+        canvas.drawPath(path, paint)
 
         // Belly (lighter underside)
         val bellyBase = if (isFawn) Color.rgb(210, 180, 150) else Color.rgb(180, 150, 120)
@@ -250,25 +271,6 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         canvas.drawOval(-unit * 4.5f, bodyY - unit * 0.5f, -unit * 3.5f, bodyY + unit * 1f, paint)
 
         paint.color = bodyColor
-
-        // Neck: tapered band from shoulder to head base; follows the head up (alert) or down (graze).
-        // The shoulder anchor sits well inside the torso: with a narrow base the only visible part
-        // is the sliver above the body oval, which reads as a wire rather than a neck.
-        val shoulderX = unit * 1.2f
-        val shoulderTopY = bodyY - unit * 1.9f
-        val shoulderBotY = bodyY + unit * 0.4f
-        val headBaseX = headX - unit * 1.7f
-        val headTopY = headY - unit * 0.7f
-        val headBotY = headY + unit * 0.9f
-        path.reset()
-        path.moveTo(shoulderX, shoulderTopY)
-        path.quadTo((shoulderX + headBaseX) * 0.5f + unit * 0.4f,
-            (shoulderTopY + headTopY) * 0.5f, headBaseX, headTopY)
-        path.lineTo(headBaseX, headBotY)
-        path.quadTo((shoulderX + headBaseX) * 0.5f,
-            (shoulderBotY + headBotY) * 0.5f, shoulderX, shoulderBotY)
-        path.close()
-        canvas.drawPath(path, paint)
 
         // Head
         canvas.drawOval(headX - unit * 1.8f, headY - unit * 1.2f,
