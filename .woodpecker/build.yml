@@ -11,10 +11,20 @@ steps:
       GRADLE_USER_HOME: &cache_path .gradle
     commands:
       - chmod +x gradlew
-      # Surfaces proxy/egress failures that Gradle otherwise hides behind "plugin not found"
-      - curl -sS -o /dev/null -w 'google=%{http_code}\n' https://dl.google.com/dl/android/maven2/com/android/application/com.android.application.gradle.plugin/8.11.1/com.android.application.gradle.plugin-8.11.1.pom || true
-      - curl -sS -o /dev/null -w 'central=%{http_code}\n' https://repo.maven.apache.org/maven2/ || true
-      - ./gradlew dependencies --no-daemon --stacktrace
+      # dl.google.com answers 404 from this runner; find a Google-Maven host that is actually reachable
+      - |
+        AGP=com/android/tools/build/gradle/8.11.1/gradle-8.11.1.pom
+        for u in \
+          "https://dl.google.com/dl/android/maven2/$AGP" \
+          "https://maven.google.com/$AGP" \
+          "https://maven.aliyun.com/repository/google/$AGP" \
+          "https://plugins.gradle.org/m2/$AGP" \
+          "https://repo.maven.apache.org/maven2/$AGP"; do
+          curl -sSL -o /dev/null --connect-timeout 10 --max-time 30 \
+            -w "%{http_code} ip=%{remote_ip} $u\n" "$u" || echo "ERR $u"
+        done
+        getent hosts dl.google.com maven.google.com repo.maven.apache.org || true
+      - ./gradlew dependencies --no-daemon --info 2>&1 | tail -n 120
       - ./gradlew :app:dependencies --no-daemon
       - yes | sdkmanager --licenses || true
 
