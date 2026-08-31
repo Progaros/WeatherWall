@@ -96,10 +96,13 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
         canvas.scale(flip, 1f)
 
         val hopLeg = sin(hopPhase) * 0.2f * s
+        // 0 while grounded, 1 at the apex: legs pull up and the ears lean back in flight.
+        val airborne = sin(hopPhase).coerceAtLeast(0f)
+        val legTuck = airborne * 0.45f * s
 
         // Back legs (behind body)
-        canvas.drawRoundRect(-1.6f*s, 0.2f*s, -1.2f*s, 1.0f*s - hopLeg, 0.15f*s, 0.15f*s, paint)
-        canvas.drawRoundRect(-2.0f*s, 0.2f*s, -1.6f*s, 1.0f*s + hopLeg, 0.15f*s, 0.15f*s, paint)
+        canvas.drawRoundRect(-1.6f*s, 0.2f*s, -1.2f*s, 1.0f*s - hopLeg - legTuck, 0.15f*s, 0.15f*s, paint)
+        canvas.drawRoundRect(-2.0f*s, 0.2f*s, -1.6f*s, 1.0f*s + hopLeg - legTuck, 0.15f*s, 0.15f*s, paint)
         
         // Body + haunch
         canvas.drawOval(-1.8f*s, -0.9f*s, 1.6f*s, 0.8f*s, paint)
@@ -111,6 +114,10 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
         // Head
         canvas.drawOval(1.0f*s, -1.2f*s, 2.4f*s, -0.1f*s, paint)
         
+        // Ears, pivoted at their base so they lag backwards through the hop
+        canvas.save()
+        canvas.rotate(-airborne * 14f, 1.8f*s, -1.1f*s)
+
         // Ears (outer)
         canvas.drawRoundRect(1.4f*s, -3.0f*s, 1.8f*s, -1.1f*s, 0.4f*s, 0.4f*s, paint)
         canvas.drawRoundRect(1.9f*s, -2.8f*s, 2.3f*s, -1.1f*s, 0.4f*s, 0.4f*s, paint)
@@ -119,6 +126,7 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
         paint.color = RenderConstants.blendWithAmbient(Color.rgb(200, 150, 150), ambientColor, 0.3f)
         canvas.drawRoundRect(1.5f*s, -2.7f*s, 1.7f*s, -1.3f*s, 0.3f*s, 0.3f*s, paint)
         canvas.drawRoundRect(2.0f*s, -2.5f*s, 2.2f*s, -1.3f*s, 0.3f*s, 0.3f*s, paint)
+        canvas.restore()
         
         // Eye (dark dot on head)
         paint.color = Color.rgb(20, 15, 10)
@@ -130,8 +138,8 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
 
         // Front legs (in front of torso)
         paint.color = RenderConstants.blendWithAmbient(Color.rgb(140, 120, 100), ambientColor, 0.35f)
-        canvas.drawRoundRect(0.6f*s, 0.3f*s, 0.95f*s, 1.1f*s + hopLeg, 0.15f*s, 0.15f*s, paint)
-        canvas.drawRoundRect(0.2f*s, 0.3f*s, 0.55f*s, 1.1f*s - hopLeg, 0.15f*s, 0.15f*s, paint)
+        canvas.drawRoundRect(0.6f*s, 0.3f*s, 0.95f*s, 1.1f*s + hopLeg - legTuck, 0.15f*s, 0.15f*s, paint)
+        canvas.drawRoundRect(0.2f*s, 0.3f*s, 0.55f*s, 1.1f*s - hopLeg - legTuck, 0.15f*s, 0.15f*s, paint)
         
         // Whiskers
         strokePaint.color = Color.argb(100, 80, 70, 60)

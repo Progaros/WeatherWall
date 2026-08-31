@@ -226,13 +226,15 @@ class EventRenderTest {
         }
     }
 
-    /** Fixed-size crop centred on the content, so limbs animate without the body drifting out of frame. */
-    private fun cropCentered(bitmap: Bitmap, bounds: Rect, side: Int): Bitmap {
+    /**
+     * Fixed-size crop. The horizontal centre follows the animal so it does not drift out of
+     * frame, but the vertical centre is shared across the sheet: centring vertically too would
+     * cancel out exactly the hop and bob motion the sheet is meant to show.
+     */
+    private fun cropWindow(bitmap: Bitmap, centerX: Int, centerY: Int, side: Int): Bitmap {
         val clamped = side.coerceIn(16, min(bitmap.width, bitmap.height))
-        val cx = (bounds.left + bounds.right) / 2
-        val cy = (bounds.top + bounds.bottom) / 2
-        val left = (cx - clamped / 2).coerceIn(0, bitmap.width - clamped)
-        val top = (cy - clamped / 2).coerceIn(0, bitmap.height - clamped)
+        val left = (centerX - clamped / 2).coerceIn(0, bitmap.width - clamped)
+        val top = (centerY - clamped / 2).coerceIn(0, bitmap.height - clamped)
         val cropped = Bitmap.createBitmap(bitmap, left, top, clamped, clamped)
         return Bitmap.createScaledBitmap(cropped, cropSize, cropSize, true)
     }
@@ -277,18 +279,28 @@ class EventRenderTest {
         }
 
         var side = 0
+        var unionTop = Int.MAX_VALUE
+        var unionBottom = Int.MIN_VALUE
         for ((_, bounds) in rendered) {
-            if (bounds != null) side = max(side, max(bounds.width(), bounds.height()))
+            if (bounds != null) {
+                side = max(side, max(bounds.width(), bounds.height()))
+                unionTop = min(unionTop, bounds.top)
+                unionBottom = max(unionBottom, bounds.bottom)
+            }
         }
         if (side <= 0) {
             println("WARNING: No content found for gait sheet $name")
             return
         }
         // Head-room so limbs at their extremes never touch the tile edge.
-        side = (side * 9) / 5
+        side = max((side * 9) / 5, unionBottom - unionTop + side / 3)
+        val windowCenterY = (unionTop + unionBottom) / 2
 
         val tiles = rendered.mapIndexedNotNull { i, (bmp, bounds) ->
-            bounds?.let { "+${i * stepMs}ms" to cropCentered(bmp, it, side) }
+            bounds?.let {
+                val cx = (it.left + it.right) / 2
+                "+${i * stepMs}ms" to cropWindow(bmp, cx, windowCenterY, side)
+            }
         }
         if (tiles.isEmpty()) return
 
@@ -344,9 +356,10 @@ class EventRenderTest {
      */
     @Test fun renderGroundAnimalGaits() {
         renderGaitSheet("FoxEvent", FoxEvent(Random(42), spawnTimeMs = 1000000L))
-        renderGaitSheet("DeerEvent", DeerEvent(Random(42), spawnTimeMs = 1000000L), startProgress = 0.9f)
-        renderGaitSheet("RabbitEvent", RabbitEvent(Random(42), spawnTimeMs = 1000000L))
-        renderGaitSheet("SquirrelEvent", SquirrelEvent(Random(42), spawnTimeMs = 1000000L))
+        renderGaitSheet("DeerEvent", DeerEvent(Random(42), spawnTimeMs = 1000000L), startProgress = 0.95f)
+        // Rabbit hop and squirrel run cycles are ~1s, so sample a full period.
+        renderGaitSheet("RabbitEvent", RabbitEvent(Random(42), spawnTimeMs = 1000000L), stepMs = 130L)
+        renderGaitSheet("SquirrelEvent", SquirrelEvent(Random(42), spawnTimeMs = 1000000L), stepMs = 130L)
     }
 
     // ==================== Sky Events ====================

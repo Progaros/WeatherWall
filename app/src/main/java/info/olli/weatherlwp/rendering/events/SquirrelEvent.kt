@@ -196,16 +196,17 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
             paint
         )
         
-        // Front legs (in front of body)
+        // Front legs (in front of body). Shifted inwards and reaching higher into the torso:
+        // at full legOffset the old anchors swung past the body oval's right edge and detached.
         paint.color = RenderConstants.blendWithAmbient(bodyColor, ambientColor, 0.3f)
         canvas.drawRoundRect(
-            screenX + unit * 0.3f + legOffset, screenY + unit * 0.3f,
-            screenX + unit * 0.6f + legOffset, screenY + unit * 1.2f,
+            screenX + unit * 0.1f + legOffset, screenY + unit * 0.15f,
+            screenX + unit * 0.4f + legOffset, screenY + unit * 1.2f,
             unit * 0.15f, unit * 0.15f, paint
         )
         canvas.drawRoundRect(
-            screenX + unit * 0.0f - legOffset, screenY + unit * 0.3f,
-            screenX + unit * 0.3f - legOffset, screenY + unit * 1.2f,
+            screenX - unit * 0.2f - legOffset, screenY + unit * 0.15f,
+            screenX + unit * 0.1f - legOffset, screenY + unit * 1.2f,
             unit * 0.15f, unit * 0.15f, paint
         )
         
