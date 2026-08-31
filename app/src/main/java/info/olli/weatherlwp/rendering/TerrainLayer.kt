@@ -1131,7 +1131,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             // Blend with ambient color based on depth (distant hills blend more)
             val blendAmount = RenderConstants.applyAmbientTint(effectiveDayColor, ambientColor, hill.depthFactor)
             val hillColor = RenderConstants.blendWithAmbient(effectiveDayColor, ambientColor, blendAmount)
-            drawHill(canvas, index, hill, hillColor)
+            drawHill(canvas, index, hillColor)
             
             canvas.restore()
             
@@ -1327,7 +1327,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         }
     }
 
-    private fun drawHill(canvas: Canvas, hillIndex: Int, hill: HillData, hillColor: Int) {
+    private fun drawHill(canvas: Canvas, hillIndex: Int, hillColor: Int) {
         val path = hillPaths.getOrNull(hillIndex) ?: return
         val bottomY = height + height * 0.3f
         val minY = hillMinYs.getOrElse(hillIndex) { bottomY }

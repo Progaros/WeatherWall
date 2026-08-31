@@ -45,7 +45,7 @@ object RenderConstants {
      * that is now identical to getHeightScale. No production code should call this.
      */
     @Deprecated("Use getHeightScale(screenHeight) directly", ReplaceWith("getHeightScale(screenHeight)"))
-    fun getPositionScale(screenWidth: Float, screenHeight: Float): Float {
+    fun getPositionScale(@Suppress("UNUSED_PARAMETER") screenWidth: Float, screenHeight: Float): Float {
         return getHeightScale(screenHeight)
     }
     
