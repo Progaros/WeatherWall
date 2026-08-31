@@ -11,20 +11,9 @@ steps:
       GRADLE_USER_HOME: &cache_path .gradle
     commands:
       - chmod +x gradlew
-      # dl.google.com answers 404 from this runner; find a Google-Maven host that is actually reachable
-      - |
-        AGP=com/android/tools/build/gradle/8.11.1/gradle-8.11.1.pom
-        for u in \
-          "https://dl.google.com/dl/android/maven2/$AGP" \
-          "https://maven.google.com/$AGP" \
-          "https://maven.aliyun.com/repository/google/$AGP" \
-          "https://plugins.gradle.org/m2/$AGP" \
-          "https://repo.maven.apache.org/maven2/$AGP"; do
-          curl -sSL -o /dev/null --connect-timeout 10 --max-time 30 \
-            -w "%{http_code} ip=%{remote_ip} $u\n" "$u" || echo "ERR $u"
-        done
-        getent hosts dl.google.com maven.google.com repo.maven.apache.org || true
-      - ./gradlew dependencies --no-daemon --info 2>&1 | tail -n 120
+      - curl -sS -o /dev/null -w 'google=%{http_code} mirror=' --max-time 30 https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/8.11.1/gradle-8.11.1.pom || true
+      - curl -sS -o /dev/null -w '%{http_code}\n' --max-time 30 https://maven.aliyun.com/repository/google/com/android/tools/build/gradle/8.11.1/gradle-8.11.1.pom || true
+      - ./gradlew dependencies --no-daemon
       - ./gradlew :app:dependencies --no-daemon
       - yes | sdkmanager --licenses || true
 
