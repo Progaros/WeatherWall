@@ -95,6 +95,16 @@ class EventRenderTest {
      * Ground is drawn ONLY on the full version, not here, so content detection works.
      */
     private fun renderToBitmap(event: RandomEvent, progress: Float, bgColor: Int, withGround: Boolean = false): Bitmap {
+        val absoluteTimeMs = event.spawnTimeMs + (event.durationMs * progress).toLong()
+        return renderAtAbsoluteTime(event, absoluteTimeMs, bgColor, withGround)
+    }
+
+    private fun renderAtAbsoluteTime(
+        event: RandomEvent,
+        absoluteTimeMs: Long,
+        bgColor: Int,
+        withGround: Boolean = false
+    ): Bitmap {
         val bitmap = Bitmap.createBitmap(width.toInt(), height.toInt(), Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         canvas.drawColor(bgColor)
@@ -113,7 +123,6 @@ class EventRenderTest {
         val parallax = ParallaxCalculator()
         parallax.setCanvasSize(width, height)
         
-        val absoluteTimeMs = event.spawnTimeMs + (event.durationMs * progress).toLong()
         val hillProvider: EventTerrainProvider = { _, _ -> 0.80f }
         
         event.draw(canvas, paint, strokePaint, parallax, width, height,
@@ -217,6 +226,79 @@ class EventRenderTest {
         }
     }
 
+    /** Fixed-size crop centred on the content, so limbs animate without the body drifting out of frame. */
+    private fun cropCentered(bitmap: Bitmap, bounds: Rect, side: Int): Bitmap {
+        val clamped = side.coerceIn(16, min(bitmap.width, bitmap.height))
+        val cx = (bounds.left + bounds.right) / 2
+        val cy = (bounds.top + bounds.bottom) / 2
+        val left = (cx - clamped / 2).coerceIn(0, bitmap.width - clamped)
+        val top = (cy - clamped / 2).coerceIn(0, bitmap.height - clamped)
+        val cropped = Bitmap.createBitmap(bitmap, left, top, clamped, clamped)
+        return Bitmap.createScaledBitmap(cropped, cropSize, cropSize, true)
+    }
+
+    private fun buildSheet(tiles: List<Pair<String, Bitmap>>, cols: Int): Bitmap {
+        val tileSize = cropSize
+        val rows = (tiles.size + cols - 1) / cols
+        val sheet = Bitmap.createBitmap(cols * tileSize, rows * tileSize, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(sheet)
+        canvas.drawColor(Color.DKGRAY)
+        val labelPaint = Paint().apply {
+            color = Color.WHITE; textSize = 20f; isAntiAlias = true
+            setShadowLayer(2f, 1f, 1f, Color.BLACK)
+        }
+        for ((idx, pair) in tiles.withIndex()) {
+            val x = (idx % cols) * tileSize
+            val y = (idx / cols) * tileSize
+            canvas.drawBitmap(pair.second, x.toFloat(), y.toFloat(), null)
+            canvas.drawText(pair.first, x + 6f, y + 24f, labelPaint)
+        }
+        return sheet
+    }
+
+    /**
+     * Tile a short slice of the animation so limb phases can be compared side by side.
+     * Frames are spaced in real time rather than by progress: a gait cycle lasts under a second
+     * while an event lives for many seconds, so progress-based sampling only shows the animal
+     * at different screen positions, never at different points of its stride.
+     */
+    private fun renderGaitSheet(
+        name: String,
+        event: RandomEvent,
+        frames: Int = 8,
+        stepMs: Long = 100L,
+        startProgress: Float = 0.35f,
+        bgColor: Int = Color.rgb(135, 190, 230)
+    ) {
+        val startMs = event.spawnTimeMs + (event.durationMs * startProgress).toLong()
+        val rendered = (0 until frames).map { i ->
+            val bmp = renderAtAbsoluteTime(event, startMs + i * stepMs, bgColor, withGround = false)
+            bmp to findContentBounds(bmp, bgColor)
+        }
+
+        var side = 0
+        for ((_, bounds) in rendered) {
+            if (bounds != null) side = max(side, max(bounds.width(), bounds.height()))
+        }
+        if (side <= 0) {
+            println("WARNING: No content found for gait sheet $name")
+            return
+        }
+        // Head-room so limbs at their extremes never touch the tile edge.
+        side = (side * 9) / 5
+
+        val tiles = rendered.mapIndexedNotNull { i, (bmp, bounds) ->
+            bounds?.let { "+${i * stepMs}ms" to cropCentered(bmp, it, side) }
+        }
+        if (tiles.isEmpty()) return
+
+        val dir = File(outputDir, "gait").also { it.mkdirs() }
+        File(dir, "$name.png").outputStream().use {
+            buildSheet(tiles, cols = min(4, tiles.size)).compress(Bitmap.CompressFormat.PNG, 100, it)
+        }
+        println("Gait sheet $name: ${tiles.size} frames, ${stepMs}ms apart, tile source ${side}px")
+    }
+
     // ==================== Ground Events ====================
 
     @Test fun renderFox() {
@@ -254,6 +336,17 @@ class EventRenderTest {
         val event = SquirrelEvent(Random(42), spawnTimeMs = 1000000L)
         renderEvent("SquirrelEvent", event)
         renderFrames("SquirrelEvent", event)
+    }
+
+    /**
+     * Gait sheets for the walking animals. These are the renders to look at when judging
+     * leg motion, body attachment and silhouette, which the progress-based frames cannot show.
+     */
+    @Test fun renderGroundAnimalGaits() {
+        renderGaitSheet("FoxEvent", FoxEvent(Random(42), spawnTimeMs = 1000000L))
+        renderGaitSheet("DeerEvent", DeerEvent(Random(42), spawnTimeMs = 1000000L), startProgress = 0.9f)
+        renderGaitSheet("RabbitEvent", RabbitEvent(Random(42), spawnTimeMs = 1000000L))
+        renderGaitSheet("SquirrelEvent", SquirrelEvent(Random(42), spawnTimeMs = 1000000L))
     }
 
     // ==================== Sky Events ====================

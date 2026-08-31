@@ -74,6 +74,27 @@ Run mutation tests:
 ./gradlew :app:pitest
 ```
 
+### Visual renders
+
+Event and scene artwork is reviewed from generated PNGs rather than committed images.
+`event_renders/` is gitignored and is meant to be rebuilt on demand:
+
+```bash
+./gradlew :app:testDebugUnitTest --tests '*EventRenderTest' --tests '*SceneScreenshotTest'
+```
+
+Both tests run under Robolectric with native graphics and write to `event_renders/`:
+
+| Output | Produced by | Shows |
+| --- | --- | --- |
+| `<Event>.png`, `<Event>_full.png` | `EventRenderTest.renderEvent` | Best single frame, cropped and full scene |
+| `<Event>_f1..f3.png` | `EventRenderTest.renderFrames` | Three points across the event lifetime |
+| `gait/<Event>.png` | `EventRenderTest.renderGroundAnimalGaits` | One stride sampled every 100 ms, animal kept centred |
+| `scenes/`, `contact_sheets/` | `SceneScreenshotTest` | Full scenes across time of day, weather and seeds |
+
+Use the gait sheets to judge leg motion and body attachment — the lifetime frames only show
+the animal at different screen positions, never at different points of its stride.
+
 ## Docker
 
 Build the CI image:
