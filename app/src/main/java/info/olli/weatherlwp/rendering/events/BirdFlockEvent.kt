@@ -111,9 +111,12 @@ class BirdFlockEvent(random: Random, override val spawnTimeMs: Long = System.cur
             // During flap: fast wing beats with larger amplitude
             // During glide: slow gentle movement with wings mostly up
             val wingBeatSpeed = if (isFlapping) 10f else 1.5f
-            val wingAmplitude = if (isFlapping) size * 0.35f else size * 0.1f
+            // A gliding bird holds a steady dihedral, so keep the trough of the
+            // oscillation well above strokeWidth (size * 0.15f) - otherwise the V
+            // collapses into the line thickness and the bird reads as a flat bar.
+            val wingAmplitude = if (isFlapping) size * 0.45f else size * 0.15f
             // Base wing angle: wings curve upward (negative Y = up on screen)
-            val baseWingUp = size * 0.4f
+            val baseWingUp = if (isFlapping) size * 0.4f else size * 0.5f
             
             // Wing lift oscillates around base position, always keeping wings angled up
             val sineValue = sin(elapsedSec * wingBeatSpeed + bird.wingPhase)

@@ -92,11 +92,13 @@ class FishJumpEvent(random: Random, override val spawnTimeMs: Long = System.curr
         // Fish body (oval)
         canvas.drawOval(-2f * s, -0.6f * s, 2f * s, 0.6f * s, paint)
 
-        // Tail fin
+        // Tail fin - overlaps into the peduncle so it stays fused with the body.
+        // At x = -1.4s the body ellipse is still ~0.43s tall, giving a solid join.
         fishPath.reset()
-        fishPath.moveTo(-2f * s, 0f)
-        fishPath.lineTo(-3.2f * s, -0.8f * s)
-        fishPath.lineTo(-3.2f * s, 0.8f * s)
+        fishPath.moveTo(-1.4f * s, -0.35f * s)
+        fishPath.lineTo(-3.2f * s, -0.85f * s)
+        fishPath.lineTo(-3.2f * s, 0.85f * s)
+        fishPath.lineTo(-1.4f * s, 0.35f * s)
         fishPath.close()
         canvas.drawPath(fishPath, paint)
 

@@ -107,7 +107,7 @@ class FrogEvent(random: Random, override val spawnTimeMs: Long = System.currentT
 
         // Throat pulsing (breathing animation when sitting)
         val isHopping = progress >= hopStartProgress && progress <= hopEndProgress
-        val throatPulse = if (!isHopping) abs(sin(absoluteTimeMs * 0.004f)) * 0.15f * s else 0f
+        val throatPulse = if (!isHopping) abs(sin(absoluteTimeMs * 0.004f)) * 0.28f * s else 0f
 
         // Body (dark green)
         val bodyColor = RenderConstants.blendWithAmbient(Color.rgb(50, 100, 40), ambientColor, 0.3f)
@@ -123,10 +123,12 @@ class FrogEvent(random: Random, override val spawnTimeMs: Long = System.currentT
             frogPath.lineTo(-2.0f * s, 0.8f * s)
             frogPath.lineTo(-2.5f * s, 0.5f * s)
         } else {
-            // Folded back legs
-            frogPath.moveTo(-1.0f * s, 0.1f * s)
-            frogPath.lineTo(-1.8f * s, -0.3f * s)
+            // Folded back leg: a hunched mass against the rump. A backward spike here reads
+            // as a fish tail rather than a crouched frog.
+            frogPath.moveTo(-0.9f * s, -0.25f * s)
+            frogPath.lineTo(-1.7f * s, 0.05f * s)
             frogPath.lineTo(-1.5f * s, 0.5f * s)
+            frogPath.lineTo(-0.7f * s, 0.5f * s)
         }
         canvas.drawPath(frogPath, paint)
 
@@ -135,7 +137,7 @@ class FrogEvent(random: Random, override val spawnTimeMs: Long = System.currentT
 
         // Belly (lighter)
         paint.color = Color.argb((alpha * 200).toInt(), bellyBrightness, bellyBrightness, bellyBrightness - 30)
-        canvas.drawOval(-0.8f * s, -0.1f * s + throatPulse, 0.6f * s, 0.4f * s + throatPulse, paint)
+        canvas.drawOval(-0.8f * s, -0.1f * s - throatPulse * 0.5f, 0.6f * s, 0.4f * s + throatPulse * 0.5f, paint)
 
         // Head
         paint.color = Color.argb((alpha * 255).toInt(), Color.red(bodyColor), Color.green(bodyColor), Color.blue(bodyColor))

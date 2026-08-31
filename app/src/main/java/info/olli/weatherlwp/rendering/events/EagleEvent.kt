@@ -79,6 +79,10 @@ class EagleEvent(random: Random, override val spawnTimeMs: Long = System.current
         // Soaring eagle silhouette - wide outstretched wings
         val wingspan = size * 2.2f
         val bodyLen = size * 0.8f
+        // Slow flex of the wing tips: without it the silhouette is frozen, and a flat span
+        // this wide (4.4 x 0.6) otherwise reads as a plank rather than a bird.
+        val tipFlex = sin(timeSeconds * 1.6f + soarPhase) * size * 0.14f
+        val tipY = currentY - size * 0.72f + tipFlex
         
         // Body - elongated streamlined shape
         path.reset()
@@ -86,15 +90,15 @@ class EagleEvent(random: Random, override val spawnTimeMs: Long = System.current
                      currentX + bodyLen * 0.5f, currentY + size * 0.18f, Path.Direction.CW)
         canvas.drawPath(path, paint)
         
-        // Left wing - smooth flat soaring shape with slight dihedral (upward angle)
+        // Left wing - smooth soaring shape with pronounced dihedral (upward angle)
         path.reset()
         path.moveTo(currentX - size * 0.15f, currentY - size * 0.10f)
         // Leading edge curves gently upward to wing tip
-        path.quadTo(currentX - wingspan * 0.5f, currentY - size * 0.45f,
-                    currentX - wingspan, currentY - size * 0.35f)
+        path.quadTo(currentX - wingspan * 0.5f, currentY - size * 0.58f,
+                    currentX - wingspan, tipY)
         // Wing tip rounds back smoothly (no jagged feather points)
-        path.quadTo(currentX - wingspan * 0.97f, currentY - size * 0.12f,
-                    currentX - wingspan * 0.85f, currentY + size * 0.08f)
+        path.quadTo(currentX - wingspan * 0.97f, tipY + size * 0.26f,
+                    currentX - wingspan * 0.85f, currentY - size * 0.18f)
         // Trailing edge curves back to body
         path.quadTo(currentX - wingspan * 0.5f, currentY + size * 0.18f,
                     currentX - size * 0.15f, currentY + size * 0.18f)
@@ -104,10 +108,10 @@ class EagleEvent(random: Random, override val spawnTimeMs: Long = System.current
         // Right wing - mirror of left
         path.reset()
         path.moveTo(currentX + size * 0.15f, currentY - size * 0.10f)
-        path.quadTo(currentX + wingspan * 0.5f, currentY - size * 0.45f,
-                    currentX + wingspan, currentY - size * 0.35f)
-        path.quadTo(currentX + wingspan * 0.97f, currentY - size * 0.12f,
-                    currentX + wingspan * 0.85f, currentY + size * 0.08f)
+        path.quadTo(currentX + wingspan * 0.5f, currentY - size * 0.58f,
+                    currentX + wingspan, tipY)
+        path.quadTo(currentX + wingspan * 0.97f, tipY + size * 0.26f,
+                    currentX + wingspan * 0.85f, currentY - size * 0.18f)
         path.quadTo(currentX + wingspan * 0.5f, currentY + size * 0.18f,
                     currentX + size * 0.15f, currentY + size * 0.18f)
         path.close()

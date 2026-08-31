@@ -42,7 +42,7 @@ class DragonflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
             else -> Color.rgb(50, 205, 50) // Lime green
         }
     }
-    private val wingColor by lazy { Color.argb(120, 200, 200, 200) }  // Translucent wings
+    private val wingColor by lazy { Color.argb(90, 210, 215, 225) }  // Translucent wings
     
     // Movement - dragonflies dart and hover
     private val hoverFreqX = 1.5f + random.nextFloat() * 1.0f
@@ -134,42 +134,43 @@ class DragonflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
         
         // Wings (4 wings, translucent)
         paint.color = RenderConstants.blendWithAmbient(wingColor, ambientColor, 0.15f)
-        val wingAngle = wingBeat * 0.3f  // Subtle wing tilt
-        
+        val wingAngle = wingBeat  // Full-amplitude beat, applied per wing pair below
+
         // Top wings (front pair)
         canvas.save()
-        canvas.rotate(wingAngle * 15f, screenX, screenY)
+        canvas.rotate(wingAngle * 13f, screenX, screenY)
         canvas.drawOval(
-            screenX - unit * 1f, screenY - unit * 5f,
-            screenX + unit * 3f, screenY - unit * 0.5f,
+            screenX - unit * 0.2f, screenY - unit * 5f,
+            screenX + unit * 1.5f, screenY - unit * 0.4f,
             paint
         )
         canvas.restore()
-        
+
         canvas.save()
-        canvas.rotate(-wingAngle * 15f, screenX, screenY)
+        canvas.rotate(-wingAngle * 13f, screenX, screenY)
         canvas.drawOval(
-            screenX - unit * 1f, screenY + unit * 0.5f,
-            screenX + unit * 3f, screenY + unit * 5f,
+            screenX - unit * 0.2f, screenY + unit * 0.4f,
+            screenX + unit * 1.5f, screenY + unit * 5f,
             paint
         )
         canvas.restore()
-        
-        // Bottom wings (rear pair, slightly smaller)
+
+        // Bottom wings (rear pair) - set well back along the abdomen so the two
+        // pairs stay distinct instead of overlapping into a propeller shape.
         canvas.save()
-        canvas.rotate(-wingAngle * 12f, screenX - unit * 2f, screenY)
+        canvas.rotate(-wingAngle * 11f, screenX - unit * 3.5f, screenY)
         canvas.drawOval(
-            screenX - unit * 3f, screenY - unit * 4f,
-            screenX + unit * 0.5f, screenY - unit * 0.3f,
+            screenX - unit * 4.2f, screenY - unit * 4.2f,
+            screenX - unit * 2.6f, screenY - unit * 0.3f,
             paint
         )
         canvas.restore()
-        
+
         canvas.save()
-        canvas.rotate(wingAngle * 12f, screenX - unit * 2f, screenY)
+        canvas.rotate(wingAngle * 11f, screenX - unit * 3.5f, screenY)
         canvas.drawOval(
-            screenX - unit * 3f, screenY + unit * 0.3f,
-            screenX + unit * 0.5f, screenY + unit * 4f,
+            screenX - unit * 4.2f, screenY + unit * 0.3f,
+            screenX - unit * 2.6f, screenY + unit * 4.2f,
             paint
         )
         canvas.restore()
