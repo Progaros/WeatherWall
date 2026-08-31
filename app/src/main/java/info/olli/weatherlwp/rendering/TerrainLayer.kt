@@ -37,7 +37,7 @@ import kotlin.random.Random
  */
 class TerrainLayer(private val context: Context) : SceneLayer {
     override val layerType = LayerType.TERRAIN
-    private val hillPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
+    private val hillPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true; isDither = true }
 
     // Hill silhouettes are static in world space (parallax is applied via canvas.translate),
     // so their geometry is built once per resize/regeneration instead of every frame.
@@ -59,7 +59,11 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     // Cached hill gradients to avoid per-frame LinearGradient allocation
     private var cachedHillGradientAmbientBucket = -1
     private var cachedHillGradientSnow = -1
+    private var cachedHillGradientLightBucket = Int.MIN_VALUE
     private val cachedHillGradients = HashMap<Int, LinearGradient>()
+
+    /** Horizontal light bias for hill shading: -1 = light from the left, +1 = from the right, 0 = overhead. */
+    private var hillLightBiasX = 0f
 
     // Reused draw buffer for Y-sorted terrain interleaving (trees, bushes, animals)
     private class DrawEntry {
@@ -883,6 +887,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         cachedHillGradients.clear()
         cachedHillGradientAmbientBucket = -1
         cachedHillGradientSnow = -1
+        cachedHillGradientLightBucket = Int.MIN_VALUE
 
         // Always keep sub-renderer dimensions in sync
         treeRenderer.updateDimensions(w, h)
@@ -1092,13 +1097,17 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             decorationBitmapAmbientBucket = ambientBkt
         }
         
-        // Invalidate cached hill gradients only when bucketed ambient or snow changes.
+        // Invalidate cached hill gradients only when bucketed ambient, snow or light angle changes.
         // This avoids rebuilding gradients on tiny per-frame color deltas.
         val ambientBucket = ambientColorBucket(ambientColor)
         val snowBucket = (dynamicSnowLevel * 20).toInt()  // ~5% granularity
-        if (ambientBucket != cachedHillGradientAmbientBucket || snowBucket != cachedHillGradientSnow) {
+        hillLightBiasX = computeHillLightBias(state)
+        val lightBucket = (hillLightBiasX * 40f).toInt()  // ~2.5% granularity
+        if (ambientBucket != cachedHillGradientAmbientBucket || snowBucket != cachedHillGradientSnow ||
+            lightBucket != cachedHillGradientLightBucket) {
             cachedHillGradientAmbientBucket = ambientBucket
             cachedHillGradientSnow = snowBucket
+            cachedHillGradientLightBucket = lightBucket
             cachedHillGradients.clear()
         }
         
@@ -1271,6 +1280,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         cachedHillGradients.clear()
         cachedHillGradientAmbientBucket = -1
         cachedHillGradientSnow = -1
+        cachedHillGradientLightBucket = Int.MIN_VALUE
         if (currentHills.isEmpty() || width <= 0f || height <= 0f) {
             hillPaths = emptyArray()
             hillMinYs = FloatArray(0)
@@ -1327,6 +1337,18 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         }
     }
 
+    /**
+     * Horizontal bias of the hill shading toward the light, using the same elevation model as
+     * [MountainLayer]. Zero at noon and when shadows are disabled, strongest at low sun angles.
+     */
+    private fun computeHillLightBias(state: SimulationState): Float {
+        if (!state.shadowsEnabled) return 0f
+        val noonAngle = (Math.PI / 2).toFloat()
+        val lightAngle = state.getLightSourceAngle()
+        val sunElevation = 1f - kotlin.math.abs(lightAngle - noonAngle) / noonAngle
+        return kotlin.math.cos(lightAngle) * (1f - sunElevation) * state.getEffectiveShadowStrength()
+    }
+
     private fun drawHill(canvas: Canvas, hillIndex: Int, hillColor: Int) {
         val path = hillPaths.getOrNull(hillIndex) ?: return
         val bottomY = height + height * 0.3f
@@ -1363,6 +1385,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val applySnow = effectiveSnowCoverage > 0
         
         // Apply linear gradient from top to bottom (cached to avoid per-frame allocation)
+        // The axis leans toward the light, so the lit flank faces the sun/moon.
+        val lightShiftX = width * 0.5f * hillLightBiasX
         val gradientKey = hillIndex * 2 + (if (applySnow) 1 else 0)
         val gradient = cachedHillGradients.getOrPut(gradientKey) {
             if (applySnow) {
@@ -1377,8 +1401,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 )
                 
                 LinearGradient(
-                    0f, minY,
-                    0f, bottomY,
+                    lightShiftX, minY,
+                    -lightShiftX, bottomY,
                     intArrayOf(
                         snowColor,
                         snowTransition,
@@ -1390,8 +1414,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 )
             } else {
                 LinearGradient(
-                    0f, minY,
-                    0f, bottomY,
+                    lightShiftX, minY,
+                    -lightShiftX, bottomY,
                     hillColor,
                     darkenColor(hillColor, 0.7f),
                     Shader.TileMode.CLAMP

@@ -33,6 +33,7 @@ class VignetteLayer(private val context: Context) : SceneLayer {
 
     private val paint = Paint().apply {
         isAntiAlias = false  // Not needed for gradient fills
+        isDither = true      // Full-screen alpha ramps band badly without it
     }
 
     private var width = 0f

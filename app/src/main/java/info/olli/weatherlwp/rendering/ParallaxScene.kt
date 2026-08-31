@@ -43,6 +43,7 @@ class ParallaxScene(
 
     companion object {
         private const val TAG = "ParallaxScene"
+        private const val DRAW_ERROR_LOG_INTERVAL_MS = 5000L
     }
 
     @Volatile
@@ -59,6 +60,22 @@ class ParallaxScene(
     
     // Layers
     private val layers = ArrayList<SceneLayer>()
+    // Draw failures repeat every frame, so log at most one per interval and count the rest.
+    private var lastDrawErrorLogMs = 0L
+    private var suppressedDrawErrors = 0
+
+    private fun logDrawError(what: String, e: Exception) {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - lastDrawErrorLogMs >= DRAW_ERROR_LOG_INTERVAL_MS) {
+            val suffix = if (suppressedDrawErrors > 0) " (+$suppressedDrawErrors suppressed)" else ""
+            lastDrawErrorLogMs = now
+            suppressedDrawErrors = 0
+            Log.e(TAG, "Error drawing $what$suffix", e)
+        } else {
+            suppressedDrawErrors++
+        }
+    }
+
     private val skyLayer = SkyLayer(context)
     private val mountainLayer = MountainLayer(context)
     private val cloudLayer = CloudLayer(context)
@@ -342,7 +359,7 @@ class ParallaxScene(
                         else -> layer.draw(canvas, state, parallaxCalculator)
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error drawing layer ${layer.javaClass.simpleName}", e)
+                    logDrawError("layer ${layer.javaClass.simpleName}", e)
                 }
             }
             
@@ -353,7 +370,7 @@ class ParallaxScene(
                         weatherLayer.draw(canvas, state, parallaxCalculator)
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error drawing weather", e)
+                    logDrawError("weather", e)
                 }
             }
             
@@ -361,7 +378,7 @@ class ParallaxScene(
             try {
                 vignetteLayer.draw(canvas, state, parallaxCalculator)
             } catch (e: Exception) {
-                Log.e(TAG, "Error drawing vignette", e)
+                logDrawError("vignette", e)
             }
             
             // Draw Debug Overlay (on top of vignette for visibility)
@@ -375,7 +392,7 @@ class ParallaxScene(
                 debugOverlayLayer.update(state, 0L)  // Update for FPS calculation
                 debugOverlayLayer.draw(canvas, state, parallaxCalculator)
             } catch (e: Exception) {
-                Log.e(TAG, "Error drawing debug overlay", e)
+                logDrawError("debug overlay", e)
             }
             
             DebugTracer.traceEnd("render")

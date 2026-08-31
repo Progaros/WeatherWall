@@ -40,6 +40,11 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     // Thread-safe event list using volatile + immutable list pattern
     @Volatile private var events: List<RandomEvent> = emptyList()
     
+    companion object {
+        private const val TAG = "RandomEventLayer"
+        private const val EVENT_ERROR_LOG_INTERVAL_MS = 5000L
+    }
+
     // Use a fixed base seed - actual randomness comes from absoluteTimeMs
     private val baseSeed = 4000L
     private val paint = Paint().apply {
@@ -139,8 +144,24 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
                     eventTerrainProvider
                 )
             } catch (e: Exception) {
-                android.util.Log.e("RandomEventLayer", "Error drawing event ${currentEvent.javaClass.simpleName}", e)
+                logEventDrawError(currentEvent, e)
             }
+        }
+    }
+
+    // Draw failures repeat every frame, so log at most one per interval and count the rest.
+    private var lastEventErrorLogMs = 0L
+    private var suppressedEventErrors = 0
+
+    private fun logEventDrawError(event: RandomEvent, e: Exception) {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - lastEventErrorLogMs >= EVENT_ERROR_LOG_INTERVAL_MS) {
+            val suffix = if (suppressedEventErrors > 0) " (+$suppressedEventErrors suppressed)" else ""
+            lastEventErrorLogMs = now
+            suppressedEventErrors = 0
+            android.util.Log.e(TAG, "Error drawing event ${event.javaClass.simpleName}$suffix", e)
+        } else {
+            suppressedEventErrors++
         }
     }
 
@@ -534,7 +555,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
                         offsetY
                     )
                 } catch (e: Exception) {
-                    android.util.Log.e("RandomEventLayer", "Error drawing event ${event.javaClass.simpleName}", e)
+                    logEventDrawError(event, e)
                 }
             }
         }
