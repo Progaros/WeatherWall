@@ -11,7 +11,10 @@ steps:
       GRADLE_USER_HOME: &cache_path .gradle
     commands:
       - chmod +x gradlew
-      - ./gradlew dependencies --no-daemon
+      # Surfaces proxy/egress failures that Gradle otherwise hides behind "plugin not found"
+      - curl -sS -o /dev/null -w 'google=%{http_code}\n' https://dl.google.com/dl/android/maven2/com/android/application/com.android.application.gradle.plugin/8.11.1/com.android.application.gradle.plugin-8.11.1.pom || true
+      - curl -sS -o /dev/null -w 'central=%{http_code}\n' https://repo.maven.apache.org/maven2/ || true
+      - ./gradlew dependencies --no-daemon --stacktrace
       - ./gradlew :app:dependencies --no-daemon
       - yes | sdkmanager --licenses || true
 
