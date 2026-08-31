@@ -263,15 +263,30 @@ class EventRenderTest {
      * Frames are spaced in real time rather than by progress: a gait cycle lasts under a second
      * while an event lives for many seconds, so progress-based sampling only shows the animal
      * at different screen positions, never at different points of its stride.
+     *
+     * Events like the deer are only on screen for part of their lifetime, so the start point is
+     * probed with single frames first instead of being fixed.
      */
     private fun renderGaitSheet(
         name: String,
         event: RandomEvent,
         frames: Int = 8,
         stepMs: Long = 100L,
-        startProgress: Float = 0.35f,
+        startCandidates: List<Float> = listOf(0.35f, 0.5f, 0.2f, 0.65f, 0.8f, 0.9f, 0.95f),
         bgColor: Int = Color.rgb(135, 190, 230)
     ) {
+        val startProgress = startCandidates.firstOrNull { p ->
+            val probe = renderAtAbsoluteTime(
+                event, event.spawnTimeMs + (event.durationMs * p).toLong(), bgColor
+            )
+            val b = findContentBounds(probe, bgColor)
+            b != null && b.width() > 20 && b.left > 2 && b.right < width.toInt() - 2
+        }
+        if (startProgress == null) {
+            println("WARNING: $name never fully on screen, no gait sheet")
+            return
+        }
+
         val startMs = event.spawnTimeMs + (event.durationMs * startProgress).toLong()
         val rendered = (0 until frames).map { i ->
             val bmp = renderAtAbsoluteTime(event, startMs + i * stepMs, bgColor, withGround = false)
@@ -356,10 +371,24 @@ class EventRenderTest {
      */
     @Test fun renderGroundAnimalGaits() {
         renderGaitSheet("FoxEvent", FoxEvent(Random(42), spawnTimeMs = 1000000L))
-        renderGaitSheet("DeerEvent", DeerEvent(Random(42), spawnTimeMs = 1000000L), startProgress = 0.95f)
+        renderGaitSheet("DeerEvent", DeerEvent(Random(42), spawnTimeMs = 1000000L))
         // Rabbit hop and squirrel run cycles are ~1s, so sample a full period.
         renderGaitSheet("RabbitEvent", RabbitEvent(Random(42), spawnTimeMs = 1000000L), stepMs = 130L)
         renderGaitSheet("SquirrelEvent", SquirrelEvent(Random(42), spawnTimeMs = 1000000L), stepMs = 130L)
+        renderGaitSheet("DuckEvent", DuckEvent(Random(42), spawnTimeMs = 1000000L), stepMs = 130L)
+        renderGaitSheet("FrogEvent", FrogEvent(Random(42), spawnTimeMs = 1000000L), stepMs = 130L)
+        renderGaitSheet("FishJumpEvent", FishJumpEvent(Random(42), spawnTimeMs = 1000000L), stepMs = 80L)
+    }
+
+    /** Wing-beat sheets: the flying events animate far faster than the walkers. */
+    @Test fun renderFlyingAnimalGaits() {
+        // Owl and eagle glide between flap bursts roughly every 2s, so the window must span one.
+        renderGaitSheet("OwlEvent", OwlEvent(Random(42), spawnTimeMs = 1000000L), stepMs = 300L)
+        renderGaitSheet("EagleEvent", EagleEvent(Random(42), spawnTimeMs = 1000000L), stepMs = 300L)
+        renderGaitSheet("BatEvent", BatEvent(Random(42), spawnTimeMs = 1000000L), stepMs = 60L)
+        renderGaitSheet("ButterflyEvent", ButterflyEvent(Random(42), spawnTimeMs = 1000000L), stepMs = 50L)
+        renderGaitSheet("DragonflyEvent", DragonflyEvent(Random(42), spawnTimeMs = 1000000L), stepMs = 50L)
+        renderGaitSheet("BirdFlockEvent", BirdFlockEvent(Random(42), spawnTimeMs = 1000000L), stepMs = 60L)
     }
 
     // ==================== Sky Events ====================

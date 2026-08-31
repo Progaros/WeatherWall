@@ -252,10 +252,12 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         paint.color = bodyColor
 
         // Neck: tapered band from shoulder to head base; follows the head up (alert) or down (graze).
-        val shoulderX = unit * 2.2f
+        // The shoulder anchor sits well inside the torso: with a narrow base the only visible part
+        // is the sliver above the body oval, which reads as a wire rather than a neck.
+        val shoulderX = unit * 1.2f
         val shoulderTopY = bodyY - unit * 1.9f
         val shoulderBotY = bodyY + unit * 0.4f
-        val headBaseX = headX - unit * 1.3f
+        val headBaseX = headX - unit * 1.7f
         val headTopY = headY - unit * 0.7f
         val headBotY = headY + unit * 0.9f
         path.reset()
