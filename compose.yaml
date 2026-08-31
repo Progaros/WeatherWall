@@ -1,0 +1,57 @@
+services:
+  # Gradle/Android SDK build container (see Dockerfile.build).
+  # Behind a corporate proxy, set CORP_PROXY and GRADLE_PROXY_OPTS, e.g.
+  #   $env:CORP_PROXY = "http://proxy.example.internal:80"
+  #   $env:GRADLE_PROXY_OPTS = "-Dhttps.proxyHost=proxy.example.internal -Dhttps.proxyPort=80"
+  build:
+    image: weatherwall-build
+    container_name: weatherwall-build
+    working_dir: /workspace
+    environment:
+      http_proxy: ${CORP_PROXY:-}
+      https_proxy: ${CORP_PROXY:-}
+      GRADLE_OPTS: ${GRADLE_PROXY_OPTS:-}
+    volumes:
+      - ./:/workspace
+      - ww-gradle:/home/builder/.gradle
+      # Robolectric downloads android-all-instrumented here; persisting it keeps
+      # test runs fast and avoids flaky fetches.
+      - ww-m2:/home/builder/.m2
+    command: ["./gradlew", "--no-daemon", "testDebugUnitTest", "assembleDebug"]
+
+  # Android emulator with noVNC at http://localhost:6080
+  #
+  # Docker Desktop cannot expose /dev/kvm, so this runs SwiftShader software
+  # rendering. Useful for functional and visual checks; frame rates measured
+  # here are NOT representative of real hardware.
+  emulator:
+    build:
+      context: ./docker/emulator
+      args:
+        http_proxy: ${CORP_PROXY:-}
+        https_proxy: ${CORP_PROXY:-}
+    image: weatherwall-emulator
+    container_name: weatherwall-emulator
+    privileged: true
+    shm_size: "4gb"
+    ports:
+      - "6080:6080"
+      - "5554:5554"
+      - "5555:5555"
+    environment:
+      DISPLAY: ":0"
+      # Software rendering: keep the pixel count low or frames take ~a minute each.
+      EMU_WIDTH: "${EMU_WIDTH:-720}"
+      EMU_HEIGHT: "${EMU_HEIGHT:-1560}"
+      EMU_DPI: "${EMU_DPI:-280}"
+    volumes:
+      - ./:/workspace
+      - ./artifacts:/artifacts
+    deploy:
+      resources:
+        limits:
+          memory: 10g
+
+volumes:
+  ww-gradle:
+  ww-m2:

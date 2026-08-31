@@ -19,6 +19,7 @@ __pycache__/
 *.log
 ai.md
 event_renders/
+artifacts/
 analysis-output/
 *.patch
 

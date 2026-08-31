@@ -8,6 +8,7 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Shader
+import android.os.Trace
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
@@ -37,7 +38,16 @@ import kotlin.random.Random
 class TerrainLayer(private val context: Context) : SceneLayer {
     override val layerType = LayerType.TERRAIN
     private val hillPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
-    private val hillPath = Path()
+
+    // Hill silhouettes are static in world space (parallax is applied via canvas.translate),
+    // so their geometry is built once per resize/regeneration instead of every frame.
+    private var hillPaths: Array<Path?> = emptyArray()
+    private var hillMinYs: FloatArray = FloatArray(0)
+    private var frostPaths: Array<Path?> = emptyArray()
+    private var hillGeometryDirty = true
+
+    /** Rebuild counters; see [TerrainRenderStats]. Exposed for benchmarks and tests. */
+    val renderStats = TerrainRenderStats()
 
     private var width = 0f
     private var height = 0f
@@ -79,6 +89,14 @@ class TerrainLayer(private val context: Context) : SceneLayer {
          * decoration bitmaps are tall enough even at maximum hill noise amplitude.
          */
         internal const val DECOR_BITMAP_MARGIN = 0.15f
+
+        /**
+         * Bounds of `getHillYFromNoise()` relative to a hill's heightOffset.
+         * The noise term is `0.12 * (1 - normalizedValue)` with normalizedValue
+         * clamped to 0.05..0.75, so the surface never rises above heightOffset.
+         */
+        internal const val HILL_SURFACE_MIN = 0.03f
+        internal const val HILL_SURFACE_MAX = 0.12f
 
         /** Returns true for decoration categories that can be baked into a static Bitmap. */
         fun isStaticDecoration(category: DecorationCategory): Boolean =
@@ -250,7 +268,12 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private val leafPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val mushroomPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val mushroomCapPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
-    private val frostPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
+    // Hairline stroke reproduces the previous per-segment drawLine() appearance in one path op.
+    private val frostPaint = Paint().apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 0f
+        isAntiAlias = true
+    }
     private val flowerPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val snowPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
 
@@ -278,6 +301,14 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private var decorationBitmapSeasonBucket = -1
     private var decorationBitmapAmbientBucket = -1
     private val decorationBitmapPaint = Paint()
+
+    /**
+     * Per-hill vertical extent of the baked decorations, as screen-height ratios.
+     * Decorations hug the hill contour, so this band is far smaller than the full
+     * screen height and keeps the cached bitmaps small.
+     */
+    private var decorBandTopRatio: FloatArray = FloatArray(0)
+    private var decorBandBottomRatio: FloatArray = FloatArray(0)
 
     init {
         reloadSettings()
@@ -372,6 +403,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         // Atomic reference swap (volatile ensures visibility to render thread)
         hills = newHills
+        hillGeometryDirty = true
         
         // Generate seasonal decorations after hills are created
         generateSeasonalDecorations(newHills)
@@ -706,8 +738,44 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         } else {
             mushroomsByHill = emptyMap()
         }
+        computeDecorationBands(currentHills)
         decorationsDirty = true
         decorationOomBlocked = false  // settings changed: allow bake retry even after prior OOM
+    }
+
+    /** Measure the vertical band each hill's decorations occupy, in screen-height ratios. */
+    private fun computeDecorationBands(currentHills: List<HillData>) {
+        val tops = FloatArray(currentHills.size)
+        val bottoms = FloatArray(currentHills.size)
+        for (i in currentHills.indices) {
+            val surfaceMin = currentHills[i].heightOffset + HILL_SURFACE_MIN
+            val surfaceMax = currentHills[i].heightOffset + HILL_SURFACE_MAX
+            var top = Float.MAX_VALUE
+            var bottom = -Float.MAX_VALUE
+
+            flowersByHill[i]?.forEach {
+                top = minOf(top, surfaceMin + it.yOffset - it.size)
+                bottom = maxOf(bottom, surfaceMax + it.yOffset + it.size)
+            }
+            fallenLeavesByHill[i]?.forEach {
+                top = minOf(top, surfaceMin + it.yOffset - it.size)
+                bottom = maxOf(bottom, surfaceMax + it.yOffset + it.size)
+            }
+            mushroomsByHill[i]?.forEach {
+                top = minOf(top, surfaceMin + it.yOffset - it.size * 1.3f)
+                bottom = maxOf(bottom, surfaceMax + it.yOffset)
+            }
+
+            if (top > bottom) {
+                tops[i] = 0f
+                bottoms[i] = 0f  // empty band: no bitmap is baked for this hill
+            } else {
+                tops[i] = (top - 0.005f).coerceAtLeast(0f)
+                bottoms[i] = (bottom + 0.005f).coerceAtMost(1f)
+            }
+        }
+        decorBandTopRatio = tops
+        decorBandBottomRatio = bottoms
     }
     
     /** Evaluate hill Y at world-space X using noise. */
@@ -806,6 +874,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
 
         // Rebuild cached transform for current dimensions
         cachedTransform = WorldViewportTransform(w, h)
+        hillGeometryDirty = true
 
         // Size change may produce smaller bitmaps — allow bake retry even after prior OOM.
         decorationOomBlocked = false
@@ -963,10 +1032,16 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         if (width <= 0 || height <= 0) return
-        
+
+        renderStats.recordFrame()
+
         // Take local snapshots for thread-safe iteration
         val currentHills = hills
         val currentTreesByDepth = treeRenderer.treesByDepth
+
+        if (hillGeometryDirty || hillPaths.size != currentHills.size) {
+            buildHillGeometry(currentHills)
+        }
         
         // Cache current season once per frame (avoid repeated lookups in loops)
         cachedSeason = state.currentSeason
@@ -1077,7 +1152,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             if (decorBitmap != null && !decorBitmap.isRecycled) {
                 // Bitmap was drawn with translate(width*MARGIN, -topY); undo both here.
                 canvas.drawBitmap(decorBitmap, -(width * DECOR_BITMAP_MARGIN), hillTopY, decorationBitmapPaint)
-                drawFrostOnly(canvas, hill)
+                drawFrostOnly(canvas, index)
             } else {
                 // OOM fallback: draw per-object (slower but always correct)
                 drawSeasonalDecorations(canvas, index, hill, ambientColor)
@@ -1185,35 +1260,77 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         }
     }
     
-    private fun drawHill(canvas: Canvas, hillIndex: Int, hill: HillData, hillColor: Int) {
-        hillPath.reset()
-        
-        // Use cached transform (rebuilt on resize only)
-        val transform = cachedTransform
-        val parallaxMargin = height * 0.3f
-        val padding = height * 0.45f + width * 0.1f  // parallax + edge padding
-        val startX = -padding
-        val endX = width + padding
-        // Number of line segments: ~3px per step for smooth curves
-        val numSteps = ((endX - startX) / 3f).toInt().coerceIn(80, 800)
-        val stepX = (endX - startX) / numSteps
-        val bottomY = height + parallaxMargin
-        
-        var minY = bottomY
-        hillPath.moveTo(startX, bottomY)
-        
-        for (i in 0..numSteps) {
-            val screenX = startX + i * stepX
-            // Convert screen X to world-space X (inverse of zoom transform)
-            val worldX = (screenX - transform.centerX) / transform.heightScale
-            val yRatio = getHillY(worldX, hill)
-            val y = yRatio * height
-            if (y < minY) minY = y
-            hillPath.lineTo(screenX, y)
+    /**
+     * Rebuild the cached per-hill fill paths, min-Y values and frost contours.
+     * Only depends on screen size, the world transform and the hill noise parameters,
+     * so it runs on resize/regeneration rather than per frame.
+     */
+    private fun buildHillGeometry(currentHills: List<HillData>) {
+        hillGeometryDirty = false
+        // Hill gradients are built from minY/bottomY, so they must not outlive the geometry.
+        cachedHillGradients.clear()
+        cachedHillGradientAmbientBucket = -1
+        cachedHillGradientSnow = -1
+        if (currentHills.isEmpty() || width <= 0f || height <= 0f) {
+            hillPaths = emptyArray()
+            hillMinYs = FloatArray(0)
+            frostPaths = emptyArray()
+            return
         }
-        
-        hillPath.lineTo(endX, bottomY)
-        hillPath.close()
+
+        Trace.beginSection("WeatherWall.GeometryBuild")
+        try {
+            val transform = cachedTransform
+            val parallaxMargin = height * 0.3f
+            val padding = height * 0.45f + width * 0.1f  // parallax + edge padding
+            val startX = -padding
+            val endX = width + padding
+            // Number of line segments: ~3px per step for smooth curves
+            val numSteps = ((endX - startX) / 3f).toInt().coerceIn(80, 800)
+            val stepX = (endX - startX) / numSteps
+            val bottomY = height + parallaxMargin
+
+            val paths = arrayOfNulls<Path>(currentHills.size)
+            val contours = arrayOfNulls<Path>(currentHills.size)
+            val minYs = FloatArray(currentHills.size)
+
+            for (h in currentHills.indices) {
+                val hill = currentHills[h]
+                val fill = Path()
+                val contour = Path()
+                var minY = bottomY
+
+                fill.moveTo(startX, bottomY)
+                for (i in 0..numSteps) {
+                    val screenX = startX + i * stepX
+                    // Convert screen X to world-space X (inverse of zoom transform)
+                    val worldX = (screenX - transform.centerX) / transform.heightScale
+                    val y = getHillY(worldX, hill) * height
+                    if (y < minY) minY = y
+                    fill.lineTo(screenX, y)
+                    if (i == 0) contour.moveTo(screenX, y) else contour.lineTo(screenX, y)
+                }
+                fill.lineTo(endX, bottomY)
+                fill.close()
+
+                paths[h] = fill
+                contours[h] = contour
+                minYs[h] = minY
+            }
+
+            hillPaths = paths
+            frostPaths = contours
+            hillMinYs = minYs
+            renderStats.recordHillGeometryBuild(currentHills.size)
+        } finally {
+            Trace.endSection()
+        }
+    }
+
+    private fun drawHill(canvas: Canvas, hillIndex: Int, hill: HillData, hillColor: Int) {
+        val path = hillPaths.getOrNull(hillIndex) ?: return
+        val bottomY = height + height * 0.3f
+        val minY = hillMinYs.getOrElse(hillIndex) { bottomY }
         
         // Check if we should apply snow cap effect
         // When useWeatherSnow is true, use ONLY weather snow level to avoid
@@ -1283,7 +1400,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         }
         hillPaint.shader = gradient
         
-        canvas.drawPath(hillPath, hillPaint)
+        canvas.drawPath(path, hillPaint)
         
         // Clear shader after drawing
         hillPaint.shader = null
@@ -1291,7 +1408,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     
     private fun drawSeasonalDecorations(canvas: Canvas, hillIndex: Int, hill: HillData, ambientColor: Int) {
         drawStaticDecorationsOnCanvas(canvas, hillIndex, hill, ambientColor)
-        drawFrostOnly(canvas, hill)
+        drawFrostOnly(canvas, hillIndex)
     }
 
     private fun drawStaticDecorationsOnCanvas(canvas: Canvas, hillIndex: Int, hill: HillData, ambientColor: Int) {
@@ -1393,52 +1510,28 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         }
     }
 
-    private fun drawFrostOnly(canvas: Canvas, hill: HillData) {
-        val transform = cachedTransform
-        // Frost: visible in winter (already uses smooth blending via getSeasonWeight)
-        if (frostEnabled) {
-            val frostWeight = if (useWeatherSnow && dynamicSnowLevel > 0.2f) {
-                dynamicSnowLevel.coerceIn(0f, 1f)
-            } else {
-                getSeasonWeight("winter")
-            }
-            if (frostWeight > 0.05f) {
-                val frostAlpha = if (useWeatherSnow && dynamicSnowLevel > 0.2f) {
-                    (dynamicSnowLevel * 40).toInt().coerceIn(0, 35)
-                } else {
-                    (25 * frostWeight).toInt()
-                }
-                if (frostAlpha > 3) {
-                    frostPaint.color = Color.argb(frostAlpha, 220, 230, 255)
-                    // Draw frost as thin lines along hill contour using noise evaluation
-                    // Pixel-walking loop: walk screen pixels, convert to world for noise
-                    val frostPadding = height * 0.45f + width * 0.1f
-                    val frostStartX = -frostPadding
-                    val frostEndX = width + frostPadding
-                    val frostSteps = ((frostEndX - frostStartX) / 4f).toInt().coerceIn(40, 400)
-                    val frostStepX = (frostEndX - frostStartX) / frostSteps
-                    for (i in 0 until frostSteps) {
-                        val x1 = frostStartX + i * frostStepX
-                        val x2 = x1 + frostStepX
-                        val worldX1 = transform.screenToWorldX(x1)
-                        val worldX2 = transform.screenToWorldX(x2)
-                        val y1 = getHillY(worldX1, hill) * height
-                        val y2 = getHillY(worldX2, hill) * height
-                        canvas.drawLine(x1, y1, x2, y2, frostPaint)
-                    }
-                }
-            }
-        }
-    }
+    private fun drawFrostOnly(canvas: Canvas, hillIndex: Int) {
+        if (!frostEnabled) return
+        val contour = frostPaths.getOrNull(hillIndex) ?: return
 
-    /**
-     * Top screen-Y for the decoration bitmap of a specific hill.
-     * Uses hill.heightOffset so background hills get larger bitmaps than foreground hills.
-     * The DECOR_BITMAP_MARGIN clearance is sufficient: getHillYFromNoise returns at most
-     * heightOffset + 0.03, leaving >12% headroom within the margin.
-     */
-    private fun hillDecorationTopY(hill: HillData): Float =
-        ((hill.heightOffset - DECOR_BITMAP_MARGIN).coerceAtLeast(0f) * height)
+        // Frost: visible in winter (already uses smooth blending via getSeasonWeight)
+        val frostWeight = if (useWeatherSnow && dynamicSnowLevel > 0.2f) {
+            dynamicSnowLevel.coerceIn(0f, 1f)
+        } else {
+            getSeasonWeight("winter")
+        }
+        if (frostWeight <= 0.05f) return
+
+        val frostAlpha = if (useWeatherSnow && dynamicSnowLevel > 0.2f) {
+            (dynamicSnowLevel * 40).toInt().coerceIn(0, 35)
+        } else {
+            (25 * frostWeight).toInt()
+        }
+        if (frostAlpha <= 3) return
+
+        frostPaint.color = Color.argb(frostAlpha, 220, 230, 255)
+        canvas.drawPath(contour, frostPaint)
+    }
 
     /**
      * Bucketizes season weights for cache invalidation (5% steps = 20 buckets per season).
@@ -1475,15 +1568,31 @@ class TerrainLayer(private val context: Context) : SceneLayer {
      * On OOM the bitmap slot is left null and the hill falls back to per-object drawing.
      */
     private fun bakeDecorationBitmaps(hills: Array<HillData>, ambientColor: Int) {
+        Trace.beginSection("WeatherWall.DecorationBake")
+        try {
+            bakeDecorationBitmapsInner(hills, ambientColor)
+        } finally {
+            Trace.endSection()
+        }
+    }
+
+    private fun bakeDecorationBitmapsInner(hills: Array<HillData>, ambientColor: Int) {
         val bmpW = ((width * (1f + 2f * DECOR_BITMAP_MARGIN)).toInt()).coerceAtLeast(1)
         val newBitmaps = arrayOfNulls<Bitmap>(hills.size)
         val newTopYs = FloatArray(hills.size)
         var anyOom = false
 
         for (i in hills.indices) {
-            val topY = hillDecorationTopY(hills[i])
+            val topRatio = decorBandTopRatio.getOrElse(i) { 0f }
+            val bottomRatio = decorBandBottomRatio.getOrElse(i) { 0f }
+            val topY = (topRatio * height).coerceIn(0f, height)
+            val bottomY = (bottomRatio * height).coerceIn(topY, height)
             newTopYs[i] = topY
-            val bmpH = (height - topY).toInt().coerceAtLeast(1)
+            val bmpH = (bottomY - topY).toInt()
+            if (bmpH < 1) {
+                newBitmaps[i] = null
+                continue
+            }
             try {
                 val bmp = Bitmap.createBitmap(bmpW, bmpH, Bitmap.Config.ARGB_8888)
                 val bmpCanvas = android.graphics.Canvas(bmp)
@@ -1511,10 +1620,11 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         decorationBitmapW = bmpW
         decorationBitmapScreenH = height
 
-        val totalBytes = newTopYs.indices.sumOf { i ->
-            val h = (height - newTopYs[i]).toInt().coerceAtLeast(0)
-            bmpW.toLong() * h * 4L
+        val totalBytes = newBitmaps.sumOf { bmp ->
+            if (bmp == null) 0L else bmp.width.toLong() * bmp.height * 4L
         }
+        renderStats.recordDecorationBake(newBitmaps.count { it != null })
+        renderStats.recordDecorationBytes(totalBytes)
         android.util.Log.d("TerrainLayer",
             "Baked decoration bitmaps: ${hills.size} hills, W=${bmpW}px " +
             "(~${totalBytes / 1024L / 1024L}MB total)")

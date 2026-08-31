@@ -11,8 +11,8 @@ android {
         applicationId = "info.olli.weatherlwp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 259
-        versionName = "1.31.23"
+        versionCode = 260
+        versionName = "1.31.24"
     }
 
     buildFeatures {
@@ -50,6 +50,18 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+}
+
+tasks.withType<Test>().configureEach {
+    // Robolectric downloads its android-all artifacts from the forked test JVM,
+    // which does not inherit the Gradle JVM's proxy configuration.
+    listOf(
+        "http.proxyHost", "http.proxyPort",
+        "https.proxyHost", "https.proxyPort",
+        "http.nonProxyHosts"
+    ).forEach { key ->
+        System.getProperty(key)?.let { systemProperty(key, it) }
     }
 }
 
