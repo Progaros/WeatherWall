@@ -1,9 +1,19 @@
 pluginManagement {
     repositories {
-        // Google answers 404 to the CI runner's VPN exit IP, so the mirror is queried first;
-        // google() stays as fallback for developer machines and once the block is lifted.
-        maven { url = uri("https://maven.aliyun.com/repository/google") }
         google()
+        // Google answers 404 to the CI runner's VPN exit IP, so this mirror serves the Android
+        // artifacts. It only mirrors Google's Maven and answers 502 for anything else, which
+        // would disable the repository for the whole build instead of falling through like a
+        // 404 - hence the content filter.
+        maven {
+            url = uri("https://maven.aliyun.com/repository/google")
+            content {
+                includeGroupByRegex("com\\.android.*")
+                includeGroupByRegex("androidx.*")
+                includeGroupByRegex("com\\.google\\.android.*")
+                includeGroup("com.google.testing.platform")
+            }
+        }
         mavenCentral()
         gradlePluginPortal()
     }
@@ -12,8 +22,16 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
-        maven { url = uri("https://maven.aliyun.com/repository/google") }
         google()
+        maven {
+            url = uri("https://maven.aliyun.com/repository/google")
+            content {
+                includeGroupByRegex("com\\.android.*")
+                includeGroupByRegex("androidx.*")
+                includeGroupByRegex("com\\.google\\.android.*")
+                includeGroup("com.google.testing.platform")
+            }
+        }
         mavenCentral()
     }
 }
