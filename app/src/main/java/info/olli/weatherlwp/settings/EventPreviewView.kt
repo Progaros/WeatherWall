@@ -23,7 +23,7 @@ import info.olli.weatherlwp.rendering.events.FireflyEvent
 import info.olli.weatherlwp.rendering.events.FishJumpEvent
 import info.olli.weatherlwp.rendering.events.FoxEvent
 import info.olli.weatherlwp.rendering.events.FrogEvent
-import info.olli.weatherlwp.rendering.events.HillHeightProvider
+import info.olli.weatherlwp.rendering.events.EventTerrainProvider
 import info.olli.weatherlwp.rendering.events.HotAirBalloonEvent
 import info.olli.weatherlwp.rendering.events.OwlEvent
 import info.olli.weatherlwp.rendering.events.RabbitEvent
@@ -92,8 +92,8 @@ class EventPreviewView @JvmOverloads constructor(
 
     private val previewGroundColor = Color.argb(70, 85, 105, 80)
 
-    private val previewHillProvider: HillHeightProvider = { xRatio, depthFactor ->
-        val x = xRatio.coerceIn(-0.2f, 1.2f)
+    private val previewHillProvider: EventTerrainProvider = { eventX, depthFactor ->
+        val x = eventX.coerceIn(-0.2f, 1.2f)
         val centered = ((x + 0.2f) / 1.4f) * 2f - 1f
         val arch = 1f - centered * centered
         val depthShift = (depthFactor - 0.65f) * 0.06f

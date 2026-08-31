@@ -49,7 +49,7 @@ class SnowflakeEvent(random: Random, override val spawnTimeMs: Long = System.cur
         return startX + sin(t * driftFreq + driftPhase) * 0.05f + t * driftSpeed
     }
 
-    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         return startY + fallSpeed * elapsedMs
     }
@@ -57,7 +57,7 @@ class SnowflakeEvent(random: Random, override val spawnTimeMs: Long = System.cur
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
-                      hillHeightProvider: HillHeightProvider?, extendedOffsetY: Float) {
+                      hillHeightProvider: EventTerrainProvider?, extendedOffsetY: Float) {
         val unit = height * 0.004f * sizeScale
         
         val elapsedMs = absoluteTimeMs - spawnTimeMs

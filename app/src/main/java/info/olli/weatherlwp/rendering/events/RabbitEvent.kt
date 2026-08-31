@@ -48,7 +48,7 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
     /**
      * Get current Y position for Y-based draw ordering with trees.
      */
-    override fun getCurrentYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+    override fun getCurrentYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val x = startX + direction * avgSpeed * elapsedMs
         val hillY = hillHeightProvider?.invoke(x, depthFactor) ?: fallbackGroundY
@@ -63,7 +63,7 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
-                      hillHeightProvider: HillHeightProvider?, extendedOffsetY: Float) {
+                      hillHeightProvider: EventTerrainProvider?, extendedOffsetY: Float) {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         
         val hopPhase = (elapsedMs * 0.006f) % (2f * 3.14159f)  // Slower hop animation

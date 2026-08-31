@@ -57,7 +57,7 @@ class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
             sin(t * wobbleFreqX + flutterPhase) * wobbleAmpX
     }
 
-    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val t = elapsedMs / 1000f
         return startY +
@@ -68,7 +68,7 @@ class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
-                      hillHeightProvider: HillHeightProvider?, extendedOffsetY: Float) {
+                      hillHeightProvider: EventTerrainProvider?, extendedOffsetY: Float) {
         // Butterflies: 0.4-0.6% of screen height
         val unit = height * 0.003f * sizeScale
         val size = unit * 4f  // About 1.2% max wingspan (24px on 2000px screen)

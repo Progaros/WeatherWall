@@ -131,53 +131,32 @@ class WorldProviderPreferenceTest {
      *
      * ```kotlin
      * val effectiveDepth = hillInfoWorldProvider?.invoke(0f, event.depthFactor)
-     *     ?: hillInfoProvider?.invoke(0.5f, event.depthFactor)
      *     ?: event.depthFactor
      * ```
      */
     private fun snapDepth(
         eventDepth: Float,
-        worldProvider: ((Float, Float) -> Float)?,
-        legacyProvider: ((Float, Float) -> Float)?
+        worldProvider: ((Float, Float) -> Float)?
     ): Float {
-        return worldProvider?.invoke(0f, eventDepth)
-            ?: legacyProvider?.invoke(0.5f, eventDepth)
-            ?: eventDepth
+        return worldProvider?.invoke(0f, eventDepth) ?: eventDepth
     }
 
     @Test
-    fun `depth snap prefers world provider`() {
+    fun `depth snap uses world provider when set`() {
         var worldCalled = false
         val worldProvider: (Float, Float) -> Float = { _, depth ->
             worldCalled = true
             depth + 0.01f  // slightly different to distinguish
         }
-        val throwingLegacy: (Float, Float) -> Float = { _, _ ->
-            fail("legacy should not be called")
-            0f
-        }
 
-        val result = snapDepth(0.5f, worldProvider, throwingLegacy)
+        val result = snapDepth(0.5f, worldProvider)
         assertEquals(true, worldCalled)
         assertEquals(0.51f, result, 0.001f)
     }
 
     @Test
-    fun `depth snap falls back to legacy when world is null`() {
-        var legacyCalled = false
-        val legacyProvider: (Float, Float) -> Float = { _, depth ->
-            legacyCalled = true
-            depth + 0.02f
-        }
-
-        val result = snapDepth(0.5f, null, legacyProvider)
-        assertEquals(true, legacyCalled)
-        assertEquals(0.52f, result, 0.001f)
-    }
-
-    @Test
-    fun `depth snap returns raw depth when both providers are null`() {
-        val result = snapDepth(0.65f, null, null)
+    fun `depth snap returns raw depth when world provider is null`() {
+        val result = snapDepth(0.65f, null)
         assertEquals(0.65f, result, 0.001f)
     }
 }

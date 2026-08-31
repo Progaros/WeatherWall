@@ -55,7 +55,7 @@ class HotAirBalloonEvent(random: Random, override val spawnTimeMs: Long = System
         return progress * 1.3f
     }
 
-    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
         val elapsedSec = (absoluteTimeMs - spawnTimeMs) / 1000f
         val bobOffsetRatio = sin(elapsedSec * 0.4f + bobPhase) * (0.0045f * sizeScale * sizeScale)
         return y + bobOffsetRatio
@@ -64,7 +64,7 @@ class HotAirBalloonEvent(random: Random, override val spawnTimeMs: Long = System
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
-                      hillHeightProvider: HillHeightProvider?, extendedOffsetY: Float) {
+                      hillHeightProvider: EventTerrainProvider?, extendedOffsetY: Float) {
         // Scale: 0.4-0.8% of height based on distance (was 1%)
         val unit = height * 0.005f * sizeScale
         val size = unit * 6f

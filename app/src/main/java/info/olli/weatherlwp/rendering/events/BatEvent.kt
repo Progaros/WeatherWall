@@ -45,7 +45,7 @@ class BatEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         return startX + direction * speed * elapsedMs
     }
 
-    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
         return baseY
     }
     
@@ -64,7 +64,7 @@ class BatEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
-                      hillHeightProvider: HillHeightProvider?, extendedOffsetY: Float) {
+                      hillHeightProvider: EventTerrainProvider?, extendedOffsetY: Float) {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val elapsedSec = elapsedMs / 1000f
         

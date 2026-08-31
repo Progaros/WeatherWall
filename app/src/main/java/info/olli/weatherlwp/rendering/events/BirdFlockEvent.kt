@@ -48,7 +48,7 @@ class BirdFlockEvent(random: Random, override val spawnTimeMs: Long = System.cur
         return -0.15f + speed * elapsedMs
     }
 
-    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
         val elapsedSec = (absoluteTimeMs - spawnTimeMs) / 1000f
         val flapCycleSec = flapCycleMs / 1000f
         val cyclePhase = (elapsedSec % flapCycleSec) / flapCycleSec
@@ -66,7 +66,7 @@ class BirdFlockEvent(random: Random, override val spawnTimeMs: Long = System.cur
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
-                      hillHeightProvider: HillHeightProvider?, extendedOffsetY: Float) {
+                      hillHeightProvider: EventTerrainProvider?, extendedOffsetY: Float) {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val elapsedSec = elapsedMs / 1000f
         

@@ -18,21 +18,17 @@ enum class EventLayer {
 }
 
 /**
- * Function type for getting hill Y position at a given X ratio and depth factor.
- * @param xRatio X position as ratio of extended width (0.0 to 1.0)
+ * Terrain Y lookup for ground events.
+ *
+ * Events are screen-relative overlay content and address terrain in their own
+ * normalized extended-field space; RandomEventLayer translates [eventX] to the
+ * world position before sampling the terrain.
+ *
+ * @param eventX X position as ratio of extended field width (0.0 to 1.0)
  * @param depthFactor Depth layer to sample (0.0=background to 1.0=foreground)
  * @return Y position as ratio of screen height (0.0=top, 1.0=bottom)
  */
-@Deprecated("Use HillHeightWorldProvider (worldX-based) instead", replaceWith = ReplaceWith("HillHeightWorldProvider"))
-typealias HillHeightProvider = (xRatio: Float, depthFactor: Float) -> Float
-
-/**
- * World-space provider for hill Y position.
- * @param worldX World-space X position (0 = center)
- * @param depthFactor Depth layer to sample (0.0=background to 1.0=foreground)
- * @return Y position as ratio of screen height (0.0=top, 1.0=bottom)
- */
-typealias HillHeightWorldProvider = (worldX: Float, depthFactor: Float) -> Float
+typealias EventTerrainProvider = (eventX: Float, depthFactor: Float) -> Float
 
 /**
  * Info about a hill position, including both Y and the actual hill's depthFactor.
@@ -44,15 +40,6 @@ data class HillInfo(
     /** The actual hill's depthFactor (for correct draw ordering) */
     val actualDepthFactor: Float
 )
-
-/**
- * Function type for getting full hill info (Y position and actual depth factor).
- * @param xRatio X position as ratio of extended width (0.0 to 1.0)
- * @param requestedDepthFactor Approximate depth to find closest hill for
- * @return HillInfo with Y position and actual hill depthFactor
- */
-@Deprecated("Use HillInfoWorldProvider (worldX-based) instead", replaceWith = ReplaceWith("HillInfoWorldProvider"))
-typealias HillInfoProvider = (xRatio: Float, requestedDepthFactor: Float) -> HillInfo
 
 /**
  * World-space provider for full hill info.
@@ -125,7 +112,7 @@ interface RandomEvent {
      * @param hillHeightProvider Function to get hill Y at given X and depth
      * @return Y position as ratio of screen height (0.0=top, 1.0=bottom)
      */
-    fun getCurrentYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+    fun getCurrentYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
         return 0.85f  // Default fallback - subclasses should override
     }
 
@@ -143,7 +130,7 @@ interface RandomEvent {
      *
      * Ground events default to their current terrain Y.
      */
-    fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+    fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
         return if (layer == EventLayer.GROUND) {
             getCurrentYRatio(absoluteTimeMs, hillHeightProvider)
         } else {
@@ -172,6 +159,6 @@ interface RandomEvent {
              parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
              timeSeconds: Float, ambientColor: Int, extendedOffset: Float = 0f,
              absoluteTimeMs: Long = System.currentTimeMillis(),
-             hillHeightProvider: HillHeightProvider? = null,
+             hillHeightProvider: EventTerrainProvider? = null,
              extendedOffsetY: Float = 0f)
 }

@@ -127,22 +127,14 @@ class ParallaxScene(
             }
         }
         
-        // Set up hill height provider so ground events can follow terrain contour
-        @Suppress("DEPRECATION")
-        randomEventLayer.hillHeightProvider = { xRatio, depthFactor ->
+        // Set up terrain provider so ground events can follow the hill contour
+        randomEventLayer.eventTerrainProvider = { eventX, depthFactor ->
             // Convert from extended-field normalized x to screen-width ratio for terrain lookup
-            val screenRatio = randomEventLayer.eventXToScreenRatio(xRatio)
+            val screenRatio = randomEventLayer.eventXToScreenRatio(eventX)
             terrainLayer.getHillYAtPosition(screenRatio, depthFactor)
-        }
-        randomEventLayer.hillHeightWorldProvider = { worldX, depthFactor ->
-            terrainLayer.getHillYAtWorldX(worldX, depthFactor)
         }
         
         // Set up hill info provider so events snap to actual hill depths for correct draw ordering
-        @Suppress("DEPRECATION")
-        randomEventLayer.hillInfoProvider = { _, requestedDepthFactor ->
-            terrainLayer.getHillInfoAtPosition(0.5f, requestedDepthFactor).second
-        }
         randomEventLayer.hillInfoWorldProvider = { worldX, requestedDepthFactor ->
             terrainLayer.getHillInfoAtWorldX(worldX, requestedDepthFactor).second
         }
@@ -596,11 +588,7 @@ class ParallaxScene(
         terrainLayer.groundEventDrawer = null
         terrainLayer.riverDrawer = null
         terrainLayer.lakeDrawer = null
-        @Suppress("DEPRECATION")
-        randomEventLayer.hillHeightProvider = null
-        randomEventLayer.hillHeightWorldProvider = null
-        @Suppress("DEPRECATION")
-        randomEventLayer.hillInfoProvider = null
+        randomEventLayer.eventTerrainProvider = null
         randomEventLayer.hillInfoWorldProvider = null
         @Suppress("DEPRECATION")
         riverLayer.terrainYProvider = null

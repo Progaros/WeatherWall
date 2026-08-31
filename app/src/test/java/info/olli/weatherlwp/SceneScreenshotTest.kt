@@ -220,7 +220,7 @@ class SceneScreenshotTest {
         }
         val absoluteTimeMs = event.spawnTimeMs + (event.durationMs * progress).toLong()
         val ambientColor = getAmbientColor(state)
-        val hillProvider: HillHeightProvider = { _, _ -> 0.82f }
+        val hillProvider: EventTerrainProvider = { _, _ -> 0.82f }
 
         event.draw(
             canvas, paint, strokePaint, parallax, width, height,

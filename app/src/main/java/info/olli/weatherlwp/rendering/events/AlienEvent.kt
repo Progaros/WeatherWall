@@ -47,7 +47,7 @@ class AlienEvent(random: Random, override val spawnTimeMs: Long = System.current
         return startX + direction * speed * elapsedMs
     }
 
-    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val hoverPhase = initialHoverPhase + elapsedMs * 0.0005f
         val verticalOffset = sin(hoverPhase) * 0.015f
@@ -57,7 +57,7 @@ class AlienEvent(random: Random, override val spawnTimeMs: Long = System.current
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
-                      hillHeightProvider: HillHeightProvider?, extendedOffsetY: Float) {
+                      hillHeightProvider: EventTerrainProvider?, extendedOffsetY: Float) {
         // Scale: ~0.6-1% of height - distant UFO
         val unit = height * 0.004f * sizeScale
         val size = unit * 5f  // About 2% saucer width max (40px on 2000px screen)

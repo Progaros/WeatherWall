@@ -46,14 +46,14 @@ class AirplaneEvent(random: Random, override val spawnTimeMs: Long = System.curr
         return -0.1f + 1.4f * progress
     }
 
-    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
         return y
     }
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
-                      hillHeightProvider: HillHeightProvider?, extendedOffsetY: Float) {
+                      hillHeightProvider: EventTerrainProvider?, extendedOffsetY: Float) {
         // Scale: 0.4-0.8% of height based on distance (was 1%)
         val unit = height * 0.004f * sizeScale
         val size = unit * 8f  // Base airplane size

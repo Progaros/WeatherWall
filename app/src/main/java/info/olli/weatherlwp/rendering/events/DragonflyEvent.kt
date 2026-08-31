@@ -68,7 +68,7 @@ class DragonflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
             sin(t * hoverFreqX + wingPhase) * hoverAmpX
     }
 
-    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val t = elapsedMs / 1000f
         return startY + sin(t * hoverFreqY) * hoverAmpY
@@ -77,7 +77,7 @@ class DragonflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
-                      hillHeightProvider: HillHeightProvider?, extendedOffsetY: Float) {
+                      hillHeightProvider: EventTerrainProvider?, extendedOffsetY: Float) {
         val unit = height * 0.002f * sizeScale
         
         val elapsedMs = absoluteTimeMs - spawnTimeMs

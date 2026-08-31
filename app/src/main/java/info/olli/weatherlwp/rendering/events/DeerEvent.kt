@@ -83,7 +83,7 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         return startX + direction * speed * movingTime
     }
 
-    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
         val x = getPreviewAnchorXRatio(absoluteTimeMs)
         return hillHeightProvider?.invoke(x, depthValue) ?: (0.65f + depthValue * 0.1f)
     }
@@ -91,7 +91,7 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
-                      hillHeightProvider: HillHeightProvider?, extendedOffsetY: Float) {
+                      hillHeightProvider: EventTerrainProvider?, extendedOffsetY: Float) {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         
         // Check if deer is grazing (stops periodically)

@@ -114,7 +114,7 @@ class EventRenderTest {
         parallax.setCanvasSize(width, height)
         
         val absoluteTimeMs = event.spawnTimeMs + (event.durationMs * progress).toLong()
-        val hillProvider: HillHeightProvider = { _, _ -> 0.80f }
+        val hillProvider: EventTerrainProvider = { _, _ -> 0.80f }
         
         event.draw(canvas, paint, strokePaint, parallax, width, height,
             timeSeconds = absoluteTimeMs / 1000f,

@@ -47,7 +47,7 @@ class ShootingStarEvent(random: Random, override val spawnTimeMs: Long = System.
         return startX + cos(angle) * progress * 0.5f
     }
 
-    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val activeElapsedMs = (elapsedMs - spawnDelayMs).coerceAtLeast(0L)
         val progress = speed * activeElapsedMs
@@ -57,7 +57,7 @@ class ShootingStarEvent(random: Random, override val spawnTimeMs: Long = System.
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
-                      hillHeightProvider: HillHeightProvider?, extendedOffsetY: Float) {
+                      hillHeightProvider: EventTerrainProvider?, extendedOffsetY: Float) {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         
         // Don't draw during the delay period

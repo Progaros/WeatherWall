@@ -47,7 +47,7 @@ class FrogEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         return getCurrentX(absoluteTimeMs)
     }
 
-    override fun getCurrentYRatio(absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?): Float {
+    override fun getCurrentYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
         val currentX = getCurrentX(absoluteTimeMs)
         return (hillHeightProvider?.invoke(currentX, depthFactor) ?: fallbackGroundY) + groundOffset
     }
@@ -75,7 +75,7 @@ class FrogEvent(random: Random, override val spawnTimeMs: Long = System.currentT
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float,
-                  absoluteTimeMs: Long, hillHeightProvider: HillHeightProvider?, extendedOffsetY: Float) {
+                  absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?, extendedOffsetY: Float) {
         val progress = getProgress(absoluteTimeMs)
         if (progress < 0f || progress > 1f) return
 
