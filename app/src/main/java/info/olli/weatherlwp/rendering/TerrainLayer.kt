@@ -1343,10 +1343,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
      */
     private fun computeHillLightBias(state: SimulationState): Float {
         if (!state.shadowsEnabled) return 0f
-        val noonAngle = (Math.PI / 2).toFloat()
-        val lightAngle = state.getLightSourceAngle()
-        val sunElevation = 1f - kotlin.math.abs(lightAngle - noonAngle) / noonAngle
-        return kotlin.math.cos(lightAngle) * (1f - sunElevation) * state.getEffectiveShadowStrength()
+        return state.lightDirX * (1f - state.lightElevation01) * state.getEffectiveShadowStrength()
     }
 
     private fun drawHill(canvas: Canvas, hillIndex: Int, hillColor: Int) {

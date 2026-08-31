@@ -250,6 +250,34 @@ data class SimulationState(
     // Pre-calculated shadow direction values (avoids per-tree sin/cos)
     private val shadowCos: Float = kotlin.math.cos(lightSourceAngle)
     private val shadowSin: Float = kotlin.math.sin(lightSourceAngle)
+
+    // === Shared scene lighting model ===
+    // Every layer (mountains, hills, trees, bushes) must agree on where the light is.
+    // These three values are the single source of truth for that.
+
+    /** Light elevation: 0 at the horizon, 1 at the zenith. True sin of the light angle. */
+    val lightElevation01: Float = shadowSin.coerceIn(0f, 1f)
+
+    /** Horizontal light direction: -1 = from the left (sunrise), +1 = from the right (sunset). */
+    val lightDirX: Float = shadowCos
+
+    /** Horizontal direction ground shadows fall in; always opposite the light. */
+    val shadowDirX: Float = -shadowCos
+
+    /**
+     * Ground-shadow length as a multiple of object height: cot(elevation), the true
+     * projection of an upright object. Clamped so shadows stay usable near the horizon.
+     * Length is deliberately independent of shadow strength - strength only sets opacity.
+     */
+    fun shadowLengthFactor(): Float {
+        val e = lightElevation01.coerceAtLeast(0.15f)
+        val cosE = kotlin.math.sqrt((1f - e * e).coerceAtLeast(0f))
+        return (cosE / e).coerceIn(0.3f, 4f)
+    }
+
+    /** Shared opacity for every ground shadow in the scene. */
+    fun groundShadowAlpha(): Int =
+        (20f + 130f * cachedEffectiveShadowStrength).toInt().coerceIn(0, 150)
     
     /**
      * Get shadow offset for an entity based on light source position.
@@ -261,20 +289,8 @@ data class SimulationState(
      */
     fun getShadowOffset(objectHeight: Float = 1f): Pair<Float, Float> {
         if (!shadowsEnabled) return Pair(0f, 0f)
-        
-        val strength = getEffectiveShadowStrength()
-        
-        // Shadow length based on light angle (longer shadows at sunrise/sunset)
-        val lightHeight = shadowSin.coerceIn(0.1f, 1f)
-        // Dramatically longer shadows at low sun angles for visibility
-        val shadowLength = (1.5f / lightHeight).coerceIn(0.5f, 4f) * objectHeight * strength
-        
-        // Shadow direction is opposite to light source (dx determines left/right)
-        val dx = -shadowCos * shadowLength
-        // Shadow extends along ground (positive dy = downward on screen = extending along ground plane)
-        val dy = shadowLength * 0.4f  // Shadow projects forward onto ground
-        
-        return Pair(dx, dy)
+        val shadowLength = shadowLengthFactor() * objectHeight
+        return Pair(shadowDirX * shadowLength, shadowLength * 0.4f)
     }
 
     /**
@@ -283,11 +299,7 @@ data class SimulationState(
      */
     fun getShadowDx(objectHeight: Float = 1f): Float {
         if (!shadowsEnabled) return 0f
-        // Shadow length based on light angle (longer shadows at sunrise/sunset)
-        val lightHeight = shadowSin.coerceIn(0.1f, 1f)
-        val shadowLength = (1.5f / lightHeight).coerceIn(0.5f, 4f) * objectHeight * cachedEffectiveShadowStrength
-        // Shadow direction is opposite to light source (dx determines left/right)
-        return -shadowCos * shadowLength
+        return shadowDirX * shadowLengthFactor() * objectHeight
     }
     
     /**

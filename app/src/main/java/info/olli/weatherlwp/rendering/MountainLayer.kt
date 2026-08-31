@@ -507,22 +507,18 @@ class MountainLayer(private val context: Context) : SceneLayer {
         // both viewer-facing slopes are partially shadowed. At noon, minimal shadow.
         //
         // Light angle: 0 = sunrise (right), π/2 = noon (overhead), π = sunset (left)
-        val lightAngle = state.getLightSourceAngle()
         val shadowStrength = if (state.mountainShadowsEnabled) state.getEffectiveShadowStrength() else 0f
-        
-        // Calculate sun elevation (0 = horizon, 1 = overhead)
-        // Using abs distance from π/2 (noon)
-        val noonAngle = kotlin.math.PI.toFloat() / 2f
-        val sunElevation = 1f - kotlin.math.abs(lightAngle - noonAngle) / noonAngle
+
+        // Sun elevation (0 = horizon, 1 = overhead) from the shared scene lighting model.
+        val sunElevation = state.lightElevation01
         
         // Base shadow on viewer-facing slopes (stronger when sun is low behind mountains)
         // At noon (elevation=1): minimal shadow. At sunrise/sunset (elevation=0): max shadow
         val frontShadowBase = shadowStrength * (1f - sunElevation) * 0.35f
         
         // Left/right asymmetry based on sun position
-        // Light from left (angle > π/2) means left side catches more light, right is darker
-        // Light from right (angle < π/2) means right side catches more light, left is darker
-        val lightBias = (lightAngle - noonAngle) / noonAngle  // -1 to +1
+        // Light from left (sunrise) means left side catches more light, right is darker
+        val lightBias = -state.lightDirX  // +1 at sunrise (light left), -1 at sunset
         
         // Shadow intensity for each side (base shadow + directional component)
         // Both sides always have some shadow when sun is low, but one side is darker

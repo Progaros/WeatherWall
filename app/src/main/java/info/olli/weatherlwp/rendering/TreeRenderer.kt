@@ -554,17 +554,9 @@ class TreeRenderer {
 
         // Get shadow offset from light source (sun/moon position)
         val shadowStrength = if (state.treeShadowsEnabled) state.getEffectiveShadowStrength() else 0f
-        val shadowDx = state.getShadowDx(tree.scale)
 
         // Draw shadow first (if shadows enabled)
         if (shadowStrength > 0.01f) {
-            val shadowAlpha = (20f + 130f * shadowStrength).toInt().coerceIn(20, 150)
-            shadowPaint.color = Color.argb(shadowAlpha, 0, 0, 0)
-
-            // Calculate shadow skew direction based on light angle
-            val skewDirection = if (shadowDx > 0) 1f else -1f
-            val skewFactor = kotlin.math.abs(shadowDx).coerceIn(0.2f, 2.0f)
-
             // Calculate tree tip sway for shadow
             val tipPhase = spatialPhase + 0.4f
             val tipWave = sin(timeSec * baseFreq + tipPhase) * 0.5f +
@@ -574,26 +566,10 @@ class TreeRenderer {
             val shadowGustLean = gustPush * RenderConstants.GUST_LEAN_FACTOR
             val tipSway = tipWave * shadowWindFactor * maxAmplitude * 0.5f + shadowGustLean * totalHeight * 0.5f
 
-            // Shadow as a thin wedge lying on the ground
-            val shadowLength = totalHeight * skewFactor * 0.7f
-            val shadowBaseWidth = baseTreeWidth * 0.35f
-            val shadowHeight = totalHeight * 0.025f  // Thin ground-hugging wedge
-
-            val shadowTipX = x + shadowLength * skewDirection + tipSway
-            val shadowTipY = groundY + 1f
-            val shadowBaseX = x
-            val shadowBaseY = groundY + shadowHeight
-
-            treePath.reset()
-            treePath.moveTo(shadowTipX, shadowTipY)
-            treePath.lineTo(shadowBaseX - shadowBaseWidth, shadowBaseY)
-            treePath.lineTo(shadowBaseX + shadowBaseWidth, shadowBaseY)
-            treePath.close()
-
             // Clip shadow to not extend beyond ground level
             canvas.save()
             canvas.clipRect(0f, 0f, screenWidth + screenWidth, groundY + 10f)
-            canvas.drawPath(treePath, shadowPaint)
+            GroundShadow.draw(canvas, shadowPaint, state, x, groundY, totalHeight, baseTreeWidth, tipSway)
             canvas.restore()
         }
 
@@ -765,25 +741,10 @@ class TreeRenderer {
         val gustRotationDeg = gustPush * RenderConstants.GUST_LEAN_FACTOR * 6f
         val totalRotationDeg = (baseRotationDeg + gustRotationDeg).coerceIn(-20f, 20f)
 
-        // Shadow (same style as needle trees)
+        // Shadow (same shared model as needle trees)
         val shadowStrength = if (state.treeShadowsEnabled) state.getEffectiveShadowStrength() else 0f
-        val shadowDx = state.getShadowDx(tree.scale)
         if (shadowStrength > 0.01f) {
-            val shadowAlpha = (20f + 130f * shadowStrength).toInt().coerceIn(20, 150)
-            shadowPaint.color = Color.argb(shadowAlpha, 0, 0, 0)
-            val skewDirection = if (shadowDx > 0) 1f else -1f
-            val skewFactor = kotlin.math.abs(shadowDx).coerceIn(0.2f, 2.0f)
-            // Thin ground-hugging shadow projected to one side
-            val shadowLength = crownRadius * skewFactor * 1.2f
-            val shadowHeight = totalHeight * 0.025f  // Very thin ellipse
-            val shadowCenterX = x + shadowLength * skewDirection * 0.5f
-            canvas.drawOval(
-                shadowCenterX - shadowLength * 0.5f,
-                groundY - shadowHeight * 0.5f,
-                shadowCenterX + shadowLength * 0.5f,
-                groundY + shadowHeight * 0.5f,
-                shadowPaint
-            )
+            GroundShadow.draw(canvas, shadowPaint, state, x, groundY, totalHeight, crownRadius * 2f)
         }
 
         canvas.save()

@@ -59,6 +59,7 @@ class BushRenderer {
     // ---- Pre-allocated Paint objects (zero-allocation rendering) ----
 
     private val bushPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
+    private val shadowPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val berryPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
 
     // ---- Settings (loaded from SharedPreferences) ----
@@ -347,6 +348,12 @@ class BushRenderer {
         val sway = sin((timeSec * 1.5f * swaySpeed + normalizedPos * 3f).toDouble()).toFloat() * windStrength * bushWidth * 0.1f
 
         val centerY = groundY - bushHeight * 0.5f
+
+        // Bushes cast the same ground shadow as trees; without one they looked lit from
+        // a different direction than everything standing next to them.
+        if (state.treeShadowsEnabled) {
+            GroundShadow.draw(canvas, shadowPaint, state, x, groundY, bushHeight, bushWidth * 2f, sway)
+        }
 
         // Draw precalculated circles for organic bush shape
         for (circle in bush.circles) {
