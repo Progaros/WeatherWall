@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import info.olli.weatherlwp.BuildConfig
 import org.json.JSONObject
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -26,12 +27,35 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
             Thread(r, "BreezyWeatherWorker").apply { isDaemon = true }
         }
 
+        // The receiver is exported without a permission, so every value below arrives from an
+        // untrusted sender and is bounded before it can reach storage or the renderer.
+        private const val MAX_PAYLOAD_CHARS = 64 * 1024
+        private const val MAX_WIND_KMH = 500.0
+        private const val MIN_TEMP_C = -120f
+        private const val MAX_TEMP_C = 80f
+        private const val MAX_EPOCH_SECONDS = 4_102_444_800L  // 2100-01-01
+
         /** Convert a temperature that may be in Kelvin or Celsius to Celsius. */
         fun kelvinOrCelsiusToC(value: Double): Float {
             return if (!value.isNaN() && value > 200) (value - 273.15).toFloat()
                    else if (!value.isNaN()) value.toFloat()
                    else Float.NaN
         }
+
+        /**
+         * Clamp to a physically plausible range. NaN and infinities become NaN, which callers
+         * already treat as "unknown" — note that coerceIn alone would let NaN through unchanged.
+         */
+        fun sanitizeTemperature(celsius: Float): Float =
+            if (celsius.isFinite()) celsius.coerceIn(MIN_TEMP_C, MAX_TEMP_C) else Float.NaN
+
+        /** Wind in km/h to m/s, bounded; non-finite input yields calm. */
+        fun sanitizeWindSpeedToMs(kmh: Double): Float =
+            if (kmh.isFinite()) (kmh.coerceIn(0.0, MAX_WIND_KMH) / 3.6).toFloat() else 0f
+
+        /** Epoch seconds; anything implausible collapses to the -1 "unknown" sentinel. */
+        fun sanitizeEpochSeconds(seconds: Long): Long =
+            if (seconds in 0..MAX_EPOCH_SECONDS) seconds else -1L
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -49,11 +73,20 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
             return
         }
 
+        // An oversized payload would be persisted into the default SharedPreferences file,
+        // which is read in full on every process start.
+        if (jsonString.length > MAX_PAYLOAD_CHARS) {
+            Log.w(TAG, "WeatherJson too large (${jsonString.length} chars), ignoring")
+            return
+        }
+
         // Use goAsync() to avoid ANR - JSON parsing can take time.
         val pendingResult = goAsync()
         executor.execute {
             try {
-                Log.d(TAG, "Received weather JSON: ${jsonString.take(200)}...")
+                if (BuildConfig.DEBUG) {
+                    Log.d(TAG, "Received weather JSON: ${jsonString.take(200)}...")
+                }
                 parseWeatherData(context, jsonString)
             } catch (e: Exception) {
                 Log.e(TAG, "Error parsing weather data", e)
@@ -90,14 +123,13 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
             }
             
             // Sunrise/sunset (Unix timestamps in seconds)
-            val sunrise = data.optLong("sunRise", data.optLong("todaySunrise", -1))
-            val sunset = data.optLong("sunSet", data.optLong("todaySunset", -1))
+            val sunrise = sanitizeEpochSeconds(data.optLong("sunRise", data.optLong("todaySunrise", -1)))
+            val sunset = sanitizeEpochSeconds(data.optLong("sunSet", data.optLong("todaySunset", -1)))
             
             // Wind speed - Breezy Weather sends in km/h, we need m/s
-            // Convert km/h to m/s by dividing by 3.6
             val windSpeedKmh = data.optDouble("currentWindSpeed", 
-                data.optDouble("windSpeed", 0.0)).toFloat()
-            val windSpeed = windSpeedKmh / 3.6f
+                data.optDouble("windSpeed", 0.0))
+            val windSpeed = sanitizeWindSpeedToMs(windSpeedKmh)
             
             // Temperature data (Breezy Weather sends in Kelvin or Celsius depending on version)
             // Try currentTemp first, then temp, then temperature
@@ -110,20 +142,20 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
             
             // Breezy Weather via Gadgetbridge sends temperature in Kelvin
             // Convert to Celsius: K - 273.15
-            val tempC = kelvinOrCelsiusToC(tempK)
-            val feelsC = kelvinOrCelsiusToC(feelsLikeK)
-            val dewC = kelvinOrCelsiusToC(dewPointK)
+            val tempC = sanitizeTemperature(kelvinOrCelsiusToC(tempK))
+            val feelsC = sanitizeTemperature(kelvinOrCelsiusToC(feelsLikeK))
+            val dewC = sanitizeTemperature(kelvinOrCelsiusToC(dewPointK))
             
             // Extended weather data
             val extendedData = WeatherRepository.ExtendedWeatherData(
                 precipProbability = data.optInt("precipProbability", 0).coerceIn(0, 100),
                 cloudCover = data.optInt("cloudCover", 0).coerceIn(0, 100),
                 humidity = data.optInt("currentHumidity", data.optInt("humidity", 0)).coerceIn(0, 100),
-                visibility = data.optInt("visibility", 10000),
-                pressure = data.optInt("pressure", 1013),
-                moonPhase = data.optInt("moonPhase", 0),
-                moonRise = data.optLong("moonRise", -1L),
-                moonSet = data.optLong("moonSet", -1L),
+                visibility = data.optInt("visibility", 10000).coerceIn(0, 100_000),
+                pressure = data.optInt("pressure", 1013).coerceIn(300, 1100),
+                moonPhase = data.optInt("moonPhase", 0).coerceIn(0, 360),
+                moonRise = sanitizeEpochSeconds(data.optLong("moonRise", -1L)),
+                moonSet = sanitizeEpochSeconds(data.optLong("moonSet", -1L)),
                 windDirection = ((data.optInt("windDirection", 0) % 360) + 360) % 360,
                 temperatureCelsius = tempC,
                 feelsLikeCelsius = feelsC,
@@ -133,7 +165,7 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
             // Store in repository (including raw JSON for debugging)
             WeatherRepository.updateWeather(context, weatherType, sunrise, sunset, windSpeed, json, extendedData)
             
-            Log.i(TAG, "Weather updated: $weatherType (code=$conditionCode), wind=${windSpeedKmh}km/h (${windSpeed}m/s), " +
+            Log.i(TAG, "Weather updated: $weatherType (code=$conditionCode), wind=${windSpeed}m/s, " +
                 "temp=${if (tempC.isNaN()) "?" else "%.1f°C".format(tempC)}, " +
                 "precip=${extendedData.precipProbability}%, clouds=${extendedData.cloudCover}%")
         } catch (e: Exception) {

@@ -11,8 +11,8 @@ steps:
       GRADLE_USER_HOME: &cache_path .gradle
     commands:
       - chmod +x gradlew
-      - curl -sS -o /dev/null -w 'google=%{http_code} mirror=' --max-time 30 https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/8.11.1/gradle-8.11.1.pom || true
-      - curl -sS -o /dev/null -w '%{http_code}\n' --max-time 30 https://maven.aliyun.com/repository/google/com/android/tools/build/gradle/8.11.1/gradle-8.11.1.pom || true
+      # Signals when Google stops rejecting this runner's IP, so the mirror can be dropped again
+      - curl -sS -o /dev/null -w 'dl.google.com=%{http_code}\n' --max-time 30 https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/8.11.1/gradle-8.11.1.pom || true
       - ./gradlew dependencies --no-daemon
       - ./gradlew :app:dependencies --no-daemon
       - yes | sdkmanager --licenses || true

@@ -1,8 +1,9 @@
 pluginManagement {
     repositories {
-        google()
-        // Google answers 404 to the CI runner's VPN exit IP; this mirror serves the same artifacts
+        // Google answers 404 to the CI runner's VPN exit IP, so the mirror is queried first;
+        // google() stays as fallback for developer machines and once the block is lifted.
         maven { url = uri("https://maven.aliyun.com/repository/google") }
+        google()
         mavenCentral()
         gradlePluginPortal()
     }
@@ -11,8 +12,8 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
-        google()
         maven { url = uri("https://maven.aliyun.com/repository/google") }
+        google()
         mavenCentral()
     }
 }

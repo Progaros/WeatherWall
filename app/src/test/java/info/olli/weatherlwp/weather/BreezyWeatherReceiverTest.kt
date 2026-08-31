@@ -66,4 +66,58 @@ class BreezyWeatherReceiverTest {
     fun `negative celsius passes through`() {
         assertEquals(-40f, BreezyWeatherReceiver.kelvinOrCelsiusToC(-40.0), 0.01f)
     }
+
+    // ============== Untrusted Broadcast Sanitization ==============
+
+    @Test
+    fun `sanitizeTemperature keeps plausible values`() {
+        assertEquals(20f, BreezyWeatherReceiver.sanitizeTemperature(20f), 0.01f)
+        assertEquals(-40f, BreezyWeatherReceiver.sanitizeTemperature(-40f), 0.01f)
+    }
+
+    @Test
+    fun `sanitizeTemperature clamps out of range values`() {
+        assertEquals(80f, BreezyWeatherReceiver.sanitizeTemperature(5000f), 0.01f)
+        assertEquals(-120f, BreezyWeatherReceiver.sanitizeTemperature(-9999f), 0.01f)
+    }
+
+    @Test
+    fun `sanitizeTemperature maps non-finite input to NaN`() {
+        // coerceIn alone would pass NaN straight through to the renderer
+        assertTrue(BreezyWeatherReceiver.sanitizeTemperature(Float.NaN).isNaN())
+        assertTrue(BreezyWeatherReceiver.sanitizeTemperature(Float.POSITIVE_INFINITY).isNaN())
+        assertTrue(BreezyWeatherReceiver.sanitizeTemperature(Float.NEGATIVE_INFINITY).isNaN())
+    }
+
+    @Test
+    fun `sanitizeWindSpeedToMs converts kmh to ms`() {
+        assertEquals(10f, BreezyWeatherReceiver.sanitizeWindSpeedToMs(36.0), 0.01f)
+        assertEquals(0f, BreezyWeatherReceiver.sanitizeWindSpeedToMs(0.0), 0.01f)
+    }
+
+    @Test
+    fun `sanitizeWindSpeedToMs rejects non-finite and negative input`() {
+        assertEquals(0f, BreezyWeatherReceiver.sanitizeWindSpeedToMs(Double.NaN), 0.01f)
+        assertEquals(0f, BreezyWeatherReceiver.sanitizeWindSpeedToMs(Double.POSITIVE_INFINITY), 0.01f)
+        assertEquals(0f, BreezyWeatherReceiver.sanitizeWindSpeedToMs(-50.0), 0.01f)
+    }
+
+    @Test
+    fun `sanitizeWindSpeedToMs caps absurd speeds`() {
+        // 500 km/h ceiling => ~138.9 m/s
+        assertEquals(138.9f, BreezyWeatherReceiver.sanitizeWindSpeedToMs(1_000_000.0), 0.1f)
+    }
+
+    @Test
+    fun `sanitizeEpochSeconds keeps plausible timestamps`() {
+        assertEquals(1_700_000_000L, BreezyWeatherReceiver.sanitizeEpochSeconds(1_700_000_000L))
+        assertEquals(0L, BreezyWeatherReceiver.sanitizeEpochSeconds(0L))
+    }
+
+    @Test
+    fun `sanitizeEpochSeconds maps out of range timestamps to unknown`() {
+        assertEquals(-1L, BreezyWeatherReceiver.sanitizeEpochSeconds(-1L))
+        assertEquals(-1L, BreezyWeatherReceiver.sanitizeEpochSeconds(-999L))
+        assertEquals(-1L, BreezyWeatherReceiver.sanitizeEpochSeconds(Long.MAX_VALUE))
+    }
 }
