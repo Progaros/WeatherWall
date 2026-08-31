@@ -100,36 +100,31 @@ class BatEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
             
             val size = bat.sizeVariation * unit * 4f
             
-            // Rapid wing beats - bats flap very fast
-            val wingBeat = sin(timeSeconds * 25f + bat.wingPhase)
+            // Rapid wing beats - bats flap very fast. Two detuned sines keep the beat
+            // from looking like a mechanical loop.
+            val wingBeat = sin(timeSeconds * 25f + bat.wingPhase) * 0.85f +
+                sin(timeSeconds * 11f + bat.wingPhase * 1.7f) * 0.15f
             val wingAngle = wingBeat * 0.6f  // Wing rotation in radians
             
             // Draw bat silhouette - membrane wings
             canvas.save()
             canvas.translate(batX, batY)
             
-            // Body (small oval)
-            canvas.drawOval(-size * 0.3f, -size * 0.15f, size * 0.3f, size * 0.15f, paint)
-            
-            // Left wing
+            // Far wing first, smaller and raised: two mirror-image wings read as a
+            // symmetric ornament rather than an animal seen at an angle.
             canvas.save()
-            canvas.rotate(-wingAngle * 40f)
-            path.reset()
-            path.moveTo(0f, 0f)
-            path.quadTo(-size * 0.5f, -size * 0.8f, -size * 1.5f, -size * 0.3f)
-            path.lineTo(-size * 1.2f, size * 0.1f)
-            path.quadTo(-size * 0.4f, size * 0.2f, 0f, 0f)
+            canvas.rotate(-wingAngle * 34f)
+            buildBatWingPath(path, size, -1f, 0.86f, -size * 0.07f)
             canvas.drawPath(path, paint)
             canvas.restore()
-            
-            // Right wing (mirrored)
+
+            // Body (small oval)
+            canvas.drawOval(-size * 0.3f, -size * 0.15f, size * 0.3f, size * 0.15f, paint)
+
+            // Near wing
             canvas.save()
             canvas.rotate(wingAngle * 40f)
-            path.reset()
-            path.moveTo(0f, 0f)
-            path.quadTo(size * 0.5f, -size * 0.8f, size * 1.5f, -size * 0.3f)
-            path.lineTo(size * 1.2f, size * 0.1f)
-            path.quadTo(size * 0.4f, size * 0.2f, 0f, 0f)
+            buildBatWingPath(path, size, 1f, 1f, 0f)
             canvas.drawPath(path, paint)
             canvas.restore()
             
@@ -150,5 +145,20 @@ class BatEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         }
         
         canvas.restore()
+    }
+
+    /** Membrane wing: shoulder -> elbow -> tip, with the trailing edge scalloped by the finger bones. */
+    private fun buildBatWingPath(path: Path, size: Float, dir: Float, scale: Float, yOffset: Float) {
+        val w = size * scale
+        path.reset()
+        path.moveTo(0f, yOffset - size * 0.04f)
+        path.quadTo(dir * w * 0.55f, yOffset - w * 0.72f, dir * w * 1.02f, yOffset - w * 0.55f)
+        path.quadTo(dir * w * 1.42f, yOffset - w * 0.44f, dir * w * 1.55f, yOffset - w * 0.16f)
+        path.lineTo(dir * w * 1.18f, yOffset + w * 0.10f)
+        path.lineTo(dir * w * 1.06f, yOffset - w * 0.06f)
+        path.lineTo(dir * w * 0.74f, yOffset + w * 0.20f)
+        path.lineTo(dir * w * 0.60f, yOffset + w * 0.01f)
+        path.lineTo(dir * w * 0.30f, yOffset + w * 0.19f)
+        path.close()
     }
 }

@@ -124,12 +124,15 @@ class BirdFlockEvent(random: Random, override val spawnTimeMs: Long = System.cur
             
             strokePaint.strokeWidth = (size * 0.15f).coerceAtLeast(1.2f)
             
-            // Draw bird as smooth curved V-shape (wings always curve up from body)
-            // Wingtips are above body (birdY - wingLift), body is at center
+            // Draw bird as smooth curved V-shape (wings always curve up from body).
+            // The far wing is foreshortened so the bird reads as seen at an angle
+            // instead of as a symmetric tick mark.
+            val farSpan = size * 0.82f
+            val farLift = wingLift * 0.88f
             path.reset()
-            path.moveTo(birdX - size, birdY - wingLift)  // Left wingtip (above body)
-            path.quadTo(birdX - size * 0.35f, birdY - wingLift * 0.25f, birdX, birdY)  // Left wing curves down to body
-            path.quadTo(birdX + size * 0.35f, birdY - wingLift * 0.25f, birdX + size, birdY - wingLift)  // Right wing curves up to tip
+            path.moveTo(birdX - farSpan, birdY - farLift)  // Far wingtip (above body)
+            path.quadTo(birdX - farSpan * 0.35f, birdY - farLift * 0.25f, birdX, birdY)  // Far wing curves down to body
+            path.quadTo(birdX + size * 0.35f, birdY - wingLift * 0.25f, birdX + size, birdY - wingLift)  // Near wing curves up to tip
             canvas.drawPath(path, strokePaint)
         }
         canvas.restore()

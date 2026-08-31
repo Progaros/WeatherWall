@@ -37,17 +37,26 @@ class EagleEvent(random: Random, override val spawnTimeMs: Long = System.current
     // Parallax depth based on distance
     private val parallaxDepth = 0.2f + distance * 0.2f
 
-    override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
-        val elapsedMs = absoluteTimeMs - spawnTimeMs
-        val progress = -0.1f + speed * elapsedMs
-        return -0.1f + 1.4f * progress
+    /**
+     * Shared by [draw] and the preview so both use the identical traversal: -0.1 (just off
+     * the left edge) to 1.3 at the end of [durationMs]. The old form applied the -0.1 twice
+     * and ran to 1.72, so the eagle left the screen at ~63% of its duration.
+     */
+    private fun anchorXRatio(absoluteTimeMs: Long, screenHeight: Float): Float {
+        val traversalElapsed = EventTraversal.scaledElapsed(absoluteTimeMs - spawnTimeMs, screenHeight)
+        return -0.1f + speed * traversalElapsed
     }
 
-    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
-        val elapsedSec = (absoluteTimeMs - spawnTimeMs) / 1000f
-        val soarOffset = sin(elapsedSec * 0.8f + soarPhase) * 0.015f * sizeScale
-        return baseY + soarOffset
-    }
+    // Two detuned waves; a single sine reads as a mechanical loop.
+    private fun soarOffset(seconds: Float): Float =
+        sin(seconds * 0.42f + soarPhase) * 0.012f * sizeScale +
+            sin(seconds * 0.91f + soarPhase * 0.6f) * 0.004f * sizeScale
+
+    override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float =
+        anchorXRatio(absoluteTimeMs, RenderConstants.REFERENCE_HEIGHT)
+
+    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float =
+        baseY + soarOffset((absoluteTimeMs - spawnTimeMs) / 1000f)
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
@@ -57,18 +66,15 @@ class EagleEvent(random: Random, override val spawnTimeMs: Long = System.current
         val unit = height * 0.005f * sizeScale
         val size = unit * 5f
         
-        val elapsedMs = absoluteTimeMs - spawnTimeMs
-        val traversalElapsed = EventTraversal.scaledElapsed(elapsedMs, height)
-        val progress = -0.1f + speed * traversalElapsed
-        
+        val elapsedSec = (absoluteTimeMs - spawnTimeMs) / 1000f
+
         val px = parallaxCalculator.getOffsetXForDepth(parallaxDepth)
         val py = parallaxCalculator.getOffsetYForDepth(parallaxDepth)
         canvas.save()
         canvas.translate(px, py)
-        
-        val currentX = -0.1f * width + 1.4f * width * progress - extendedOffset
-        val soarOffset = sin(timeSeconds * 0.8f + soarPhase) * 0.015f * sizeScale
-        val currentY = EventTraversal.mapFieldY(baseY + soarOffset, height, extendedOffsetY)
+
+        val currentX = anchorXRatio(absoluteTimeMs, height) * width - extendedOffset
+        val currentY = EventTraversal.mapFieldY(baseY + soarOffset(elapsedSec), height, extendedOffsetY)
         
         // Alpha based on distance
         val alpha = (1f - distance * 0.25f)
@@ -81,76 +87,119 @@ class EagleEvent(random: Random, override val spawnTimeMs: Long = System.current
         // bird disappears into the wing mass and the silhouette reads as a plank.
         val eagleBody = RenderConstants.blendWithAmbient(
             Color.argb((255 * alpha).toInt(), 95, 74, 54), ambientColor, 0.35f)
-        paint.color = birdColor
-        
-        // Soaring eagle silhouette - wide outstretched wings
+
         val wingspan = size * 2.2f
         val bodyLen = size * 0.8f
-        // Slow flex of the wing tips: without it the silhouette is frozen, and a flat span
-        // this wide (4.4 x 0.6) otherwise reads as a plank rather than a bird.
-        val tipFlex = sin(timeSeconds * 1.6f + soarPhase) * size * 0.14f
+
+        // Bank the whole bird: a perfectly level, symmetric silhouette reads as a logo.
+        val bank = sin(elapsedSec * 0.55f + soarPhase) * 0.08f
+        canvas.rotate(bank * 10f, currentX, currentY)
+
+        val tipFlex = sin(elapsedSec * 0.75f + soarPhase) * size * 0.09f +
+            sin(elapsedSec * 1.93f + soarPhase * 1.7f) * size * 0.035f
         val tipY = currentY - size * 0.72f + tipFlex
-        
-        // Left wing - smooth soaring shape with pronounced dihedral (upward angle)
-        path.reset()
-        path.moveTo(currentX - size * 0.15f, currentY - size * 0.10f)
-        // Leading edge curves gently upward to wing tip
-        path.quadTo(currentX - wingspan * 0.5f, currentY - size * 0.58f,
-                    currentX - wingspan, tipY)
-        // Wing tip rounds back smoothly (no jagged feather points)
-        path.quadTo(currentX - wingspan * 0.97f, tipY + size * 0.26f,
-                    currentX - wingspan * 0.85f, currentY - size * 0.18f)
-        // Trailing edge curves back to body
-        path.quadTo(currentX - wingspan * 0.5f, currentY + size * 0.18f,
-                    currentX - size * 0.15f, currentY + size * 0.18f)
-        path.close()
+
+        // Three-quarter view: the far wing is shorter and carried higher. Two identical
+        // blades either side of the body is what made the bird look like a moustache.
+        val farWingScale = 0.88f + bank * 0.08f
+        paint.color = birdColor
+        buildWingPath(path, currentX, currentY, -1f, wingspan, size, tipY - size * 0.10f, farWingScale)
         canvas.drawPath(path, paint)
-        
-        // Right wing - mirror of left
-        path.reset()
-        path.moveTo(currentX + size * 0.15f, currentY - size * 0.10f)
-        path.quadTo(currentX + wingspan * 0.5f, currentY - size * 0.58f,
-                    currentX + wingspan, tipY)
-        path.quadTo(currentX + wingspan * 0.97f, tipY + size * 0.26f,
-                    currentX + wingspan * 0.85f, currentY - size * 0.18f)
-        path.quadTo(currentX + wingspan * 0.5f, currentY + size * 0.18f,
-                    currentX + size * 0.15f, currentY + size * 0.18f)
-        path.close()
+        buildWingPath(path, currentX, currentY, 1f, wingspan, size, tipY, 1f)
         canvas.drawPath(path, paint)
-        
-        // Tail - short wedge trailing behind body
+
+        // Tail - long and fanned, over the wing roots but under the body
         paint.color = eagleWhite
         path.reset()
-        path.moveTo(currentX - bodyLen * 0.4f, currentY - size * 0.05f)
-        path.lineTo(currentX - bodyLen * 1.0f, currentY - size * 0.15f)
-        path.lineTo(currentX - bodyLen * 1.15f, currentY)
-        path.lineTo(currentX - bodyLen * 1.0f, currentY + size * 0.15f)
-        path.lineTo(currentX - bodyLen * 0.4f, currentY + size * 0.05f)
+        path.moveTo(currentX - bodyLen * 0.35f, currentY - size * 0.08f)
+        path.lineTo(currentX - bodyLen * 1.30f, currentY - size * 0.22f)
+        path.lineTo(currentX - bodyLen * 1.14f, currentY)
+        path.lineTo(currentX - bodyLen * 1.28f, currentY + size * 0.22f)
+        path.lineTo(currentX - bodyLen * 0.35f, currentY + size * 0.08f)
         path.close()
         canvas.drawPath(path, paint)
-        
-        // Body - drawn over the wing roots so the torso stays readable
+
+        // Body - deep chest tapering to the tail; an ellipse read as a capsule laid on top
         paint.color = eagleBody
         path.reset()
-        path.addOval(currentX - bodyLen * 0.55f, currentY - size * 0.2f,
-                     currentX + bodyLen * 0.55f, currentY + size * 0.2f, Path.Direction.CW)
+        path.moveTo(currentX - bodyLen * 0.58f, currentY)
+        path.cubicTo(
+            currentX - bodyLen * 0.25f, currentY - size * 0.24f,
+            currentX + bodyLen * 0.28f, currentY - size * 0.20f,
+            currentX + bodyLen * 0.58f, currentY - size * 0.06f
+        )
+        path.cubicTo(
+            currentX + bodyLen * 0.35f, currentY + size * 0.22f,
+            currentX - bodyLen * 0.25f, currentY + size * 0.20f,
+            currentX - bodyLen * 0.58f, currentY
+        )
+        path.close()
         canvas.drawPath(path, paint)
-        
-        // Head (small, extends forward from body)
+
+        // Head - flows out of the neck instead of sitting on the body as a pale dot
         paint.color = eagleWhite
-        canvas.drawOval(currentX + bodyLen * 0.3f, currentY - size * 0.12f,
-                        currentX + bodyLen * 0.7f, currentY + size * 0.08f, paint)
+        path.reset()
+        path.moveTo(currentX + bodyLen * 0.20f, currentY - size * 0.14f)
+        path.cubicTo(
+            currentX + bodyLen * 0.42f, currentY - size * 0.18f,
+            currentX + bodyLen * 0.68f, currentY - size * 0.12f,
+            currentX + bodyLen * 0.72f, currentY - size * 0.02f
+        )
+        path.cubicTo(
+            currentX + bodyLen * 0.62f, currentY + size * 0.10f,
+            currentX + bodyLen * 0.35f, currentY + size * 0.10f,
+            currentX + bodyLen * 0.18f, currentY + size * 0.04f
+        )
+        path.close()
+        canvas.drawPath(path, paint)
         
         // Beak (hooked, characteristic of raptors)
         paint.color = RenderConstants.blendWithAmbient(
             Color.argb((220 * alpha).toInt(), 200, 180, 60), ambientColor, 0.3f)
         path.reset()
-        path.moveTo(currentX + bodyLen * 0.65f, currentY - size * 0.03f)
-        path.lineTo(currentX + bodyLen * 0.82f, currentY + size * 0.02f)
-        path.lineTo(currentX + bodyLen * 0.65f, currentY + size * 0.06f)
+        path.moveTo(currentX + bodyLen * 0.66f, currentY - size * 0.06f)
+        path.quadTo(
+            currentX + bodyLen * 0.91f, currentY - size * 0.01f,
+            currentX + bodyLen * 0.85f, currentY + size * 0.08f
+        )
+        path.lineTo(currentX + bodyLen * 0.68f, currentY + size * 0.04f)
         path.close()
         canvas.drawPath(path, paint)
         
         canvas.restore()
+    }
+
+    /**
+     * Raptor wing: broad inner section to the elbow, narrower hand, and slotted primaries.
+     * [dir] is 1 for the near wing and -1 for the mirrored far wing.
+     */
+    private fun buildWingPath(
+        path: Path, centerX: Float, centerY: Float, dir: Float,
+        wingspan: Float, size: Float, tipY: Float, scale: Float
+    ) {
+        val span = wingspan * scale
+        val shoulderX = centerX + dir * size * 0.12f
+        path.reset()
+        path.moveTo(shoulderX, centerY - size * 0.08f)
+        path.cubicTo(
+            centerX + dir * span * 0.20f, centerY - size * 0.38f,
+            centerX + dir * span * 0.38f, centerY - size * 0.63f,
+            centerX + dir * span * 0.48f, centerY - size * 0.55f
+        )
+        path.cubicTo(
+            centerX + dir * span * 0.70f, centerY - size * 0.48f,
+            centerX + dir * span * 0.90f, tipY - size * 0.08f,
+            centerX + dir * span, tipY
+        )
+        // Slotted primary tips - small notches are enough at this scale
+        path.lineTo(centerX + dir * span * 0.91f, tipY + size * 0.16f)
+        path.lineTo(centerX + dir * span * 0.83f, tipY + size * 0.07f)
+        path.lineTo(centerX + dir * span * 0.76f, tipY + size * 0.21f)
+        path.cubicTo(
+            centerX + dir * span * 0.55f, centerY + size * 0.13f,
+            centerX + dir * span * 0.30f, centerY + size * 0.20f,
+            shoulderX, centerY + size * 0.14f
+        )
+        path.close()
     }
 }
