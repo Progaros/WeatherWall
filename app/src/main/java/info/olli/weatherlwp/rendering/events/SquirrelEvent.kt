@@ -126,14 +126,15 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
             canvas.scale(-1f, 1f, screenX, screenY)
         }
 
-        // Back legs (behind body)
+        // Back legs (behind body). Tops reach into the torso: at the extremes of legOffset the
+        // outer leg swings past the body oval's edge and would otherwise detach.
         canvas.drawRoundRect(
-            screenX - unit * 1.0f - legOffset, screenY + unit * 0.3f,
+            screenX - unit * 1.0f - legOffset, screenY - unit * 0.1f,
             screenX - unit * 0.7f - legOffset, screenY + unit * 1.2f,
             unit * 0.15f, unit * 0.15f, paint
         )
         canvas.drawRoundRect(
-            screenX - unit * 1.3f + legOffset, screenY + unit * 0.3f,
+            screenX - unit * 1.3f + legOffset, screenY - unit * 0.1f,
             screenX - unit * 1.0f + legOffset, screenY + unit * 1.2f,
             unit * 0.15f, unit * 0.15f, paint
         )

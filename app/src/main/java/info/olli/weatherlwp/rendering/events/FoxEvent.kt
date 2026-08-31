@@ -101,9 +101,10 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         path.close()
         canvas.drawPath(path, paint)
 
-        // Back legs (behind torso)
+        // Back legs (behind torso). The outer leg starts higher because the body oval
+        // curves away towards its ends, which would otherwise leave it hanging in the air.
         val step = sin(walkPhase) * 0.25f * s
-        canvas.drawRoundRect(-1.8f*s, 0.1f*s, -1.4f*s, 1.0f*s + step, 0.2f*s, 0.2f*s, paint)
+        canvas.drawRoundRect(-1.8f*s, -0.15f*s, -1.4f*s, 1.0f*s + step, 0.2f*s, 0.2f*s, paint)
         canvas.drawRoundRect(-0.8f*s, 0.1f*s, -0.4f*s, 1.0f*s - step, 0.2f*s, 0.2f*s, paint)
         
         // Body
@@ -122,10 +123,10 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         paint.color = Color.rgb(240, 200, 180)
         canvas.drawOval(2.7f*s, -1.4f*s, 3.7f*s, -0.9f*s, paint)
         
-        // Front legs (in front of torso)
+        // Front legs (in front of torso); same reason for the raised outer leg.
         paint.color = RenderConstants.blendWithAmbient(Color.rgb(200, 90, 30), ambientColor, 0.3f)
         canvas.drawRoundRect(0.6f*s, 0.1f*s, 1.0f*s, 1.0f*s + step, 0.2f*s, 0.2f*s, paint)
-        canvas.drawRoundRect(1.4f*s, 0.1f*s, 1.8f*s, 1.0f*s - step, 0.2f*s, 0.2f*s, paint)
+        canvas.drawRoundRect(1.4f*s, -0.35f*s, 1.8f*s, 1.0f*s - step, 0.2f*s, 0.2f*s, paint)
         
         // Tail tip (white)
         paint.color = Color.rgb(250, 250, 250)
