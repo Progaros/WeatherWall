@@ -77,6 +77,10 @@ class EagleEvent(random: Random, override val spawnTimeMs: Long = System.current
         // Bald-eagle contrast: with a single flat colour the head vanishes into the body.
         val eagleWhite = RenderConstants.blendWithAmbient(
             Color.argb((255 * alpha).toInt(), 240, 238, 230), ambientColor, 0.35f)
+        // Torso sits a few shades lighter than the wings, otherwise the middle of the
+        // bird disappears into the wing mass and the silhouette reads as a plank.
+        val eagleBody = RenderConstants.blendWithAmbient(
+            Color.argb((255 * alpha).toInt(), 95, 74, 54), ambientColor, 0.35f)
         paint.color = birdColor
         
         // Soaring eagle silhouette - wide outstretched wings
@@ -86,12 +90,6 @@ class EagleEvent(random: Random, override val spawnTimeMs: Long = System.current
         // this wide (4.4 x 0.6) otherwise reads as a plank rather than a bird.
         val tipFlex = sin(timeSeconds * 1.6f + soarPhase) * size * 0.14f
         val tipY = currentY - size * 0.72f + tipFlex
-        
-        // Body - elongated streamlined shape
-        path.reset()
-        path.addOval(currentX - bodyLen * 0.5f, currentY - size * 0.18f,
-                     currentX + bodyLen * 0.5f, currentY + size * 0.18f, Path.Direction.CW)
-        canvas.drawPath(path, paint)
         
         // Left wing - smooth soaring shape with pronounced dihedral (upward angle)
         path.reset()
@@ -131,7 +129,15 @@ class EagleEvent(random: Random, override val spawnTimeMs: Long = System.current
         path.close()
         canvas.drawPath(path, paint)
         
+        // Body - drawn over the wing roots so the torso stays readable
+        paint.color = eagleBody
+        path.reset()
+        path.addOval(currentX - bodyLen * 0.55f, currentY - size * 0.2f,
+                     currentX + bodyLen * 0.55f, currentY + size * 0.2f, Path.Direction.CW)
+        canvas.drawPath(path, paint)
+        
         // Head (small, extends forward from body)
+        paint.color = eagleWhite
         canvas.drawOval(currentX + bodyLen * 0.3f, currentY - size * 0.12f,
                         currentX + bodyLen * 0.7f, currentY + size * 0.08f, paint)
         

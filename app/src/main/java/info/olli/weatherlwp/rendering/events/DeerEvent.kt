@@ -7,6 +7,7 @@ import android.graphics.Path
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.RenderConstants
 import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.random.Random
 
 /**
@@ -225,22 +226,26 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         // Body (horizontal oval)
         canvas.drawOval(-unit * 4f, bodyY - unit * 2.5f, unit * 4f, bodyY + unit * 2.5f, paint)
 
-        // Neck: tapered band from shoulder to head base; follows the head up (alert) or down (graze).
-        // Drawn before the belly so its wide shoulder anchor can sit deep inside the torso -
-        // the belly oval then covers the overlap instead of leaving a seam across the underside.
-        val shoulderX = unit * 1.2f
-        val shoulderTopY = bodyY - unit * 1.9f
-        val shoulderBotY = bodyY + unit * 0.4f
-        val headBaseX = headX - unit * 1.7f
-        val headTopY = headY - unit * 0.7f
-        val headBotY = headY + unit * 0.9f
+        // Neck: band from the withers to the head base, drawn before the belly so its
+        // anchor can sit inside the torso without leaving a seam on the underside.
+        // Thickness is measured perpendicular to the neck axis - measuring it vertically
+        // collapsed the neck to a sliver whenever the head was held high and steep.
+        val neckBaseX = unit * 2.6f
+        val neckBaseY = bodyY - unit * 0.9f
+        val neckTopX = headX - unit * 1.2f
+        val neckTopY = headY + unit * 0.2f
+        val neckDx = neckTopX - neckBaseX
+        val neckDy = neckTopY - neckBaseY
+        val neckLen = sqrt(neckDx * neckDx + neckDy * neckDy).coerceAtLeast(0.0001f)
+        val neckNx = -neckDy / neckLen
+        val neckNy = neckDx / neckLen
+        val neckBaseHalf = unit * 1.0f
+        val neckTopHalf = unit * 0.8f
         path.reset()
-        path.moveTo(shoulderX, shoulderTopY)
-        path.quadTo((shoulderX + headBaseX) * 0.5f + unit * 0.4f,
-            (shoulderTopY + headTopY) * 0.5f, headBaseX, headTopY)
-        path.lineTo(headBaseX, headBotY)
-        path.quadTo((shoulderX + headBaseX) * 0.5f,
-            (shoulderBotY + headBotY) * 0.5f, shoulderX, shoulderBotY)
+        path.moveTo(neckBaseX + neckNx * neckBaseHalf, neckBaseY + neckNy * neckBaseHalf)
+        path.lineTo(neckTopX + neckNx * neckTopHalf, neckTopY + neckNy * neckTopHalf)
+        path.lineTo(neckTopX - neckNx * neckTopHalf, neckTopY - neckNy * neckTopHalf)
+        path.lineTo(neckBaseX - neckNx * neckBaseHalf, neckBaseY - neckNy * neckBaseHalf)
         path.close()
         canvas.drawPath(path, paint)
 
@@ -296,6 +301,7 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         paint.color = bodyColor
 
         // Ears (angled back from the head base)
+        val headBaseX = headX - unit * 1.7f
         path.reset()
         path.moveTo(headBaseX + unit * 0.2f, headY - unit * 0.6f)
         path.lineTo(headBaseX - unit * 0.6f, headY - unit * 2.2f)
