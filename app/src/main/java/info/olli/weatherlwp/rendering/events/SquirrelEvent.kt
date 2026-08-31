@@ -160,6 +160,19 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
             paint
         )
         
+        // Front legs. Drawn before the belly so their tops are hidden underneath it -
+        // otherwise the dark rectangles sit on the light belly and visibly slide across it.
+        canvas.drawRoundRect(
+            screenX + unit * 0.1f + legOffset, screenY + unit * 0.15f,
+            screenX + unit * 0.4f + legOffset, screenY + unit * 1.2f,
+            unit * 0.15f, unit * 0.15f, paint
+        )
+        canvas.drawRoundRect(
+            screenX - unit * 0.2f - legOffset, screenY + unit * 0.15f,
+            screenX + unit * 0.1f - legOffset, screenY + unit * 1.2f,
+            unit * 0.15f, unit * 0.15f, paint
+        )
+
         // Belly (lighter underside)
         paint.color = RenderConstants.blendWithAmbient(bellyColor, ambientColor, 0.3f)
         canvas.drawOval(
@@ -194,20 +207,6 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
             screenX + unit * 1.0f, screenY + unit * 0.0f,
             screenX + unit * 1.6f, screenY + unit * 0.4f,
             paint
-        )
-        
-        // Front legs (in front of body). Shifted inwards and reaching higher into the torso:
-        // at full legOffset the old anchors swung past the body oval's right edge and detached.
-        paint.color = RenderConstants.blendWithAmbient(bodyColor, ambientColor, 0.3f)
-        canvas.drawRoundRect(
-            screenX + unit * 0.1f + legOffset, screenY + unit * 0.15f,
-            screenX + unit * 0.4f + legOffset, screenY + unit * 1.2f,
-            unit * 0.15f, unit * 0.15f, paint
-        )
-        canvas.drawRoundRect(
-            screenX - unit * 0.2f - legOffset, screenY + unit * 0.15f,
-            screenX + unit * 0.1f - legOffset, screenY + unit * 1.2f,
-            unit * 0.15f, unit * 0.15f, paint
         )
         
         canvas.restore()

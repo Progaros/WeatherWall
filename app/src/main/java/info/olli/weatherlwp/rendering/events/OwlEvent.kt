@@ -199,29 +199,6 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         canvas.drawPath(path, paint)
         canvas.restore()
         
-        // === TAIL ===
-        // Short, broad tail
-        paint.color = bodyColor
-        path.reset()
-        path.moveTo(currentX - bodyW * 0.7f, currentY + bodyH * 0.3f)
-        path.lineTo(currentX - bodyW * 1.1f, currentY + bodyH * 0.15f)
-        path.lineTo(currentX - bodyW * 1.3f, currentY + bodyH * 0.35f)
-        path.lineTo(currentX - bodyW * 1.1f, currentY + bodyH * 0.55f)
-        path.lineTo(currentX - bodyW * 0.7f, currentY + bodyH * 0.45f)
-        path.close()
-        canvas.drawPath(path, paint)
-        
-        // Tail barring (dark stripes)
-        paint.color = darkColor
-        strokePaint.color = darkColor
-        strokePaint.strokeWidth = size * 0.05f
-        val tailCx = currentX - bodyW * 1.0f
-        val tailCy = currentY + bodyH * 0.35f
-        canvas.drawLine(tailCx - size * 0.08f, tailCy - size * 0.06f,
-                        tailCx + size * 0.04f, tailCy - size * 0.04f, strokePaint)
-        canvas.drawLine(tailCx - size * 0.06f, tailCy + size * 0.02f,
-                        tailCx + size * 0.05f, tailCy + size * 0.03f, strokePaint)
-        
         // === EYES ===
         // Large, forward-facing eyes - defining owl feature
         val eyeR = headR * 0.22f

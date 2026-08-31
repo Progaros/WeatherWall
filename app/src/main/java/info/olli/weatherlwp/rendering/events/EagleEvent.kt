@@ -74,6 +74,9 @@ class EagleEvent(random: Random, override val spawnTimeMs: Long = System.current
         val alpha = (1f - distance * 0.25f)
         val birdColor = RenderConstants.blendWithAmbient(
             Color.argb((255 * alpha).toInt(), 35, 30, 25), ambientColor, 0.35f)
+        // Bald-eagle contrast: with a single flat colour the head vanishes into the body.
+        val eagleWhite = RenderConstants.blendWithAmbient(
+            Color.argb((255 * alpha).toInt(), 240, 238, 230), ambientColor, 0.35f)
         paint.color = birdColor
         
         // Soaring eagle silhouette - wide outstretched wings
@@ -118,6 +121,7 @@ class EagleEvent(random: Random, override val spawnTimeMs: Long = System.current
         canvas.drawPath(path, paint)
         
         // Tail - short wedge trailing behind body
+        paint.color = eagleWhite
         path.reset()
         path.moveTo(currentX - bodyLen * 0.4f, currentY - size * 0.05f)
         path.lineTo(currentX - bodyLen * 1.0f, currentY - size * 0.15f)

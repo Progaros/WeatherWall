@@ -116,11 +116,14 @@ class DragonflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
         // Thorax
         canvas.drawCircle(screenX, screenY, unit * 1.5f, paint)
         
-        // Abdomen (long segmented tail)
+        // Abdomen (long segmented tail), widest at the thorax and tapering to the tip.
+        // It used to be a triangle with its point at the thorax, so the body met the
+        // abdomen at zero width and read as two separate pieces.
         path.reset()
-        path.moveTo(screenX - unit * 0.8f, screenY)
-        path.lineTo(screenX - unit * 8f, screenY + unit * 0.3f)
-        path.lineTo(screenX - unit * 8f, screenY - unit * 0.3f)
+        path.moveTo(screenX - unit * 0.5f, screenY - unit * 0.75f)
+        path.lineTo(screenX - unit * 8f, screenY - unit * 0.14f)
+        path.lineTo(screenX - unit * 8f, screenY + unit * 0.14f)
+        path.lineTo(screenX - unit * 0.5f, screenY + unit * 0.75f)
         path.close()
         canvas.drawPath(path, paint)
         
@@ -155,22 +158,22 @@ class DragonflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
         )
         canvas.restore()
 
-        // Bottom wings (rear pair) - set well back along the abdomen so the two
-        // pairs stay distinct instead of overlapping into a propeller shape.
+        // Bottom wings (rear pair). Both pairs attach to the thorax on a real dragonfly,
+        // so this pair sits just behind the front one rather than out on the abdomen.
         canvas.save()
-        canvas.rotate(-wingAngle * 11f, screenX - unit * 3.5f, screenY)
+        canvas.rotate(-wingAngle * 11f, screenX - unit * 1.3f, screenY)
         canvas.drawOval(
-            screenX - unit * 4.2f, screenY - unit * 4.2f,
-            screenX - unit * 2.6f, screenY - unit * 0.3f,
+            screenX - unit * 2.1f, screenY - unit * 4.2f,
+            screenX - unit * 0.6f, screenY - unit * 0.3f,
             paint
         )
         canvas.restore()
 
         canvas.save()
-        canvas.rotate(wingAngle * 11f, screenX - unit * 3.5f, screenY)
+        canvas.rotate(wingAngle * 11f, screenX - unit * 1.3f, screenY)
         canvas.drawOval(
-            screenX - unit * 4.2f, screenY + unit * 0.3f,
-            screenX - unit * 2.6f, screenY + unit * 4.2f,
+            screenX - unit * 2.1f, screenY + unit * 0.3f,
+            screenX - unit * 0.6f, screenY + unit * 4.2f,
             paint
         )
         canvas.restore()
