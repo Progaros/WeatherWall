@@ -93,19 +93,20 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         
         paint.color = RenderConstants.blendWithAmbient(Color.rgb(200, 90, 30), ambientColor, 0.3f)
         
-        // Tail (bushy, horizontal, low angle with offset white tip)
+        // Tail (bushy brush, low angle with an offset white tip)
         path.reset()
-        path.moveTo(-2.0f*s, -0.4f*s)
-        path.cubicTo(-3.2f*s, -0.2f*s, -4.0f*s, -0.6f*s, -4.2f*s, -0.3f*s)
-        path.cubicTo(-4.0f*s, 0.0f*s, -3.0f*s, 0.2f*s, -2.0f*s, 0.0f*s)
+        path.moveTo(-2.0f*s, -0.7f*s)
+        path.cubicTo(-3.4f*s, -1.2f*s, -4.4f*s, -0.9f*s, -4.5f*s, -0.2f*s)
+        path.cubicTo(-4.4f*s, 0.4f*s, -3.4f*s, 0.6f*s, -2.0f*s, 0.3f*s)
         path.close()
         canvas.drawPath(path, paint)
 
-        // Back legs (behind torso). The outer leg starts higher because the body oval
-        // curves away towards its ends, which would otherwise leave it hanging in the air.
+        // Back legs (behind torso). Tops reach into the torso because the body oval curves
+        // away towards its ends, which would otherwise leave the outer leg in the air.
         val step = sin(walkPhase) * 0.25f * s
-        canvas.drawRoundRect(-1.8f*s, -0.15f*s, -1.4f*s, 1.0f*s + step, 0.2f*s, 0.2f*s, paint)
-        canvas.drawRoundRect(-0.8f*s, 0.1f*s, -0.4f*s, 1.0f*s - step, 0.2f*s, 0.2f*s, paint)
+        val swing = sin(walkPhase) * 0.35f * s
+        canvas.drawRoundRect(-1.8f*s + swing, -0.3f*s, -1.4f*s + swing, 1.0f*s + step, 0.2f*s, 0.2f*s, paint)
+        canvas.drawRoundRect(-0.8f*s - swing, 0.1f*s, -0.4f*s - swing, 1.0f*s - step, 0.2f*s, 0.2f*s, paint)
         
         // Body
         canvas.drawOval(-2.4f*s, -1.2f*s, 2.0f*s, 0.2f*s, paint)
@@ -125,12 +126,12 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         
         // Front legs (in front of torso); same reason for the raised outer leg.
         paint.color = RenderConstants.blendWithAmbient(Color.rgb(200, 90, 30), ambientColor, 0.3f)
-        canvas.drawRoundRect(0.6f*s, 0.1f*s, 1.0f*s, 1.0f*s + step, 0.2f*s, 0.2f*s, paint)
-        canvas.drawRoundRect(1.4f*s, -0.35f*s, 1.8f*s, 1.0f*s - step, 0.2f*s, 0.2f*s, paint)
+        canvas.drawRoundRect(0.6f*s - swing, 0.1f*s, 1.0f*s - swing, 1.0f*s + step, 0.2f*s, 0.2f*s, paint)
+        canvas.drawRoundRect(1.4f*s + swing, -0.35f*s, 1.8f*s + swing, 1.0f*s - step, 0.2f*s, 0.2f*s, paint)
         
-        // Tail tip (white)
+        // Tail tip (white), seated inside the brush end
         paint.color = Color.rgb(250, 250, 250)
-        canvas.drawCircle(-4.0f*s, -0.3f*s, 0.35f*s, paint)
+        canvas.drawCircle(-4.25f*s, -0.2f*s, 0.45f*s, paint)
         
         // Ears
         paint.color = RenderConstants.blendWithAmbient(Color.rgb(200, 90, 30), ambientColor, 0.3f)
