@@ -65,6 +65,13 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     /** Horizontal light bias for hill shading: -1 = light from the left, +1 = from the right, 0 = overhead. */
     private var hillLightBiasX = 0f
 
+    // Baked-decoration shadow scalars (mushrooms), refreshed once per frame like hillLightBiasX.
+    // Baking these into the per-hill bitmap (instead of drawing per-frame per-mushroom) keeps
+    // mushroom shadows in sync with the tree/bush shadow model without extra draw calls.
+    private var decorShadowDirX = 0f
+    private var decorShadowLengthFactor = 0.6f
+    private var decorShadowAlpha = 0
+
     // Reused draw buffer for Y-sorted terrain interleaving (trees, bushes, animals)
     private class DrawEntry {
         var y = 0f
@@ -272,6 +279,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private val leafPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val mushroomPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val mushroomCapPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
+    private val mushroomShadowPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     // Hairline stroke reproduces the previous per-segment drawLine() appearance in one path op.
     private val frostPaint = Paint().apply {
         style = Paint.Style.STROKE
@@ -304,6 +312,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private var decorationOomBlocked = false
     private var decorationBitmapSeasonBucket = -1
     private var decorationBitmapAmbientBucket = -1
+    private var decorationBitmapShadowBucket = Int.MIN_VALUE
     private val decorationBitmapPaint = Paint()
 
     /**
@@ -1081,13 +1090,25 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // This avoids per-frame individual drawing of flowers, mushrooms, and foliage.
         val ambientBkt = decorationAmbientBucket(ambientColor)
         val seasonBkt = currentSeasonBucket()
+        // Mushroom shadows are baked in, so the bake must also refresh as the sun/moon moves.
+        // Coarse buckets keep this from rebaking every frame while the light angle drifts.
+        decorShadowDirX = state.shadowDirX
+        decorShadowLengthFactor = state.shadowLengthFactor()
+        decorShadowAlpha = if (state.treeShadowsEnabled) state.groundShadowAlpha() else 0
+        // Non-negative bucket components only (shadowDirX is -1..1) so OR-packing them
+        // into one Int can't corrupt neighbouring bits via sign extension.
+        val dirBucket = ((decorShadowDirX + 1f) * 10f).toInt()
+        val lengthBucket = (decorShadowLengthFactor * 8f).toInt()
+        val alphaBucket = decorShadowAlpha / 8
+        val shadowBkt = dirBucket or (lengthBucket shl 8) or (alphaBucket shl 16)
         val newBmpW = (width * (1f + 2f * DECOR_BITMAP_MARGIN)).toInt()
         val sizeChanged = decorationBitmapW != newBmpW ||
             decorationBitmapScreenH != height ||
             decorationBitmaps.size != currentHills.size
         val rebakeNeeded = decorationsDirty || sizeChanged ||
             seasonBkt != decorationBitmapSeasonBucket ||
-            ambientBkt != decorationBitmapAmbientBucket
+            ambientBkt != decorationBitmapAmbientBucket ||
+            shadowBkt != decorationBitmapShadowBucket
         // After OOM, skip rebakes that are driven only by season/ambient transitions.
         // Allow retry when decoration layout changes (decorationsDirty) or screen resizes.
         if (rebakeNeeded && (!decorationOomBlocked || decorationsDirty || sizeChanged)) {
@@ -1095,6 +1116,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             decorationsDirty = false
             decorationBitmapSeasonBucket = seasonBkt
             decorationBitmapAmbientBucket = ambientBkt
+            decorationBitmapShadowBucket = shadowBkt
         }
         
         // Invalidate cached hill gradients only when bucketed ambient, snow or light angle changes.
@@ -1512,6 +1534,16 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 val y = yRatio * height + mushroom.yOffset * height
                 
                 val size = mushroom.size * height * (0.5f + mushroomAlpha * 0.5f)  // Grow as they appear
+                
+                // Ground shadow first, using the same shared light model as trees/bushes so
+                // mushrooms don't look lit from a different direction than everything else.
+                if (decorShadowAlpha > 0) {
+                    GroundShadow.drawRaw(
+                        canvas, mushroomShadowPaint, x, y, size * 1.3f, size * 0.6f,
+                        decorShadowDirX, decorShadowLengthFactor,
+                        (decorShadowAlpha * mushroomAlpha).toInt()
+                    )
+                }
                 
                 // Stem (light beige)
                 val stemColor = RenderConstants.blendWithAmbient(Color.rgb(230, 210, 180), ambientColor, 0.2f)

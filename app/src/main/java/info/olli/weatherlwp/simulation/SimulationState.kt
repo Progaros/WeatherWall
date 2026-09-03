@@ -266,18 +266,26 @@ data class SimulationState(
 
     /**
      * Ground-shadow length as a multiple of object height: cot(elevation), the true
-     * projection of an upright object. Clamped so shadows stay usable near the horizon.
+     * projection of an upright object. Clamped so shadows stay usable near the horizon -
+     * capped well short of the true cotangent blow-up so low sun (dawn/dusk) doesn't turn
+     * every tree into a near-horizontal streak stretching across the whole scene.
      * Length is deliberately independent of shadow strength - strength only sets opacity.
      */
     fun shadowLengthFactor(): Float {
-        val e = lightElevation01.coerceAtLeast(0.15f)
+        val e = lightElevation01.coerceAtLeast(0.22f)
         val cosE = kotlin.math.sqrt((1f - e * e).coerceAtLeast(0f))
-        return (cosE / e).coerceIn(0.3f, 4f)
+        return (cosE / e).coerceIn(0.3f, 2f)
     }
 
-    /** Shared opacity for every ground shadow in the scene. */
-    fun groundShadowAlpha(): Int =
-        (20f + 130f * cachedEffectiveShadowStrength).toInt().coerceIn(0, 150)
+    /**
+     * Shared opacity for every ground shadow in the scene. Fades further as the light
+     * approaches the horizon so low-sun shadows (already at max length) read as soft and
+     * hazy rather than long AND dark at the same time.
+     */
+    fun groundShadowAlpha(): Int {
+        val elevationSoftening = 0.55f + 0.45f * lightElevation01
+        return (16f + 100f * cachedEffectiveShadowStrength * elevationSoftening).toInt().coerceIn(0, 120)
+    }
     
     /**
      * Get shadow offset for an entity based on light source position.
