@@ -3,7 +3,11 @@ package info.olli.weatherlwp.rendering
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
 import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
@@ -28,13 +32,19 @@ object GroundShadow {
     // Reused across calls to avoid a per-frame RectF allocation.
     private val destRect = RectF()
 
-    /** Lazily builds the shared soft round mask: opaque core fading to transparent at the rim. */
+    /**
+     * Lazily builds the shared soft mask. The core is a feathered round blob (vertical
+     * softness) multiplied by a horizontal ramp that runs from opaque at x=0 to fully
+     * transparent at x=MASK_SIZE, so the stamp is dense where it touches the object's
+     * base and dissolves toward the far tip - a contact shadow rather than a flat streak.
+     */
     private fun softMask(): Bitmap {
         mask?.let { return it }
         val size = MASK_SIZE
+        val sizeF = size.toFloat()
         val radius = size / 2f
-        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ALPHA_8)
-        val maskCanvas = Canvas(bmp)
+        val src = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val maskCanvas = Canvas(src)
         val gradientPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = RadialGradient(
                 radius, radius, radius,
@@ -44,8 +54,20 @@ object GroundShadow {
             )
         }
         maskCanvas.drawCircle(radius, radius, radius, gradientPaint)
-        mask = bmp
-        return bmp
+
+        gradientPaint.shader = LinearGradient(
+            0f, 0f, sizeF, 0f,
+            intArrayOf(Color.WHITE, Color.argb(140, 255, 255, 255), Color.TRANSPARENT),
+            floatArrayOf(0f, 0.5f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        gradientPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
+        maskCanvas.drawRect(0f, 0f, sizeF, sizeF, gradientPaint)
+
+        val alphaOnly = src.extractAlpha()
+        src.recycle()
+        mask = alphaOnly
+        return alphaOnly
     }
 
     /**
@@ -53,6 +75,9 @@ object GroundShadow {
      * [SimulationState.shadowDirX], with length driven by the light elevation.
      *
      * @param tipSwayX horizontal displacement of the far end, so a swaying plant's shadow sways too.
+     * @param clipPath ground silhouette the shadow must stay inside, in the caller's current
+     *   canvas space. Without it a shadow cast from a hilltop would spill over the ridge
+     *   into the sky.
      */
     fun draw(
         canvas: Canvas,
@@ -62,13 +87,14 @@ object GroundShadow {
         groundY: Float,
         objectHeight: Float,
         objectWidth: Float,
-        tipSwayX: Float = 0f
+        tipSwayX: Float = 0f,
+        clipPath: Path? = null
     ) {
         val alpha = state.groundShadowAlpha()
         if (alpha <= 0) return
         drawRaw(
             canvas, paint, baseX, groundY, objectHeight, objectWidth,
-            state.shadowDirX, state.shadowLengthFactor(), alpha, tipSwayX
+            state.shadowDirX, state.shadowLengthFactor(), alpha, tipSwayX, clipPath
         )
     }
 
@@ -87,7 +113,8 @@ object GroundShadow {
         shadowDirX: Float,
         shadowLengthFactor: Float,
         alpha: Int,
-        tipSwayX: Float = 0f
+        tipSwayX: Float = 0f,
+        clipPath: Path? = null
     ) {
         if (alpha <= 0) return
 
@@ -101,6 +128,14 @@ object GroundShadow {
         paint.alpha = alpha
         paint.isFilterBitmap = true
         destRect.set(centerX - halfLength, groundY - halfThickness, centerX + halfLength, groundY + halfThickness)
+
+        val needsRestore = clipPath != null || tipX < baseX
+        if (needsRestore) canvas.save()
+        if (clipPath != null) canvas.clipPath(clipPath)
+        // The mask fades toward +X, so mirror it when the light throws the shadow leftward.
+        // destRect is symmetric about centerX, so the mirrored stamp lands on the same rect.
+        if (tipX < baseX) canvas.scale(-1f, 1f, centerX, groundY)
         canvas.drawBitmap(softMask(), null, destRect, paint)
+        if (needsRestore) canvas.restore()
     }
 }

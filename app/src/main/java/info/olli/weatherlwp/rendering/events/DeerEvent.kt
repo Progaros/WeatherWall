@@ -6,6 +6,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.RenderConstants
+import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
@@ -142,27 +143,46 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         // Smooth grazing transition: the head eases down and back up instead of snapping,
         // and the legs settle to a planted stance as the deer stops to graze.
         val grazeTransitionMs = 400f
+        val grazeElapsedMs = if (isGrazing) (cycleTime - grazeInterval).toFloat() else 0f
         val grazeProgress = if (isGrazing) {
-            val grazeElapsed = (cycleTime - grazeInterval).toFloat()
             val ramp = grazeTransitionMs.coerceAtMost(grazeDuration / 2f)
-            val rampIn = (grazeElapsed / ramp).coerceIn(0f, 1f)
-            val rampOut = ((grazeDuration.toFloat() - grazeElapsed) / ramp).coerceIn(0f, 1f)
+            val rampIn = (grazeElapsedMs / ramp).coerceIn(0f, 1f)
+            val rampOut = ((grazeDuration.toFloat() - grazeElapsedMs) / ramp).coerceIn(0f, 1f)
             RenderConstants.easeInOutCubic(minOf(rampIn, rampOut))
         } else 0f
         val gaitActivity = 1f - grazeProgress
+
+        // Chewing: once the muzzle is down the deer works the grass instead of holding a
+        // frozen pose. Squared weight keeps the nibble out of the lowering transition.
+        val nibbleWeight = grazeProgress * grazeProgress
+        val nibblePhase = grazeElapsedMs * 0.010f
+        val nibbleBob = sin(nibblePhase * 2.3f) * unit * 0.30f * nibbleWeight
+        val nibbleReach = sin(nibblePhase) * unit * 0.35f * nibbleWeight
+        val nibbleTiltDeg = sin(nibblePhase * 1.7f) * 6f * nibbleWeight
 
         // Leg + gait animation (elapsed-time based for stable motion independent of frame pacing).
         val walkPhase = movingTime * 0.004f + legPhaseOffset
 
         // Subtle vertical body bob synced to the stride (rises twice per gait cycle).
         val bodyBob = sin(walkPhase * 2f) * unit * 0.15f * gaitActivity
-
-        // Body + head positions. When grazing the head eases all the way down so the
-        // muzzle reaches the ground in front of the deer; otherwise it is held high/alert.
-        val headLower = grazeProgress * unit * 9.5f
         val bodyY = -unit * 6.5f + bodyBob
-        val headX = unit * 4f
-        val headY = bodyY - unit * 3.8f + headLower
+
+        // Head travel. Alert: carried high and forward. Grazing: the neck *reaches* down and
+        // forward so the muzzle lands on the grass - dropping the head straight down instead
+        // buried it in the chest and left the neck as a vertical sliver.
+        val headAlertX = unit * 4f
+        val headAlertY = bodyY - unit * 3.8f + sin(walkPhase * 2f + 0.9f) * unit * 0.25f * gaitActivity
+        val headGrazeX = unit * 5.4f + nibbleReach
+        val headGrazeY = -unit * 1.9f + nibbleBob
+        // Slight outward arc through the transition so the head swings rather than slides.
+        val reachArc = sin(grazeProgress * Math.PI.toFloat()) * unit * 0.9f
+        val headX = headAlertX + (headGrazeX - headAlertX) * grazeProgress + reachArc
+        val headY = headAlertY + (headGrazeY - headAlertY) * grazeProgress
+        // Skull pitches nose-down as it descends, so the muzzle (not the cheek) meets the ground.
+        val headTiltDeg = grazeProgress * 68f + nibbleTiltDeg
+        val headTiltRad = headTiltDeg * (Math.PI.toFloat() / 180f)
+        val headCos = cos(headTiltRad)
+        val headSin = sin(headTiltRad)
 
         // Diagonal trot gait: each diagonal pair (front-near + back-far) opposes the other
         // (front-far + back-near) so legs alternate naturally instead of moving in unison.
@@ -186,8 +206,9 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
 
         // Jointed-leg renderer: hip -> knee -> hoof with a forward stride and a small lift
         // on the swing phase. kneeBend shapes the joint (fore legs bend forward, hind back).
-        fun drawLeg(hipX: Float, swing: Float, kneeBend: Float, legColor: Int) {
-            val stride = swing * strideAmp * gaitActivity
+        // plantX braces the hoof for the grazing stance, where the gait swing is zero.
+        fun drawLeg(hipX: Float, swing: Float, kneeBend: Float, legColor: Int, plantX: Float = 0f) {
+            val stride = swing * strideAmp * gaitActivity + plantX
             val lift = maxOf(0f, swing) * liftAmp * gaitActivity
             val hoofX = hipX + stride
             val hoofY = -lift
@@ -217,9 +238,15 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         val frontKneeBend = unit * 0.2f
         val backKneeBend = -unit * 0.45f
 
+        // Grazing stance: the fore legs splay so the chest drops toward the grass, and the
+        // hind legs brace back slightly.
+        val frontNearPlant = grazeProgress * unit * 0.9f
+        val frontFarPlant = grazeProgress * unit * -0.5f
+        val backPlant = grazeProgress * unit * -0.35f
+
         // --- Back legs (drawn behind the body) ---
-        drawLeg(backFarX, swingA, backKneeBend, legFarColor)
-        drawLeg(backNearX, swingB, backKneeBend, bodyColor)
+        drawLeg(backFarX, swingA, backKneeBend, legFarColor, backPlant)
+        drawLeg(backNearX, swingB, backKneeBend, bodyColor, backPlant)
 
         paint.color = bodyColor
 
@@ -231,9 +258,13 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         // Thickness is measured perpendicular to the neck axis - measuring it vertically
         // collapsed the neck to a sliver whenever the head was held high and steep.
         val neckBaseX = unit * 2.6f
-        val neckBaseY = bodyY - unit * 0.9f
-        val neckTopX = headX - unit * 1.2f
-        val neckTopY = headY + unit * 0.2f
+        val neckBaseY = bodyY - unit * 0.9f + grazeProgress * unit * 0.6f
+        // Neck meets the skull just behind the eye; that attachment rotates with the head,
+        // otherwise the band detaches from the jaw as the muzzle pitches down.
+        val neckAttachLocalX = -unit * 1.2f
+        val neckAttachLocalY = unit * 0.2f
+        val neckTopX = headX + neckAttachLocalX * headCos - neckAttachLocalY * headSin
+        val neckTopY = headY + neckAttachLocalX * headSin + neckAttachLocalY * headCos
         val neckDx = neckTopX - neckBaseX
         val neckDy = neckTopY - neckBaseY
         val neckLen = sqrt(neckDx * neckDx + neckDy * neckDy).coerceAtLeast(0.0001f)
@@ -277,9 +308,14 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
 
         paint.color = bodyColor
 
+        // Head and everything attached to it are drawn in head-local space so the whole skull
+        // pitches together when the deer lowers to graze.
+        canvas.save()
+        canvas.translate(headX, headY)
+        canvas.rotate(headTiltDeg)
+
         // Head
-        canvas.drawOval(headX - unit * 1.8f, headY - unit * 1.2f,
-                        headX + unit * 2f, headY + unit * 1.3f, paint)
+        canvas.drawOval(-unit * 1.8f, -unit * 1.2f, unit * 2f, unit * 1.3f, paint)
 
         // Muzzle (lighter patch)
         val muzzleColor = if (isFawn) Color.rgb(220, 200, 170) else Color.rgb(190, 160, 130)
@@ -287,32 +323,31 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
             Color.argb((200 * alpha).toInt(),
                        Color.red(muzzleColor), Color.green(muzzleColor), Color.blue(muzzleColor)),
             ambientColor, 0.25f)
-        canvas.drawOval(headX + unit * 0.5f, headY - unit * 0.3f,
-                        headX + unit * 1.8f, headY + unit * 0.8f, paint)
+        canvas.drawOval(unit * 0.5f, -unit * 0.3f, unit * 1.8f, unit * 0.8f, paint)
 
         // Eye
         paint.color = Color.argb((180 * alpha).toInt(), 30, 25, 20)
-        canvas.drawCircle(headX + unit * 0.3f, headY - unit * 0.2f, unit * 0.25f, paint)
+        canvas.drawCircle(unit * 0.3f, -unit * 0.2f, unit * 0.25f, paint)
 
         // Nose
         paint.color = Color.argb((200 * alpha).toInt(), 40, 35, 30)
-        canvas.drawCircle(headX + unit * 1.7f, headY + unit * 0.3f, unit * 0.2f, paint)
+        canvas.drawCircle(unit * 1.7f, unit * 0.3f, unit * 0.2f, paint)
 
         paint.color = bodyColor
 
         // Ears (angled back from the head base)
-        val headBaseX = headX - unit * 1.7f
+        val headBaseX = -unit * 1.7f
         path.reset()
-        path.moveTo(headBaseX + unit * 0.2f, headY - unit * 0.6f)
-        path.lineTo(headBaseX - unit * 0.6f, headY - unit * 2.2f)
-        path.lineTo(headBaseX + unit * 1.0f, headY - unit * 0.4f)
+        path.moveTo(headBaseX + unit * 0.2f, -unit * 0.6f)
+        path.lineTo(headBaseX - unit * 0.6f, -unit * 2.2f)
+        path.lineTo(headBaseX + unit * 1.0f, -unit * 0.4f)
         path.close()
         canvas.drawPath(path, paint)
 
         path.reset()
-        path.moveTo(headBaseX + unit * 0.9f, headY - unit * 0.7f)
-        path.lineTo(headBaseX + unit * 1.0f, headY - unit * 2.3f)
-        path.lineTo(headBaseX + unit * 1.8f, headY - unit * 0.5f)
+        path.moveTo(headBaseX + unit * 0.9f, -unit * 0.7f)
+        path.lineTo(headBaseX + unit * 1.0f, -unit * 2.3f)
+        path.lineTo(headBaseX + unit * 1.8f, -unit * 0.5f)
         path.close()
         canvas.drawPath(path, paint)
 
@@ -324,32 +359,32 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
             strokePaint.style = Paint.Style.STROKE
             strokePaint.strokeCap = Paint.Cap.ROUND
             strokePaint.strokeJoin = Paint.Join.ROUND
-            val baseY = headY - unit * 1.1f
+            val baseY = -unit * 1.1f
             // Back beam + tines
             path.reset()
-            path.moveTo(headX - unit * 0.2f, baseY)
-            path.quadTo(headX - unit * 1.4f, baseY - unit * 2.2f,
-                headX - unit * 1.0f, baseY - unit * 4.2f)
-            path.moveTo(headX - unit * 1.05f, baseY - unit * 1.9f)
-            path.lineTo(headX - unit * 2.3f, baseY - unit * 2.4f)
-            path.moveTo(headX - unit * 1.02f, baseY - unit * 3.1f)
-            path.lineTo(headX - unit * 2.1f, baseY - unit * 3.9f)
+            path.moveTo(-unit * 0.2f, baseY)
+            path.quadTo(-unit * 1.4f, baseY - unit * 2.2f, -unit * 1.0f, baseY - unit * 4.2f)
+            path.moveTo(-unit * 1.05f, baseY - unit * 1.9f)
+            path.lineTo(-unit * 2.3f, baseY - unit * 2.4f)
+            path.moveTo(-unit * 1.02f, baseY - unit * 3.1f)
+            path.lineTo(-unit * 2.1f, baseY - unit * 3.9f)
             canvas.drawPath(path, strokePaint)
             // Front beam + tines
             path.reset()
-            path.moveTo(headX + unit * 0.5f, baseY)
-            path.quadTo(headX + unit * 1.5f, baseY - unit * 2.2f,
-                headX + unit * 1.1f, baseY - unit * 4.2f)
-            path.moveTo(headX + unit * 1.15f, baseY - unit * 1.9f)
-            path.lineTo(headX + unit * 2.4f, baseY - unit * 2.4f)
-            path.moveTo(headX + unit * 1.12f, baseY - unit * 3.1f)
-            path.lineTo(headX + unit * 2.2f, baseY - unit * 3.9f)
+            path.moveTo(unit * 0.5f, baseY)
+            path.quadTo(unit * 1.5f, baseY - unit * 2.2f, unit * 1.1f, baseY - unit * 4.2f)
+            path.moveTo(unit * 1.15f, baseY - unit * 1.9f)
+            path.lineTo(unit * 2.4f, baseY - unit * 2.4f)
+            path.moveTo(unit * 1.12f, baseY - unit * 3.1f)
+            path.lineTo(unit * 2.2f, baseY - unit * 3.9f)
             canvas.drawPath(path, strokePaint)
         }
 
+        canvas.restore()
+
         // --- Front legs (drawn in front of the body) ---
-        drawLeg(frontFarX, swingB, frontKneeBend, legFarColor)
-        drawLeg(frontNearX, swingA, frontKneeBend, bodyColor)
+        drawLeg(frontFarX, swingB, frontKneeBend, legFarColor, frontFarPlant)
+        drawLeg(frontNearX, swingA, frontKneeBend, bodyColor, frontNearPlant)
 
         // Restore shared stroke join to the default for subsequent events.
         strokePaint.strokeJoin = Paint.Join.MITER

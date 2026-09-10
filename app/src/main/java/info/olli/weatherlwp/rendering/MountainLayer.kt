@@ -519,11 +519,18 @@ class MountainLayer(private val context: Context) : SceneLayer {
         // Left/right asymmetry based on sun position
         // Light from left (sunrise) means left side catches more light, right is darker
         val lightBias = -state.lightDirX  // +1 at sunrise (light left), -1 at sunset
-        
+
+        // Cast-shadow term: the ridge blocks the sun, so the whole flank turned away from it
+        // sits in shade. Scales with how far off-centre the light is, independent of the
+        // elevation-driven base shading, so mountains keep a lit and a shaded face all day.
+        val ridgeShade = shadowStrength * 0.45f
+        val leftRidgeShade = (-lightBias).coerceAtLeast(0f) * ridgeShade
+        val rightRidgeShade = lightBias.coerceAtLeast(0f) * ridgeShade
+
         // Shadow intensity for each side (base shadow + directional component)
         // Both sides always have some shadow when sun is low, but one side is darker
-        val leftShadow = (frontShadowBase - lightBias * frontShadowBase * 0.4f).coerceIn(0f, 0.4f)
-        val rightShadow = (frontShadowBase + lightBias * frontShadowBase * 0.4f).coerceIn(0f, 0.4f)
+        val leftShadow = (frontShadowBase + leftRidgeShade).coerceIn(0f, 0.55f)
+        val rightShadow = (frontShadowBase + rightRidgeShade).coerceIn(0f, 0.55f)
         
         // Cone-style: shadow is STRONGER at base (where mountain blocks more light)
         // and WEAKER at peak (which catches more direct sunlight)

@@ -37,8 +37,8 @@
     <PreferenceCategory android:title="Shadows &amp; Lighting">
         <SwitchPreferenceCompat
             android:key="pref_mountain_shadows_enabled"
-            android:title="Mountain Shadows"
-            android:summary="Mountain sides darken based on sun position"
+            android:title="Terrain Shadows"
+            android:summary="Mountain sides darken and hill ridges cast shadows based on sun position"
             android:defaultValue="true" />
 
         <SwitchPreferenceCompat

@@ -46,6 +46,13 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private var frostPaths: Array<Path?> = emptyArray()
     private var hillGeometryDirty = true
 
+    // Terrain self-shadowing: ridges cast a soft band down the slope facing away from the
+    // light. Depends only on the hill noise and the light direction, so the bands are built
+    // once per geometry rebuild / light bucket instead of every frame.
+    private var hillShadowPaths: Array<Path?> = emptyArray()
+    private var hillShadowBucket = Int.MIN_VALUE
+    private val hillShadowPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
+
     /** Rebuild counters; see [TerrainRenderStats]. Exposed for benchmarks and tests. */
     val renderStats = TerrainRenderStats()
 
@@ -64,6 +71,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
 
     /** Horizontal light bias for hill shading: -1 = light from the left, +1 = from the right, 0 = overhead. */
     private var hillLightBiasX = 0f
+
+    /** Opacity of the ridge-shadow bands for the current frame; 0 disables them. */
+    private var hillShadowAlpha = 0
 
     // Baked-decoration shadow scalars (mushrooms), refreshed once per frame like hillLightBiasX.
     // Baking these into the per-hill bitmap (instead of drawing per-frame per-mushroom) keeps
@@ -108,6 +118,15 @@ class TerrainLayer(private val context: Context) : SceneLayer {
          */
         internal const val HILL_SURFACE_MIN = 0.03f
         internal const val HILL_SURFACE_MAX = 0.12f
+
+        /** How far (as a fraction of screen height) the shadow ray is marched toward the light. */
+        private const val HILL_SHADOW_RAY_LENGTH = 0.16f
+
+        /** Deepest a ridge-shadow band reaches down the slope, as a fraction of screen height. */
+        private const val HILL_SHADOW_MAX_DEPTH = 0.028f
+
+        /** Steps taken along the shadow ray; more steps catch occluders at more distances. */
+        private const val HILL_SHADOW_RAY_SAMPLES = 4
 
         /** Returns true for decoration categories that can be baked into a static Bitmap. */
         fun isStaticDecoration(category: DecorationCategory): Boolean =
@@ -1132,6 +1151,22 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             cachedHillGradientLightBucket = lightBucket
             cachedHillGradients.clear()
         }
+
+        // Ridge shadows: geometry depends only on the light vector, opacity on shadow strength.
+        hillShadowAlpha = if (state.mountainShadowsEnabled) {
+            (90f * state.getEffectiveShadowStrength()).toInt().coerceIn(0, 90)
+        } else {
+            0
+        }
+        if (hillShadowAlpha > 0) {
+            val dirBkt = ((state.lightDirX + 1f) * 16f).toInt()
+            val elevBkt = (state.lightElevation01 * 16f).toInt()
+            val shadowBandBucket = dirBkt or (elevBkt shl 8)
+            if (shadowBandBucket != hillShadowBucket || hillShadowPaths.size != currentHills.size) {
+                buildHillShadowBands(currentHills, state)
+                hillShadowBucket = shadowBandBucket
+            }
+        }
         
         // Pre-compute autumn foliage weight once per frame (shared by all trees)
         val treeAutumnWeight = getSeasonWeight("autumn")
@@ -1198,6 +1233,12 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             }
             val hillTrees = currentTreesByDepth[hill.depthFactor] ?: emptyList()
             val hillBushes = bushRenderer.bushesByDepth[hill.depthFactor] ?: emptyList()
+
+            // Ground shadows must stay on this hill's surface: the layer silhouette is in the
+            // same canvas space as the per-item parallax translate, so it doubles as the clip.
+            val hillSilhouette = hillPaths.getOrNull(index)
+            treeRenderer.groundClipPath = hillSilhouette
+            bushRenderer.groundClipPath = hillSilhouette
             
             // Get animals for this depth range (may be empty)
             val animals = groundEventDrawer?.getEventsInRange(hill.depthFactor, nextDepth) ?: emptyList()
@@ -1289,6 +1330,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
 
             index++
         }
+
+        treeRenderer.groundClipPath = null
+        bushRenderer.groundClipPath = null
     }
     
     /**
@@ -1353,7 +1397,85 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             hillPaths = paths
             frostPaths = contours
             hillMinYs = minYs
+            hillShadowBucket = Int.MIN_VALUE
             renderStats.recordHillGeometryBuild(currentHills.size)
+        } finally {
+            Trace.endSection()
+        }
+    }
+
+    /**
+     * Rebuild the per-hill ridge-shadow bands for the current light direction.
+     *
+     * Each hill layer is a 1-D height field, so a point on the surface is in shadow when the
+     * ray toward the light passes *below* the terrain further along. The result is drawn as a
+     * strip hugging the surface whose depth scales with how deeply that ray is buried, which
+     * reads as a soft shadow thrown down the slope facing away from the sun. Purely a function
+     * of the hill noise and the light vector, so it is cached per light bucket.
+     */
+    private fun buildHillShadowBands(currentHills: List<HillData>, state: SimulationState) {
+        if (currentHills.isEmpty() || width <= 0f || height <= 0f) {
+            hillShadowPaths = emptyArray()
+            return
+        }
+
+        Trace.beginSection("WeatherWall.HillShadowBuild")
+        try {
+            val transform = cachedTransform
+            val padding = height * 0.45f + width * 0.1f
+            val startX = -padding
+            val endX = width + padding
+            val numSteps = ((endX - startX) / 6f).toInt().coerceIn(60, 400)
+            val stepX = (endX - startX) / numSteps
+
+            // Unit vector toward the light is (lightDirX, -lightElevation01); march it out to rayLen.
+            val rayLen = height * HILL_SHADOW_RAY_LENGTH
+            val rayDx = state.lightDirX * rayLen / transform.heightScale
+            val rayRise = state.lightElevation01 * rayLen
+            val softness = (height * 0.005f).coerceAtLeast(1f)
+            val maxDepth = height * HILL_SHADOW_MAX_DEPTH
+
+            val surfaceYs = FloatArray(numSteps + 1)
+            val depths = FloatArray(numSteps + 1)
+            val paths = arrayOfNulls<Path>(currentHills.size)
+
+            for (h in currentHills.indices) {
+                val hill = currentHills[h]
+                var anyShadow = false
+                for (i in 0..numSteps) {
+                    val screenX = startX + i * stepX
+                    val worldX = (screenX - transform.centerX) / transform.heightScale
+                    val y0 = getHillY(worldX, hill) * height
+                    surfaceYs[i] = y0
+                    var buried = 0f
+                    for (s in 1..HILL_SHADOW_RAY_SAMPLES) {
+                        val t = s.toFloat() / HILL_SHADOW_RAY_SAMPLES
+                        val sampleY = getHillY(worldX + rayDx * t, hill) * height
+                        // Ray height at this step minus terrain height: positive = inside the hill.
+                        val d = (y0 - rayRise * t) - sampleY
+                        if (d > buried) buried = d
+                    }
+                    val occlusion = (buried / softness).coerceIn(0f, 1f)
+                    depths[i] = maxDepth * occlusion
+                    if (occlusion > 0f) anyShadow = true
+                }
+
+                if (!anyShadow) {
+                    paths[h] = null
+                    continue
+                }
+
+                val band = Path()
+                band.moveTo(startX, surfaceYs[0])
+                for (i in 1..numSteps) band.lineTo(startX + i * stepX, surfaceYs[i])
+                for (i in numSteps downTo 0) {
+                    band.lineTo(startX + i * stepX, surfaceYs[i] + depths[i])
+                }
+                band.close()
+                paths[h] = band
+            }
+
+            hillShadowPaths = paths
         } finally {
             Trace.endSection()
         }
@@ -1447,6 +1569,19 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         // Clear shader after drawing
         hillPaint.shader = null
+
+        // Ridge self-shadow: soft band down every slope facing away from the light.
+        if (hillShadowAlpha > 0) {
+            val band = hillShadowPaths.getOrNull(hillIndex)
+            if (band != null) {
+                canvas.save()
+                canvas.clipPath(path)
+                hillShadowPaint.color = Color.BLACK
+                hillShadowPaint.alpha = hillShadowAlpha
+                canvas.drawPath(band, hillShadowPaint)
+                canvas.restore()
+            }
+        }
     }
     
     private fun drawSeasonalDecorations(canvas: Canvas, hillIndex: Int, hill: HillData, ambientColor: Int) {
@@ -1541,7 +1676,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                     GroundShadow.drawRaw(
                         canvas, mushroomShadowPaint, x, y, size * 1.3f, size * 0.6f,
                         decorShadowDirX, decorShadowLengthFactor,
-                        (decorShadowAlpha * mushroomAlpha).toInt()
+                        (decorShadowAlpha * mushroomAlpha).toInt(),
+                        0f, hillPaths.getOrNull(hillIndex)
                     )
                 }
                 

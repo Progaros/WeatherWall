@@ -147,6 +147,13 @@ class TreeRenderer {
     private var screenWidth = 0f
     private var height = 0f
 
+    /**
+     * Silhouette of the hill the trees currently being drawn stand on, in the active canvas
+     * space. Ground shadows are clipped to it so a shadow cast from a ridge cannot spill
+     * over the skyline. Set by [TerrainLayer] per hill layer; null means "no clip".
+     */
+    var groundClipPath: Path? = null
+
     /** Cached world-to-screen transform, rebuilt on dimension change. */
     private var cachedTransform = WorldViewportTransform(1f, 1f)
 
@@ -566,11 +573,10 @@ class TreeRenderer {
             val shadowGustLean = gustPush * RenderConstants.GUST_LEAN_FACTOR
             val tipSway = tipWave * shadowWindFactor * maxAmplitude * 0.5f + shadowGustLean * totalHeight * 0.5f
 
-            // Clip shadow to not extend beyond ground level
-            canvas.save()
-            canvas.clipRect(0f, 0f, screenWidth + screenWidth, groundY + 10f)
-            GroundShadow.draw(canvas, shadowPaint, state, x, groundY, totalHeight, baseTreeWidth, tipSway)
-            canvas.restore()
+            GroundShadow.draw(
+                canvas, shadowPaint, state, x, groundY, totalHeight, baseTreeWidth,
+                tipSway, groundClipPath
+            )
         }
 
         // Draw tree segments from bottom to top with wind-based rotation
@@ -744,7 +750,10 @@ class TreeRenderer {
         // Shadow (same shared model as needle trees)
         val shadowStrength = if (state.treeShadowsEnabled) state.getEffectiveShadowStrength() else 0f
         if (shadowStrength > 0.01f) {
-            GroundShadow.draw(canvas, shadowPaint, state, x, groundY, totalHeight, crownRadius * 2f)
+            GroundShadow.draw(
+                canvas, shadowPaint, state, x, groundY, totalHeight, crownRadius * 2f,
+                0f, groundClipPath
+            )
         }
 
         canvas.save()

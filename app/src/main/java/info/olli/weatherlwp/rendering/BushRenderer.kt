@@ -3,6 +3,7 @@ package info.olli.weatherlwp.rendering
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.util.ColorMath
 import info.olli.weatherlwp.simulation.SimulationSettings
@@ -84,6 +85,12 @@ class BushRenderer {
 
     private var screenWidth = 0f
     private var height = 0f
+
+    /**
+     * Silhouette of the hill the bushes currently being drawn stand on, in the active canvas
+     * space. Ground shadows are clipped to it so they cannot spill over the skyline.
+     */
+    var groundClipPath: Path? = null
 
     /** Cached world-to-screen transform, rebuilt on dimension change. */
     private var cachedTransform = WorldViewportTransform(1f, 1f)
@@ -352,7 +359,10 @@ class BushRenderer {
         // Bushes cast the same ground shadow as trees; without one they looked lit from
         // a different direction than everything standing next to them.
         if (state.treeShadowsEnabled) {
-            GroundShadow.draw(canvas, shadowPaint, state, x, groundY, bushHeight, bushWidth * 2f, sway)
+            GroundShadow.draw(
+                canvas, shadowPaint, state, x, groundY, bushHeight, bushWidth * 2f,
+                sway, groundClipPath
+            )
         }
 
         // Draw precalculated circles for organic bush shape
