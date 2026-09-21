@@ -115,6 +115,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
     // Accumulated animation time for sinusoidal drift and scale oscillation
     private var animationTime = 0f
 
+    // Exponentially smoothed frame delta used to pace cloud movement (0 = uninitialised)
+    private var smoothedDeltaSec = 0f
+
     // World-space cloud band values — ABSOLUTE, computed once from constants.
     // NOT recalculated on resize. Cloud Y is stable regardless of viewport.
     private var cachedBandTop = ABS_BAND_TOP
@@ -251,6 +254,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         const val MAX_SCREEN_WIDTH_FRACTION = 0.60f  // Max cloud width as fraction of screen width
         const val MAX_DRAW_PER_FRAME = 20            // Hard cap on draw calls per layer pass
         const val MAX_CLOUD_COUNT = 50               // Maximum cloud count from getCloudCount()
+        const val DELTA_SMOOTHING_ALPHA = 0.15f      // EMA factor for frame-delta pacing
     }
 
     /** When true, reduces bitmap sizes and group count for better preview performance. */
@@ -591,12 +595,15 @@ class CloudLayer(private val context: Context) : SceneLayer {
             else -> 1.0f
         }
         
-        // Combined wind factor - don't clamp, allow gusty strong winds to exceed 1.0
-        // This creates more dramatic cloud movement at high wind settings
-        val windFactor = (baseWind + gustAdd).coerceAtLeast(0f)  // Only prevent negative
+        // Combined wind factor, normalised to 0..1 before it is mapped onto the
+        // cloud speed band. `windMultiplier` defaults to 2.0 (pref 200%), so leaving
+        // this unclamped made clouds drift several times faster than
+        // WIND_CLOUD_SPEED_MAX and completely detached from the reported wind.
+        val windFactor = (baseWind + gustAdd).coerceIn(0f, 1f)
         val windSpeed = RenderConstants.WIND_CLOUD_SPEED_MIN + 
             windFactor * (RenderConstants.WIND_CLOUD_SPEED_MAX - RenderConstants.WIND_CLOUD_SPEED_MIN)
-        val effectiveSpeed = windSpeed * cloudSpeedMultiplier * stormBoost
+        val effectiveSpeed = (windSpeed * cloudSpeedMultiplier * stormBoost)
+            .coerceAtMost(RenderConstants.WIND_CLOUD_SPEED_MAX * cloudSpeedMultiplier)
         
         // Wind direction X component (-1 to 1, positive = rightward).
         // MINIMUM WIND GUARANTEE: even calm wind produces visible slow drift.
@@ -609,8 +616,17 @@ class CloudLayer(private val context: Context) : SceneLayer {
             rawDirX
         }
         
-        // Convert delta time to seconds, cap to prevent jumps
-        val deltaSec = (deltaTimeMs / 1000f).coerceAtMost(0.1f)
+        // Convert delta time to seconds, cap to prevent jumps.
+        // The raw frame delta jitters by several milliseconds even at a stable frame
+        // rate; that jitter is invisible on slow clouds but shows up as judder once
+        // the wind pushes them across the screen, so pace movement on a smoothed delta.
+        val rawDeltaSec = (deltaTimeMs / 1000f).coerceIn(0.001f, 0.1f)
+        val deltaSec = if (smoothedDeltaSec <= 0f) {
+            rawDeltaSec
+        } else {
+            smoothedDeltaSec + (rawDeltaSec - smoothedDeltaSec) * DELTA_SMOOTHING_ALPHA
+        }
+        smoothedDeltaSec = deltaSec
         
         // Accumulate animation time for per-cloud drift/oscillation in draw phase
         animationTime += deltaSec

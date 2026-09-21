@@ -40,11 +40,11 @@ class ParallaxCalculator {
         /** Ignore tiny tilt noise so return-to-center can engage on a still device. */
         private const val TILT_NOISE_DEADZONE = 0.06f
 
-        /** Enter stillness when per-frame delta magnitude is below this. */
-        private const val STILL_VELOCITY_ENTER = 0.012f
+        /** Enter stillness when tilt velocity (units/second) is below this. */
+        private const val STILL_VELOCITY_ENTER = 0.72f
 
-        /** Exit stillness when per-frame delta magnitude exceeds this (hysteresis). */
-        private const val STILL_VELOCITY_EXIT = 0.025f
+        /** Exit stillness when tilt velocity (units/second) exceeds this (hysteresis). */
+        private const val STILL_VELOCITY_EXIT = 1.5f
 
         /** Milliseconds of continuous stillness before recenter engages. */
         private const val STILL_HOLD_MS = 500L
@@ -58,8 +58,12 @@ class ParallaxCalculator {
         /** Snap position to zero when magnitude is below this (prevents oscillation). */
         private const val SNAP_EPSILON = 0.05f
 
-        /** Clamp per-frame delta to this maximum (prevents huge jumps, keeps movement). */
-        private const val MAX_DELTA_PER_FRAME = 0.10f
+        /**
+         * Maximum tilt velocity in units/second that is integrated into position.
+         * Rate-based rather than per-frame so a fast flick is not throttled harder at
+         * 30 fps than at 60 fps (6.0/s == the previous 0.10 per frame at 60 fps).
+         */
+        private const val MAX_DELTA_RATE = 6.0f
 
         /** Per-frame delta deadzone: deltas smaller than this are zeroed to suppress sensor noise. */
         private const val NOISE_EPSILON = 0.0015f
@@ -76,8 +80,21 @@ class ParallaxCalculator {
         /** Weights for weighted moving average: newest=0.75, mid=0.2, oldest=0.05. */
         private val SMOOTHING_WEIGHTS = floatArrayOf(0.75f, 0.2f, 0.05f)
 
-        /** Max accumulated delta magnitude per frame (prevents huge jumps from burst events). */
-        private const val MAX_ACCUMULATED_DELTA = 0.25f
+        /**
+         * Tilt velocity (units/second) at which smoothing relaxes to [MAX_RAW_WEIGHT].
+         * Averaging costs ~1 frame of latency, which is only worth paying for the slow,
+         * noisy movements it is meant to filter.
+         */
+        private const val SMOOTHING_BYPASS_RATE = 3.0f
+
+        /** Upper bound on the unsmoothed share, so single-frame sensor spikes stay damped. */
+        private const val MAX_RAW_WEIGHT = 0.8f
+
+        /**
+         * Maximum accumulated tilt velocity (units/second) consumed in one frame.
+         * Rate-based for the same reason as [MAX_DELTA_RATE] (15.0/s == 0.25 at 60 fps).
+         */
+        private const val MAX_ACCUMULATED_RATE = 15.0f
     }
 
     // Lock-free tilt input (sensor thread → render thread)
@@ -260,6 +277,7 @@ class ParallaxCalculator {
 
         // Use accumulated delta if sensor events arrived AND tilt is outside deadzone,
         // otherwise fallback to frame-based delta (works for tests and single-event-per-frame scenarios).
+        val maxAccumulated = MAX_ACCUMULATED_RATE * dt
         val rawDeltaX: Float
         val rawDeltaY: Float
         if (accum.count > 0 && (filteredTiltX != 0f || filteredTiltY != 0f)) {
@@ -273,9 +291,9 @@ class ParallaxCalculator {
                 prevTiltX = filteredTiltX
                 prevTiltY = filteredTiltY
                 return
-            } else if (accumMag > MAX_ACCUMULATED_DELTA) {
+            } else if (accumMag > maxAccumulated) {
                 // Clamp accumulated magnitude to prevent huge jumps from burst events
-                val clamp = MAX_ACCUMULATED_DELTA / accumMag
+                val clamp = maxAccumulated / accumMag
                 rawDeltaX = accum.dx * clamp
                 rawDeltaY = accum.dy * clamp
             } else {
@@ -307,28 +325,34 @@ class ParallaxCalculator {
         }
 
         // Clamp large deltas instead of discarding them (preserves movement direction)
-        if (motionMagnitude > MAX_DELTA_PER_FRAME) {
-            val clampScale = MAX_DELTA_PER_FRAME / motionMagnitude
+        val maxDelta = MAX_DELTA_RATE * dt
+        if (motionMagnitude > maxDelta) {
+            val clampScale = maxDelta / motionMagnitude
             deltaTiltX *= clampScale
             deltaTiltY *= clampScale
         }
 
-        // Moving-average smoothing: reduces high-frequency sensor noise
-        // while preserving intentional movement direction and magnitude.
+        // Tilt velocity in units/second — frame-rate independent, so the same physical
+        // motion behaves identically at 30, 60 and 120 fps.
+        val motionRate = motionMagnitude / dt
+
+        // Adaptive smoothing: the moving average costs ~1 frame of latency, so blend it
+        // out as motion gets faster. Slow movement stays filtered, flicks stay responsive.
         smoothDelta(deltaTiltX, deltaTiltY)
-        deltaTiltX = filteredDeltaX
-        deltaTiltY = filteredDeltaY
+        val rawWeight = (motionRate / SMOOTHING_BYPASS_RATE).coerceIn(0f, MAX_RAW_WEIGHT)
+        deltaTiltX = filteredDeltaX + (deltaTiltX - filteredDeltaX) * rawWeight
+        deltaTiltY = filteredDeltaY + (deltaTiltY - filteredDeltaY) * rawWeight
 
         // Stillness hysteresis
         if (isDeviceStill) {
-            if (motionMagnitude > STILL_VELOCITY_EXIT) {
+            if (motionRate > STILL_VELOCITY_EXIT) {
                 isDeviceStill = false
                 stillTimerMs = 0L
             } else {
                 stillTimerMs += deltaTimeMs
             }
         } else {
-            if (motionMagnitude < STILL_VELOCITY_ENTER) {
+            if (motionRate < STILL_VELOCITY_ENTER) {
                 isDeviceStill = true
                 stillTimerMs += deltaTimeMs
             } else {
@@ -420,6 +444,20 @@ class ParallaxCalculator {
     fun getOffset(): Pair<Float, Float> = Pair(positionX, positionY)
     fun getOffsetX(): Float = positionX
     fun getOffsetY(): Float = positionY
+
+    /**
+     * True when sensor motion has arrived that no frame has integrated yet.
+     *
+     * Idle mode otherwise only wakes up once the visible offset has already moved,
+     * which cannot happen until a frame renders — costing a full idle frame interval
+     * of latency at the start of every movement.
+     */
+    fun hasPendingSensorMotion(): Boolean {
+        val accum = accumulatedDelta.get()
+        if (accum.count == 0) return false
+        return kotlin.math.abs(accum.dx) > NOISE_EPSILON ||
+            kotlin.math.abs(accum.dy) > NOISE_EPSILON
+    }
 
     fun getOffsetForDepth(depthFactor: Float): Pair<Float, Float> {
         // Delegates to the allocation-free scalar accessors. This convenience Pair

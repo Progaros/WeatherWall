@@ -63,29 +63,15 @@ data class SimulationSettings(
     fun getEffectiveTimeMinutes(): Int = manualTimeMinutes
 
     /**
-     * Get effective weather, considering debug overrides.
+     * Get effective weather, considering the manual weather override.
+     *
+     * The `pref_weather_type` override applies whether or not simulation mode is on,
+     * so users can force rain/fog/snow without enabling debug settings.
      */
     fun getEffectiveWeather(realWeather: WeatherType): WeatherType {
         val override = debugWeatherOverride
-        if (debugEnabled && override != null) {
-            return when (override.lowercase()) {
-                "none", "clear" -> WeatherType.CLEAR
-                "rain" -> WeatherType.RAIN
-                "snow" -> WeatherType.SNOW
-                "lightning", "thunderstorm" -> WeatherType.THUNDERSTORM
-                "fog" -> WeatherType.FOG
-                "hail" -> WeatherType.HAIL
-                "cloudy" -> WeatherType.CLOUDY
-                "overcast" -> WeatherType.OVERCAST
-                "partly_cloudy" -> WeatherType.PARTLY_CLOUDY
-                else -> {
-                    try {
-                        WeatherType.valueOf(override.uppercase())
-                    } catch (_: IllegalArgumentException) {
-                        realWeather
-                    }
-                }
-            }
+        if (override != null) {
+            return parseWeatherOverride(override) ?: realWeather
         }
         return if (useRealWeather) realWeather else manualWeather
     }
@@ -113,6 +99,27 @@ data class SimulationSettings(
     }
 
     companion object {
+        /** Map a `pref_weather_type` value to a [WeatherType]; null when unrecognised. */
+        internal fun parseWeatherOverride(value: String?): WeatherType? {
+            if (value == null || value == "auto") return null
+            return when (value.lowercase()) {
+                "none", "clear" -> WeatherType.CLEAR
+                "rain" -> WeatherType.RAIN
+                "snow" -> WeatherType.SNOW
+                "lightning", "thunderstorm" -> WeatherType.THUNDERSTORM
+                "fog" -> WeatherType.FOG
+                "hail" -> WeatherType.HAIL
+                "cloudy" -> WeatherType.CLOUDY
+                "overcast" -> WeatherType.OVERCAST
+                "partly_cloudy" -> WeatherType.PARTLY_CLOUDY
+                else -> try {
+                    WeatherType.valueOf(value.uppercase())
+                } catch (_: IllegalArgumentException) {
+                    null
+                }
+            }
+        }
+
         /** Coerce a snapshot value to Boolean. Shared by instance and factory methods. */
         internal fun coerceBoolean(value: Any?, default: Boolean): Boolean =
             when (value) {
@@ -162,8 +169,10 @@ data class SimulationSettings(
             val useRealTime = if (debugEnabled) false else snapBoolean("pref_daynight_enabled", true)
             val manualTimeMinutes = snapInt("pref_manual_time", 720)
 
-            val useRealWeather = true
-            val manualWeather = WeatherType.CLEAR
+            val useRealWeather = snapBoolean("pref_use_breezy_weather", true)
+            val manualWeather = parseWeatherOverride(
+                snapString("pref_weather_type", "auto")
+            ) ?: WeatherType.CLEAR
 
             val windStrength: Float
             val useWeatherWind: Boolean
@@ -205,11 +214,8 @@ data class SimulationSettings(
                 simulatedRiverLevel = 0f
             }
 
-            val debugWeatherOverride = if (debugEnabled) {
+            val debugWeatherOverride =
                 snapString("pref_weather_type", "auto").takeUnless { it == "auto" }
-            } else {
-                null
-            }
 
             if (debugEnabled) {
                 val debugCloudStr = snapString("pref_debug_cloud_override", "auto")

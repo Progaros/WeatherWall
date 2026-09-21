@@ -35,6 +35,16 @@ class WeatherLayer : SceneLayer {
         private const val SNOW_DEPTH_SMALL = 0
         private const val SNOW_DEPTH_MEDIUM = 1
         private const val SNOW_DEPTH_LARGE = 2
+
+        /**
+         * Precipitation floor. Weather providers frequently report 0% precipitation
+         * probability while it is actually raining, which would otherwise leave the
+         * effect almost invisible.
+         */
+        private const val MIN_PRECIP_INTENSITY = 0.35f
+
+        /** Fog floor so a FOG condition is always clearly visible. */
+        private const val MIN_FOG_INTENSITY = 0.4f
     }
 
     /**
@@ -245,6 +255,16 @@ class WeatherLayer : SceneLayer {
      */
     fun setIntensity(value: Float) {
         intensity = value.coerceIn(0f, 1f)
+    }
+
+    /**
+     * Fog density from atmospheric data: low visibility and high humidity mean thick fog.
+     * Precipitation probability is meaningless for fog, so it is not used here.
+     */
+    private fun fogIntensityFrom(state: SimulationState): Float {
+        val lowVisibility = 1f - state.visibility.coerceIn(0f, 1f)
+        val damp = state.humidity.coerceIn(0f, 1f)
+        return (lowVisibility * 0.7f + damp * 0.3f).coerceIn(MIN_FOG_INTENSITY, 1f)
     }
 
     fun render(canvas: Canvas, state: SimulationState) {
@@ -656,6 +676,14 @@ class WeatherLayer : SceneLayer {
         setEffect(effect)
         
         if (currentEffect == EffectType.NONE || screenWidth <= 0) return
+
+        // Drive density/opacity from the simulation instead of a fixed default.
+        // Fog is not precipitation, so it is derived from visibility/humidity instead.
+        intensity = when (currentEffect) {
+            EffectType.FOG -> fogIntensityFrom(state)
+            EffectType.NONE -> 0f
+            else -> state.precipIntensity.coerceIn(MIN_PRECIP_INTENSITY, 1f)
+        }
 
         if (!initialized) {
             initParticles()

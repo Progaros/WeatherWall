@@ -86,28 +86,40 @@ class SimulationSettingsTest {
         val result = mapWeatherOverride("unknown_value", WeatherType.RAIN)
         assertEquals(WeatherType.RAIN, result)
     }
-    
-    /**
-     * Helper function that mirrors the logic in SimulationSettings.getEffectiveWeather()
-     */
-    private fun mapWeatherOverride(override: String, fallback: WeatherType): WeatherType {
-        return when (override.lowercase()) {
-            "none", "clear" -> WeatherType.CLEAR
-            "rain" -> WeatherType.RAIN
-            "snow" -> WeatherType.SNOW
-            "lightning", "thunderstorm" -> WeatherType.THUNDERSTORM
-            "fog" -> WeatherType.FOG
-            "hail" -> WeatherType.HAIL
-            "cloudy" -> WeatherType.CLOUDY
-            "overcast" -> WeatherType.OVERCAST
-            "partly_cloudy" -> WeatherType.PARTLY_CLOUDY
-            else -> {
-                try {
-                    WeatherType.valueOf(override.uppercase())
-                } catch (e: Exception) {
-                    fallback
-                }
-            }
-        }
+
+    // ============== Effective weather resolution ==============
+
+    @Test
+    fun `manual weather override applies without simulation mode`() {
+        val settings = SimulationSettings.fromSnapshot(
+            mapOf(
+                "pref_debug_enabled" to false,
+                "pref_weather_type" to "fog"
+            )
+        )
+        assertEquals(WeatherType.FOG, settings.getEffectiveWeather(WeatherType.CLEAR))
     }
+
+    @Test
+    fun `auto weather type keeps real weather`() {
+        val settings = SimulationSettings.fromSnapshot(
+            mapOf("pref_weather_type" to "auto")
+        )
+        assertEquals(WeatherType.RAIN, settings.getEffectiveWeather(WeatherType.RAIN))
+    }
+
+    @Test
+    fun `disabling breezy weather falls back to manual weather`() {
+        val settings = SimulationSettings.fromSnapshot(
+            mapOf(
+                "pref_use_breezy_weather" to false,
+                "pref_weather_type" to "auto"
+            )
+        )
+        assertEquals(WeatherType.CLEAR, settings.getEffectiveWeather(WeatherType.RAIN))
+    }
+
+    /** Delegates to the production mapping so the test cannot drift from it. */
+    private fun mapWeatherOverride(override: String, fallback: WeatherType): WeatherType =
+        SimulationSettings.parseWeatherOverride(override) ?: fallback
 }

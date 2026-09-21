@@ -233,6 +233,9 @@ class ParallaxScene(
      * Used for idle mode battery optimization.
      */
     fun isParallaxActive(): Boolean {
+        // Unconsumed sensor motion counts as active so idle mode wakes up on the very
+        // first frame of a movement instead of after the offset has already drifted.
+        if (parallaxCalculator.hasPendingSensorMotion()) return true
         val (x, y) = parallaxCalculator.getOffset()
         // Consider active if offset is non-zero and changing
         val magnitude = kotlin.math.sqrt(x * x + y * y)
