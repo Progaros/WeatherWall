@@ -1004,6 +1004,9 @@ class ParallaxCalculatorTest {
     fun `longer delta time produces faster convergence`() {
         // With direct delta integration, the tilt delta is the same regardless of dt.
         // Both should produce the same offset for the same tilt change.
+        // Tilt stays below the rate-based delta clamp (MAX_DELTA_RATE * dt) at 60fps,
+        // which is where dt-independence is expected to hold.
+        val tiltStep = 0.08f
         val calcNormal = ParallaxCalculator()
         calcNormal.strength = 1.0f
         calcNormal.maxOffsetPercent = 10f
@@ -1013,7 +1016,7 @@ class ParallaxCalculatorTest {
 
         calcNormal.updateFromSensor(0f, 0f)
         calcNormal.update(16) // baseline
-        calcNormal.updateFromSensor(0.2f, 0f)
+        calcNormal.updateFromSensor(tiltStep, 0f)
         calcNormal.update(16) // 60fps frame
         val x16ms = calcNormal.getOffsetX()
 
@@ -1026,7 +1029,7 @@ class ParallaxCalculatorTest {
 
         calcSlow.updateFromSensor(0f, 0f)
         calcSlow.update(16) // baseline
-        calcSlow.updateFromSensor(0.2f, 0f)
+        calcSlow.updateFromSensor(tiltStep, 0f)
         calcSlow.update(32) // 30fps frame
         val x32ms = calcSlow.getOffsetX()
 
