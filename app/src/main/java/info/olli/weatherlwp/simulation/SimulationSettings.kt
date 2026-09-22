@@ -16,7 +16,8 @@ data class SimulationSettings(
 
     // Weather settings
     val useRealWeather: Boolean = true,
-    val manualWeather: WeatherType = WeatherType.CLEAR,
+    // Manual condition override parsed from `pref_weather_type` (null = follow real weather).
+    val weatherOverride: WeatherType? = null,
 
     // Wind settings
     val windStrength: Float = 0.5f,
@@ -51,7 +52,6 @@ data class SimulationSettings(
 
     // Debug
     val debugEnabled: Boolean = false,
-    val debugWeatherOverride: String? = null,
 
     // Raw immutable preference snapshot for rendering-layer settings
     internal val snapshot: Map<String, Any?> = emptyMap()
@@ -63,17 +63,15 @@ data class SimulationSettings(
     fun getEffectiveTimeMinutes(): Int = manualTimeMinutes
 
     /**
-     * Get effective weather, considering the manual weather override.
+     * Get effective weather, resolving the manual condition override.
      *
-     * The `pref_weather_type` override applies whether or not simulation mode is on,
-     * so users can force rain/fog/snow without enabling debug settings.
+     * A single [weatherOverride] (parsed from `pref_weather_type`) applies whether or not
+     * simulation mode is on, so users can force rain/fog/snow without enabling debug
+     * settings. When real weather is disabled and no override is set, clear skies are used.
      */
     fun getEffectiveWeather(realWeather: WeatherType): WeatherType {
-        val override = debugWeatherOverride
-        if (override != null) {
-            return parseWeatherOverride(override) ?: realWeather
-        }
-        return if (useRealWeather) realWeather else manualWeather
+        weatherOverride?.let { return it }
+        return if (useRealWeather) realWeather else WeatherType.CLEAR
     }
 
     fun getBoolean(key: String, default: Boolean): Boolean =
@@ -170,9 +168,8 @@ data class SimulationSettings(
             val manualTimeMinutes = snapInt("pref_manual_time", 720)
 
             val useRealWeather = snapBoolean("pref_use_breezy_weather", true)
-            val manualWeather = parseWeatherOverride(
-                snapString("pref_weather_type", "auto")
-            ) ?: WeatherType.CLEAR
+            // Single source of truth for the manual condition override (auto = null).
+            val weatherOverride = parseWeatherOverride(snapString("pref_weather_type", "auto"))
 
             val windStrength: Float
             val useWeatherWind: Boolean
@@ -214,9 +211,6 @@ data class SimulationSettings(
                 simulatedRiverLevel = 0f
             }
 
-            val debugWeatherOverride =
-                snapString("pref_weather_type", "auto").takeUnless { it == "auto" }
-
             if (debugEnabled) {
                 val debugCloudStr = snapString("pref_debug_cloud_override", "auto")
                 if (debugCloudStr != "auto") {
@@ -235,7 +229,7 @@ data class SimulationSettings(
                 useRealTime = useRealTime,
                 manualTimeMinutes = manualTimeMinutes,
                 useRealWeather = useRealWeather,
-                manualWeather = manualWeather,
+                weatherOverride = weatherOverride,
                 windStrength = windStrength,
                 useWeatherWind = useWeatherWind,
                 windMultiplier = windMultiplier,
@@ -254,7 +248,6 @@ data class SimulationSettings(
                 simulatedSnowLevel = simulatedSnowLevel,
                 simulatedRiverLevel = simulatedRiverLevel,
                 debugEnabled = debugEnabled,
-                debugWeatherOverride = debugWeatherOverride,
                 snapshot = snapshot
             )
         }

@@ -36,7 +36,7 @@ data class SimulationState(
     val precipProbability: Float = 0f,  // 0-1 (from 0-100%)
     val precipIntensity: Float = 0f,    // 0-1 effective precipitation intensity
     val cloudCover: Float = 0f,         // 0-1 (from 0-100%)
-    val humidity: Float = 0f,           // 0-1 (from 0-100%)
+    val humidity: Float = 0.5f,       // 0-1 (from 0-100%); neutral so fog never collapses to zero
     val visibility: Float = 1f,         // 0-1 normalized (0=poor, 1=excellent)
     val pressure: Int = 1013,           // hPa
     val moonPhase: Float = 0.5f,        // 0-1 (0=new, 0.5=full, 1=new again) - default full

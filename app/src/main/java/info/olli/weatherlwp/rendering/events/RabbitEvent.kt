@@ -3,6 +3,7 @@ package info.olli.weatherlwp.rendering.events
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.RenderConstants
 import kotlin.math.sin
@@ -25,6 +26,7 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
     private val startX = traversal.startX
     private val direction = traversal.direction
     private val size = 0.5f + random.nextFloat() * 0.2f
+    private val path = Path()
     // Random vertical offset from hill surface (-2% to +1% of screen height)
     private val groundOffset = -0.02f + random.nextFloat() * 0.03f
     
@@ -100,9 +102,41 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
         val airborne = sin(hopPhase).coerceAtLeast(0f)
         val legTuck = airborne * 0.45f * s
 
-        // Back legs (behind body)
-        canvas.drawRoundRect(-1.6f*s, 0.2f*s, -1.2f*s, 1.0f*s - hopLeg - legTuck, 0.15f*s, 0.15f*s, paint)
-        canvas.drawRoundRect(-2.0f*s, 0.2f*s, -1.6f*s, 1.0f*s + hopLeg - legTuck, 0.15f*s, 0.15f*s, paint)
+        // Jointed legs (hip -> knee -> hoof) so the hop reads as gathered legs rather than
+        // blocky stumps. The legs extend on landing and tuck under the body at the apex;
+        // hopLeg staggers the pair so they don't move in lockstep. Captured fur is reused so
+        // the body/head colours drawn between the leg calls are never disturbed.
+        val fur = paint.color
+        val hipY = -0.1f * s
+        val kneeBaseY = 0.45f * s
+        val legW = 0.24f * s
+        val hoofSize = 0.14f * s
+
+        fun drawLeg(hipX: Float, gather: Float) {
+            val g = gather.coerceAtLeast(0f)
+            val stride = -g * 0.55f            // the hoof drags back as it gathers
+            val hoofX = hipX + stride
+            val hoofY = 1.0f * s - g
+            val kneeX = hipX + stride * 0.45f
+            val kneeY = kneeBaseY - g * 0.3f
+            strokePaint.color = fur
+            strokePaint.strokeWidth = legW
+            strokePaint.style = Paint.Style.STROKE
+            strokePaint.strokeCap = Paint.Cap.ROUND
+            strokePaint.strokeJoin = Paint.Join.ROUND
+            path.reset()
+            path.moveTo(hipX, hipY)
+            path.lineTo(kneeX, kneeY)
+            path.lineTo(hoofX, hoofY)
+            canvas.drawPath(path, strokePaint)
+            paint.color = fur
+            canvas.drawOval(hoofX - hoofSize, hoofY - hoofSize, hoofX + hoofSize, hoofY + hoofSize * 0.6f, paint)
+        }
+
+        // Back legs (behind body): the far leg tucks a touch more than the near one.
+        drawLeg(-2.0f * s, legTuck + hopLeg)
+        drawLeg(-1.6f * s, legTuck - hopLeg)
+        paint.color = fur
         
         // Body + haunch
         canvas.drawOval(-1.8f*s, -0.9f*s, 1.6f*s, 0.8f*s, paint)
@@ -136,10 +170,13 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
         paint.color = Color.rgb(180, 120, 120)
         canvas.drawCircle(2.35f*s, -0.5f*s, 0.08f*s, paint)
 
-        // Front legs (in front of torso)
-        paint.color = RenderConstants.blendWithAmbient(Color.rgb(140, 120, 100), ambientColor, 0.35f)
-        canvas.drawRoundRect(0.6f*s, 0.3f*s, 0.95f*s, 1.1f*s + hopLeg - legTuck, 0.15f*s, 0.15f*s, paint)
-        canvas.drawRoundRect(0.2f*s, 0.3f*s, 0.55f*s, 1.1f*s - hopLeg - legTuck, 0.15f*s, 0.15f*s, paint)
+        // Front legs (in front of torso); the far one tucks a touch more than the near one.
+        drawLeg(0.6f * s, legTuck + hopLeg)
+        drawLeg(0.2f * s, legTuck - hopLeg)
+        paint.color = fur
+
+        // Restore shared stroke join to the default for subsequent events.
+        strokePaint.strokeJoin = Paint.Join.MITER
         
         // Whiskers
         strokePaint.color = Color.argb(100, 80, 70, 60)

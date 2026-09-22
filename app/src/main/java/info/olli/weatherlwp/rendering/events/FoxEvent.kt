@@ -102,12 +102,45 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         path.close()
         canvas.drawPath(path, paint)
 
-        // Back legs (behind torso). Tops reach into the torso because the body oval curves
-        // away towards its ends, which would otherwise leave the outer leg in the air.
-        val step = sin(walkPhase) * 0.25f * s
-        val swing = sin(walkPhase) * 0.35f * s
-        canvas.drawRoundRect(-1.8f*s + swing, -0.3f*s, -1.4f*s + swing, 1.0f*s + step, 0.2f*s, 0.2f*s, paint)
-        canvas.drawRoundRect(-0.8f*s - swing, 0.1f*s, -0.4f*s - swing, 1.0f*s - step, 0.2f*s, 0.2f*s, paint)
+        // Jointed legs (hip -> knee -> hoof) so the gait reads as a walk instead of blocky
+        // stumps bobbing. Mirrors the deer renderer: the stride swings the hoof forward and
+        // the lift only happens on the forward half of the step, so the hoof stays planted on
+        // the recovery swing. A darker far pair is drawn behind the body for depth separation.
+        val swingA = sin(walkPhase)
+        val swingB = -swingA  // sin(walkPhase + PI)
+
+        val legNearColor = RenderConstants.blendWithAmbient(Color.rgb(200, 90, 30), ambientColor, 0.3f)
+        val legFarColor = RenderConstants.blendWithAmbient(Color.rgb(160, 70, 24), ambientColor, 0.3f)
+        val legW = 0.28f * s
+        val hoofSize = 0.16f * s
+        val hipY = -0.15f * s
+        val kneeY = 0.45f * s
+        val strideAmp = 0.42f * s
+        val liftAmp = 0.34f * s
+
+        fun drawLeg(hipX: Float, swing: Float, legColor: Int) {
+            val stride = swing * strideAmp
+            val lift = maxOf(0f, swing) * liftAmp
+            val hoofX = hipX + stride
+            val hoofY = 1.0f * s - lift
+            val kneeX = hipX + stride * 0.4f
+            strokePaint.color = legColor
+            strokePaint.strokeWidth = legW
+            strokePaint.style = Paint.Style.STROKE
+            strokePaint.strokeCap = Paint.Cap.ROUND
+            strokePaint.strokeJoin = Paint.Join.ROUND
+            path.reset()
+            path.moveTo(hipX, hipY)
+            path.lineTo(kneeX, kneeY)
+            path.lineTo(hoofX, hoofY)
+            canvas.drawPath(path, strokePaint)
+            paint.color = legColor
+            canvas.drawOval(hoofX - hoofSize, hoofY - hoofSize, hoofX + hoofSize, hoofY + hoofSize * 0.6f, paint)
+        }
+
+        // Back legs (behind torso): far leg first, then near. Tops reach into the torso.
+        drawLeg(-0.6f * s, swingB, legFarColor)
+        drawLeg(-1.6f * s, swingA, legNearColor)
         
         // Body
         canvas.drawOval(-2.4f*s, -1.2f*s, 2.0f*s, 0.2f*s, paint)
@@ -125,10 +158,12 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         paint.color = Color.rgb(240, 200, 180)
         canvas.drawOval(2.7f*s, -1.4f*s, 3.7f*s, -0.9f*s, paint)
         
-        // Front legs (in front of torso); same reason for the raised outer leg.
-        paint.color = RenderConstants.blendWithAmbient(Color.rgb(200, 90, 30), ambientColor, 0.3f)
-        canvas.drawRoundRect(0.6f*s - swing, 0.1f*s, 1.0f*s - swing, 1.0f*s + step, 0.2f*s, 0.2f*s, paint)
-        canvas.drawRoundRect(1.4f*s + swing, -0.35f*s, 1.8f*s + swing, 1.0f*s - step, 0.2f*s, 0.2f*s, paint)
+        // Front legs (in front of torso): far leg first, then near.
+        drawLeg(0.8f * s, swingB, legFarColor)
+        drawLeg(1.6f * s, swingA, legNearColor)
+
+        // Restore shared stroke join to the default for subsequent events.
+        strokePaint.strokeJoin = Paint.Join.MITER
         
         // Tail tip (white), seated inside the brush end
         paint.color = Color.rgb(250, 250, 250)
