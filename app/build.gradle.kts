@@ -11,8 +11,8 @@ android {
         applicationId = "info.olli.weatherlwp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 274
-        versionName = "1.32.3"
+        versionCode = 275
+        versionName = "1.32.4"
     }
 
     buildFeatures {
@@ -54,6 +54,11 @@ android {
 }
 
 tasks.withType<Test>().configureEach {
+    // The suite is dominated by Robolectric classes that each boot their own Android
+    // runtime, so wall time scales with fork count rather than with a single JVM.
+    maxParallelForks = (Runtime.getRuntime().availableProcessors() / 2).coerceIn(1, 6)
+    maxHeapSize = "1536m"
+
     // Robolectric downloads its android-all artifacts from the forked test JVM,
     // which does not inherit the Gradle JVM's proxy configuration.
     listOf(

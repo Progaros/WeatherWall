@@ -103,13 +103,12 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         canvas.drawPath(path, paint)
 
         // Jointed legs (hip -> knee -> hoof) so the gait reads as a walk instead of blocky
-        // stumps bobbing. Mirrors the deer renderer: the stride swings the hoof forward and
-        // the lift only happens on the forward half of the step, so the hoof stays planted on
-        // the recovery swing. A darker far pair is drawn behind the body for depth separation.
+        // stumps bobbing. Mirrors the deer renderer: the lift only happens on the forward
+        // half of the step, so the hoof stays planted through the recovery swing.
         val swingA = sin(walkPhase)
         val swingB = -swingA  // sin(walkPhase + PI)
 
-        val legNearColor = RenderConstants.blendWithAmbient(Color.rgb(200, 90, 30), ambientColor, 0.3f)
+        val furColor = paint.color
         val legFarColor = RenderConstants.blendWithAmbient(Color.rgb(160, 70, 24), ambientColor, 0.3f)
         val legW = 0.28f * s
         val hoofSize = 0.16f * s
@@ -138,11 +137,23 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
             canvas.drawOval(hoofX - hoofSize, hoofY - hoofSize, hoofX + hoofSize, hoofY + hoofSize * 0.6f, paint)
         }
 
-        // Back legs (behind torso): far leg first, then near. Tops reach into the torso.
-        drawLeg(-0.6f * s, swingB, legFarColor)
-        drawLeg(-1.6f * s, swingA, legNearColor)
-        
+        // Leg anchors: the pairs sit under the shoulder and haunch with a clear gap between
+        // them, otherwise four evenly spaced legs read as a centipede rather than a fox.
+        // Hips stay inside the torso oval, which curves away towards its ends.
+        val backFarX = -1.9f * s
+        val backNearX = -1.25f * s
+        val frontFarX = 1.0f * s
+        val frontNearX = 1.65f * s
+
+        // Far-side legs go behind the torso and near-side legs in front, so the darker far
+        // pair never paints a stripe across the belly. Diagonal pairs share a phase
+        // (far-hind with near-fore), otherwise the same-side legs swing together and the
+        // walk reads as a camel pace.
+        drawLeg(backFarX, swingA, legFarColor)
+        drawLeg(frontFarX, swingB, legFarColor)
+
         // Body
+        paint.color = furColor
         canvas.drawOval(-2.4f*s, -1.2f*s, 2.0f*s, 0.2f*s, paint)
 
         // Shoulder bridge keeps head connected to torso silhouette.
@@ -153,24 +164,21 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         canvas.drawOval(-1.8f*s, -0.5f*s, 1.5f*s, 0.15f*s, paint)
         
         // Head + snout
-        paint.color = RenderConstants.blendWithAmbient(Color.rgb(200, 90, 30), ambientColor, 0.3f)
+        paint.color = furColor
         canvas.drawOval(1.7f*s, -1.8f*s, 3.2f*s, -0.6f*s, paint)
         paint.color = Color.rgb(240, 200, 180)
         canvas.drawOval(2.7f*s, -1.4f*s, 3.7f*s, -0.9f*s, paint)
         
-        // Front legs (in front of torso): far leg first, then near.
-        drawLeg(0.8f * s, swingB, legFarColor)
-        drawLeg(1.6f * s, swingA, legNearColor)
+        // Near-side legs, drawn over the torso they share a colour with.
+        drawLeg(backNearX, swingB, furColor)
+        drawLeg(frontNearX, swingA, furColor)
 
-        // Restore shared stroke join to the default for subsequent events.
-        strokePaint.strokeJoin = Paint.Join.MITER
-        
         // Tail tip (white), seated inside the brush end
         paint.color = Color.rgb(250, 250, 250)
         canvas.drawCircle(-3.6f*s, -0.05f*s, 0.25f*s, paint)
         
         // Ears
-        paint.color = RenderConstants.blendWithAmbient(Color.rgb(200, 90, 30), ambientColor, 0.3f)
+        paint.color = furColor
         path.reset()
         path.moveTo(2.2f*s, -1.6f*s)
         path.lineTo(2.0f*s, -2.4f*s)

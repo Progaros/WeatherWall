@@ -386,9 +386,6 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         drawLeg(frontFarX, swingB, frontKneeBend, legFarColor, frontFarPlant)
         drawLeg(frontNearX, swingA, frontKneeBend, bodyColor, frontNearPlant)
 
-        // Restore shared stroke join to the default for subsequent events.
-        strokePaint.strokeJoin = Paint.Join.MITER
-
         canvas.restore()
         canvas.restore()
     }

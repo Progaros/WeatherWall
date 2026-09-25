@@ -19,6 +19,25 @@ services:
       - ww-m2:/home/builder/.m2
     command: ["./gradlew", "--no-daemon", "testDebugUnitTest", "assembleDebug"]
 
+  # Long-lived container for iterating on tests. The Gradle daemon survives between
+  # commands here, so repeat runs skip JVM startup and configuration:
+  #   docker compose up -d dev
+  #   docker compose exec dev ./gradlew testDebugUnitTest
+  #   docker compose exec dev ./gradlew testDebugUnitTest --tests '*EventRenderTest'
+  dev:
+    image: weatherwall-build
+    container_name: weatherwall-dev
+    working_dir: /workspace
+    environment:
+      http_proxy: ${CORP_PROXY:-}
+      https_proxy: ${CORP_PROXY:-}
+      GRADLE_OPTS: ${GRADLE_PROXY_OPTS:-}
+    volumes:
+      - ./:/workspace
+      - ww-gradle:/home/builder/.gradle
+      - ww-m2:/home/builder/.m2
+    command: ["sleep", "infinity"]
+
   # Android emulator with noVNC at http://localhost:6080
   #
   # Docker Desktop cannot expose /dev/kvm, so this runs SwiftShader software

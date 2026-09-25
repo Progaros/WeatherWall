@@ -100,26 +100,28 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
         val hopLeg = sin(hopPhase) * 0.2f * s
         // 0 while grounded, 1 at the apex: legs pull up and the ears lean back in flight.
         val airborne = sin(hopPhase).coerceAtLeast(0f)
-        val legTuck = airborne * 0.45f * s
+        // Capped so the tucked hoof never rises above the body silhouette and vanishes.
+        val legTuck = airborne * 0.2f * s
 
         // Jointed legs (hip -> knee -> hoof) so the hop reads as gathered legs rather than
-        // blocky stumps. The legs extend on landing and tuck under the body at the apex;
-        // hopLeg staggers the pair so they don't move in lockstep. Captured fur is reused so
-        // the body/head colours drawn between the leg calls are never disturbed.
+        // blocky stumps. Fur is captured up front because drawLeg mutates the shared paint
+        // and the body/head colours are drawn between the leg calls.
         val fur = paint.color
+        val legFarColor = RenderConstants.blendWithAmbient(Color.rgb(110, 94, 78), ambientColor, 0.35f)
         val hipY = -0.1f * s
         val kneeBaseY = 0.45f * s
         val legW = 0.24f * s
         val hoofSize = 0.14f * s
 
-        fun drawLeg(hipX: Float, gather: Float) {
-            val g = gather.coerceAtLeast(0f)
-            val stride = -g * 0.55f            // the hoof drags back as it gathers
+        // kneeBend shapes the joint independently of the stride: the hind hock folds back
+        // and the fore knee eases forward, so the legs are not straight stumps at rest.
+        fun drawLeg(hipX: Float, gather: Float, kneeBend: Float, legColor: Int) {
+            val stride = -gather * 0.55f       // the hoof drags back as it gathers
             val hoofX = hipX + stride
-            val hoofY = 1.0f * s - g
-            val kneeX = hipX + stride * 0.45f
-            val kneeY = kneeBaseY - g * 0.3f
-            strokePaint.color = fur
+            val hoofY = 1.2f * s - gather
+            val kneeX = hipX + stride * 0.45f + kneeBend
+            val kneeY = kneeBaseY - gather * 0.3f
+            strokePaint.color = legColor
             strokePaint.strokeWidth = legW
             strokePaint.style = Paint.Style.STROKE
             strokePaint.strokeCap = Paint.Cap.ROUND
@@ -129,16 +131,26 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
             path.lineTo(kneeX, kneeY)
             path.lineTo(hoofX, hoofY)
             canvas.drawPath(path, strokePaint)
-            paint.color = fur
+            paint.color = legColor
             canvas.drawOval(hoofX - hoofSize, hoofY - hoofSize, hoofX + hoofSize, hoofY + hoofSize * 0.6f, paint)
         }
 
-        // Back legs (behind body): the far leg tucks a touch more than the near one.
-        drawLeg(-2.0f * s, legTuck + hopLeg)
-        drawLeg(-1.6f * s, legTuck - hopLeg)
-        paint.color = fur
-        
+        // Leg anchors: rabbits bound, so each pair moves together; the near/far offset is
+        // wide enough that all four legs stay readable instead of overlapping into two.
+        val backFarX = -2.05f * s
+        val backNearX = -1.45f * s
+        val frontFarX = 0.15f * s
+        val frontNearX = 0.8f * s
+        val backKneeBend = -0.3f * s
+        val frontKneeBend = 0.1f * s
+
+        // Far-side legs go behind the body and near-side legs in front, so the darker far
+        // pair never paints a stripe across the belly.
+        drawLeg(backFarX, legTuck + hopLeg, backKneeBend, legFarColor)
+        drawLeg(frontFarX, legTuck + hopLeg, frontKneeBend, legFarColor)
+
         // Body + haunch
+        paint.color = fur
         canvas.drawOval(-1.8f*s, -0.9f*s, 1.6f*s, 0.8f*s, paint)
         canvas.drawOval(-2.3f*s, -0.6f*s, -1.0f*s, 0.6f*s, paint)
 
@@ -170,14 +182,10 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
         paint.color = Color.rgb(180, 120, 120)
         canvas.drawCircle(2.35f*s, -0.5f*s, 0.08f*s, paint)
 
-        // Front legs (in front of torso); the far one tucks a touch more than the near one.
-        drawLeg(0.6f * s, legTuck + hopLeg)
-        drawLeg(0.2f * s, legTuck - hopLeg)
-        paint.color = fur
+        // Near-side legs, drawn over the body they share a colour with.
+        drawLeg(backNearX, legTuck - hopLeg, backKneeBend, fur)
+        drawLeg(frontNearX, legTuck - hopLeg, frontKneeBend, fur)
 
-        // Restore shared stroke join to the default for subsequent events.
-        strokePaint.strokeJoin = Paint.Join.MITER
-        
         // Whiskers
         strokePaint.color = Color.argb(100, 80, 70, 60)
         strokePaint.strokeWidth = 0.04f * s
