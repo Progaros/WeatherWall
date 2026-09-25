@@ -102,8 +102,8 @@ class DragonflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
         val screenX = x * width - extendedOffset
         val screenY = EventTraversal.mapFieldY(y, height, extendedOffsetY)
         
-        // Very fast wing beat
-        val wingBeat = sin(timeSeconds * 40f + wingPhase)
+        // 40 rad/s on the wrapped 24h float clock steps by ~18 degrees. Elapsed time does not.
+        val wingBeat = sin(t * 40f + wingPhase)
         
         paint.color = RenderConstants.blendWithAmbient(bodyColor, ambientColor, 0.2f)
         

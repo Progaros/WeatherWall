@@ -102,8 +102,9 @@ class BatEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
             
             // Rapid wing beats - bats flap very fast. Two detuned sines keep the beat
             // from looking like a mechanical loop.
-            val wingBeat = sin(timeSeconds * 25f + bat.wingPhase) * 0.85f +
-                sin(timeSeconds * 11f + bat.wingPhase * 1.7f) * 0.15f
+            // Elapsed seconds stay precise; the wrapped 24h clock jitters a 25 Hz beat.
+            val wingBeat = sin(elapsedSec * 25f + bat.wingPhase) * 0.85f +
+                sin(elapsedSec * 11f + bat.wingPhase * 1.7f) * 0.15f
             val wingAngle = wingBeat * 0.6f  // Wing rotation in radians
             
             // Draw bat silhouette - membrane wings

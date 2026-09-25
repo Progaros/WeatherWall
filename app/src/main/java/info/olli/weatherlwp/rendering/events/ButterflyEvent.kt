@@ -94,8 +94,10 @@ class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
         val currentX = x * width - extendedOffset
         val currentY = EventTraversal.mapFieldY(y, height, extendedOffsetY)
         
-        val flutter = sin(timeSeconds * 16f + flutterPhase) * 
-            (0.8f + sin(timeSeconds * 3f) * 0.2f)
+        // Elapsed seconds, not the 24h animation clock: a 16 Hz flap needs
+        // sub-frame precision that float32 loses near 86400.
+        val flutter = sin(t * 16f + flutterPhase) *
+            (0.8f + sin(t * 3f) * 0.2f)
         
         paint.color = RenderConstants.blendWithAmbient(color, ambientColor, 0.25f)
         paint.style = Paint.Style.FILL
@@ -116,17 +118,17 @@ class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
             canvas.drawPath(path, paint)
         }
 
-        val wingScale = flutter
+        // Both wings open and close together. Opposite scales made one wing
+        // collapse while the other spread, which is not how a butterfly flaps.
+        val open = (0.22f + (1f + flutter) * 0.39f).coerceIn(0.18f, 1f)
         
         canvas.save()
-        val leftScale = (0.2f + (1f + wingScale) * 0.4f).coerceIn(0.15f, 1f)
-        canvas.scale(leftScale, 1f, currentX, currentY)
+        canvas.scale(open, 1f, currentX, currentY)
         drawWing(-1f)
         canvas.restore()
         
         canvas.save()
-        val rightScale = (0.2f + (1f - wingScale) * 0.4f).coerceIn(0.15f, 1f)
-        canvas.scale(rightScale, 1f, currentX, currentY)
+        canvas.scale(open, 1f, currentX, currentY)
         drawWing(1f)
         canvas.restore()
         
@@ -136,12 +138,12 @@ class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
         paint.color = spotColor
         // Spots scale with wing opening — positions must be inside wing cubic boundaries
         canvas.save()
-        canvas.scale(leftScale, 1f, currentX, currentY)
+        canvas.scale(open, 1f, currentX, currentY)
         canvas.drawCircle(currentX - size * 1.2f, currentY - size * 0.6f, size * 0.25f, paint)
         canvas.drawCircle(currentX - size * 0.55f, currentY + size * 0.8f, size * 0.18f, paint)
         canvas.restore()
         canvas.save()
-        canvas.scale(rightScale, 1f, currentX, currentY)
+        canvas.scale(open, 1f, currentX, currentY)
         canvas.drawCircle(currentX + size * 1.2f, currentY - size * 0.6f, size * 0.25f, paint)
         canvas.drawCircle(currentX + size * 0.55f, currentY + size * 0.8f, size * 0.18f, paint)
         canvas.restore()

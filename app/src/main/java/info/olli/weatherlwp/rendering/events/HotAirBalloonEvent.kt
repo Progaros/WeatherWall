@@ -128,19 +128,21 @@ class HotAirBalloonEvent(random: Random, override val spawnTimeMs: Long = System
         path.close()
         canvas.drawPath(path, paint)
         
-        // Basket
-        paint.color = RenderConstants.blendWithAmbient(Color.rgb(139, 90, 43), ambientColor, 0.3f)
-        val basketY = currentY + size * 0.45f
+        // Basket hangs below the throat. Ropes were skipped past distance 0.7,
+        // which left the basket floating under about a third of balloons.
+        val basketColor = RenderConstants.blendWithAmbient(Color.rgb(139, 90, 43), ambientColor, 0.3f)
+        paint.color = basketColor
+        val throatY = currentY + size * 0.2f
+        val basketY = currentY + size * 0.55f
         canvas.drawRect(currentX - size * 0.3f, basketY,
             currentX + size * 0.3f, basketY + size * 0.4f, paint)
-        
-        // Ropes (only for closer balloons)
-        if (distance < 0.7f) {
-            strokePaint.color = paint.color
-            strokePaint.strokeWidth = (2f - distance).coerceAtLeast(0.5f)
-            canvas.drawLine(currentX - size * 0.25f, basketY, currentX - size * 0.2f, currentY + size * 0.25f, strokePaint)
-            canvas.drawLine(currentX + size * 0.25f, basketY, currentX + size * 0.2f, currentY + size * 0.25f, strokePaint)
-        }
+
+        strokePaint.color = basketColor
+        strokePaint.strokeWidth = (size * 0.045f).coerceAtLeast(1f)
+        canvas.drawLine(currentX - size * 0.28f, throatY, currentX - size * 0.22f, basketY, strokePaint)
+        canvas.drawLine(currentX + size * 0.28f, throatY, currentX + size * 0.22f, basketY, strokePaint)
+        canvas.drawLine(currentX - size * 0.08f, throatY, currentX - size * 0.08f, basketY, strokePaint)
+        canvas.drawLine(currentX + size * 0.08f, throatY, currentX + size * 0.08f, basketY, strokePaint)
         
         canvas.restore()
     }

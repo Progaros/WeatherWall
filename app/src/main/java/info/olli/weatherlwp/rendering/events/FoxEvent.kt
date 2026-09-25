@@ -92,19 +92,11 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         canvas.scale(flip, 1f)
         
         paint.color = RenderConstants.blendWithAmbient(Color.rgb(200, 90, 30), ambientColor, 0.3f)
-        
-        // Tail (bushy but clearly slimmer than the torso, swept down and back so the
-        // silhouette does not just continue the body line)
-        path.reset()
-        path.moveTo(-2.0f*s, -0.9f*s)
-        path.cubicTo(-3.0f*s, -0.95f*s, -3.7f*s, -0.6f*s, -3.85f*s, 0.1f*s)
-        path.cubicTo(-3.55f*s, 0.3f*s, -2.85f*s, 0.05f*s, -2.0f*s, -0.15f*s)
-        path.close()
-        canvas.drawPath(path, paint)
 
         // Jointed legs (hip -> knee -> hoof) so the gait reads as a walk instead of blocky
         // stumps bobbing. Mirrors the deer renderer: the lift only happens on the forward
-        // half of the step, so the hoof stays planted through the recovery swing.
+        // half of the step, so the hoof stays planted through the recovery swing. kneeBend
+        // folds the hock back and the fore knee forward, otherwise the legs are sticks.
         val swingA = sin(walkPhase)
         val swingB = -swingA  // sin(walkPhase + PI)
 
@@ -117,12 +109,12 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         val strideAmp = 0.42f * s
         val liftAmp = 0.34f * s
 
-        fun drawLeg(hipX: Float, swing: Float, legColor: Int) {
+        fun drawLeg(hipX: Float, swing: Float, kneeBend: Float, legColor: Int) {
             val stride = swing * strideAmp
             val lift = maxOf(0f, swing) * liftAmp
             val hoofX = hipX + stride
             val hoofY = 1.0f * s - lift
-            val kneeX = hipX + stride * 0.4f
+            val kneeX = hipX + stride * 0.4f + kneeBend
             strokePaint.color = legColor
             strokePaint.strokeWidth = legW
             strokePaint.style = Paint.Style.STROKE
@@ -144,13 +136,15 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         val backNearX = -1.25f * s
         val frontFarX = 1.0f * s
         val frontNearX = 1.65f * s
+        val backKneeBend = -0.32f * s
+        val frontKneeBend = 0.12f * s
 
         // Far-side legs go behind the torso and near-side legs in front, so the darker far
         // pair never paints a stripe across the belly. Diagonal pairs share a phase
         // (far-hind with near-fore), otherwise the same-side legs swing together and the
         // walk reads as a camel pace.
-        drawLeg(backFarX, swingA, legFarColor)
-        drawLeg(frontFarX, swingB, legFarColor)
+        drawLeg(backFarX, swingA, backKneeBend, legFarColor)
+        drawLeg(frontFarX, swingB, frontKneeBend, legFarColor)
 
         // Body
         paint.color = furColor
@@ -168,14 +162,23 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         canvas.drawOval(1.7f*s, -1.8f*s, 3.2f*s, -0.6f*s, paint)
         paint.color = Color.rgb(240, 200, 180)
         canvas.drawOval(2.7f*s, -1.4f*s, 3.7f*s, -0.9f*s, paint)
+
+        // Tail after the torso, so the oval cannot swallow it, but before the near hind
+        // leg so the hock stays in front of the brush. It drops below the body line; a
+        // same-colour extension along that line just reads as a longer body.
+        paint.color = furColor
+        path.reset()
+        path.moveTo(-1.7f*s, -0.55f*s)
+        path.cubicTo(-2.8f*s, -0.35f*s, -3.5f*s, 0.35f*s, -3.55f*s, 1.05f*s)
+        path.cubicTo(-3.05f*s, 1.25f*s, -2.3f*s, 0.45f*s, -1.45f*s, 0.05f*s)
+        path.close()
+        canvas.drawPath(path, paint)
+        paint.color = Color.rgb(250, 250, 250)
+        canvas.drawCircle(-3.4f*s, 1.1f*s, 0.28f*s, paint)
         
         // Near-side legs, drawn over the torso they share a colour with.
-        drawLeg(backNearX, swingB, furColor)
-        drawLeg(frontNearX, swingA, furColor)
-
-        // Tail tip (white), seated inside the brush end
-        paint.color = Color.rgb(250, 250, 250)
-        canvas.drawCircle(-3.6f*s, -0.05f*s, 0.25f*s, paint)
+        drawLeg(backNearX, swingB, backKneeBend, furColor)
+        drawLeg(frontNearX, swingA, frontKneeBend, furColor)
         
         // Ears
         paint.color = furColor

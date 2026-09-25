@@ -94,11 +94,13 @@ class FishJumpEvent(random: Random, override val spawnTimeMs: Long = System.curr
 
         // Tail fin - overlaps into the peduncle so it stays fused with the body.
         // At x = -1.4s the body ellipse is still ~0.43s tall, giving a solid join.
+        // The fork wags; the peduncle stays put so the join does not tear.
+        val wag = sin((absoluteTimeMs - spawnTimeMs) / 1000f * 14f) * 0.45f * s
         fishPath.reset()
         fishPath.moveTo(-1.4f * s, -0.35f * s)
-        fishPath.lineTo(-3.2f * s, -0.85f * s)
-        fishPath.lineTo(-3.2f * s, 0.85f * s)
-        fishPath.lineTo(-1.4f * s, 0.35f * s)
+        fishPath.quadTo(-2.3f * s, wag * 0.3f, -3.15f * s, -0.8f * s + wag)
+        fishPath.lineTo(-3.15f * s, 0.8f * s + wag)
+        fishPath.quadTo(-2.3f * s, wag * 0.3f, -1.4f * s, 0.35f * s)
         fishPath.close()
         canvas.drawPath(fishPath, paint)
 

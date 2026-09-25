@@ -279,8 +279,12 @@ class EventRenderTest {
             val probe = renderAtAbsoluteTime(
                 event, event.spawnTimeMs + (event.durationMs * p).toLong(), bgColor
             )
-            val b = findContentBounds(probe, bgColor)
-            b != null && b.width() > 20 && b.left > 2 && b.right < width.toInt() - 2
+            val b = findContentBounds(probe, bgColor) ?: return@firstOrNull false
+            // Centre on screen is enough. Requiring the whole silhouette inside the frame
+            // dropped the duck: its path only clips the viewport, so every probe failed
+            // and the sheet was silently skipped.
+            val center = (b.left + b.right) / 2
+            b.width() > 8 && center > 40 && center < width.toInt() - 40
         }
         if (startProgress == null) {
             println("WARNING: $name never fully on screen, no gait sheet")

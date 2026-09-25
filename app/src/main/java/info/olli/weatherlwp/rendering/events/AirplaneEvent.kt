@@ -152,12 +152,13 @@ class AirplaneEvent(random: Random, override val spawnTimeMs: Long = System.curr
         path.close()
         canvas.drawPath(path, paint)
         
-        // Engine pods (under wings)
+        // Engine under the near wing. The old oval sat ahead of the leading edge
+        // and read as a dot under the nose.
         paint.color = shadowColor
-        val engineSize = size * 0.15f
+        val engineSize = size * 0.11f
         canvas.drawOval(
-            currentX - size * 0.9f - engineSize * 2f, currentY + size * 0.35f - engineSize,
-            currentX - size * 0.9f, currentY + size * 0.35f + engineSize,
+            currentX - size * 1.55f, currentY + size * 0.28f - engineSize,
+            currentX - size * 1.2f, currentY + size * 0.28f + engineSize,
             paint
         )
         

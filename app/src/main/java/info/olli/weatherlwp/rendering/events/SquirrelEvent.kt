@@ -112,7 +112,6 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
         
         // Running animation - elapsed-time based for stable movement across frame rates.
         val runPhase = if (isStopped) 0f else sin(elapsedMs * 0.02f + animPhase)
-        val legOffset = runPhase * unit * 0.3f
 
         // Tail bob with reduced amplitude to keep torso/tail seam tighter.
         val tailBob = sin(elapsedMs * 0.003f + animPhase) * unit * 0.26f
@@ -126,20 +125,50 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
             canvas.scale(-1f, 1f, screenX, screenY)
         }
 
-        // Back legs (behind body). Tops reach into the torso: at the extremes of legOffset the
-        // outer leg swings past the body oval's edge and would otherwise detach.
-        canvas.drawRoundRect(
-            screenX - unit * 1.0f - legOffset, screenY - unit * 0.1f,
-            screenX - unit * 0.7f - legOffset, screenY + unit * 1.2f,
-            unit * 0.15f, unit * 0.15f, paint
-        )
-        canvas.drawRoundRect(
-            screenX - unit * 1.3f + legOffset, screenY - unit * 0.1f,
-            screenX - unit * 1.0f + legOffset, screenY + unit * 1.2f,
-            unit * 0.15f, unit * 0.15f, paint
-        )
+        val fur = paint.color
+        val legFarColor = RenderConstants.blendWithAmbient(Color.rgb(110, 70, 32), ambientColor, 0.3f)
+        val legW = unit * 0.22f
+        val hoofSize = unit * 0.12f
+        val strideAmp = unit * 0.42f
+        val liftAmp = unit * 0.32f
+        val swingA = runPhase
+        val swingB = -swingA
+
+        // Bound gait: lift only on the forward half, so the foot stays planted on the return.
+        fun drawLeg(hipX: Float, swing: Float, kneeBend: Float, legColor: Int) {
+            val stride = swing * strideAmp
+            val lift = maxOf(0f, swing) * liftAmp
+            val hoofX = hipX + stride
+            val hoofY = screenY + unit * 1.15f - lift
+            val kneeX = hipX + stride * 0.35f + kneeBend
+            val kneeY = screenY + unit * 0.55f
+            strokePaint.color = legColor
+            strokePaint.strokeWidth = legW
+            strokePaint.style = Paint.Style.STROKE
+            strokePaint.strokeCap = Paint.Cap.ROUND
+            strokePaint.strokeJoin = Paint.Join.ROUND
+            path.reset()
+            path.moveTo(hipX, screenY + unit * 0.15f)
+            path.lineTo(kneeX, kneeY)
+            path.lineTo(hoofX, hoofY)
+            canvas.drawPath(path, strokePaint)
+            paint.color = legColor
+            canvas.drawOval(hoofX - hoofSize, hoofY - hoofSize, hoofX + hoofSize, hoofY + hoofSize * 0.5f, paint)
+        }
+
+        val backFarX = screenX - unit * 1.15f
+        val backNearX = screenX - unit * 0.7f
+        val frontFarX = screenX - unit * 0.05f
+        val frontNearX = screenX + unit * 0.4f
+        val backKneeBend = -unit * 0.22f
+        val frontKneeBend = unit * 0.08f
+
+        // Far pair behind the body. Diagonal phase, or the same-side legs lock together.
+        drawLeg(backFarX, swingA, backKneeBend, legFarColor)
+        drawLeg(frontFarX, swingB, frontKneeBend, legFarColor)
         
         // Draw tail (large, fluffy, curved upward)
+        paint.color = fur
         path.reset()
         path.moveTo(screenX - unit * 1.5f, screenY)
         path.quadTo(
@@ -160,18 +189,10 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
             paint
         )
         
-        // Front legs. Drawn before the belly so their tops are hidden underneath it -
-        // otherwise the dark rectangles sit on the light belly and visibly slide across it.
-        canvas.drawRoundRect(
-            screenX + unit * 0.1f + legOffset, screenY + unit * 0.15f,
-            screenX + unit * 0.4f + legOffset, screenY + unit * 1.2f,
-            unit * 0.15f, unit * 0.15f, paint
-        )
-        canvas.drawRoundRect(
-            screenX - unit * 0.2f - legOffset, screenY + unit * 0.15f,
-            screenX + unit * 0.1f - legOffset, screenY + unit * 1.2f,
-            unit * 0.15f, unit * 0.15f, paint
-        )
+        // Near pair over the torso. Drawn before the belly so the light underside covers
+        // the hip, instead of a dark stroke sliding across it.
+        drawLeg(backNearX, swingB, backKneeBend, fur)
+        drawLeg(frontNearX, swingA, frontKneeBend, fur)
 
         // Belly (lighter underside)
         paint.color = RenderConstants.blendWithAmbient(bellyColor, ambientColor, 0.3f)

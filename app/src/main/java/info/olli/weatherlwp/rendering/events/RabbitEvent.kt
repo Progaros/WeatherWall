@@ -110,19 +110,20 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
         val legFarColor = RenderConstants.blendWithAmbient(Color.rgb(110, 94, 78), ambientColor, 0.35f)
         val hipY = -0.1f * s
         val kneeBaseY = 0.45f * s
-        val legW = 0.24f * s
+        val legW = 0.22f * s
+        val hindLegW = 0.36f * s
         val hoofSize = 0.14f * s
 
         // kneeBend shapes the joint independently of the stride: the hind hock folds back
         // and the fore knee eases forward, so the legs are not straight stumps at rest.
-        fun drawLeg(hipX: Float, gather: Float, kneeBend: Float, legColor: Int) {
+        fun drawLeg(hipX: Float, gather: Float, kneeBend: Float, legColor: Int, width: Float) {
             val stride = -gather * 0.55f       // the hoof drags back as it gathers
             val hoofX = hipX + stride
             val hoofY = 1.2f * s - gather
             val kneeX = hipX + stride * 0.45f + kneeBend
             val kneeY = kneeBaseY - gather * 0.3f
             strokePaint.color = legColor
-            strokePaint.strokeWidth = legW
+            strokePaint.strokeWidth = width
             strokePaint.style = Paint.Style.STROKE
             strokePaint.strokeCap = Paint.Cap.ROUND
             strokePaint.strokeJoin = Paint.Join.ROUND
@@ -141,13 +142,14 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
         val backNearX = -1.45f * s
         val frontFarX = 0.15f * s
         val frontNearX = 0.8f * s
-        val backKneeBend = -0.3f * s
+        val backKneeBend = -0.55f * s
         val frontKneeBend = 0.1f * s
 
         // Far-side legs go behind the body and near-side legs in front, so the darker far
-        // pair never paints a stripe across the belly.
-        drawLeg(backFarX, legTuck + hopLeg, backKneeBend, legFarColor)
-        drawLeg(frontFarX, legTuck + hopLeg, frontKneeBend, legFarColor)
+        // pair never paints a stripe across the belly. Hind stroke is thicker: a rabbit's
+        // thigh is the leg, not a stick under the haunch.
+        drawLeg(backFarX, legTuck + hopLeg, backKneeBend, legFarColor, hindLegW)
+        drawLeg(frontFarX, legTuck + hopLeg, frontKneeBend, legFarColor, legW)
 
         // Body + haunch
         paint.color = fur
@@ -182,9 +184,14 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
         paint.color = Color.rgb(180, 120, 120)
         canvas.drawCircle(2.35f*s, -0.5f*s, 0.08f*s, paint)
 
+        // Cottontail before the near hind leg, or the blob covers the hock and the rabbit
+        // reads as one stick under a white ball.
+        paint.color = Color.rgb(230, 225, 215)
+        canvas.drawCircle(-2.15f * s, -0.15f * s, 0.32f * s, paint)
+
         // Near-side legs, drawn over the body they share a colour with.
-        drawLeg(backNearX, legTuck - hopLeg, backKneeBend, fur)
-        drawLeg(frontNearX, legTuck - hopLeg, frontKneeBend, fur)
+        drawLeg(backNearX, legTuck - hopLeg, backKneeBend, fur, hindLegW)
+        drawLeg(frontNearX, legTuck - hopLeg, frontKneeBend, fur, legW)
 
         // Whiskers
         strokePaint.color = Color.argb(100, 80, 70, 60)
@@ -192,10 +199,6 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
         canvas.drawLine(2.3f*s, -0.45f*s, 3.0f*s, -0.7f*s, strokePaint)
         canvas.drawLine(2.3f*s, -0.5f*s, 3.0f*s, -0.5f*s, strokePaint)
         canvas.drawLine(2.3f*s, -0.45f*s, 3.0f*s, -0.25f*s, strokePaint)
-        
-        // Tail (fluffy white)
-        paint.color = Color.rgb(200, 190, 180)
-        canvas.drawCircle(-2.2f*s, 0.0f, 0.45f*s, paint)
         
         canvas.restore()
         canvas.restore()
