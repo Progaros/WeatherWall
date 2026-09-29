@@ -1,18 +1,17 @@
-package info.olli.weatherlwp
+package info.olli.weatherlwp.parallax
 
-import info.olli.weatherlwp.parallax.ParallaxCalculator
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 
 /**
- * Unit tests for ParallaxCalculator (delta-based relative motion model).
+ * Unit tests for ParallaxCalculator in legacy pixel mode (maxOffsetPercent = 0).
  * Tests parallax physics: strength, max offset, delta-based movement, soft limit.
  *
  * Key: Tests must ramp tilt gradually (not set abruptly) because the delta
  * model computes per-frame changes, clamps large deltas, and discards sensor resets.
  */
-class ParallaxCalculatorTest {
+class ParallaxCalculatorPixelModeTest {
 
     private lateinit var calculator: ParallaxCalculator
 
