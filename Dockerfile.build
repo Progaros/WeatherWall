@@ -11,10 +11,15 @@ ENV GRADLE_USER_HOME=$HOME/.gradle
 
 # 2. Create home directory and workspace with correct permissions
 #    Using numeric ID 1000:1000 bypasses name conflict issues
+#    Robolectric caches under the passwd home of uid 1000 (java user.home), not $HOME;
+#    pre-creating it lets the compose named volume inherit uid 1000 ownership.
 RUN mkdir -p $GRADLE_USER_HOME && \
     chown -R 1000:1000 /home/builder && \
     mkdir -p /workspace && \
-    chown 1000:1000 /workspace
+    chown 1000:1000 /workspace && \
+    m2="$(getent passwd 1000 | cut -d: -f6)/.m2" && \
+    mkdir -p "$m2" && \
+    chown 1000:1000 "$m2"
 
 # 3. Switch to numeric user immediately
 USER 1000:1000
