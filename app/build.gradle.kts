@@ -74,7 +74,8 @@ tasks.withType<Test>().configureEach {
     listOf(
         "http.proxyHost", "http.proxyPort",
         "https.proxyHost", "https.proxyPort",
-        "http.nonProxyHosts"
+        "http.nonProxyHosts",
+        "readme.screenshots"
     ).forEach { key ->
         System.getProperty(key)?.let { systemProperty(key, it) }
     }

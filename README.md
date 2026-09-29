@@ -95,6 +95,15 @@ Both tests run under Robolectric with native graphics and write to `event_render
 Use the gait sheets to judge leg motion and body attachment — the lifetime frames only show
 the animal at different screen positions, never at different points of its stride.
 
+### README screenshots
+
+`docs/screenshots/` is rendered through the real `ParallaxScene` with the app's default settings
+(`ReadmeScreenshotTest`). The test is skipped unless explicitly requested:
+
+```bash
+docker compose exec dev ./gradlew testDebugUnitTest --tests '*ReadmeScreenshotTest' -Dreadme.screenshots=true
+```
+
 ## Docker
 
 Build the CI image:
