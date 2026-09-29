@@ -39,15 +39,6 @@ object RenderConstants {
     fun getHeightScale(screenHeight: Float, @Suppress("UNUSED_PARAMETER") screenWidth: Float = 0f): Float {
         return (screenHeight / REFERENCE_HEIGHT).coerceAtLeast(MIN_HEIGHT_SCALE)
     }
-
-    /**
-     * @deprecated Use [getHeightScale] directly. This was a legacy compatibility shim
-     * that is now identical to getHeightScale. No production code should call this.
-     */
-    @Deprecated("Use getHeightScale(screenHeight) directly", ReplaceWith("getHeightScale(screenHeight)"))
-    fun getPositionScale(@Suppress("UNUSED_PARAMETER") screenWidth: Float, screenHeight: Float): Float {
-        return getHeightScale(screenHeight)
-    }
     
     /** Reference aspect ratio for world-space calculations (9:16 portrait) */
     const val REFERENCE_ASPECT_RATIO = 0.5625f

@@ -160,20 +160,6 @@ class ViewportMigrationTest {
             shortHalf > tallHalf)
     }
 
-    // ===================== heightScale / positionScale audit =====================
-
-    @Test
-    fun `getPositionScale is deprecated and equals getHeightScale`() {
-        // Verify positionScale remains an exact alias for backwards compat
-        for ((w, h) in listOf(1080f to 1920f, 1920f to 1080f, 720f to 1280f)) {
-            @Suppress("DEPRECATION")
-            val posScale = RenderConstants.getPositionScale(w, h)
-            val heightScale = RenderConstants.getHeightScale(h, w)
-            assertEquals("positionScale should equal heightScale at ${w}x${h}",
-                heightScale, posScale, 0f)
-        }
-    }
-
     // ===================== Generation range does not include far objects =====================
 
     @Test
@@ -252,19 +238,5 @@ class ViewportMigrationTest {
             assertEquals("round-trip for xRatio=$xRatio",
                 screenX, reconstructedScreenX, 0.01f)
         }
-    }
-
-    // ===================== Banned API usage =====================
-
-    @Test
-    fun `no production renderer calls getPositionScale`() {
-        // getPositionScale is deprecated. Verify only the definition exists in production.
-        // This is a documentation/awareness test — the actual enforcement is that
-        // getPositionScale is marked @Deprecated and no production code references it.
-        @Suppress("DEPRECATION")
-        val scale = RenderConstants.getPositionScale(1080f, 1920f)
-        val heightScale = RenderConstants.getHeightScale(1920f, 1080f)
-        assertEquals("getPositionScale must equal getHeightScale",
-            heightScale, scale, 0f)
     }
 }
