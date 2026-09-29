@@ -142,18 +142,8 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
             val hoofY = screenY + unit * 1.15f - lift
             val kneeX = hipX + stride * 0.35f + kneeBend
             val kneeY = screenY + unit * 0.55f
-            strokePaint.color = legColor
-            strokePaint.strokeWidth = legW
-            strokePaint.style = Paint.Style.STROKE
-            strokePaint.strokeCap = Paint.Cap.ROUND
-            strokePaint.strokeJoin = Paint.Join.ROUND
-            path.reset()
-            path.moveTo(hipX, screenY + unit * 0.15f)
-            path.lineTo(kneeX, kneeY)
-            path.lineTo(hoofX, hoofY)
-            canvas.drawPath(path, strokePaint)
-            paint.color = legColor
-            canvas.drawOval(hoofX - hoofSize, hoofY - hoofSize, hoofX + hoofSize, hoofY + hoofSize * 0.5f, paint)
+            JointedLeg.draw(canvas, path, strokePaint, paint, hipX, screenY + unit * 0.15f, kneeX, kneeY, hoofX, hoofY,
+                legW, legColor, legColor, hoofSize, 0.5f)
         }
 
         val backFarX = screenX - unit * 1.15f

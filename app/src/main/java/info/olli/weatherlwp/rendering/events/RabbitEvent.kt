@@ -122,18 +122,8 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
             val hoofY = 1.2f * s - gather
             val kneeX = hipX + stride * 0.45f + kneeBend
             val kneeY = kneeBaseY - gather * 0.3f
-            strokePaint.color = legColor
-            strokePaint.strokeWidth = width
-            strokePaint.style = Paint.Style.STROKE
-            strokePaint.strokeCap = Paint.Cap.ROUND
-            strokePaint.strokeJoin = Paint.Join.ROUND
-            path.reset()
-            path.moveTo(hipX, hipY)
-            path.lineTo(kneeX, kneeY)
-            path.lineTo(hoofX, hoofY)
-            canvas.drawPath(path, strokePaint)
-            paint.color = legColor
-            canvas.drawOval(hoofX - hoofSize, hoofY - hoofSize, hoofX + hoofSize, hoofY + hoofSize * 0.6f, paint)
+            JointedLeg.draw(canvas, path, strokePaint, paint, hipX, hipY, kneeX, kneeY, hoofX, hoofY,
+                width, legColor, legColor, hoofSize, 0.6f)
         }
 
         // Leg anchors: rabbits bound, so each pair moves together; the near/far offset is

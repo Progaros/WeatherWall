@@ -115,18 +115,8 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
             val hoofX = hipX + stride
             val hoofY = 1.0f * s - lift
             val kneeX = hipX + stride * 0.4f + kneeBend
-            strokePaint.color = legColor
-            strokePaint.strokeWidth = legW
-            strokePaint.style = Paint.Style.STROKE
-            strokePaint.strokeCap = Paint.Cap.ROUND
-            strokePaint.strokeJoin = Paint.Join.ROUND
-            path.reset()
-            path.moveTo(hipX, hipY)
-            path.lineTo(kneeX, kneeY)
-            path.lineTo(hoofX, hoofY)
-            canvas.drawPath(path, strokePaint)
-            paint.color = legColor
-            canvas.drawOval(hoofX - hoofSize, hoofY - hoofSize, hoofX + hoofSize, hoofY + hoofSize * 0.6f, paint)
+            JointedLeg.draw(canvas, path, strokePaint, paint, hipX, hipY, kneeX, kneeY, hoofX, hoofY,
+                legW, legColor, legColor, hoofSize, 0.6f)
         }
 
         // Leg anchors: the pairs sit under the shoulder and haunch with a clear gap between

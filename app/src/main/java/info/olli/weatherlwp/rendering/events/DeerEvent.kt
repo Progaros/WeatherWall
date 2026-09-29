@@ -214,18 +214,8 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
             val hoofY = -lift
             val kneeX = hipX + stride * 0.4f + kneeBend
             val kneeY = hipY * 0.46f
-            strokePaint.color = legColor
-            strokePaint.strokeWidth = legWidth
-            strokePaint.style = Paint.Style.STROKE
-            strokePaint.strokeCap = Paint.Cap.ROUND
-            strokePaint.strokeJoin = Paint.Join.ROUND
-            path.reset()
-            path.moveTo(hipX, hipY)
-            path.lineTo(kneeX, kneeY)
-            path.lineTo(hoofX, hoofY)
-            canvas.drawPath(path, strokePaint)
-            paint.color = hoofColor
-            canvas.drawOval(hoofX - hoofSize, hoofY - hoofSize, hoofX + hoofSize, hoofY + hoofSize * 0.5f, paint)
+            JointedLeg.draw(canvas, path, strokePaint, paint, hipX, hipY, kneeX, kneeY, hoofX, hoofY,
+                legWidth, legColor, hoofColor, hoofSize, 0.5f)
         }
 
         // Leg anchors (profile view): a near and far leg for each pair; far drawn darker.
