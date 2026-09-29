@@ -4,6 +4,9 @@ services:
   #   $env:CORP_PROXY = "http://proxy.example.internal:80"
   #   $env:GRADLE_PROXY_OPTS = "-Dhttps.proxyHost=proxy.example.internal -Dhttps.proxyPort=80"
   build:
+    build:
+      context: .
+      dockerfile: Dockerfile.build
     image: weatherwall-build
     container_name: weatherwall-build
     working_dir: /workspace
@@ -15,8 +18,9 @@ services:
       - ./:/workspace
       - ww-gradle:/home/builder/.gradle
       # Robolectric downloads android-all-instrumented here; persisting it keeps
-      # test runs fast and avoids flaky fetches.
-      - ww-m2:/home/builder/.m2
+      # test runs fast and avoids flaky fetches. The JVM resolves user.home from
+      # /etc/passwd (uid 1000 = ubuntu), not from $HOME.
+      - ww-m2:/home/ubuntu/.m2
     command: ["./gradlew", "--no-daemon", "testDebugUnitTest", "assembleDebug"]
 
   # Long-lived container for iterating on tests. The Gradle daemon survives between
@@ -25,6 +29,9 @@ services:
   #   docker compose exec dev ./gradlew testDebugUnitTest
   #   docker compose exec dev ./gradlew testDebugUnitTest --tests '*EventRenderTest'
   dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.build
     image: weatherwall-build
     container_name: weatherwall-dev
     working_dir: /workspace
@@ -35,7 +42,7 @@ services:
     volumes:
       - ./:/workspace
       - ww-gradle:/home/builder/.gradle
-      - ww-m2:/home/builder/.m2
+      - ww-m2:/home/ubuntu/.m2
     command: ["sleep", "infinity"]
 
   # Android emulator with noVNC at http://localhost:6080

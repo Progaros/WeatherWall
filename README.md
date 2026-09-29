@@ -100,17 +100,24 @@ the animal at different screen positions, never at different points of its strid
 Build the CI image:
 
 ```bash
-docker build -t weatherwall-builder -f Dockerfile.build .
+docker compose build build
 ```
 
 Run tests in Docker:
 
 ```bash
-docker run --rm -v "$PWD":/workspace -w /workspace weatherwall-builder ./gradlew test --no-daemon
+docker compose run --rm build ./gradlew test --no-daemon
+```
+
+For repeated runs, keep a container with a warm Gradle daemon:
+
+```bash
+docker compose up -d dev
+docker compose exec dev ./gradlew testDebugUnitTest
 ```
 
 Run mutation tests in Docker:
 
 ```bash
-docker run --rm -v "$PWD":/workspace -w /workspace weatherwall-builder ./gradlew :app:pitest --no-daemon
+docker compose run --rm build ./gradlew :app:pitest --no-daemon
 ```

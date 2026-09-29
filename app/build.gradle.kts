@@ -101,6 +101,8 @@ tasks.register<JavaExec>("pitest") {
     mainClass.set("org.pitest.mutationtest.commandline.MutationCoverageReport")
     classpath = configurations["pitest"]
     
+    val androidJar = android.sdkDirectory.resolve("platforms/android-${android.compileSdk}/android.jar")
+
     doFirst {
         val buildDir = layout.buildDirectory.get().asFile
         val runtimeCp = configurations["debugUnitTestRuntimeClasspath"].resolve().joinToString(",")
@@ -116,7 +118,7 @@ tasks.register<JavaExec>("pitest") {
         
         val allClasspath = (appClassesDirs + testClassesDirs).joinToString(",") { it.absolutePath } +
             "," + runtimeCp +
-            ",/opt/android-sdk-linux/platforms/android-35/android.jar"
+            "," + androidJar.absolutePath
         
         // Log classpath for debugging
         appClassesDirs.forEach { dir ->
