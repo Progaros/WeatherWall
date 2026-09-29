@@ -3,7 +3,6 @@ package info.olli.weatherlwp.rendering.events
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Path
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.RenderConstants
 import kotlin.math.cos
@@ -20,14 +19,9 @@ import kotlin.random.Random
  * the fox is drawn at the correct layer relative to trees. The depthFactor is chosen from
  * values that will match actual hill depthFactors when getHillYAtWorldX snaps to closest hill.
  */
-class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis(), viewportRatio: Float = 1.0f) : RandomEvent {
-    override val layer = EventLayer.GROUND
-    
-    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.04f, viewportRatio = viewportRatio)
-    private val startX = traversal.startX
-    private val direction = traversal.direction
+class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis(), viewportRatio: Float = 1.0f) : QuadrupedWalkerEvent() {
+    override val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.04f, viewportRatio = viewportRatio)
     private val size = 0.7f + random.nextFloat() * 0.3f
-    private val path = Path()
     // Random vertical offset from hill surface (-2% to +1% of screen height)
     private val groundOffset = -0.02f + random.nextFloat() * 0.03f
     
@@ -38,10 +32,10 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
     override val depthFactor: Float = RenderConstants.getHillParallaxDepth(normalizedDepth)
     
     // Fallback ground Y based on depth (used when no hill data available)
-    private val fallbackGroundY = 0.78f + normalizedDepth * 0.10f  // 0.78 to 0.88
+    override val fallbackGroundY = 0.78f + normalizedDepth * 0.10f  // 0.78 to 0.88
     
     // Reduced speed: was 0.00008, now 0.000025 (~3x slower)
-    private val speed = 0.000025f
+    override val speed = 0.000025f
     override val durationMs: Long = EventTraversal.durationMsForPath(
         path = traversal,
         speed = speed,
@@ -52,15 +46,7 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
      * Get current Y position for Y-based draw ordering with trees.
      */
     override fun getCurrentYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
-        val elapsedMs = absoluteTimeMs - spawnTimeMs
-        val x = startX + direction * speed * elapsedMs
-        val hillY = hillHeightProvider?.invoke(x, depthFactor) ?: fallbackGroundY
-        return hillY + groundOffset
-    }
-
-    override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
-        val elapsedMs = absoluteTimeMs - spawnTimeMs
-        return startX + direction * speed * elapsedMs
+        return groundY(currentX(absoluteTimeMs), hillHeightProvider) + groundOffset
     }
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
@@ -69,28 +55,19 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
                       hillHeightProvider: EventTerrainProvider?, extendedOffsetY: Float) {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         val traversalElapsed = EventTraversal.scaledElapsed(elapsedMs, height)
-        val x = startX + direction * speed * traversalElapsed
+        val x = xAt(traversalElapsed)
         val walkPhase = elapsedMs * 0.008f  // Slower walk animation
         
         // Use depthFactor for parallax so fox moves with terrain at correct depth
-        val px = parallaxCalculator.getOffsetXForDepth(depthFactor)
-        val py = parallaxCalculator.getOffsetYForDepth(depthFactor)
-        canvas.save()
-        canvas.translate(px, py)
+        saveParallax(canvas, parallaxCalculator)
         
         val cx = x * width - extendedOffset
-        
-        // Get ground Y from hill height provider if available, otherwise use fallback
-        val groundY = hillHeightProvider?.invoke(x, depthFactor) ?: fallbackGroundY
-        val cy = (groundY + groundOffset) * height
+        val cy = (groundY(x, hillHeightProvider) + groundOffset) * height
         
         val unit = height
         val s = size * unit * 0.009f
-        val flip = if (direction > 0) 1f else -1f
         
-        canvas.save()
-        canvas.translate(cx, cy)
-        canvas.scale(flip, 1f)
+        saveFacing(canvas, cx, cy)
         
         paint.color = RenderConstants.blendWithAmbient(Color.rgb(200, 90, 30), ambientColor, 0.3f)
 

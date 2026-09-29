@@ -3,7 +3,6 @@ package info.olli.weatherlwp.rendering.events
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Path
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.RenderConstants
 import kotlin.math.cos
@@ -16,7 +15,7 @@ import kotlin.random.Random
  * Ground event for autumn/winter - majestic silhouette.
  * Seasonal: Autumn/Winter (cooler months when deer are more active)
  */
-class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis(), viewportRatio: Float = 1.0f) : RandomEvent {
+class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis(), viewportRatio: Float = 1.0f) : QuadrupedWalkerEvent() {
     private companion object {
         // Precomputed fawn spot coordinates (x, y) to keep draw() allocation-free.
         private val FAWN_SPOT_COORDS = floatArrayOf(
@@ -31,20 +30,17 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         )
     }
 
-    override val layer = EventLayer.GROUND
-    
     // Depth: mapped to hill parallax range for consistent terrain following
     private val depthValue = RenderConstants.getHillParallaxDepth(0.3f + random.nextFloat() * 0.5f)
     override val depthFactor: Float = depthValue
     private val sizeScale = 1.0f - (depthValue - RenderConstants.PARALLAX_HILLS_MIN) * 0.3f
+    override val fallbackGroundY = 0.65f + depthValue * 0.1f
     
     // Starting position and movement
-    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.05f, viewportRatio = viewportRatio)
-    private val startX = traversal.startX
-    private val direction = traversal.direction
+    override val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.05f, viewportRatio = viewportRatio)
     
     // Very slow, graceful movement
-    private val speed = 0.000008f + random.nextFloat() * 0.000005f
+    override val speed = 0.000008f + random.nextFloat() * 0.000005f
     
     // Behavioral state
     private val grazeInterval = 3000L + random.nextLong(2500L)  // How often deer stops to graze
@@ -58,8 +54,6 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
     )
     private val legPhaseOffset = random.nextFloat() * 6.28f
     
-    private val path = Path()
-    
     // Is this deer an adult or young fawn (20% chance for fawn)
     private val isFawn = random.nextFloat() < 0.2f
     private val fawnScale = if (isFawn) 0.6f else 1.0f
@@ -67,8 +61,7 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
     // Adult bucks (60% of adults) carry antlers; fawns never do.
     private val hasAntlers = !isFawn && random.nextFloat() < 0.6f
 
-    private fun movingElapsedMs(absoluteTimeMs: Long): Long {
-        val elapsedMs = absoluteTimeMs - spawnTimeMs
+    override fun movingElapsedMs(elapsedMs: Long): Long {
         val cycleTime = elapsedMs % (grazeInterval + grazeDuration)
         val isGrazing = cycleTime >= grazeInterval
         return if (isGrazing) {
@@ -80,14 +73,8 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         }
     }
 
-    override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
-        val movingTime = movingElapsedMs(absoluteTimeMs)
-        return startX + direction * speed * movingTime
-    }
-
     override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
-        val x = getPreviewAnchorXRatio(absoluteTimeMs)
-        return hillHeightProvider?.invoke(x, depthValue) ?: (0.65f + depthValue * 0.1f)
+        return groundY(currentX(absoluteTimeMs), hillHeightProvider)
     }
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
@@ -101,23 +88,20 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         val isGrazing = cycleTime >= grazeInterval
         
         // Calculate position considering grazing pauses (height-scaled)
-        val movingTime = movingElapsedMs(absoluteTimeMs)
+        val movingTime = movingElapsedMs(elapsedMs)
         val scaledMovingTime = EventTraversal.scaledElapsed(movingTime, height)
-        val x = startX + direction * speed * scaledMovingTime
+        val x = xAt(scaledMovingTime)
         
         // Skip if off-screen
         if (x < -0.2f || x > 1.2f) return
         
         // Get ground height
-        val groundY = hillHeightProvider?.invoke(x, depthValue) ?: (0.65f + depthValue * 0.1f)
+        val groundYRatio = groundY(x, hillHeightProvider)
         
-        val px = parallaxCalculator.getOffsetXForDepth(depthValue)
-        val py = parallaxCalculator.getOffsetYForDepth(depthValue)
-        canvas.save()
-        canvas.translate(px, py)
+        saveParallax(canvas, parallaxCalculator)
         
         val deerX = x * width - extendedOffset
-        val deerY = groundY * height
+        val deerY = groundYRatio * height
         
         // Size: deer are larger animals
         val unit = height * 0.006f * sizeScale * fawnScale
@@ -136,9 +120,7 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         paint.style = Paint.Style.FILL
         
         // Flip based on direction
-        canvas.save()
-        canvas.translate(deerX, deerY)
-        if (direction < 0) canvas.scale(-1f, 1f)
+        saveFacing(canvas, deerX, deerY)
         
         // Smooth grazing transition: the head eases down and back up instead of snapping,
         // and the legs settle to a planted stance as the deer stops to graze.

@@ -3,7 +3,6 @@ package info.olli.weatherlwp.rendering.events
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Path
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.RenderConstants
 import kotlin.math.cos
@@ -14,9 +13,7 @@ import kotlin.random.Random
  * Squirrel scurrying across the ground, stops occasionally to look around.
  * Seasonal: Autumn (gathering nuts for winter)
  */
-class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis(), viewportRatio: Float = 1.0f) : RandomEvent {
-    override val layer = EventLayer.GROUND
-    
+class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis(), viewportRatio: Float = 1.0f) : QuadrupedWalkerEvent() {
     // Depth determines size and parallax (0.4-0.8 - squirrels stay in mid-foreground)
     private val normalizedDepth = 0.4f + random.nextFloat() * 0.4f
     override val depthFactor = RenderConstants.getHillParallaxDepth(normalizedDepth)
@@ -24,15 +21,13 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
     private val sizeScale = 1.0f - normalizedDepth * 0.3f
     
     // Direction: left or right
-    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.03f, viewportRatio = viewportRatio)
-    private val direction = traversal.direction
-    private val startX = traversal.startX
+    override val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.03f, viewportRatio = viewportRatio)
     
     // Baseline Y - will be adjusted by hill height
-    private val baseY = 0.78f + random.nextFloat() * 0.08f
+    override val fallbackGroundY = 0.78f + random.nextFloat() * 0.08f
     
     // Movement speed (squirrels are quick but not unrealistic)
-    private val speed = 0.00004f + random.nextFloat() * 0.00002f
+    override val speed = 0.00004f + random.nextFloat() * 0.00002f
     
     // Animation phases
     private val animPhase = random.nextFloat() * 6.28f
@@ -40,11 +35,6 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
     // Colors - lazy to avoid Android dependency in tests
     private val bodyColor by lazy { Color.rgb(139, 90, 43) }  // Brown
     private val bellyColor by lazy { Color.rgb(222, 184, 135) }  // Tan
-    
-    private val path = Path()
-    
-    // Parallax depth — same as depthFactor (already mapped through getHillParallaxDepth)
-    private val parallaxDepth = depthFactor
     
     // Stop and look behavior - squirrels pause periodically
     private val stopIntervalMs = 2000L + random.nextLong(1500)
@@ -59,7 +49,7 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
         minDurationMs = 5000L
     )
 
-    private fun getEffectiveElapsedMs(elapsedMs: Long): Long {
+    override fun movingElapsedMs(elapsedMs: Long): Long {
         val cycleLength = stopIntervalMs + stopDurationMs
         val cyclePos = elapsedMs % cycleLength
         val fullCycles = elapsedMs / cycleLength
@@ -71,16 +61,7 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
     }
     
     override fun getCurrentYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
-        val elapsedMs = absoluteTimeMs - spawnTimeMs
-        val effectiveElapsedMs = getEffectiveElapsedMs(elapsedMs)
-        val x = startX + direction * speed * effectiveElapsedMs
-        return hillHeightProvider?.invoke(x, depthFactor) ?: baseY
-    }
-
-    override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
-        val elapsedMs = absoluteTimeMs - spawnTimeMs
-        val effectiveElapsedMs = getEffectiveElapsedMs(elapsedMs)
-        return startX + direction * speed * effectiveElapsedMs
+        return groundY(currentX(absoluteTimeMs), hillHeightProvider)
     }
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
@@ -96,17 +77,14 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
         val isStopped = cyclePos > stopIntervalMs
         
         // Calculate position (height-scaled traversal)
-        val effectiveElapsed = getEffectiveElapsedMs(
+        val effectiveElapsed = movingElapsedMs(
             EventTraversal.scaledElapsed(elapsedMs, height)
         )
         
-        val x = startX + direction * speed * effectiveElapsed
-        val y = hillHeightProvider?.invoke(x, depthFactor) ?: baseY
+        val x = xAt(effectiveElapsed)
+        val y = groundY(x, hillHeightProvider)
         
-        val px = parallaxCalculator.getOffsetXForDepth(parallaxDepth)
-        val py = parallaxCalculator.getOffsetYForDepth(parallaxDepth)
-        canvas.save()
-        canvas.translate(px, py)
+        saveParallax(canvas, parallaxCalculator)
         
         val screenX = x * width - extendedOffset
         val screenY = y * height - unit * 3f  // Offset above ground

@@ -3,7 +3,6 @@ package info.olli.weatherlwp.rendering.events
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Path
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.RenderConstants
 import kotlin.math.cos
@@ -20,14 +19,9 @@ import kotlin.random.Random
  * the rabbit is drawn at the correct layer relative to trees. The depthFactor is chosen from
  * values that will match actual hill depthFactors when getHillYAtWorldX snaps to closest hill.
  */
-class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis(), viewportRatio: Float = 1.0f) : RandomEvent {
-    override val layer = EventLayer.GROUND
-    
-    private val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.03f, viewportRatio = viewportRatio)
-    private val startX = traversal.startX
-    private val direction = traversal.direction
+class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis(), viewportRatio: Float = 1.0f) : QuadrupedWalkerEvent() {
+    override val traversal = EventTraversal.randomHorizontalPath(random, margin = 0.03f, viewportRatio = viewportRatio)
     private val size = 0.5f + random.nextFloat() * 0.2f
-    private val path = Path()
     // Random vertical offset from hill surface (-2% to +1% of screen height)
     private val groundOffset = -0.02f + random.nextFloat() * 0.03f
     
@@ -38,13 +32,13 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
     override val depthFactor: Float = RenderConstants.getHillParallaxDepth(normalizedDepth)
     
     // Fallback ground Y based on depth (used when no hill data available)
-    private val fallbackGroundY = 0.82f + normalizedDepth * 0.08f  // 0.82 to 0.90
+    override val fallbackGroundY = 0.82f + normalizedDepth * 0.08f  // 0.82 to 0.90
     
-    // Reduced speed: was 0.0001, now 0.00003 (~3x slower)
-    private val avgSpeed = 0.00003f
+    // Reduced speed: was 0.0001, now 0.00003 (~3x slower); average over the hop cycle
+    override val speed = 0.00003f
     override val durationMs: Long = EventTraversal.durationMsForPath(
         path = traversal,
-        speed = avgSpeed,
+        speed = speed,
         minDurationMs = 5000L
     )
     
@@ -52,15 +46,7 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
      * Get current Y position for Y-based draw ordering with trees.
      */
     override fun getCurrentYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
-        val elapsedMs = absoluteTimeMs - spawnTimeMs
-        val x = startX + direction * avgSpeed * elapsedMs
-        val hillY = hillHeightProvider?.invoke(x, depthFactor) ?: fallbackGroundY
-        return hillY + groundOffset
-    }
-
-    override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
-        val elapsedMs = absoluteTimeMs - spawnTimeMs
-        return startX + direction * avgSpeed * elapsedMs
+        return groundY(currentX(absoluteTimeMs), hillHeightProvider) + groundOffset
     }
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
@@ -73,30 +59,22 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
         
         // Calculate X position based on average speed (height-scaled)
         val traversalElapsed = EventTraversal.scaledElapsed(elapsedMs, height)
-        val x = startX + direction * avgSpeed * traversalElapsed
+        val x = xAt(traversalElapsed)
         
         // Use depthFactor for parallax so rabbit moves with terrain at correct depth
-        val px = parallaxCalculator.getOffsetXForDepth(depthFactor)
-        val py = parallaxCalculator.getOffsetYForDepth(depthFactor)
-        canvas.save()
-        canvas.translate(px, py)
+        saveParallax(canvas, parallaxCalculator)
         
         val cx = x * width - extendedOffset
         val unit = minOf(width, height)
         val hopHeight = (sin(hopPhase).coerceAtLeast(0f)) * unit * 0.02f * size
         
-        // Get ground Y from hill height provider if available, otherwise use fallback
-        val groundY = hillHeightProvider?.invoke(x, depthFactor) ?: fallbackGroundY
-        val cy = (groundY + groundOffset) * height - hopHeight
+        val cy = (groundY(x, hillHeightProvider) + groundOffset) * height - hopHeight
         
         val s = size * unit * 0.015f
-        val flip = if (direction > 0) 1f else -1f
         
         paint.color = RenderConstants.blendWithAmbient(Color.rgb(140, 120, 100), ambientColor, 0.35f)
         
-        canvas.save()
-        canvas.translate(cx, cy)
-        canvas.scale(flip, 1f)
+        saveFacing(canvas, cx, cy)
 
         // Leg gather in body units (multiplied by s where drawn).
         val hopLeg = sin(hopPhase) * 0.2f
