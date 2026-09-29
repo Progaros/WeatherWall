@@ -4,6 +4,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RectF
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.RenderConstants
 import info.olli.weatherlwp.simulation.SimulationState
@@ -32,6 +33,7 @@ class HotAirBalloonEvent(random: Random, override val spawnTimeMs: Long = System
     override val durationMs: Long = (1.4f / speed).toLong()
     
     private val path = Path()
+    private val domeRect = RectF()
     private val color = when (random.nextInt(5)) {
         0 -> Color.rgb(220, 80, 80)
         1 -> Color.rgb(80, 150, 220)
@@ -85,57 +87,62 @@ class HotAirBalloonEvent(random: Random, override val spawnTimeMs: Long = System
         val currentY = EventTraversal.mapFieldY(y, height, extendedOffsetY) + bobOffset
         
         val balloonHeight = size * 2.0f
-        val balloonWidth = size * 1.6f
+        val topY = currentY - balloonHeight
+        val throatY = currentY + size * 0.2f
+        val throatHalf = size * 0.3f
+        // Slightly flattened circular dome; its widest point (equator) sits at domeCy.
+        val domeRx = size * 1.0f
+        val domeRy = size * 0.95f
+        val domeCy = topY + domeRy
+        val taper = throatY - domeCy
         
-        // Balloon envelope (proper hot air balloon shape - wide dome with narrowing bottom)
-        paint.color = RenderConstants.blendWithAmbient(color, ambientColor, 0.3f)
+        // Envelope: round dome on top, bulging sides tapering to a narrow mouth.
         path.reset()
-        // Start at top center
-        path.moveTo(currentX, currentY - balloonHeight)
-        // Right side curve: top dome is wider and rounder
+        path.moveTo(currentX - throatHalf, throatY)
         path.cubicTo(
-            currentX + balloonWidth * 1.1f, currentY - balloonHeight * 0.7f,  // Wide control point
-            currentX + balloonWidth * 0.9f, currentY - balloonHeight * 0.2f,  // Curves inward
-            currentX + size * 0.35f, currentY + size * 0.2f  // Bottom right (narrower opening)
+            currentX - throatHalf - size * 0.18f, throatY - taper * 0.3f,
+            currentX - domeRx, domeCy + taper * 0.5f,
+            currentX - domeRx, domeCy
         )
-        // Bottom (the opening/throat)
-        path.lineTo(currentX - size * 0.35f, currentY + size * 0.2f)
-        // Left side curve (mirror)
+        domeRect.set(currentX - domeRx, domeCy - domeRy, currentX + domeRx, domeCy + domeRy)
+        path.arcTo(domeRect, 180f, 180f, false)
         path.cubicTo(
-            currentX - balloonWidth * 0.9f, currentY - balloonHeight * 0.2f,
-            currentX - balloonWidth * 1.1f, currentY - balloonHeight * 0.7f,
-            currentX, currentY - balloonHeight  // Back to top
+            currentX + domeRx, domeCy + taper * 0.5f,
+            currentX + throatHalf + size * 0.18f, throatY - taper * 0.3f,
+            currentX + throatHalf, throatY
         )
         path.close()
+        
+        val envelopeColor = RenderConstants.blendWithAmbient(color, ambientColor, 0.3f)
+        val gorePaintColor = RenderConstants.blendWithAmbient(stripeColor, ambientColor, 0.3f)
+        paint.color = envelopeColor
         canvas.drawPath(path, paint)
         
-        // Vertical stripes/panels for realism (curved sections)
-        paint.color = RenderConstants.blendWithAmbient(stripeColor, ambientColor, 0.3f)
-        // Center stripe
-        path.reset()
-        path.moveTo(currentX - size * 0.15f, currentY - balloonHeight)
-        path.cubicTo(
-            currentX - size * 0.12f, currentY - balloonHeight * 0.5f,
-            currentX - size * 0.1f, currentY - size * 0.1f,
-            currentX - size * 0.08f, currentY + size * 0.15f
-        )
-        path.lineTo(currentX + size * 0.08f, currentY + size * 0.15f)
-        path.cubicTo(
-            currentX + size * 0.1f, currentY - size * 0.1f,
-            currentX + size * 0.12f, currentY - balloonHeight * 0.5f,
-            currentX + size * 0.15f, currentY - balloonHeight
-        )
-        path.close()
+        // Gores: horizontally squeezed copies of the envelope follow its meridians,
+        // converging at the crown and the mouth like real balloon panels.
+        canvas.save()
+        canvas.scale(0.72f, 1f, currentX, currentY)
+        paint.color = gorePaintColor
         canvas.drawPath(path, paint)
+        canvas.restore()
+        canvas.save()
+        canvas.scale(0.5f, 1f, currentX, currentY)
+        paint.color = envelopeColor
+        canvas.drawPath(path, paint)
+        canvas.restore()
+        canvas.save()
+        canvas.scale(0.16f, 1f, currentX, currentY)
+        paint.color = gorePaintColor
+        canvas.drawPath(path, paint)
+        canvas.restore()
         
         // Basket hangs below the throat. Ropes were skipped past distance 0.7,
         // which left the basket floating under about a third of balloons.
         val basketColor = RenderConstants.blendWithAmbient(Color.rgb(139, 90, 43), ambientColor, 0.3f)
         paint.color = basketColor
-        val throatY = currentY + size * 0.2f
         val basketY = currentY + size * 0.55f
-        canvas.drawRect(currentX - size * 0.3f, basketY,
-            currentX + size * 0.3f, basketY + size * 0.4f, paint)
+        canvas.drawRect(currentX - size * 0.24f, basketY,
+            currentX + size * 0.24f, basketY + size * 0.34f, paint)
 
         strokePaint.color = basketColor
         strokePaint.strokeWidth = (size * 0.045f).coerceAtLeast(1f)
