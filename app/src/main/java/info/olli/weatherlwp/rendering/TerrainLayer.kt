@@ -1583,7 +1583,6 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val springWeight = getSeasonWeight("spring")
         val summerWeight = getSeasonWeight("summer")
         val autumnWeight = getSeasonWeight("autumn")
-        val winterWeight = getSeasonWeight("winter")
         
         // Flowers: visible in spring + summer, fade out in autumn
         val flowerAlpha = (springWeight + summerWeight).coerceIn(0f, 1f)
@@ -1610,8 +1609,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         }
         }
         
-        // Fallen leaves: visible in autumn + winter
-        val leafAlpha = (autumnWeight + winterWeight).coerceIn(0f, 1f)
+        // Fallen leaves: autumn only; the season blend fades them out as winter arrives
+        val leafAlpha = autumnWeight.coerceIn(0f, 1f)
         if (leafAlpha > 0.01f) {
         fallenLeavesByHill[hillIndex]?.let { leaves ->
             leafPaint.alpha = (255 * leafAlpha).toInt()
