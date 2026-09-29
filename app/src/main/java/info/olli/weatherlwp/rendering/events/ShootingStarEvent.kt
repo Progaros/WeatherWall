@@ -90,8 +90,8 @@ class ShootingStarEvent(random: Random, override val spawnTimeMs: Long = System.
         val headX = (startX + cos(angle) * progress * 0.5f) * width - extendedOffset
         val headY = EventTraversal.mapFieldY(startY + sin(angle) * progress * 0.5f, height, extendedOffsetY)
         
-        // Tail length shrinks during fade-out (meteor burning up)
-        val effectiveLength = length * (0.3f + 0.7f * fadeAlpha)
+        // Tail length shrinks during fade-out (meteor burning up); long and thin reads as a meteor.
+        val effectiveLength = length * 2.5f * (0.3f + 0.7f * fadeAlpha)
         val tailX = (startX + cos(angle) * (progress - effectiveLength) * 0.5f) * width - extendedOffset
         val tailY = EventTraversal.mapFieldY(startY + sin(angle) * (progress - effectiveLength) * 0.5f, height, extendedOffsetY)
         
@@ -99,28 +99,31 @@ class ShootingStarEvent(random: Random, override val spawnTimeMs: Long = System.
         val headAlpha = (255 * fadeAlpha).toInt()
         val glowAlpha = (200 * fadeAlpha).toInt()
         
+        // Faint wide glow under a thin bright core, both fading towards the tail
+        trailPaint.shader = android.graphics.LinearGradient(
+            tailX, tailY, headX, headY,
+            Color.argb(0, 180, 200, 255),
+            Color.argb((90 * fadeAlpha).toInt(), 200, 215, 255),
+            android.graphics.Shader.TileMode.CLAMP
+        )
+        trailPaint.strokeWidth = 1.6f * unit
+        canvas.drawLine(tailX, tailY, headX, headY, trailPaint)
+        
         trailPaint.shader = android.graphics.LinearGradient(
             tailX, tailY, headX, headY,
             Color.argb(0, 255, 255, 255),
             Color.argb(headAlpha, 255, 255, 240),
             android.graphics.Shader.TileMode.CLAMP
         )
-        trailPaint.strokeWidth = 3f * unit
+        trailPaint.strokeWidth = 0.45f * unit
         canvas.drawLine(tailX, tailY, headX, headY, trailPaint)
         
-        trailPaint.shader = android.graphics.LinearGradient(
-            tailX, tailY, headX, headY,
-            Color.argb(0, 255, 255, 255),
-            Color.argb(glowAlpha, 255, 255, 200),
-            android.graphics.Shader.TileMode.CLAMP
-        )
-        trailPaint.strokeWidth = 1.5f * unit
-        canvas.drawLine(tailX + (headX-tailX)*0.5f, tailY + (headY-tailY)*0.5f, headX, headY, trailPaint)
-        
-        paint.color = Color.argb(headAlpha, 255, 255, 255)
-        // Head shrinks during fade-out
-        val headSize = 2.5f * unit * (0.5f + 0.5f * fadeAlpha)
-        canvas.drawCircle(headX, headY, headSize, paint)
+        // Small hot head with a soft halo
+        val headSize = unit * (0.5f + 0.5f * fadeAlpha)
+        paint.color = Color.argb((glowAlpha * 0.25f).toInt(), 235, 240, 255)
+        canvas.drawCircle(headX, headY, headSize * 1.5f, paint)
+        paint.color = Color.argb(headAlpha, 255, 255, 250)
+        canvas.drawCircle(headX, headY, headSize * 0.7f, paint)
         
         trailPaint.shader = null
         canvas.restore()
