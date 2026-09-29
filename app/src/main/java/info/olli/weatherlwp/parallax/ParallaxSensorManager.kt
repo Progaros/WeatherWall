@@ -48,24 +48,6 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
         private const val SHAKE_TRIGGER_COUNT = 3          // Number of shakes to trigger event
         private const val SHAKE_COOLDOWN_MS = 1000L        // Cooldown after triggering shake event
         
-        // Roll wiggle detection (quick wrist turns around arm axis)
-        // This is an alternative trigger for shake - fast roll direction changes
-        private const val WIGGLE_ROLL_THRESHOLD_RAD = 0.2f  // Minimum roll angle change (~11 degrees)
-        private const val WIGGLE_TIME_WINDOW_MS = 800L     // Time window to detect wiggles
-        private const val WIGGLE_TRIGGER_COUNT = 4         // Direction changes to trigger (4 = 2 back-and-forth)
-        
-        // Default gyro wiggle thresholds (tuned via sensitivity)
-        // Require 3 full back-and-forth wiggles = 6 direction changes
-        private const val DEFAULT_GYRO_AXIS_THRESHOLD = 1.2f  // rad/s angular velocity threshold
-        private const val DEFAULT_GYRO_WINDOW_MS = 1600L      // Time window for wiggle detection
-        private const val DEFAULT_GYRO_TRIGGER_CHANGES = 6    // Direction changes to trigger
-        
-        // Stable sign detection: require N consecutive samples of new sign before counting
-        private const val GYRO_SIGN_STABLE_SAMPLES = 2
-        
-        // Minimum time between accepted direction changes (filters high-frequency jitter/tremor)
-        private const val GYRO_MIN_DIR_CHANGE_TIME_MS = 90L
-        
         // Sensor warmup: ignore first N sensor events after start() to prevent stale queued events
         // from triggering shakes immediately after unlock (in addition to time-based delay)
         private const val SHAKE_WARMUP_SAMPLES = 120
@@ -77,7 +59,7 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
     
     interface ShakeListener {
         /**
-         * Called when a shake gesture is detected (3 quick back-and-forth shakes).
+         * Called on a hard shake or a quick wiggle around the phone's long axis.
          */
         fun onShake()
     }
@@ -169,27 +151,13 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
     private var shakeCount = 0
     private var lastShakeTime = 0L   // Last triggered shake event time (for cooldown)
     
-    // Roll wiggle detection state - detects quick wrist turns
-    private var lastRollAngle = 0f
-    private var rollDirectionChanges = 0
-    private var lastRollDirection = 0  // -1=left, 0=none, 1=right
-    private var rollWiggleStartTime = 0L
-    
-    // Gyroscope wiggle detection state - improved (stable sign + debounce)
-    private var gyroConfirmedSign = 0          // last confirmed direction
-    private var gyroCandidateSign = 0          // current candidate direction
-    private var gyroCandidateCount = 0         // how many consecutive samples confirmed candidate
-    private var lastGyroChangeTime = 0L        // last accepted direction-change timestamp
-    private var gyroSignChanges = 0
-    private var gyroWiggleStart = 0L
+    // Wiggle around the phone's long axis (earpiece to charging port)
+    private val longAxisWiggle = AxisWiggleDetector()
     
     // Configurable thresholds (tuned by sensitivity)
     private var shakeThresholdGravity = SHAKE_THRESHOLD_GRAVITY
     private var shakeTriggerCount = SHAKE_TRIGGER_COUNT
     private var shakeSlopTimeMs = SHAKE_SLOP_TIME_MS
-    private var gyroAxisThreshold = DEFAULT_GYRO_AXIS_THRESHOLD
-    private var gyroWindowMs = DEFAULT_GYRO_WINDOW_MS
-    private var gyroTriggerChanges = DEFAULT_GYRO_TRIGGER_CHANGES
     
     // Shake unlock delay: prevents accidental shake triggers after screen on (phone unlock motion)
     private var shakeUnlockDelayMs = 2500L
@@ -252,12 +220,12 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
         shakeTriggerCount = if (s > 0.75f) 3 else if (s > 0.35f) 4 else 5
         shakeSlopTimeMs = if (s > 0.75f) 300L else if (s > 0.35f) 450L else 600L
         
-        // Gyroscope wiggle: require stronger/faster alternation at low sensitivity.
-        gyroAxisThreshold = lerp(2.6f, 0.8f, s)
-        gyroWindowMs = if (s > 0.7f) 1200L else if (s > 0.35f) 1500L else 1800L
-        gyroTriggerChanges = if (s > 0.75f) 4 else if (s > 0.35f) 6 else 8
+        // Long-axis wiggle: sensitivity lowers the rotation speed and reversal count needed.
+        longAxisWiggle.rateThreshold = lerp(3.0f, 1.2f, s)
+        longAxisWiggle.requiredReversals = if (s > 0.66f) 3 else if (s > 0.33f) 4 else 5
+        longAxisWiggle.windowMs = 1800L
         
-        Log.d(TAG, "Shake settings: enabled=$enabled sens=$s gThresh=$shakeThresholdGravity gyroThresh=$gyroAxisThreshold")
+        Log.d(TAG, "Shake settings: enabled=$enabled sens=$s gThresh=$shakeThresholdGravity wiggleRate=${longAxisWiggle.rateThreshold}")
         
         // If manager is already started, re-register shake sensors to handle runtime toggle
         if (isStarted) {
@@ -287,14 +255,7 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
         // Reset shake state
         shakeTimestamp = 0L
         shakeCount = 0
-        
-        // Reset gyro wiggle state (stable sign detection)
-        gyroConfirmedSign = 0
-        gyroCandidateSign = 0
-        gyroCandidateCount = 0
-        lastGyroChangeTime = 0L
-        gyroSignChanges = 0
-        gyroWiggleStart = 0L
+        longAxisWiggle.reset()
         
         // Use SENSOR_DELAY_GAME for shake detection (responsive wiggle detection)
         val sensorRate = SensorManager.SENSOR_DELAY_GAME
@@ -701,18 +662,8 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
     }
     
     /**
-     * Detect wrist wiggle from gyroscope angular velocity.
-     * This is the recommended rocket trigger for "wiggle in hand" gesture.
-     * 
-     * Uses yaw (Z-axis) angular velocity sign changes to detect quick wrist turns.
-     * Works better than accelerometer gForce for subtle hand movements.
-     * 
-     * Improved algorithm with stable sign detection + debouncing:
-     * - Requires GYRO_SIGN_STABLE_SAMPLES consecutive samples of new sign before counting
-     * - Minimum time between accepted changes filters high-frequency jitter/tremor
-     * - Default requires 3 full back-and-forth wiggles (6 direction changes)
-     * 
-     * @param values Gyroscope sensor values [x=pitch rate, y=roll rate, z=yaw rate] in rad/s
+     * Detect a wiggle around the phone's long axis (earpiece to charging port) from gyroscope Y.
+     * @param values Gyroscope rates in rad/s around device X, Y, Z
      */
     private fun detectGyroWiggle(values: FloatArray) {
         val now = System.currentTimeMillis()
@@ -729,126 +680,14 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
         if (shakeUnlockDelayMs > 0 && now - screenOnTime < shakeUnlockDelayMs) return
         if (now - lastShakeTime < SHAKE_COOLDOWN_MS) return
 
-        val yawRate = values[2]
-        if (abs(yawRate) < gyroAxisThreshold) {
-            // Below threshold -> reset candidate stability, but keep confirmed sign
-            gyroCandidateSign = 0
-            gyroCandidateCount = 0
-            return
+        val before = longAxisWiggle.currentReversals
+        val triggered = longAxisWiggle.onSample(values[0], values[1], values[2], now)
+        if (!triggered && longAxisWiggle.currentReversals > before) {
+            Log.d(TAG, "Long-axis wiggle reversal=${longAxisWiggle.currentReversals}/${longAxisWiggle.requiredReversals}")
         }
-
-        val sign = if (yawRate > 0) 1 else -1
-
-        // First ever sign
-        if (gyroConfirmedSign == 0) {
-            gyroConfirmedSign = sign
-            gyroCandidateSign = 0
-            gyroCandidateCount = 0
-            return
-        }
-
-        // If same as confirmed, clear candidate
-        if (sign == gyroConfirmedSign) {
-            gyroCandidateSign = 0
-            gyroCandidateCount = 0
-            return
-        }
-
-        // Candidate differs from confirmed -> require stability (N consecutive samples)
-        if (gyroCandidateSign != sign) {
-            gyroCandidateSign = sign
-            gyroCandidateCount = 1
-            return
-        } else {
-            gyroCandidateCount++
-        }
-
-        if (gyroCandidateCount < GYRO_SIGN_STABLE_SAMPLES) return
-
-        // Debounce: ignore changes that happen too fast
-        if (now - lastGyroChangeTime < GYRO_MIN_DIR_CHANGE_TIME_MS) return
-
-        // Accept the sign change
-        lastGyroChangeTime = now
-        gyroConfirmedSign = sign
-        gyroCandidateSign = 0
-        gyroCandidateCount = 0
-
-        if (gyroSignChanges == 0) gyroWiggleStart = now
-        gyroSignChanges++
-
-        Log.d(TAG, "Gyro wiggle change=$gyroSignChanges yawRate=${"%.2f".format(yawRate)}")
-
-        if (now - gyroWiggleStart <= gyroWindowMs && gyroSignChanges >= gyroTriggerChanges) {
-            gyroSignChanges = 0
-            gyroWiggleStart = 0L
-            gyroConfirmedSign = 0
+        if (triggered) {
             lastShakeTime = now
-            Log.d(TAG, "Gyro wiggle gesture detected! Triggering listener")
-            shakeListener?.onShake()
-            return
-        }
-
-        // Timeout reset
-        if (gyroSignChanges > 0 && now - gyroWiggleStart > gyroWindowMs) {
-            gyroSignChanges = 0
-            gyroWiggleStart = 0L
-            gyroConfirmedSign = 0
-            Log.d(TAG, "Gyro wiggle reset - timeout")
-        }
-    }
-    
-    /**
-     * Detect roll wiggle gesture - quick wrist turns around the arm axis.
-     * This is an alternative to shake for users who prefer a more subtle gesture.
-     * 
-     * Detects rapid direction changes in roll angle (left-right turns).
-     * 4 direction changes (2 complete back-and-forth movements) trigger the event.
-     */
-    private fun detectRollWiggle(currentRoll: Float) {
-        val now = System.currentTimeMillis()
-        
-        // Check cooldown after a successful shake trigger (shared with shake)
-        if (now - lastShakeTime < SHAKE_COOLDOWN_MS) return
-        
-        val rollDelta = currentRoll - lastRollAngle
-        
-        // Only process if roll changed enough to be intentional
-        if (abs(rollDelta) < WIGGLE_ROLL_THRESHOLD_RAD) return
-        
-        // Determine direction: positive = right, negative = left
-        val direction = if (rollDelta > 0) 1 else -1
-        
-        // Check if direction changed from last movement
-        if (lastRollDirection != 0 && direction != lastRollDirection) {
-            // Direction changed! This is a wiggle
-            rollDirectionChanges++
-            Log.d(TAG, "Roll wiggle direction change=$rollDirectionChanges, delta=${"%.2f".format(rollDelta)}")
-        }
-        
-        lastRollDirection = direction
-        lastRollAngle = currentRoll
-        
-        // Reset if too much time passed since first wiggle
-        if (rollDirectionChanges > 0 && rollWiggleStartTime > 0 && 
-            now - rollWiggleStartTime > WIGGLE_TIME_WINDOW_MS) {
-            rollDirectionChanges = 0
-            rollWiggleStartTime = 0L
-            Log.d(TAG, "Roll wiggle reset - timeout")
-        }
-        
-        // Start timing on first direction change
-        if (rollDirectionChanges == 1 && rollWiggleStartTime == 0L) {
-            rollWiggleStartTime = now
-        }
-        
-        // Trigger shake event on enough direction changes
-        if (rollDirectionChanges >= WIGGLE_TRIGGER_COUNT) {
-            rollDirectionChanges = 0
-            rollWiggleStartTime = 0L
-            lastRollDirection = 0
-            lastShakeTime = now  // Use shared cooldown
-            Log.d(TAG, "Roll wiggle gesture detected! Triggering listener")
+            Log.d(TAG, "Long-axis wiggle gesture detected! Triggering listener")
             shakeListener?.onShake()
         }
     }
@@ -952,14 +791,8 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
             // First sample: just set reference, don't move yet
             prevPitch = pitch
             prevRoll = roll
-            lastRollAngle = roll  // Initialize roll wiggle detection
             isFirstSample = false
             return
-        }
-        
-        // Detect roll wiggle (quick wrist turns) for shake alternative
-        if (shakeEnabled) {
-            detectRollWiggle(roll)
         }
         
         // Calculate motion since last frame

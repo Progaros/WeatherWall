@@ -42,7 +42,7 @@
         <info.olli.weatherlwp.settings.ToggleNavPreference
             android:key="pref_shake_fireworks_enabled"
             android:title="Shake for Fireworks"
-            android:summary="Firework count, sensitivity, delay"
+            android:summary="Wiggle the phone around its long axis (or shake hard)"
             android:defaultValue="true"
             app:fragment="info.olli.weatherlwp.settings.EventsShakeFragment" />
     </PreferenceCategory>

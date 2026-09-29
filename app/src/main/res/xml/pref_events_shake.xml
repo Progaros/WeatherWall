@@ -16,7 +16,7 @@
         <SeekBarPreference
             android:key="pref_shake_sensitivity"
             android:title="Shake Sensitivity"
-            android:summary="How hard to shake (0=hard, 100=gentle)"
+            android:summary="How fast and how often to wiggle or shake (0=deliberate, 100=gentle)"
             android:defaultValue="5"
             android:max="100"
             app:min="0"
