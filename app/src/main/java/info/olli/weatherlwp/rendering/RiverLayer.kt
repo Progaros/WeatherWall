@@ -8,7 +8,6 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Shader
-import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
@@ -760,11 +759,6 @@ class RiverLayer(private val context: Context) : SceneLayer {
     }
 
     // ========================= Settings =========================
-
-    override fun reloadSettings() {
-        val snapshot = PreferenceManager.getDefaultSharedPreferences(context).all
-        reloadSettings(SimulationSettings.fromSnapshot(snapshot))
-    }
 
     override fun reloadSettings(settings: SimulationSettings) {
         enabled = settings.getBoolean("pref_river_enabled", PreferenceDefaults.RIVER_ENABLED)

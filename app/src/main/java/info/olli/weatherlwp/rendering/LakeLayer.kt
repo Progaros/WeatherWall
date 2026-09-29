@@ -7,7 +7,6 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Shader
-import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
@@ -417,11 +416,6 @@ class LakeLayer(private val context: Context) : SceneLayer {
 
 
     // ========================= Settings =========================
-
-    override fun reloadSettings() {
-        val snapshot = PreferenceManager.getDefaultSharedPreferences(context).all
-        reloadSettings(SimulationSettings.fromSnapshot(snapshot))
-    }
 
     override fun reloadSettings(settings: SimulationSettings) {
         enabled = settings.getBoolean("pref_lake_enabled", PreferenceDefaults.LAKE_ENABLED)

@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.events.*
 import info.olli.weatherlwp.simulation.CloudDensity
@@ -184,7 +183,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     }
     
     init {
-        reloadSettings()
+        reloadSettings(SimulationSettings.fromSnapshot(emptyMap<String, Any?>()))
     }
     
     /**
@@ -635,11 +634,6 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         }
     }
     
-    override fun reloadSettings() {
-        val snapshot = PreferenceManager.getDefaultSharedPreferences(context).all
-        reloadSettings(SimulationSettings.fromSnapshot(snapshot))
-    }
-
     override fun reloadSettings(settings: SimulationSettings) {
         eventsEnabled = settings.getBoolean("pref_events_enabled", true)
         val chance = settings.getInt("pref_event_frequency", 50)

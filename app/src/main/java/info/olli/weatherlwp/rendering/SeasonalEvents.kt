@@ -9,7 +9,6 @@ import android.graphics.Path
 import android.graphics.RadialGradient
 import android.graphics.Shader
 import android.util.Log
-import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
@@ -221,8 +220,7 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
     private var shakeFireworksCount = 12  // Number of fireworks to launch on shake (10-15)
     
     init {
-        // Legacy fallback for callers that still use no-arg reload.
-        reloadSettings()
+        applySettings(currentSettings)
     }
     
     /**
@@ -1304,12 +1302,6 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
         renderBehindTerrain(canvas, enabled)
     }
     
-    override fun reloadSettings() {
-        val currentContext = context ?: return
-        val snapshot = PreferenceManager.getDefaultSharedPreferences(currentContext).all
-        reloadSettings(SimulationSettings.fromSnapshot(snapshot))
-    }
-
     override fun reloadSettings(settings: SimulationSettings) {
         applySettings(settings)
     }

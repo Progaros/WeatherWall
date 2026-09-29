@@ -878,10 +878,6 @@ class WeatherLayer : SceneLayer {
         render(canvas, state)
     }
 
-    override fun reloadSettings() {
-        // No-op - settings are set via setLayerSettings()
-    }
-    
     /**
      * Configure weather layer depth settings.
      * @param layers Number of depth layers (1-5)

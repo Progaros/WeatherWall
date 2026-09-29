@@ -47,17 +47,9 @@ interface SceneLayer {
     fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator)
 
     /**
-     * Reload preferences/settings.
-     */
-    fun reloadSettings()
-
-    /**
      * Reload settings from an immutable snapshot pushed by the engine.
-     * Default implementation delegates to the legacy no-arg reload.
      */
-    fun reloadSettings(settings: SimulationSettings) {
-        reloadSettings()
-    }
+    fun reloadSettings(settings: SimulationSettings) {}
     
     /**
      * Clean up resources.

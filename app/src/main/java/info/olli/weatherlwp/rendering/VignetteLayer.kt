@@ -6,7 +6,6 @@ import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
-import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
@@ -67,7 +66,7 @@ class VignetteLayer(private val context: Context) : SceneLayer {
     private var gradientsDirty = true
 
     init {
-        reloadSettings()
+        reloadSettings(SimulationSettings.fromSnapshot(emptyMap<String, Any?>()))
     }
 
     override fun update(state: SimulationState, deltaTimeMs: Long) {
@@ -223,11 +222,6 @@ class VignetteLayer(private val context: Context) : SceneLayer {
         width = w
         height = h
         gradientsDirty = true
-    }
-
-    override fun reloadSettings() {
-        val snapshot = PreferenceManager.getDefaultSharedPreferences(context).all
-        reloadSettings(SimulationSettings.fromSnapshot(snapshot))
     }
 
     override fun reloadSettings(settings: SimulationSettings) {

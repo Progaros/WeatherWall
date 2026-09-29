@@ -8,7 +8,6 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
-import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
@@ -272,7 +271,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
     private val effectiveMaxGroups get() = if (isPreviewMode) MAX_GROUPS_PREVIEW else MAX_GROUPS
     
     init {
-        reloadSettings()
+        reloadSettings(SimulationSettings.fromSnapshot(emptyMap<String, Any?>()))
     }
     
     /**
@@ -915,11 +914,6 @@ class CloudLayer(private val context: Context) : SceneLayer {
     internal fun getCloudGroups(): List<CloudGroup> = cloudGroups
     internal fun getBackLayerCount(): Int = cloudGroups.count { it.isBackLayer }
     internal fun getFrontLayerCount(): Int = cloudGroups.count { !it.isBackLayer }
-
-    override fun reloadSettings() {
-        val snapshot = PreferenceManager.getDefaultSharedPreferences(context).all
-        reloadSettings(SimulationSettings.fromSnapshot(snapshot))
-    }
 
     override fun reloadSettings(settings: SimulationSettings) {
         

@@ -7,7 +7,6 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Shader
-import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
@@ -130,7 +129,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
     private var frameSeason: String = "summer"
     
     init {
-        reloadSettings()
+        reloadSettings(SimulationSettings.fromSnapshot(emptyMap<String, Any?>()))
     }
     
     private fun getCurrentTerrainSeason(): String =
@@ -667,11 +666,6 @@ class MountainLayer(private val context: Context) : SceneLayer {
             canvas.drawPath(snowCapPath, snowCapPaint)
             snowCapPaint.shader = null
         }
-    }
-
-    override fun reloadSettings() {
-        val snapshot = PreferenceManager.getDefaultSharedPreferences(context).all
-        reloadSettings(SimulationSettings.fromSnapshot(snapshot))
     }
 
     override fun reloadSettings(settings: SimulationSettings) {

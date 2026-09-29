@@ -5,7 +5,6 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
-import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
@@ -43,8 +42,6 @@ class DebugOverlayLayer(private val context: Context) : SceneLayer {
         PARALLAX("parallax", "Parallax Offset"),
         SIMULATION("simulation", "Simulation")
     }
-    
-    private val prefs = PreferenceManager.getDefaultSharedPreferences(context)
     
     private var enabled = false
     private var enabledItems = mutableSetOf<DebugItem>()
@@ -104,7 +101,7 @@ class DebugOverlayLayer(private val context: Context) : SceneLayer {
     }
     
     init {
-        reloadSettings()
+        reloadSettings(SimulationSettings.fromSnapshot(emptyMap<String, Any?>()))
     }
     
     override fun resize(w: Float, h: Float) {
@@ -282,10 +279,6 @@ class DebugOverlayLayer(private val context: Context) : SceneLayer {
         }
     }
     
-    override fun reloadSettings() {
-        reloadSettings(SimulationSettings.fromSnapshot(prefs.all))
-    }
-
     override fun reloadSettings(settings: SimulationSettings) {
         enabled = settings.getBoolean("pref_debug_overlay_enabled", false)
         simulationEnabled = settings.debugEnabled

@@ -8,7 +8,6 @@ import android.graphics.Paint
 import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
-import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
@@ -122,7 +121,7 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
 
     init {
         generateStars()
-        reloadSettings()
+        reloadSettings(SimulationSettings.fromSnapshot(emptyMap<String, Any?>()))
     }
 
     private fun generateStars() {
@@ -649,15 +648,6 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         }
         
         moonPaint.shader = null
-    }
-
-    override fun reloadSettings() {
-        if (context == null) {
-            android.util.Log.w("SkyLayer", "reloadSettings() skipped: context is null")
-            return
-        }
-        val snapshot = PreferenceManager.getDefaultSharedPreferences(context).all
-        reloadSettings(SimulationSettings.fromSnapshot(snapshot))
     }
 
     override fun reloadSettings(settings: SimulationSettings) {

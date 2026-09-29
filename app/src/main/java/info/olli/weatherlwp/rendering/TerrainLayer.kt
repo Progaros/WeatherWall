@@ -9,7 +9,6 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Shader
 import android.os.Trace
-import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
@@ -343,7 +342,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private var decorBandBottomRatio: FloatArray = FloatArray(0)
 
     init {
-        reloadSettings()
+        reloadSettings(SimulationSettings.fromSnapshot(emptyMap<String, Any?>()))
     }
     
 
@@ -1796,11 +1795,6 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         android.util.Log.d("TerrainLayer",
             "Baked decoration bitmaps: ${hills.size} hills, W=${bmpW}px " +
             "(~${totalBytes / 1024L / 1024L}MB total)")
-    }
-
-    override fun reloadSettings() {
-        val snapshot = PreferenceManager.getDefaultSharedPreferences(context).all
-        reloadSettings(SimulationSettings.fromSnapshot(snapshot))
     }
 
     override fun reloadSettings(settings: SimulationSettings) {
