@@ -13,7 +13,6 @@ steps:
       - chmod +x gradlew
       # Signals when Google stops rejecting this runner's IP, so the mirror can be dropped again
       - curl -sS -o /dev/null -w 'dl.google.com=%{http_code}\n' --max-time 30 https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/8.11.1/gradle-8.11.1.pom || true
-      - ./gradlew dependencies --no-daemon
       - ./gradlew :app:dependencies --no-daemon
       - yes | sdkmanager --licenses || true
 
@@ -42,11 +41,11 @@ steps:
     environment:
       GRADLE_USER_HOME: *cache_path
     commands:
-      - ./gradlew assembleDebug --no-daemon
+      - ./gradlew assembleRelease --no-daemon
       - grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/' > .version
       - VERSION=$(cat .version)
       - echo "Built version $VERSION"
-      - cp app/build/outputs/apk/debug/app-debug.apk "WeatherWall-v$VERSION.apk"
+      - cp app/build/outputs/apk/release/app-release.apk "WeatherWall-v$VERSION.apk"
 
   # 5. Publish Release
   - name: release

@@ -36,6 +36,8 @@ android {
             signingConfig = signingConfigs.getByName("ciDebug")
         }
         release {
+            // Same key as published debug builds so existing installs keep updating.
+            signingConfig = signingConfigs.getByName("ciDebug")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
