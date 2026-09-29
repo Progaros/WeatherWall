@@ -49,22 +49,6 @@
         <item>overcast</item>
     </string-array>
 
-    <!-- Debug time options -->
-    <string-array name="time_options">
-        <item>Auto (Real Time)</item>
-        <item>Night (0:00)</item>
-        <item>Dawn (6:00)</item>
-        <item>Day (12:00)</item>
-        <item>Dusk (19:00)</item>
-    </string-array>
-    <string-array name="time_values">
-        <item>auto</item>
-        <item>night</item>
-        <item>dawn</item>
-        <item>day</item>
-        <item>dusk</item>
-    </string-array>
-
     <!-- Debug season options (for overlay events) -->
     <string-array name="season_options">
         <item>Auto (Real Date)</item>
