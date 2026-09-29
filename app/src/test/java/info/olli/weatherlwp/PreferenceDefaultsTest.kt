@@ -6,7 +6,7 @@ import java.io.File
 
 /**
  * Automated test to verify preference defaults are consistent across:
- * 1. Multiple XML files (preferences.xml, pref_effects.xml, pref_events.xml, etc.)
+ * 1. Multiple XML files (pref_effects.xml, pref_events.xml, etc.)
  * 2. Kotlin code that reads preferences with defaults
  * 3. PreferenceDefaults.kt (the source of truth)
  * 

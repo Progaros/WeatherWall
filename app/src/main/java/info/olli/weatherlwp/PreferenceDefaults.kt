@@ -4,7 +4,7 @@ package info.olli.weatherlwp
  * Single source of truth for all preference default values.
  * 
  * WHY THIS EXISTS:
- * - Android preference XML files (preferences.xml, pref_effects.xml, etc.) require
+ * - Android preference XML files (pref_effects.xml, pref_scene.xml, etc.) require
  *   hardcoded android:defaultValue attributes
  * - Kotlin code that reads preferences also needs defaults in getInt()/getString() calls
  * - Having the same value in multiple places leads to drift and bugs
