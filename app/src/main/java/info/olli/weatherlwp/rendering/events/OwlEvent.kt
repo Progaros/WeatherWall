@@ -102,6 +102,24 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         // Compact, barrel-shaped body (owls are stocky)
         val bodyW = size * 0.35f
         val bodyH = size * 0.45f
+        val wingSpan = size * 0.9f
+
+        // Far wing first so the body covers its root; a curve that collapsed to a sliver
+        // used to dangle under the owl like a tail.
+        canvas.save()
+        canvas.rotate(wingAngle * 0.7f, currentX + bodyW * 0.1f, currentY)
+        paint.color = darkColor
+        path.reset()
+        path.moveTo(currentX + bodyW * 0.1f, currentY - bodyH * 0.05f)
+        path.quadTo(currentX - wingSpan * 0.35f, currentY - bodyH * 0.35f,
+                    currentX - wingSpan * 0.8f, currentY + bodyH * 0.05f)
+        path.lineTo(currentX - wingSpan * 0.72f, currentY + bodyH * 0.35f)
+        path.quadTo(currentX - wingSpan * 0.35f, currentY + bodyH * 0.6f,
+                    currentX + bodyW * 0.1f, currentY + bodyH * 0.35f)
+        path.close()
+        canvas.drawPath(path, paint)
+        canvas.restore()
+
         paint.color = bodyColor
         canvas.drawOval(
             currentX - bodyW * 0.8f, currentY - bodyH * 0.4f,
@@ -151,8 +169,6 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         
         // === WINGS ===
         // Broad, rounded wings - owls have wide wings for silent flight
-        val wingSpan = size * 0.9f
-        
         canvas.save()
         // Left wing (top wing when flying right) - rotates with flap
         canvas.rotate(-wingAngle * 0.7f, currentX - bodyW * 0.2f, currentY)
@@ -161,10 +177,14 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         path.moveTo(currentX - bodyW * 0.2f, currentY - bodyH * 0.2f)
         path.quadTo(currentX - bodyW * 0.6f, currentY - wingSpan * 0.6f,
                     currentX - wingSpan, currentY - wingSpan * 0.15f)
-        // Rounded wing tip with feather notches
-        path.quadTo(currentX - wingSpan * 1.05f, currentY + bodyH * 0.1f,
-                    currentX - wingSpan * 0.85f, currentY + bodyH * 0.25f)
-        path.quadTo(currentX - bodyW * 0.5f, currentY + bodyH * 0.3f,
+        // Rounded tip, then scalloped trailing edge so the wing reads as feathers, not a blob
+        path.quadTo(currentX - wingSpan * 1.05f, currentY + bodyH * 0.05f,
+                    currentX - wingSpan * 0.92f, currentY + bodyH * 0.22f)
+        path.quadTo(currentX - wingSpan * 0.82f, currentY + bodyH * 0.42f,
+                    currentX - wingSpan * 0.72f, currentY + bodyH * 0.28f)
+        path.quadTo(currentX - wingSpan * 0.62f, currentY + bodyH * 0.46f,
+                    currentX - wingSpan * 0.52f, currentY + bodyH * 0.32f)
+        path.quadTo(currentX - wingSpan * 0.42f, currentY + bodyH * 0.48f,
                     currentX - bodyW * 0.3f, currentY + bodyH * 0.2f)
         path.close()
         canvas.drawPath(path, paint)
@@ -178,23 +198,6 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         path.lineTo(currentX - wingSpan * 0.85f, currentY + bodyH * 0.15f)
         path.quadTo(currentX - bodyW * 0.5f, currentY + bodyH * 0.2f,
                     currentX - bodyW * 0.4f, currentY + bodyH * 0.1f)
-        path.close()
-        canvas.drawPath(path, paint)
-        canvas.restore()
-
-        // Right wing (far wing, sweeps back under the body like the near one -
-        // projecting it forward put a dark wedge in front of the owl's face).
-        canvas.save()
-        canvas.rotate(wingAngle * 0.7f, currentX + bodyW * 0.1f, currentY)
-        paint.color = darkColor
-        path.reset()
-        path.moveTo(currentX + bodyW * 0.1f, currentY + bodyH * 0.2f)
-        path.quadTo(currentX - bodyW * 0.4f, currentY + wingSpan * 0.45f,
-                    currentX - wingSpan * 0.65f, currentY + wingSpan * 0.28f)
-        path.quadTo(currentX - wingSpan * 0.72f, currentY + bodyH * 0.55f,
-                    currentX - wingSpan * 0.5f, currentY + bodyH * 0.62f)
-        path.quadTo(currentX - bodyW * 0.3f, currentY + bodyH * 0.55f,
-                    currentX + bodyW * 0.1f, currentY + bodyH * 0.35f)
         path.close()
         canvas.drawPath(path, paint)
         canvas.restore()
