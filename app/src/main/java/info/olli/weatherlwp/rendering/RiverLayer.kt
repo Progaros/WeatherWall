@@ -40,10 +40,6 @@ class RiverLayer(private val context: Context) : SceneLayer {
         private const val TAG = "RiverLayer"
     }
 
-    /** Callback to query terrain Y position at a given (xRatio, depthFactor). */
-    @Deprecated("Use terrainYWorldProvider (worldX-based) instead")
-    var terrainYProvider: ((xRatio: Float, depthFactor: Float) -> Float)? = null
-
     /** World-space callback to query terrain Y position at a given (worldX, depthFactor). */
     var terrainYWorldProvider: ((worldX: Float, depthFactor: Float) -> Float)? = null
 
@@ -166,19 +162,15 @@ class RiverLayer(private val context: Context) : SceneLayer {
         // Get available hill layers from terrain
         val depthFactors = hillDepthProvider?.invoke() ?: emptyList()
         val worldProvider = terrainYWorldProvider
-        @Suppress("DEPRECATION")
-        val legacyProvider = terrainYProvider
 
-        if (depthFactors.isEmpty() || (worldProvider == null && legacyProvider == null)) {
+        if (depthFactors.isEmpty() || worldProvider == null) {
             // Fallback: simple horizontal river near bottom
             drawFallbackRiver(canvas, state, parallaxCalculator, waterLevel, waterColor, isFrozen)
             return
         }
 
         // Build transform for world-space sampling
-        val transform = if (worldProvider != null)
-            cachedTransform
-        else null
+        val transform = cachedTransform
 
         // Draw water at each hill depth layer (back to front)
         // Water appears in valley portions of each hill, getting wider toward foreground
@@ -210,12 +202,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
             var maxTerrainY = Float.MIN_VALUE
             for (i in 0..numSamples) {
                 val screenX = left + i.toFloat() / numSamples * totalW
-                val terrainY = if (worldProvider != null && transform != null) {
-                    worldProvider(transform.screenToWorldX(screenX), depth) * height
-                } else {
-                    val xRatio = i.toFloat() / numSamples
-                    legacyProvider!!.invoke(xRatio, depth) * height
-                }
+                val terrainY = worldProvider(transform.screenToWorldX(screenX), depth) * height
                 terrainYsArray[i] = terrainY
                 if (terrainY < minTerrainY) minTerrainY = terrainY
                 if (terrainY > maxTerrainY) maxTerrainY = terrainY
@@ -291,14 +278,8 @@ class RiverLayer(private val context: Context) : SceneLayer {
         val waterLevel = state.riverLevel
         if (waterLevel < 0.01f) return
 
-        val worldProvider = terrainYWorldProvider
-        @Suppress("DEPRECATION")
-        val legacyProvider = terrainYProvider
-        if (worldProvider == null && legacyProvider == null) return
-
-        val transform = if (worldProvider != null)
-            cachedTransform
-        else null
+        val worldProvider = terrainYWorldProvider ?: return
+        val transform = cachedTransform
 
         val isFrozen = WaterColorUtil.isFrozen(state, waterPalette.frozenThreshold)
         val waterColor = WaterColorUtil.getWaterColor(state, isFrozen, waterPalette)
@@ -327,12 +308,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
         var maxTerrainY = Float.MIN_VALUE
         for (i in 0..numSamples) {
             val screenX = left + i * sampleStepX
-            val terrainY = if (worldProvider != null && transform != null) {
-                worldProvider(transform.screenToWorldX(screenX), depthFactor) * height
-            } else {
-                val xRatio = ((screenX - left) / totalW).coerceIn(0f, 1f)
-                legacyProvider!!.invoke(xRatio, depthFactor) * height
-            }
+            val terrainY = worldProvider(transform.screenToWorldX(screenX), depthFactor) * height
             terrainYsArray[i] = terrainY
             if (terrainY < minTerrainY) minTerrainY = terrainY
             if (terrainY > maxTerrainY) maxTerrainY = terrainY
@@ -429,6 +405,8 @@ class RiverLayer(private val context: Context) : SceneLayer {
 
         // Compute river path bounds for gradient
         val bounds = segmentBounds
+        // No non-deprecated overload in compileSdk 35; 'exact' is ignored since API 34.
+        @Suppress("DEPRECATION")
         riverPath.computeBounds(bounds, true)
         val topY = bounds.top
         val botY = bounds.bottom

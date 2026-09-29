@@ -146,9 +146,8 @@ class ParallaxScene(
         
         // Set up terrain provider so ground events can follow the hill contour
         randomEventLayer.eventTerrainProvider = { eventX, depthFactor ->
-            // Convert from extended-field normalized x to screen-width ratio for terrain lookup
-            val screenRatio = randomEventLayer.eventXToScreenRatio(eventX)
-            terrainLayer.getHillYAtPosition(screenRatio, depthFactor)
+            val worldX = terrainLayer.screenToWorldX(randomEventLayer.eventXToScreenX(eventX))
+            terrainLayer.getHillYAtWorldX(worldX, depthFactor)
         }
         
         // Set up hill info provider so events snap to actual hill depths for correct draw ordering
@@ -157,10 +156,6 @@ class ParallaxScene(
         }
         
         // Wire river layer to terrain data so water flows through valleys
-        @Suppress("DEPRECATION")
-        riverLayer.terrainYProvider = { xRatio, depthFactor ->
-            terrainLayer.getHillYAtPosition(xRatio, depthFactor)
-        }
         riverLayer.terrainYWorldProvider = { worldX, depthFactor ->
             terrainLayer.getHillYAtWorldX(worldX, depthFactor)
         }
@@ -179,10 +174,6 @@ class ParallaxScene(
         riverLayer.drawViaCallback = true
         
         // Wire lake layer to terrain data
-        @Suppress("DEPRECATION")
-        lakeLayer.terrainYProvider = { xRatio, depthFactor ->
-            terrainLayer.getHillYAtPosition(xRatio, depthFactor)
-        }
         lakeLayer.terrainYWorldProvider = { worldX, depthFactor ->
             terrainLayer.getHillYAtWorldX(worldX, depthFactor)
         }
@@ -610,12 +601,8 @@ class ParallaxScene(
         terrainLayer.lakeDrawer = null
         randomEventLayer.eventTerrainProvider = null
         randomEventLayer.hillInfoWorldProvider = null
-        @Suppress("DEPRECATION")
-        riverLayer.terrainYProvider = null
         riverLayer.terrainYWorldProvider = null
         riverLayer.hillDepthProvider = null
-        @Suppress("DEPRECATION")
-        lakeLayer.terrainYProvider = null
         lakeLayer.terrainYWorldProvider = null
         lakeLayer.hillDepthProvider = null
 

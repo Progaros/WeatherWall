@@ -70,13 +70,8 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     // Ratio of visible viewport to extended world width (1.0 landscape, <1.0 portrait)
     private var viewportRatio = 1.0f
 
-    /**
-     * Convert an event's normalized x (in extended field space) to the
-     * equivalent screen-width ratio (0 = left edge, 1 = right edge).
-     * Used by eventTerrainProvider to look up terrain at the correct world position.
-     */
-    fun eventXToScreenRatio(x: Float): Float =
-        if (width > 0f) (x * extendedWidth - extendedOffset) / width else x
+    /** Convert an event's normalized x (in extended field space) to screen pixels. */
+    fun eventXToScreenX(x: Float): Float = x * extendedWidth - extendedOffset
 
     // Cached per-frame ambient color (computed in update, used by multiple draw methods)
     private var cachedAmbientColor = 0

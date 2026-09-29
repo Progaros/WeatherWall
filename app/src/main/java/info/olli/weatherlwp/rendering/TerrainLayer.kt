@@ -832,17 +832,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         return getHillY(worldX, closest)
     }
 
-    /**
-     * Legacy xRatio-based API — converts xRatio to worldX using current screen width and heightScale.
-     * @param xRatio X position as ratio (0.0 to 1.0, 0.5 = center)
-     */
-    @Deprecated("Use getHillYAtWorldX(worldX, depthFactor) instead")
-    fun getHillYAtPosition(xRatio: Float, depthFactor: Float): Float {
-        val transform = cachedTransform
-        val screenX = xRatio * width
-        val worldX = transform.screenToWorldX(screenX)
-        return getHillYAtWorldX(worldX, depthFactor)
-    }
+    /** Project a screen-pixel X to world space using the current viewport. */
+    fun screenToWorldX(screenX: Float): Float = cachedTransform.screenToWorldX(screenX)
     
     /**
      * Get full hill info (Y position and actual depthFactor) at given world-space X.
@@ -874,17 +865,6 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             i++
         }
         return closestHill
-    }
-
-    /**
-     * Legacy xRatio-based API — converts xRatio to worldX using current screen width and heightScale.
-     */
-    @Deprecated("Use getHillInfoAtWorldX(worldX, requestedDepthFactor) instead")
-    fun getHillInfoAtPosition(xRatio: Float, requestedDepthFactor: Float): Pair<Float, Float> {
-        val transform = cachedTransform
-        val screenX = xRatio * width
-        val worldX = transform.screenToWorldX(screenX)
-        return getHillInfoAtWorldX(worldX, requestedDepthFactor)
     }
 
     /**

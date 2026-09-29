@@ -17,7 +17,7 @@ import kotlin.random.Random
  * 
  * DEPTH SYSTEM: Uses discrete foreground hill depths (last 60% of hill range) to ensure
  * the fox is drawn at the correct layer relative to trees. The depthFactor is chosen from
- * values that will match actual hill depthFactors when getHillYAtPosition snaps to closest hill.
+ * values that will match actual hill depthFactors when getHillYAtWorldX snaps to closest hill.
  */
 class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis(), viewportRatio: Float = 1.0f) : RandomEvent {
     override val layer = EventLayer.GROUND
