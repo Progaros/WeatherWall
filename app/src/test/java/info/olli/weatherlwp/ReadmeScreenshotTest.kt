@@ -38,18 +38,21 @@ class ReadmeScreenshotTest {
         val cloudCover: Int,
         val precip: Int,
         val season: String,
+        val seed: Int,
+        val windSpeed: Float,
         val extraPrefs: Map<String, Any> = emptyMap()
     )
 
+    // Each shot gets its own landscape seed (terrain, mountains, clouds) and wind, so the GIFs differ.
     private val shots = listOf(
-        Shot("Screenshot_1.gif", 5 * 60 + 50, WeatherType.CLOUDY, 70, 0, "spring"),          // Dawn clouds
-        Shot("Screenshot_2.gif", 13 * 60, WeatherType.PARTLY_CLOUDY, 20, 0, "summer"),       // Clear day
-        Shot("Screenshot_3.gif", 11 * 60, WeatherType.SNOW, 90, 90, "winter", mapOf(         // Snowy day
+        Shot("Screenshot_1.gif", 5 * 60 + 50, WeatherType.CLOUDY, 70, 0, "spring", 208, 2f),          // Dawn clouds
+        Shot("Screenshot_2.gif", 13 * 60, WeatherType.PARTLY_CLOUDY, 20, 0, "summer", 42, 4f),        // Clear day
+        Shot("Screenshot_3.gif", 11 * 60, WeatherType.SNOW, 90, 90, "winter", 517, 1.5f, mapOf(      // Snowy day
             "pref_sim_weather_history" to true,
             "pref_sim_snow_level" to 80
         )),
-        Shot("Screenshot_4.gif", 19 * 60 + 40, WeatherType.RAIN, 85, 85, "autumn"),          // Rainy dusk
-        Shot("Screenshot_5.gif", 23 * 60, WeatherType.CLEAR, 5, 0, "summer", mapOf(         // Night sky
+        Shot("Screenshot_4.gif", 19 * 60 + 40, WeatherType.RAIN, 85, 85, "autumn", 733, 7f),          // Rainy dusk
+        Shot("Screenshot_5.gif", 23 * 60, WeatherType.CLEAR, 5, 0, "summer", 96, 3f, mapOf(           // Night sky
             "pref_moon_phase" to 40
         ))
     )
@@ -70,6 +73,7 @@ class ReadmeScreenshotTest {
                 .putBoolean("pref_debug_enabled", true)
                 .putInt("pref_manual_time", shot.minutes)
                 .putString("pref_terrain_season", shot.season)
+                .putInt("pref_random_seed", shot.seed)
             shot.extraPrefs.forEach { (key, value) ->
                 when (value) {
                     is Int -> editor.putInt(key, value)
@@ -81,7 +85,7 @@ class ReadmeScreenshotTest {
 
             // Same path as a Breezy Weather broadcast, so clouds and precipitation follow the data.
             WeatherRepository.updateWeather(
-                context, shot.weather, sunrise = -1L, sunset = -1L, windSpeed = 3f,
+                context, shot.weather, sunrise = -1L, sunset = -1L, windSpeed = shot.windSpeed,
                 extendedData = WeatherRepository.ExtendedWeatherData(
                     precipProbability = shot.precip,
                     cloudCover = shot.cloudCover,
