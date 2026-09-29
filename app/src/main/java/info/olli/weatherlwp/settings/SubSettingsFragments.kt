@@ -6,100 +6,39 @@ import info.olli.weatherlwp.R
 import info.olli.weatherlwp.simulation.WeatherHistory
 
 /**
- * Sub-settings fragments for nested preference screens.
- * Each fragment loads a specific XML preference resource.
- * Fragments with custom logic (events spawn, system about) are in separate files.
+ * Generic sub-screen that loads the preference XML named by the `xml` argument.
+ * Set it in XML via `<extra android:name="xml" android:value="pref_..." />`;
+ * MainActivity.onPreferenceStartFragment forwards `pref.extras` as fragment arguments.
+ * Fragments with custom logic (simulation, events choose, system about) are separate classes.
  */
-
-// ── Scene Sub-screens ────────────────────────────────────────────────
-
-class SceneMountainsFragment : PreferenceFragmentCompat() {
+class XmlPreferenceFragment : PreferenceFragmentCompat() {
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-        setPreferencesFromResource(R.xml.pref_scene_mountains, rootKey)
+        val name = arguments?.getString(ARG_XML)
+        val resId = XML_BY_NAME[name]
+            ?: throw IllegalArgumentException("Unknown preference XML '$name' for XmlPreferenceFragment")
+        setPreferencesFromResource(resId, rootKey)
     }
-}
 
-class SceneHillsFragment : PreferenceFragmentCompat() {
-    override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-        setPreferencesFromResource(R.xml.pref_scene_hills, rootKey)
-    }
-}
+    companion object {
+        const val ARG_XML = "xml"
 
-class SceneTreesFragment : PreferenceFragmentCompat() {
-    override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-        setPreferencesFromResource(R.xml.pref_scene_trees, rootKey)
-    }
-}
-
-// ── Effects Sub-screens ──────────────────────────────────────────────
-
-class EffectsSkyFragment : PreferenceFragmentCompat() {
-    override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-        setPreferencesFromResource(R.xml.pref_effects_sky, rootKey)
-    }
-}
-
-class EffectsParallaxFragment : PreferenceFragmentCompat() {
-    override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-        setPreferencesFromResource(R.xml.pref_effects_parallax, rootKey)
-    }
-}
-
-class EffectsCloudsFragment : PreferenceFragmentCompat() {
-    override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-        setPreferencesFromResource(R.xml.pref_effects_clouds, rootKey)
-    }
-}
-
-class EffectsWeatherShadowsFragment : PreferenceFragmentCompat() {
-    override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-        setPreferencesFromResource(R.xml.pref_effects_weather_shadows, rootKey)
-    }
-}
-
-class EffectsSeasonalFragment : PreferenceFragmentCompat() {
-    override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-        setPreferencesFromResource(R.xml.pref_effects_seasonal, rootKey)
-    }
-}
-
-class EffectsVignetteFragment : PreferenceFragmentCompat() {
-    override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-        setPreferencesFromResource(R.xml.pref_effects_vignette, rootKey)
-    }
-}
-
-class EffectsRiverFragment : PreferenceFragmentCompat() {
-    override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-        setPreferencesFromResource(R.xml.pref_effects_river, rootKey)
-    }
-}
-
-class EffectsLakeFragment : PreferenceFragmentCompat() {
-    override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-        setPreferencesFromResource(R.xml.pref_effects_lake, rootKey)
-    }
-}
-
-// ── Events Sub-screens ───────────────────────────────────────────────
-
-class EventsSeasonalFragment : PreferenceFragmentCompat() {
-    override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-        setPreferencesFromResource(R.xml.pref_events_seasonal, rootKey)
-    }
-}
-
-class EventsShakeFragment : PreferenceFragmentCompat() {
-    override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-        setPreferencesFromResource(R.xml.pref_events_shake, rootKey)
-    }
-}
-
-// ── System Sub-screens ───────────────────────────────────────────────
-
-class SystemIdleFragment : PreferenceFragmentCompat() {
-    override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-        setPreferencesFromResource(R.xml.pref_system_idle, rootKey)
+        // Explicit R.xml references (not getIdentifier) keep these resources alive under shrinkResources.
+        private val XML_BY_NAME = mapOf(
+            "pref_scene_mountains" to R.xml.pref_scene_mountains,
+            "pref_scene_hills" to R.xml.pref_scene_hills,
+            "pref_scene_trees" to R.xml.pref_scene_trees,
+            "pref_effects_sky" to R.xml.pref_effects_sky,
+            "pref_effects_parallax" to R.xml.pref_effects_parallax,
+            "pref_effects_clouds" to R.xml.pref_effects_clouds,
+            "pref_effects_weather_shadows" to R.xml.pref_effects_weather_shadows,
+            "pref_effects_seasonal" to R.xml.pref_effects_seasonal,
+            "pref_effects_vignette" to R.xml.pref_effects_vignette,
+            "pref_effects_river" to R.xml.pref_effects_river,
+            "pref_effects_lake" to R.xml.pref_effects_lake,
+            "pref_events_seasonal" to R.xml.pref_events_seasonal,
+            "pref_events_shake" to R.xml.pref_events_shake,
+            "pref_system_idle" to R.xml.pref_system_idle,
+        )
     }
 }
 

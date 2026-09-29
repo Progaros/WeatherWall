@@ -35,7 +35,9 @@
             android:title="Seasonal Effects"
             android:summary="Christmas, New Year, St. Patrick's settings"
             android:defaultValue="true"
-            app:fragment="info.olli.weatherlwp.settings.EventsSeasonalFragment" />
+            app:fragment="info.olli.weatherlwp.settings.XmlPreferenceFragment">
+            <extra android:name="xml" android:value="pref_events_seasonal" />
+        </info.olli.weatherlwp.settings.ToggleNavPreference>
     </PreferenceCategory>
 
     <PreferenceCategory android:title="Shake Gesture">
@@ -44,7 +46,9 @@
             android:title="Shake for Fireworks"
             android:summary="Wiggle the phone around its long axis (or shake hard)"
             android:defaultValue="true"
-            app:fragment="info.olli.weatherlwp.settings.EventsShakeFragment" />
+            app:fragment="info.olli.weatherlwp.settings.XmlPreferenceFragment">
+            <extra android:name="xml" android:value="pref_events_shake" />
+        </info.olli.weatherlwp.settings.ToggleNavPreference>
     </PreferenceCategory>
 
 </PreferenceScreen>

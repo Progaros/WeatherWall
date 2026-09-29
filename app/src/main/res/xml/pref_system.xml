@@ -37,7 +37,9 @@
             android:title="Idle Mode"
             android:summary="Idle FPS, timeout duration"
             android:defaultValue="true"
-            app:fragment="info.olli.weatherlwp.settings.SystemIdleFragment" />
+            app:fragment="info.olli.weatherlwp.settings.XmlPreferenceFragment">
+            <extra android:name="xml" android:value="pref_system_idle" />
+        </info.olli.weatherlwp.settings.ToggleNavPreference>
     </PreferenceCategory>
 
     <PreferenceCategory android:title="Testing">

@@ -22,7 +22,9 @@ import info.olli.weatherlwp.R
  *     android:title="Clouds"
  *     android:summary="Fluffiness, shape, opacity, speed, render mode"
  *     android:defaultValue="true"
- *     app:fragment="info.olli.weatherlwp.settings.EffectsCloudsFragment" />
+ *     app:fragment="info.olli.weatherlwp.settings.XmlPreferenceFragment">
+ *     <extra android:name="xml" android:value="pref_effects_clouds" />
+ * </info.olli.weatherlwp.settings.ToggleNavPreference>
  * ```
  */
 class ToggleNavPreference @JvmOverloads constructor(

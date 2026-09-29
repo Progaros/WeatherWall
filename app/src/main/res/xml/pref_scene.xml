@@ -30,7 +30,9 @@
             android:key="pref_nav_mountains"
             android:title="Mountain Details"
             android:summary="Width, height, roughness, ridge, position"
-            app:fragment="info.olli.weatherlwp.settings.SceneMountainsFragment" />
+            app:fragment="info.olli.weatherlwp.settings.XmlPreferenceFragment">
+            <extra android:name="xml" android:value="pref_scene_mountains" />
+        </Preference>
     </PreferenceCategory>
 
     <PreferenceCategory android:title="Hills">
@@ -48,7 +50,9 @@
             android:key="pref_nav_hills"
             android:title="Hill Details"
             android:summary="Position, roughness, height, frequency, depth"
-            app:fragment="info.olli.weatherlwp.settings.SceneHillsFragment" />
+            app:fragment="info.olli.weatherlwp.settings.XmlPreferenceFragment">
+            <extra android:name="xml" android:value="pref_scene_hills" />
+        </Preference>
     </PreferenceCategory>
 
     <PreferenceCategory android:title="Trees">
@@ -66,7 +70,9 @@
             android:key="pref_nav_trees"
             android:title="Tree Details"
             android:summary="Spread, gaps, size, width, segments, color"
-            app:fragment="info.olli.weatherlwp.settings.SceneTreesFragment" />
+            app:fragment="info.olli.weatherlwp.settings.XmlPreferenceFragment">
+            <extra android:name="xml" android:value="pref_scene_trees" />
+        </Preference>
     </PreferenceCategory>
 
 </PreferenceScreen>
