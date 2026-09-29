@@ -17,10 +17,14 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
- * Regenerates docs/screenshots/Screenshot_N.png through the real ParallaxScene with the app's
- * default settings. Skipped unless run with -Dreadme.screenshots=true.
+ * Regenerates docs/screenshots/Screenshot_N.gif: the real ParallaxScene with the app's default
+ * settings, tilted in a slow circle through the same input the gyroscope drives.
+ * Skipped unless run with -Dreadme.screenshots=true.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -38,14 +42,14 @@ class ReadmeScreenshotTest {
     )
 
     private val shots = listOf(
-        Shot("Screenshot_1.png", 5 * 60 + 50, WeatherType.CLOUDY, 70, 0, "spring"),          // Dawn clouds
-        Shot("Screenshot_2.png", 13 * 60, WeatherType.PARTLY_CLOUDY, 20, 0, "summer"),       // Clear day
-        Shot("Screenshot_3.png", 11 * 60, WeatherType.SNOW, 90, 90, "winter", mapOf(         // Snowy day
+        Shot("Screenshot_1.gif", 5 * 60 + 50, WeatherType.CLOUDY, 70, 0, "spring"),          // Dawn clouds
+        Shot("Screenshot_2.gif", 13 * 60, WeatherType.PARTLY_CLOUDY, 20, 0, "summer"),       // Clear day
+        Shot("Screenshot_3.gif", 11 * 60, WeatherType.SNOW, 90, 90, "winter", mapOf(         // Snowy day
             "pref_sim_weather_history" to true,
             "pref_sim_snow_level" to 80
         )),
-        Shot("Screenshot_4.png", 19 * 60 + 40, WeatherType.RAIN, 85, 85, "autumn"),          // Rainy dusk
-        Shot("Screenshot_5.png", 23 * 60, WeatherType.CLEAR, 5, 0, "summer", mapOf(         // Night sky
+        Shot("Screenshot_4.gif", 19 * 60 + 40, WeatherType.RAIN, 85, 85, "autumn"),          // Rainy dusk
+        Shot("Screenshot_5.gif", 23 * 60, WeatherType.CLEAR, 5, 0, "summer", mapOf(         // Night sky
             "pref_moon_phase" to 40
         ))
     )
@@ -98,10 +102,38 @@ class ReadmeScreenshotTest {
                 scene.render(canvas, 33L)
                 Thread.sleep(33L)
             }
-            scene.destroy()
 
-            File(outDir, shot.file).outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            // One warm-up orbit so the smoothed offset is on its steady path, then capture the
+            // next orbit so the GIF loops seamlessly. The orbit speed stays above the
+            // "device is still" threshold, so return-to-center never kicks in.
+            val frames = mutableListOf<IntArray>()
+            for (i in 0 until FRAMES_PER_ORBIT * 2) {
+                val angle = 2.0 * PI * i / FRAMES_PER_ORBIT
+                scene.onTiltChanged((TILT * cos(angle)).toFloat(), (TILT * sin(angle)).toFloat())
+                scene.render(canvas, 33L)
+                Thread.sleep(33L)
+                if (i >= FRAMES_PER_ORBIT) frames.add(downscale(bitmap))
+            }
+            scene.destroy()
             bitmap.recycle()
+
+            GifWriter.write(File(outDir, shot.file), GIF_WIDTH, GIF_HEIGHT, frames, GIF_DELAY_CS)
         }
+    }
+
+    private fun downscale(bitmap: Bitmap): IntArray {
+        val small = Bitmap.createScaledBitmap(bitmap, GIF_WIDTH, GIF_HEIGHT, true)
+        val pixels = IntArray(GIF_WIDTH * GIF_HEIGHT)
+        small.getPixels(pixels, 0, GIF_WIDTH, 0, 0, GIF_WIDTH, GIF_HEIGHT)
+        small.recycle()
+        return pixels
+    }
+
+    private companion object {
+        const val GIF_WIDTH = 360
+        const val GIF_HEIGHT = 780
+        const val FRAMES_PER_ORBIT = 60
+        const val GIF_DELAY_CS = 5
+        const val TILT = 0.6
     }
 }

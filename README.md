@@ -15,11 +15,11 @@ No analytics. No internet permission.
 ## Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/Screenshot_1.png" width="180" alt="Dawn clouds">
-  <img src="docs/screenshots/Screenshot_2.png" width="180" alt="Clear day">
-  <img src="docs/screenshots/Screenshot_3.png" width="180" alt="Snowy day">
-  <img src="docs/screenshots/Screenshot_4.png" width="180" alt="Rainy dusk">
-  <img src="docs/screenshots/Screenshot_5.png" width="180" alt="Night sky">
+  <img src="docs/screenshots/Screenshot_1.gif" width="180" alt="Dawn clouds">
+  <img src="docs/screenshots/Screenshot_2.gif" width="180" alt="Clear day">
+  <img src="docs/screenshots/Screenshot_3.gif" width="180" alt="Snowy day">
+  <img src="docs/screenshots/Screenshot_4.gif" width="180" alt="Rainy dusk">
+  <img src="docs/screenshots/Screenshot_5.gif" width="180" alt="Night sky">
 </p>
 
 ## Features
@@ -97,8 +97,9 @@ the animal at different screen positions, never at different points of its strid
 
 ### README screenshots
 
-`docs/screenshots/` is rendered through the real `ParallaxScene` with the app's default settings
-(`ReadmeScreenshotTest`). The test is skipped unless explicitly requested:
+`docs/screenshots/` holds looping GIFs rendered through the real `ParallaxScene` with the app's
+default settings while the device tilt orbits (`ReadmeScreenshotTest`). The test is skipped unless
+explicitly requested:
 
 ```bash
 docker compose exec dev ./gradlew testDebugUnitTest --tests '*ReadmeScreenshotTest' -Dreadme.screenshots=true
