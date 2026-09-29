@@ -6,6 +6,19 @@ import info.olli.weatherlwp.weather.WeatherRepository
 import info.olli.weatherlwp.weather.WeatherType
 import info.olli.weatherlwp.util.SeasonHelper
 
+/** Inclusive [start, end] window on a 24 h clock; bounds outside [0, 24) wrap past midnight. */
+internal fun inHourWindow(time: Float, start: Float, end: Float): Boolean {
+    val t = normalizeHour(time)
+    val s = normalizeHour(start)
+    val e = normalizeHour(end)
+    return if (s <= e) t in s..e else t >= s || t <= e
+}
+
+private fun normalizeHour(hour: Float): Float {
+    val h = hour % 24f
+    return if (h < 0f) h + 24f else h
+}
+
 /**
  * Main controller for the simulation.
  * 
@@ -185,10 +198,10 @@ class SimulationController(private val context: Context) {
         // Calculate golden hour and blue hour flags
         val goldenHourDuration = 0.75f  // ~45 mins
         val blueHourDuration = 0.5f     // ~30 mins
-        val isGoldenHour = rawTime in sunriseHours..(sunriseHours + goldenHourDuration) ||
-                           rawTime in (sunsetHours - goldenHourDuration)..sunsetHours
-        val isBlueHour = rawTime in (sunriseHours - blueHourDuration)..sunriseHours ||
-                         rawTime in sunsetHours..(sunsetHours + blueHourDuration)
+        val isGoldenHour = inHourWindow(rawTime, sunriseHours, sunriseHours + goldenHourDuration) ||
+                           inHourWindow(rawTime, sunsetHours - goldenHourDuration, sunsetHours)
+        val isBlueHour = inHourWindow(rawTime, sunriseHours - blueHourDuration, sunriseHours) ||
+                         inHourWindow(rawTime, sunsetHours, sunsetHours + blueHourDuration)
         
         // Record weather history (throttled to once per minute; deduplicates internally to once per hour)
         // In debug mode, pass the effective (overridden) weather so history tracks simulated conditions

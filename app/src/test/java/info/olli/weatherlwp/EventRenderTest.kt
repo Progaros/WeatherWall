@@ -7,6 +7,8 @@ import android.graphics.Paint
 import android.graphics.Rect
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.events.*
+import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -35,6 +37,9 @@ class EventRenderTest {
     private val cropSize = 400  // Output size for cropped view
     private val outputDir = File("/workspace/event_renders").also { it.mkdirs() }
 
+    // ~4x4 px: far below the smallest event (a single firefly glow is several hundred px).
+    private val minEventPixels = 16
+
     /**
      * Find bounding box of non-background pixels in bitmap.
      */
@@ -57,6 +62,17 @@ class EventRenderTest {
         }
         
         return if (maxX > minX && maxY > minY) Rect(minX, minY, maxX, maxY) else null
+    }
+
+    private fun countNonBackgroundPixels(bitmap: Bitmap, bgColor: Int): Int {
+        val w = bitmap.width
+        val row = IntArray(w)
+        var count = 0
+        for (y in 0 until bitmap.height) {
+            bitmap.getPixels(row, 0, w, 0, y, w, 1)
+            for (x in 0 until w) if (row[x] != bgColor && Color.alpha(row[x]) > 10) count++
+        }
+        return count
     }
 
     /**
@@ -172,8 +188,12 @@ class EventRenderTest {
             File(outputDir, "$name.png").outputStream().use {
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
             }
+            fail("$name drew nothing at progress $progresses")
             return
         }
+
+        val drawn = countNonBackgroundPixels(bestBitmap, bgColor)
+        assertTrue("$name drew only $drawn px (min $minEventPixels)", drawn >= minEventPixels)
         
         // Save full scene (with ground)
         val fullBitmap = renderToBitmap(event, bestProgress, bgColor, withGround = true)

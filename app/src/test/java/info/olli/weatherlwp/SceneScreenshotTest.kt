@@ -17,6 +17,7 @@ import info.olli.weatherlwp.simulation.CloudDensity
 import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
 import info.olli.weatherlwp.weather.WeatherType
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -191,8 +192,34 @@ class SceneScreenshotTest {
         }
         weatherLayer.draw(canvas, state, parallax)
 
+        assertSceneNotBlank("scene ${state.timeOfDayHours}h ${state.weather}", bitmap)
         return bitmap
     }
+
+    /** Evenly spaced grid of pixels; far cheaper than a full-frame scan. */
+    private fun sampleGrid(bitmap: Bitmap, steps: Int = 24): IntArray {
+        val out = IntArray(steps * steps)
+        for (j in 0 until steps) for (i in 0 until steps) {
+            val x = ((i + 0.5f) * bitmap.width / steps).toInt()
+            val y = ((j + 0.5f) * bitmap.height / steps).toInt()
+            out[j * steps + i] = bitmap.getPixel(x, y)
+        }
+        return out
+    }
+
+    private fun assertSceneNotBlank(label: String, bitmap: Bitmap) {
+        val samples = sampleGrid(bitmap)
+        val opaque = samples.count { Color.alpha(it) > 0 }
+        val distinct = samples.toSet().size
+        assertTrue("$label: only $opaque/${samples.size} samples non-transparent", opaque >= samples.size / 2)
+        // Sky gradient + mountains + trees give hundreds of colors; a failed render is 1-2 flat fills.
+        assertTrue("$label: only $distinct distinct colors in ${samples.size} samples", distinct >= 8)
+    }
+
+    private fun meanLuminance(bitmap: Bitmap): Float =
+        sampleGrid(bitmap, 32).map {
+            0.299f * Color.red(it) + 0.587f * Color.green(it) + 0.114f * Color.blue(it)
+        }.average().toFloat()
 
     /** Render event onto a scene background bitmap. */
     private fun renderEventOnScene(
@@ -439,6 +466,15 @@ class SceneScreenshotTest {
         val sheet = buildContactSheet(tiles, cols = 4, tileWidth = 270, tileHeight = 480)
         savePng(File(dir, "time_of_day_sheet.png"), sheet)
         println("Scene time-of-day variations saved to: $dir")
+
+        val dayLum = meanLuminance(tiles.first { it.first == "day" }.second)
+        val nightLum = meanLuminance(tiles.first { it.first == "night" }.second)
+        println("Mean luminance: day=%.1f night=%.1f".format(dayLum, nightLum))
+        // 0-255 scale; current renders differ by far more, 30 only catches "night looks like day".
+        assertTrue(
+            "Day scene (lum=%.1f) not clearly brighter than night (lum=%.1f)".format(dayLum, nightLum),
+            dayLum > nightLum + 30f
+        )
     }
 
     @Test
