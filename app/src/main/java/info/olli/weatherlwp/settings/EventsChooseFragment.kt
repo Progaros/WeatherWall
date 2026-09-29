@@ -53,7 +53,7 @@ class EventsChooseFragment : PreferenceFragmentCompat() {
             .putLong("trigger_spawn_specific_event_time_preview", triggerTime)
             .putString("trigger_spawn_specific_event_wallpaper", eventType)
             .putLong("trigger_spawn_specific_event_time_wallpaper", triggerTime)
-            .commit()
+            .apply()
         
         Toast.makeText(context, getString(R.string.toast_spawning_event, eventName), Toast.LENGTH_SHORT).show()
     }

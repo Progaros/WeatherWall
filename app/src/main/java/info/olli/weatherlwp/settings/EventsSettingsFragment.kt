@@ -29,7 +29,7 @@ class EventsSettingsFragment : PreferenceFragmentCompat() {
         prefs.edit()
             .putLong("trigger_spawn_event_time_preview", triggerTime)
             .putLong("trigger_spawn_event_time_wallpaper", triggerTime)
-            .commit()
+            .apply()
         
         Toast.makeText(context, R.string.toast_spawning_random_event, Toast.LENGTH_SHORT).show()
     }
