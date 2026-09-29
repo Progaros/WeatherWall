@@ -99,7 +99,13 @@ class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
         val flutter = sin(t * 16f + flutterPhase) *
             (0.8f + sin(t * 3f) * 0.2f)
         
-        paint.color = RenderConstants.blendWithAmbient(color, ambientColor, 0.25f)
+        // Both wings open and close together. Opposite scales made one wing
+        // collapse while the other spread, which is not how a butterfly flaps.
+        val open = (0.22f + (1f + flutter) * 0.39f).coerceIn(0.18f, 1f)
+        // Fade markings out as the wing turns edge-on so they don't read as loose dots.
+        val spotAlpha = (((open - 0.3f) / 0.3f).coerceIn(0f, 1f) * 170f).toInt()
+        val wingColor = RenderConstants.blendWithAmbient(color, ambientColor, 0.25f)
+        val spotColor = RenderConstants.blendWithAmbient(Color.rgb(40, 30, 20), ambientColor, 0.2f)
         paint.style = Paint.Style.FILL
         
         fun drawWing(dir: Float) {
@@ -115,37 +121,24 @@ class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
                 currentX + (size * 0.4f * dir), currentY + size * 2.0f,
                 currentX, currentY
             )
+            paint.color = wingColor
             canvas.drawPath(path, paint)
+            if (spotAlpha == 0) return
+            // Spots share the wing's flap transform and are clipped to its outline.
+            canvas.save()
+            canvas.clipPath(path)
+            paint.color = spotColor
+            paint.alpha = spotAlpha
+            // Eye-spot near the forewing tip, smaller spot on the outer hindwing.
+            canvas.drawCircle(currentX + size * 1.55f * dir, currentY - size * 0.72f, size * 0.15f, paint)
+            canvas.drawCircle(currentX + size * 0.72f * dir, currentY + size * 1.0f, size * 0.1f, paint)
+            canvas.restore()
         }
 
-        // Both wings open and close together. Opposite scales made one wing
-        // collapse while the other spread, which is not how a butterfly flaps.
-        val open = (0.22f + (1f + flutter) * 0.39f).coerceIn(0.18f, 1f)
-        
         canvas.save()
         canvas.scale(open, 1f, currentX, currentY)
         drawWing(-1f)
-        canvas.restore()
-        
-        canvas.save()
-        canvas.scale(open, 1f, currentX, currentY)
         drawWing(1f)
-        canvas.restore()
-        
-        // Wing spots (darker circles on each wing)
-        val spotColor = RenderConstants.blendWithAmbient(
-            Color.argb(140, 40, 30, 20), ambientColor, 0.2f)
-        paint.color = spotColor
-        // Spots scale with wing opening — positions must be inside wing cubic boundaries
-        canvas.save()
-        canvas.scale(open, 1f, currentX, currentY)
-        canvas.drawCircle(currentX - size * 1.2f, currentY - size * 0.6f, size * 0.25f, paint)
-        canvas.drawCircle(currentX - size * 0.55f, currentY + size * 0.8f, size * 0.18f, paint)
-        canvas.restore()
-        canvas.save()
-        canvas.scale(open, 1f, currentX, currentY)
-        canvas.drawCircle(currentX + size * 1.2f, currentY - size * 0.6f, size * 0.25f, paint)
-        canvas.drawCircle(currentX + size * 0.55f, currentY + size * 0.8f, size * 0.18f, paint)
         canvas.restore()
         
         // Body (thin dark line between wings)
