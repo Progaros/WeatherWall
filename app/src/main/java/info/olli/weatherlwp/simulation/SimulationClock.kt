@@ -28,15 +28,31 @@ class SimulationClock {
     // Base time for animation consistency (doesn't change on reload)
     private val startTimeMs = System.currentTimeMillis()
     
+    // Raw weather sun times, kept so they can be re-projected when the timezone changes
+    private var sunriseUnix = -1L
+    private var sunsetUnix = -1L
+    
+    // The system zone changes when travelling; re-read it at most this often (TimeZone.getDefault() allocates).
+    internal var zoneCheckIntervalMs = 60_000L
+    @Volatile private var zone: TimeZone = TimeZone.getDefault()
+    @Volatile private var lastZoneCheckMs = 0L
+    
     // Cached Calendar instances per thread (avoid per-frame allocations, thread-safe)
-    private val cachedCal = ThreadLocal.withInitial { Calendar.getInstance(TimeZone.getDefault()) }
-    private val cachedConvertCal = ThreadLocal.withInitial { Calendar.getInstance(TimeZone.getDefault()) }
+    private val cachedCal = ThreadLocal.withInitial { Calendar.getInstance(zone) }
+    private val cachedConvertCal = ThreadLocal.withInitial { Calendar.getInstance(zone) }
     
     /**
      * Update sunrise/sunset times from weather data (Unix timestamps in seconds).
      * Pass -1 for unknown values to use defaults.
      */
     fun updateSunTimes(sunriseUnix: Long, sunsetUnix: Long) {
+        this.sunriseUnix = sunriseUnix
+        this.sunsetUnix = sunsetUnix
+        zone = TimeZone.getDefault()
+        applySunTimes()
+    }
+    
+    private fun applySunTimes() {
         if (sunriseUnix > 0) {
             sunriseHour = unixToLocalHour(sunriseUnix)
         }
@@ -45,11 +61,24 @@ class SimulationClock {
         }
     }
     
+    private fun currentZone(nowMs: Long): TimeZone {
+        if (nowMs - lastZoneCheckMs >= zoneCheckIntervalMs) {
+            lastZoneCheckMs = nowMs
+            val latest = TimeZone.getDefault()
+            if (latest.id != zone.id) {
+                zone = latest
+                applySunTimes()
+            }
+        }
+        return zone
+    }
+    
     /**
      * Convert Unix timestamp (seconds) to local hour of day (0-24).
      */
     private fun unixToLocalHour(unixSeconds: Long): Float {
         val cal = cachedConvertCal.get()!!
+        cal.timeZone = zone
         cal.timeInMillis = unixSeconds * 1000
         return cal.get(Calendar.HOUR_OF_DAY) + cal.get(Calendar.MINUTE) / 60f
     }
@@ -60,8 +89,10 @@ class SimulationClock {
      */
     fun getTimeOfDayHours(): Float {
         return if (useRealTime) {
+            val now = System.currentTimeMillis()
             val cal = cachedCal.get()!!
-            cal.timeInMillis = System.currentTimeMillis()
+            cal.timeZone = currentZone(now)
+            cal.timeInMillis = now
             val hours = cal.get(Calendar.HOUR_OF_DAY)
             val minutes = cal.get(Calendar.MINUTE)
             hours + minutes / 60f
@@ -75,8 +106,10 @@ class SimulationClock {
      */
     fun getTimeOfDayMinutes(): Int {
         return if (useRealTime) {
+            val now = System.currentTimeMillis()
             val cal = cachedCal.get()!!
-            cal.timeInMillis = System.currentTimeMillis()
+            cal.timeZone = currentZone(now)
+            cal.timeInMillis = now
             cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
         } else {
             manualTimeMinutes

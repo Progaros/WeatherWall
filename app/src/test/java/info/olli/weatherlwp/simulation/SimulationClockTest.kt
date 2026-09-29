@@ -366,4 +366,45 @@ class SimulationClockTest {
         clock.setManualTime(18 * 60)
         assertEquals(0.75f, clock.getDayProgress(), 0.01f)
     }
+
+    private fun withDefaultZone(id: String, block: () -> Unit) {
+        val original = java.util.TimeZone.getDefault()
+        try {
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone(id))
+            block()
+        } finally {
+            java.util.TimeZone.setDefault(original)
+        }
+    }
+
+    private fun localMinutesNow(id: String): Int {
+        val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone(id))
+        return cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE)
+    }
+
+    @Test
+    fun `real time follows a system timezone change`() {
+        withDefaultZone("Europe/Berlin") {
+            val c = SimulationClock().apply { zoneCheckIntervalMs = 0L }
+            assertEquals(localMinutesNow("Europe/Berlin").toFloat(), c.getTimeOfDayMinutes().toFloat(), 1f)
+
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("Asia/Tokyo"))
+            assertEquals(localMinutesNow("Asia/Tokyo").toFloat(), c.getTimeOfDayMinutes().toFloat(), 1f)
+        }
+    }
+
+    @Test
+    fun `sun times are re-projected into the new timezone`() {
+        // 2026-06-21 04:00 UTC
+        val sunriseUtc = 1_782_014_400L
+        withDefaultZone("UTC") {
+            val c = SimulationClock().apply { zoneCheckIntervalMs = 0L }
+            c.updateSunTimes(sunriseUtc, sunriseUtc + 16 * 3600)
+            assertEquals(4.0f, c.getSunriseHour(), 0.01f)
+
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("Asia/Tokyo"))
+            c.getTimeOfDayHours()  // triggers the zone check
+            assertEquals(13.0f, c.getSunriseHour(), 0.01f)
+        }
+    }
 }
