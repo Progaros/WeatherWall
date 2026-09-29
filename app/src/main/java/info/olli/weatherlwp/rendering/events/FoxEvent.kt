@@ -6,6 +6,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.RenderConstants
+import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -93,30 +94,50 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         
         paint.color = RenderConstants.blendWithAmbient(Color.rgb(200, 90, 30), ambientColor, 0.3f)
 
-        // Jointed legs (hip -> knee -> hoof) so the gait reads as a walk instead of blocky
-        // stumps bobbing. Mirrors the deer renderer: the lift only happens on the forward
-        // half of the step, so the hoof stays planted through the recovery swing. kneeBend
-        // folds the hock back and the fore knee forward, otherwise the legs are sticks.
+        // Three-segment legs. Mirrors the deer renderer: the lift only happens on the forward
+        // half of the step, so the paw stays planted through the recovery swing.
         val swingA = sin(walkPhase)
         val swingB = -swingA  // sin(walkPhase + PI)
 
         val furColor = paint.color
         val legFarColor = RenderConstants.blendWithAmbient(Color.rgb(160, 70, 24), ambientColor, 0.3f)
         val legW = 0.28f * s
+        val thighW = 0.42f * s
         val hoofSize = 0.16f * s
         val hipY = -0.15f * s
-        val kneeY = 0.45f * s
         val strideAmp = 0.42f * s
         val liftAmp = 0.34f * s
+        val thighLen = 0.47f * s
+        val shinLen = 0.49f * s
+        val hindFootLen = 0.47f * s
+        val upperArmLen = 0.48f * s
+        val forearmLen = 0.48f * s
+        val foreFootLen = 0.26f * s
 
-        fun drawLeg(hipX: Float, swing: Float, kneeBend: Float, legColor: Int) {
-            val stride = swing * strideAmp
-            val lift = maxOf(0f, swing) * liftAmp
-            val hoofX = hipX + stride
-            val hoofY = 1.0f * s - lift
-            val kneeX = hipX + stride * 0.4f + kneeBend
-            JointedLeg.draw(canvas, path, strokePaint, paint, hipX, hipY, kneeX, kneeY, hoofX, hoofY,
-                legW, legColor, legColor, hoofSize, 0.6f)
+        // Hind: the stride moves the paw; the hock sits behind and above it on a near-vertical
+        // metatarsus that tilts further as the paw lifts, and the stifle is solved forward.
+        fun drawHindLeg(hipX: Float, swing: Float, legColor: Int) {
+            val liftT = maxOf(0f, swing)
+            val pawX = hipX + swing * strideAmp
+            val pawY = 1.0f * s - liftT * liftAmp
+            val hockTilt = 0.3f + liftT * 0.45f
+            val hockX = pawX - sin(hockTilt) * hindFootLen
+            val hockY = pawY - cos(hockTilt) * hindFootLen
+            JointedLeg.drawSolved(canvas, path, strokePaint, paint, hipX, hipY, thighLen, shinLen, true,
+                hockX, hockY, pawX, pawY, legW, legColor, legColor, hoofSize, 0.6f, thighW)
+        }
+
+        // Fore: a straight column in stance; as the paw lifts the lower leg folds back so the
+        // wrist leads. The fold is split about the stride point so the reach stays put.
+        fun drawForeLeg(hipX: Float, swing: Float, legColor: Int) {
+            val liftT = maxOf(0f, swing)
+            val baseX = hipX + swing * strideAmp
+            val pawY = 1.0f * s - liftT * liftAmp
+            val fold = liftT * 1.0f
+            val foldX = sin(fold) * foreFootLen * 0.5f
+            val wristY = pawY - cos(fold) * foreFootLen
+            JointedLeg.drawSolved(canvas, path, strokePaint, paint, hipX, hipY, upperArmLen, forearmLen, false,
+                baseX + foldX, wristY, baseX - foldX, pawY, legW, legColor, legColor, hoofSize, 0.6f)
         }
 
         // Leg anchors: the pairs sit under the shoulder and haunch with a clear gap between
@@ -126,15 +147,13 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         val backNearX = -1.25f * s
         val frontFarX = 1.0f * s
         val frontNearX = 1.65f * s
-        val backKneeBend = -0.32f * s
-        val frontKneeBend = 0.12f * s
 
         // Far-side legs go behind the torso and near-side legs in front, so the darker far
         // pair never paints a stripe across the belly. Diagonal pairs share a phase
         // (far-hind with near-fore), otherwise the same-side legs swing together and the
         // walk reads as a camel pace.
-        drawLeg(backFarX, swingA, backKneeBend, legFarColor)
-        drawLeg(frontFarX, swingB, frontKneeBend, legFarColor)
+        drawHindLeg(backFarX, swingA, legFarColor)
+        drawForeLeg(frontFarX, swingB, legFarColor)
 
         // Body
         paint.color = furColor
@@ -167,8 +186,8 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         canvas.drawCircle(-3.4f*s, 1.1f*s, 0.28f*s, paint)
         
         // Near-side legs, drawn over the torso they share a colour with.
-        drawLeg(backNearX, swingB, backKneeBend, furColor)
-        drawLeg(frontNearX, swingA, frontKneeBend, furColor)
+        drawHindLeg(backNearX, swingB, furColor)
+        drawForeLeg(frontNearX, swingA, furColor)
         
         // Ears
         paint.color = furColor

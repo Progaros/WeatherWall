@@ -6,6 +6,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.RenderConstants
+import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -133,29 +134,49 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
         val liftAmp = unit * 0.32f
         val swingA = runPhase
         val swingB = -swingA
+        val hipY = screenY + unit * 0.15f
+        val groundPawY = screenY + unit * 1.15f
+        val thighLen = unit * 0.43f
+        val shinLen = unit * 0.64f
+        val hindFootLen = unit * 0.4f
+        val upperArmLen = unit * 0.41f
+        val forearmLen = unit * 0.41f
+        val foreFootLen = unit * 0.2f
 
         // Bound gait: lift only on the forward half, so the foot stays planted on the return.
-        fun drawLeg(hipX: Float, swing: Float, kneeBend: Float, legColor: Int) {
-            val stride = swing * strideAmp
-            val lift = maxOf(0f, swing) * liftAmp
-            val hoofX = hipX + stride
-            val hoofY = screenY + unit * 1.15f - lift
-            val kneeX = hipX + stride * 0.35f + kneeBend
-            val kneeY = screenY + unit * 0.55f
-            JointedLeg.draw(canvas, path, strokePaint, paint, hipX, screenY + unit * 0.15f, kneeX, kneeY, hoofX, hoofY,
-                legW, legColor, legColor, hoofSize, 0.5f)
+        // Hind: stifle solved forward, hock behind the paw on a slanted, rabbit-like foot
+        // that tilts further as the paw lifts.
+        fun drawHindLeg(hipX: Float, swing: Float, legColor: Int) {
+            val liftT = maxOf(0f, swing)
+            val pawX = hipX + swing * strideAmp
+            val pawY = groundPawY - liftT * liftAmp
+            val hockTilt = 0.85f + liftT * 0.35f
+            val hockX = pawX - sin(hockTilt) * hindFootLen
+            val hockY = pawY - cos(hockTilt) * hindFootLen
+            JointedLeg.drawSolved(canvas, path, strokePaint, paint, hipX, hipY, thighLen, shinLen, true,
+                hockX, hockY, pawX, pawY, legW, legColor, legColor, hoofSize, 0.5f, legW * 1.5f)
+        }
+
+        // Fore: straight in stance; the paw folds back behind the wrist as it lifts.
+        fun drawForeLeg(hipX: Float, swing: Float, legColor: Int) {
+            val liftT = maxOf(0f, swing)
+            val baseX = hipX + swing * strideAmp
+            val pawY = groundPawY - liftT * liftAmp
+            val fold = liftT * 1.1f
+            val foldX = sin(fold) * foreFootLen * 0.5f
+            val wristY = pawY - cos(fold) * foreFootLen
+            JointedLeg.drawSolved(canvas, path, strokePaint, paint, hipX, hipY, upperArmLen, forearmLen, false,
+                baseX + foldX, wristY, baseX - foldX, pawY, legW, legColor, legColor, hoofSize, 0.5f)
         }
 
         val backFarX = screenX - unit * 1.15f
         val backNearX = screenX - unit * 0.7f
         val frontFarX = screenX - unit * 0.05f
         val frontNearX = screenX + unit * 0.4f
-        val backKneeBend = -unit * 0.22f
-        val frontKneeBend = unit * 0.08f
 
         // Far pair behind the body. Diagonal phase, or the same-side legs lock together.
-        drawLeg(backFarX, swingA, backKneeBend, legFarColor)
-        drawLeg(frontFarX, swingB, frontKneeBend, legFarColor)
+        drawHindLeg(backFarX, swingA, legFarColor)
+        drawForeLeg(frontFarX, swingB, legFarColor)
         
         // Draw tail (large, fluffy, curved upward)
         paint.color = fur
@@ -181,8 +202,8 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
         
         // Near pair over the torso. Drawn before the belly so the light underside covers
         // the hip, instead of a dark stroke sliding across it.
-        drawLeg(backNearX, swingB, backKneeBend, fur)
-        drawLeg(frontNearX, swingA, frontKneeBend, fur)
+        drawHindLeg(backNearX, swingB, fur)
+        drawForeLeg(frontNearX, swingA, fur)
 
         // Belly (lighter underside)
         paint.color = RenderConstants.blendWithAmbient(bellyColor, ambientColor, 0.3f)

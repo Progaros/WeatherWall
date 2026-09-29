@@ -6,6 +6,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.RenderConstants
+import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -97,33 +98,52 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
         canvas.translate(cx, cy)
         canvas.scale(flip, 1f)
 
-        val hopLeg = sin(hopPhase) * 0.2f * s
+        // Leg gather in body units (multiplied by s where drawn).
+        val hopLeg = sin(hopPhase) * 0.2f
         // 0 while grounded, 1 at the apex: legs pull up and the ears lean back in flight.
         val airborne = sin(hopPhase).coerceAtLeast(0f)
         // Capped so the tucked hoof never rises above the body silhouette and vanishes.
-        val legTuck = airborne * 0.2f * s
+        val legTuck = airborne * 0.2f
 
-        // Jointed legs (hip -> knee -> hoof) so the hop reads as gathered legs rather than
-        // blocky stumps. Fur is captured up front because drawLeg mutates the shared paint
-        // and the body/head colours are drawn between the leg calls.
+        // Three-segment legs so the hop reads as gathered legs rather than blocky stumps.
+        // Fur is captured up front because the leg draw mutates the shared paint and the
+        // body/head colours are drawn between the leg calls.
         val fur = paint.color
         val legFarColor = RenderConstants.blendWithAmbient(Color.rgb(110, 94, 78), ambientColor, 0.35f)
         val hipY = -0.1f * s
-        val kneeBaseY = 0.45f * s
         val legW = 0.22f * s
         val hindLegW = 0.36f * s
         val hoofSize = 0.14f * s
+        val thighLen = 0.74f * s
+        val shinLen = 1.14f * s
+        val hindFootLen = 0.7f * s
+        val upperArmLen = 0.56f * s
+        val forearmLen = 0.51f * s
+        val foreFootLen = 0.25f * s
 
-        // kneeBend shapes the joint independently of the stride: the hind hock folds back
-        // and the fore knee eases forward, so the legs are not straight stumps at rest.
-        fun drawLeg(hipX: Float, gather: Float, kneeBend: Float, legColor: Int, width: Float) {
-            val stride = -gather * 0.55f       // the hoof drags back as it gathers
-            val hoofX = hipX + stride
-            val hoofY = 1.2f * s - gather
-            val kneeX = hipX + stride * 0.45f + kneeBend
-            val kneeY = kneeBaseY - gather * 0.3f
-            JointedLeg.draw(canvas, path, strokePaint, paint, hipX, hipY, kneeX, kneeY, hoofX, hoofY,
-                width, legColor, legColor, hoofSize, 0.6f)
+        // Hind: big thigh to a forward stifle, shin back down to a low hock, and a long foot
+        // lying almost flat to the toe. Gathering lifts the heel so the foot tilts up.
+        fun drawHindLeg(hipX: Float, gatherT: Float, legColor: Int) {
+            val gather = gatherT * s
+            val toeX = hipX - gather * 0.55f   // the foot drags back as it gathers
+            val toeY = 1.2f * s - gather
+            val footPitch = (0.2f + gatherT * 1.2f).coerceAtLeast(0.05f)
+            val hockX = toeX - cos(footPitch) * hindFootLen
+            val hockY = toeY - sin(footPitch) * hindFootLen
+            JointedLeg.drawSolved(canvas, path, strokePaint, paint, hipX, hipY, thighLen, shinLen, true,
+                hockX, hockY, toeX, toeY, hindLegW * 0.75f, legColor, legColor, hoofSize, 0.6f, hindLegW * 1.4f)
+        }
+
+        // Fore: short and nearly straight; gathering folds the paw back behind the wrist.
+        fun drawForeLeg(hipX: Float, gatherT: Float, legColor: Int) {
+            val gather = gatherT * s
+            val baseX = hipX - gather * 0.55f
+            val pawY = 1.2f * s - gather
+            val fold = (gatherT * 2f).coerceAtLeast(0f)
+            val foldX = sin(fold) * foreFootLen * 0.5f
+            val wristY = pawY - cos(fold) * foreFootLen
+            JointedLeg.drawSolved(canvas, path, strokePaint, paint, hipX, hipY, upperArmLen, forearmLen, false,
+                baseX + foldX, wristY, baseX - foldX, pawY, legW, legColor, legColor, hoofSize, 0.6f)
         }
 
         // Leg anchors: rabbits bound, so each pair moves together; the near/far offset is
@@ -132,14 +152,11 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
         val backNearX = -1.45f * s
         val frontFarX = 0.15f * s
         val frontNearX = 0.8f * s
-        val backKneeBend = -0.55f * s
-        val frontKneeBend = 0.1f * s
 
         // Far-side legs go behind the body and near-side legs in front, so the darker far
-        // pair never paints a stripe across the belly. Hind stroke is thicker: a rabbit's
-        // thigh is the leg, not a stick under the haunch.
-        drawLeg(backFarX, legTuck + hopLeg, backKneeBend, legFarColor, hindLegW)
-        drawLeg(frontFarX, legTuck + hopLeg, frontKneeBend, legFarColor, legW)
+        // pair never paints a stripe across the belly.
+        drawHindLeg(backFarX, legTuck + hopLeg, legFarColor)
+        drawForeLeg(frontFarX, legTuck + hopLeg, legFarColor)
 
         // Body + haunch
         paint.color = fur
@@ -180,8 +197,8 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
         canvas.drawCircle(-2.15f * s, -0.15f * s, 0.32f * s, paint)
 
         // Near-side legs, drawn over the body they share a colour with.
-        drawLeg(backNearX, legTuck - hopLeg, backKneeBend, fur, hindLegW)
-        drawLeg(frontNearX, legTuck - hopLeg, frontKneeBend, fur, legW)
+        drawHindLeg(backNearX, legTuck - hopLeg, fur)
+        drawForeLeg(frontNearX, legTuck - hopLeg, fur)
 
         // Whiskers
         strokePaint.color = Color.argb(100, 80, 70, 60)
