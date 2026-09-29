@@ -31,6 +31,6 @@ class EventsSettingsFragment : PreferenceFragmentCompat() {
             .putLong("trigger_spawn_event_time_wallpaper", triggerTime)
             .commit()
         
-        Toast.makeText(context, "Spawning random event...", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, R.string.toast_spawning_random_event, Toast.LENGTH_SHORT).show()
     }
 }

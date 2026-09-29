@@ -70,9 +70,9 @@ object DebugTracer {
             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clip = ClipData.newPlainText("Debug Trace", report)
             clipboard.setPrimaryClip(clip)
-            Toast.makeText(context, "Debug log copied to clipboard", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, R.string.toast_debug_log_copied, Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
-            Toast.makeText(context, "Failed to copy: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.toast_copy_failed, e.message), Toast.LENGTH_SHORT).show()
         }
     }
     

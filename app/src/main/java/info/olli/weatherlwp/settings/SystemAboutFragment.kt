@@ -60,7 +60,7 @@ class SystemAboutFragment : PreferenceFragmentCompat() {
                     val clipboard = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                     val clip = android.content.ClipData.newPlainText("Version", summary)
                     clipboard.setPrimaryClip(clip)
-                    Toast.makeText(context, "Version copied", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, R.string.toast_version_copied, Toast.LENGTH_SHORT).show()
                 }
                 true
             }
@@ -84,7 +84,7 @@ class SystemAboutFragment : PreferenceFragmentCompat() {
                 val enabled = newValue as Boolean
                 if (enabled) {
                     DebugTracer.enable()
-                    Toast.makeText(context, "Debug tracing enabled", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, R.string.toast_debug_tracing_enabled, Toast.LENGTH_SHORT).show()
                 } else {
                     DebugTracer.disableAndCopy(requireContext())
                 }
@@ -113,9 +113,9 @@ class SystemAboutFragment : PreferenceFragmentCompat() {
         val wind = WeatherRepository.getNormalizedWindStrength(context)
         
         val message = if (isFresh) {
-            "✓ Connected!\nWeather: $weather\nWind: ${(wind * 100).toInt()}%"
+            getString(R.string.toast_breezy_connected, weather.toString(), (wind * 100).toInt())
         } else {
-            "✗ No data. Open Breezy Weather to update."
+            getString(R.string.toast_breezy_no_data)
         }
         
         Toast.makeText(context, message, Toast.LENGTH_LONG).show()
@@ -135,9 +135,9 @@ class SystemAboutFragment : PreferenceFragmentCompat() {
             val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
             val clip = android.content.ClipData.newPlainText("Weather Data", prettyJson)
             clipboard.setPrimaryClip(clip)
-            Toast.makeText(context, "Weather data copied to clipboard", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, R.string.toast_weather_data_copied, Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(context, "No weather data available. Open Breezy Weather first.", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, R.string.toast_no_weather_data, Toast.LENGTH_LONG).show()
         }
     }
     
@@ -145,7 +145,7 @@ class SystemAboutFragment : PreferenceFragmentCompat() {
         val context = requireContext()
         val export = SettingsExporter.export(context)
         WeatherWallApp.copyToClipboard(context, export, "WeatherWall Settings")
-        Toast.makeText(context, "All settings copied to clipboard", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, R.string.toast_settings_copied, Toast.LENGTH_SHORT).show()
     }
     
     private fun openWallpaperPreview() {
@@ -157,7 +157,7 @@ class SystemAboutFragment : PreferenceFragmentCompat() {
             )
             startActivity(intent)
         } catch (e: Exception) {
-            Toast.makeText(context, "Could not open preview", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, R.string.toast_preview_failed, Toast.LENGTH_SHORT).show()
         }
     }
 }
