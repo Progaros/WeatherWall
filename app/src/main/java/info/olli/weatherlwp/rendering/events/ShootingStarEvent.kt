@@ -2,7 +2,10 @@ package info.olli.weatherlwp.rendering.events
 
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
+import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.Shader
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationState
 import kotlin.math.cos
@@ -39,6 +42,14 @@ class ShootingStarEvent(random: Random, override val spawnTimeMs: Long = System.
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
     }
+
+    // Unit-length (0,0)->(1,0) gradients; rebuilt only when their end alpha changes (fade-out)
+    private var glowShader: LinearGradient? = null
+    private var glowShaderAlpha = -1
+    private var coreShader: LinearGradient? = null
+    private var coreShaderAlpha = -1
+    private val trailMatrix = Matrix()
+    private val trailMatrixValues = FloatArray(9)
 
     override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
@@ -99,22 +110,41 @@ class ShootingStarEvent(random: Random, override val spawnTimeMs: Long = System.
         val headAlpha = (255 * fadeAlpha).toInt()
         val glowAlpha = (200 * fadeAlpha).toInt()
         
+        // Similarity transform mapping (0,0)->tail and (1,0)->head
+        val dx = headX - tailX
+        val dy = headY - tailY
+        trailMatrixValues[Matrix.MSCALE_X] = dx
+        trailMatrixValues[Matrix.MSKEW_X] = -dy
+        trailMatrixValues[Matrix.MTRANS_X] = tailX
+        trailMatrixValues[Matrix.MSKEW_Y] = dy
+        trailMatrixValues[Matrix.MSCALE_Y] = dx
+        trailMatrixValues[Matrix.MTRANS_Y] = tailY
+        trailMatrixValues[Matrix.MPERSP_0] = 0f
+        trailMatrixValues[Matrix.MPERSP_1] = 0f
+        trailMatrixValues[Matrix.MPERSP_2] = 1f
+        trailMatrix.setValues(trailMatrixValues)
+        
         // Faint wide glow under a thin bright core, both fading towards the tail
-        trailPaint.shader = android.graphics.LinearGradient(
-            tailX, tailY, headX, headY,
+        val glowAlpha90 = (90 * fadeAlpha).toInt()
+        val glow = glowShader?.takeIf { glowShaderAlpha == glowAlpha90 } ?: LinearGradient(
+            0f, 0f, 1f, 0f,
             Color.argb(0, 180, 200, 255),
-            Color.argb((90 * fadeAlpha).toInt(), 200, 215, 255),
-            android.graphics.Shader.TileMode.CLAMP
-        )
+            Color.argb(glowAlpha90, 200, 215, 255),
+            Shader.TileMode.CLAMP
+        ).also { glowShader = it; glowShaderAlpha = glowAlpha90 }
+        glow.setLocalMatrix(trailMatrix)
+        trailPaint.shader = glow
         trailPaint.strokeWidth = 1.6f * unit
         canvas.drawLine(tailX, tailY, headX, headY, trailPaint)
         
-        trailPaint.shader = android.graphics.LinearGradient(
-            tailX, tailY, headX, headY,
+        val core = coreShader?.takeIf { coreShaderAlpha == headAlpha } ?: LinearGradient(
+            0f, 0f, 1f, 0f,
             Color.argb(0, 255, 255, 255),
             Color.argb(headAlpha, 255, 255, 240),
-            android.graphics.Shader.TileMode.CLAMP
-        )
+            Shader.TileMode.CLAMP
+        ).also { coreShader = it; coreShaderAlpha = headAlpha }
+        core.setLocalMatrix(trailMatrix)
+        trailPaint.shader = core
         trailPaint.strokeWidth = 0.45f * unit
         canvas.drawLine(tailX, tailY, headX, headY, trailPaint)
         
