@@ -994,7 +994,7 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
             val bandRadius = arcRadius - i * bandWidth
             
             // Shimmer effect - subtle pulsing
-            val shimmer = (kotlin.math.sin(rainbowPhase + i * 0.5f) * 0.1f + 0.9f).toFloat()
+            val shimmer = kotlin.math.sin(rainbowPhase + i * 0.5f) * 0.1f + 0.9f
             
             // Base alpha for the center of the band
             val centerAlpha = (90 * shimmer).toInt()

@@ -567,7 +567,7 @@ class WeatherLayer : SceneLayer {
                 val cloudSize = screenWidth * RenderConstants.STORM_CLOUD_BASE_SIZE * sizeMultiplier
                 
                 // Slight animated movement using consistent timeSeconds
-                val drift = kotlin.math.sin((timeSeconds * 0.3 + i * 0.5).toDouble()).toFloat() * 10f
+                val drift = kotlin.math.sin(timeSeconds * 0.3 + i * 0.5).toFloat() * 10f
                 
                 canvas.drawCircle(xPos + drift, yPos, cloudSize, stormCloudPaint)
                 canvas.drawCircle(xPos + cloudSize * 0.6f + drift, yPos + cloudSize * 0.2f, cloudSize * 0.8f, stormCloudPaint)

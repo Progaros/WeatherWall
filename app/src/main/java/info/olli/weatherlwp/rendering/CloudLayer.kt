@@ -765,8 +765,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
             // Each cloud gets a unique phase from its seed, so they drift independently.
             // This makes the eye detect motion even when wind speed is homogeneous.
             val phase = (group.seed % 10000L).toFloat()
-            val driftX = sin((animationTime * 0.3 + phase * 0.001).toDouble()).toFloat() * 15f
-            val driftY = sin((animationTime * 0.15 + phase * 0.002).toDouble()).toFloat() * 8f
+            val driftX = sin(animationTime * 0.3 + phase * 0.001).toFloat() * 15f
+            val driftY = sin(animationTime * 0.15 + phase * 0.002).toFloat() * 8f
 
             val screenX = mapper.x(renderX + driftX)
             val screenY = mapper.y(renderY + driftY)
@@ -846,7 +846,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
             // Subtle scale oscillation: each cloud "breathes" slightly at its own rate.
             // ±3% size variation makes the scene feel alive without being distracting.
             val oscPhase = (c.group.seed % 10000L).toFloat()
-            val scaleOsc = 1f + 0.03f * sin((animationTime * 0.25 + oscPhase * 0.003).toDouble()).toFloat()
+            val scaleOsc = 1f + 0.03f * sin(animationTime * 0.25 + oscPhase * 0.003).toFloat()
             val finalScale = c.drawScale * scaleOsc
             // Direct draw via dst rect — avoids per-cloud save/translate/scale/restore
             val halfW = c.paddedWidth / 2f * finalScale
