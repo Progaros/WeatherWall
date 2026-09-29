@@ -120,4 +120,30 @@ class BreezyWeatherReceiverTest {
         assertEquals(-1L, BreezyWeatherReceiver.sanitizeEpochSeconds(-999L))
         assertEquals(-1L, BreezyWeatherReceiver.sanitizeEpochSeconds(Long.MAX_VALUE))
     }
+
+    @Test
+    fun `condition codes map to weather types`() {
+        val expected = mapOf(
+            211 to WeatherType.THUNDERSTORM,
+            301 to WeatherType.RAIN,
+            511 to WeatherType.RAIN,
+            601 to WeatherType.SNOW,
+            613 to WeatherType.HAIL,
+            621 to WeatherType.SNOW,
+            701 to WeatherType.FOG,
+            741 to WeatherType.FOG,
+            762 to WeatherType.FOG,
+            771 to WeatherType.THUNDERSTORM,
+            781 to WeatherType.THUNDERSTORM,
+            800 to WeatherType.CLEAR,
+            801 to WeatherType.PARTLY_CLOUDY,
+            802 to WeatherType.PARTLY_CLOUDY,
+            803 to WeatherType.CLOUDY,
+            804 to WeatherType.OVERCAST,
+            999 to WeatherType.CLEAR
+        )
+        expected.forEach { (code, type) ->
+            assertEquals("code $code", type, BreezyWeatherReceiver.mapConditionCode(code))
+        }
+    }
 }

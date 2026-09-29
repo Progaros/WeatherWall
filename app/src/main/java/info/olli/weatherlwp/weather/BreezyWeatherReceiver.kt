@@ -56,6 +56,23 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
         /** Epoch seconds; anything implausible collapses to the -1 "unknown" sentinel. */
         fun sanitizeEpochSeconds(seconds: Long): Long =
             if (seconds in 0..MAX_EPOCH_SECONDS) seconds else -1L
+
+        /** OpenWeatherMap condition code to the wallpaper's weather type. */
+        fun mapConditionCode(code: Int): WeatherType = when (code) {
+            in 200..232 -> WeatherType.THUNDERSTORM
+            in 300..321 -> WeatherType.RAIN          // Drizzle
+            in 500..531 -> WeatherType.RAIN
+            in 600..610 -> WeatherType.SNOW
+            in 611..616 -> WeatherType.HAIL          // Sleet
+            in 617..622 -> WeatherType.SNOW          // Snow showers
+            771, 781 -> WeatherType.THUNDERSTORM      // Squall, tornado
+            in 701..762 -> WeatherType.FOG           // Mist, smoke, haze, dust, fog, sand, ash
+            800 -> WeatherType.CLEAR
+            801, 802 -> WeatherType.PARTLY_CLOUDY
+            803 -> WeatherType.CLOUDY
+            804 -> WeatherType.OVERCAST
+            else -> WeatherType.CLEAR
+        }
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -104,23 +121,7 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
             // Weather condition code (OpenWeatherMap style)
             // Breezy sends 'currentConditionCode' (Int) or 'currentCondition' (String)
             val conditionCode = data.optInt("currentConditionCode", 800)
-            
-            // Map to our internal types
-            val weatherType = when (conditionCode) {
-                in 200..232 -> WeatherType.THUNDERSTORM  // Thunderstorm
-                in 300..321 -> WeatherType.RAIN          // Drizzle
-                in 500..531 -> WeatherType.RAIN          // Rain
-                in 600..610 -> WeatherType.SNOW          // Snow
-                in 611..616 -> WeatherType.HAIL          // Sleet/Hail
-                in 617..622 -> WeatherType.SNOW          // Snow shower variants
-                in 701..781 -> WeatherType.FOG           // Atmosphere (fog, mist, etc.)
-                800 -> WeatherType.CLEAR                 // Clear
-                801 -> WeatherType.PARTLY_CLOUDY         // Few clouds (11-25%)
-                802 -> WeatherType.PARTLY_CLOUDY         // Scattered clouds (25-50%)
-                803 -> WeatherType.CLOUDY                // Broken clouds (51-84%)
-                804 -> WeatherType.OVERCAST               // Overcast (85-100%)
-                else -> WeatherType.CLEAR
-            }
+            val weatherType = mapConditionCode(conditionCode)
             
             // Sunrise/sunset (Unix timestamps in seconds)
             val sunrise = sanitizeEpochSeconds(data.optLong("sunRise", data.optLong("todaySunrise", -1)))
