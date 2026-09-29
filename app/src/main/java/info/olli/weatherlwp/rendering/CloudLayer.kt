@@ -929,7 +929,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         cloudsEnabled = newEnabled
         
         // Random seed for consistent placement
-        val newSeed = settings.getInt("pref_random_seed", 42)
+        val newSeed = settings.getInt("pref_random_seed", PreferenceDefaults.RANDOM_SEED)
         val seedChanged = newSeed != randomSeed
         randomSeed = newSeed
         

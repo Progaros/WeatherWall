@@ -9,6 +9,7 @@ import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
 import androidx.preference.PreferenceManager
+import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
@@ -101,7 +102,7 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
     private var sunEnabled = true
     private var moonEnabled = true
     private var celestialSize = 1.0f
-    private var celestialArcHeight = 1.0f  // 1.0 = full arc, 0.0 = near horizon
+    private var celestialArcHeight = PreferenceDefaults.CELESTIAL_ARC_HEIGHT / 100f  // 1.0 = full arc, 0.0 = near horizon
 
     private var lastSkyBucketId = Int.MIN_VALUE
 
@@ -663,7 +664,7 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         sunEnabled = settings.getBoolean("pref_sun_enabled", true)
         moonEnabled = settings.getBoolean("pref_moon_enabled", true)
         celestialSize = settings.getInt("pref_celestial_size", 100) / 100f
-        celestialArcHeight = settings.getInt("pref_celestial_arc_height", 100) / 100f
+        celestialArcHeight = settings.getInt("pref_celestial_arc_height", PreferenceDefaults.CELESTIAL_ARC_HEIGHT) / 100f
     }
 
     override fun destroy() {

@@ -129,7 +129,7 @@ class TreeRenderer {
 
     // Snow settings (needed for tree snow caps; TerrainLayer also reads these for hills)
     private var winterSnowEnabled = true
-    private var winterSnowCoverage = 50   // 0-100 how much of hill tops are covered
+    private var winterSnowCoverage = PreferenceDefaults.WINTER_SNOW_COVERAGE   // 0-100 how much of hill tops are covered
     private var useWeatherSnow = true     // Use weather history for snow level
 
     // ---- Thread-safe state (volatile + immutable lists) ----
@@ -875,7 +875,7 @@ class TreeRenderer {
         // Tree size randomness: variation in tree sizes (0=uniform, 100=very varied)
         treeSizeRandomness = settings.getInt("pref_tree_size_randomness", PreferenceDefaults.TREE_SIZE_RANDOMNESS) / 100f
 
-        val sizeVal = settings.getInt("pref_tree_size", 200)
+        val sizeVal = settings.getInt("pref_tree_size", PreferenceDefaults.TREE_SIZE)
         treeSizeScale = sizeVal / 200f
 
         val widthVal = settings.getInt("pref_tree_width", 100)
@@ -890,7 +890,7 @@ class TreeRenderer {
 
         // Snow settings (also read by TerrainLayer for hills, both need them)
         winterSnowEnabled = settings.getBoolean("pref_winter_snow_hills", true)
-        winterSnowCoverage = settings.getInt("pref_winter_snow_coverage", 50)
+        winterSnowCoverage = settings.getInt("pref_winter_snow_coverage", PreferenceDefaults.WINTER_SNOW_COVERAGE)
         useWeatherSnow = settings.getBoolean("pref_weather_snow_enabled", true)
 
         return prevDensity != treeDensity ||

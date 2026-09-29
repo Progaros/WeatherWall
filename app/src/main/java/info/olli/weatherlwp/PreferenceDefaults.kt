@@ -57,6 +57,10 @@ object PreferenceDefaults {
     const val TREE_SWAY_SPEED = 100  // 0-300
     const val HILL_AMPLITUDE = 354  // 0-1000 (tall rolling hills)
     const val HILL_FREQUENCY = 170  // 25-200 (denser hill pattern)
+    const val TREE_SIZE = 100  // 25-200 %
+    const val RANDOM_SEED = 208  // 1-999, scene layout seed
+    const val WINTER_SNOW_COVERAGE = 25  // 0-100 %
+    const val CELESTIAL_ARC_HEIGHT = 66  // % of maximum sun/moon arc
     
     // === Mountain Settings ===
     const val MOUNTAIN_DENSITY = 50  // 0-100 (50 = normal, matches old 100 with halved cell size)
@@ -91,8 +95,6 @@ object PreferenceDefaults {
     // === Visual Settings ===
     const val NIGHT_SHADE_STRENGTH = 35  // 0-100
     const val VIGNETTE_ENABLED = false  // off by default, opt-in
-    const val VIGNETTE_STRENGTH = 30  // 0-100
-    const val VIGNETTE_SIZE = 60  // 20-100
     
     // === River Settings ===
     const val RIVER_ENABLED = false  // Off by default (opt-in)

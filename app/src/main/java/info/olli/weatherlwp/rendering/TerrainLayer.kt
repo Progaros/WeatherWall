@@ -202,7 +202,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private var hillCount = 5
     private var hillStartY = 0.50f
     private var hillEndY = 0.85f
-    private var randomSeed = 42
+    private var randomSeed = PreferenceDefaults.RANDOM_SEED
     private var hillRoughness = 1.0f
     private var hillAmplitude = 1.0f
     private var hillFrequency = 2.0f
@@ -219,7 +219,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private var autumnGrassEnabled = true
     private var autumnGrassIntensity = 50
     private var winterSnowEnabled = true
-    private var winterSnowCoverage = 50
+    private var winterSnowCoverage = PreferenceDefaults.WINTER_SNOW_COVERAGE
     
     // Dynamic snow from weather history
     private var useWeatherSnow = true
@@ -1849,7 +1849,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val prevFoliageRandomScatter = foliageRandomScatter
         
         // Random seed for consistent placement
-        randomSeed = settings.getInt("pref_random_seed", 42)
+        randomSeed = settings.getInt("pref_random_seed", PreferenceDefaults.RANDOM_SEED)
         
         hillCount = settings.getInt("pref_hill_count", 5)  // 5 hill layers default, range 0-20
         
@@ -1893,7 +1893,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         autumnGrassEnabled = settings.getBoolean("pref_autumn_grass", true)
         autumnGrassIntensity = settings.getInt("pref_autumn_grass_intensity", 50)
         winterSnowEnabled = settings.getBoolean("pref_winter_snow_hills", true)
-        winterSnowCoverage = settings.getInt("pref_winter_snow_coverage", 50)
+        winterSnowCoverage = settings.getInt("pref_winter_snow_coverage", PreferenceDefaults.WINTER_SNOW_COVERAGE)
         useWeatherSnow = settings.getBoolean("pref_weather_snow_enabled", true)
         seasonTransitionDays = settings.getInt("pref_season_transition_days", PreferenceDefaults.SEASON_TRANSITION_DAYS)
         

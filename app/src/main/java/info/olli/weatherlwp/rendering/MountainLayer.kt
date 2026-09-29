@@ -118,12 +118,12 @@ class MountainLayer(private val context: Context) : SceneLayer {
     private var mountainRoughness = 0.5f
     private var ridgeRoughness = 0.5f
     private var mountainBottomOffset = 0f  // Shift mountains up (0-1 of screen height)
-    private var randomSeed = 42
+    private var randomSeed = PreferenceDefaults.RANDOM_SEED
     
     // Seasonal settings (read from terrain settings)
     private var terrainSeasonOverride = "auto"
     private var winterSnowEnabled = true
-    private var winterSnowCoverage = 50   // 0-100 how much of mountain tops are covered
+    private var winterSnowCoverage = PreferenceDefaults.WINTER_SNOW_COVERAGE   // 0-100 how much of mountain tops are covered
 
     // Frame-constant terrain season, resolved once per draw() instead of per mountain
     // (getCurrentTerrainSeason() allocates a Calendar via SeasonHelper).
@@ -677,7 +677,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
     override fun reloadSettings(settings: SimulationSettings) {
         
         // Random seed for consistent placement
-        randomSeed = settings.getInt("pref_random_seed", 42)
+        randomSeed = settings.getInt("pref_random_seed", PreferenceDefaults.RANDOM_SEED)
         
         // Mountain density: 0-100 percentage (scales with extended width)
         mountainDensity = settings.getInt("pref_mountain_density", PreferenceDefaults.MOUNTAIN_DENSITY)
@@ -711,7 +711,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
             "auto"  // Always use real season when not in debug mode
         }
         winterSnowEnabled = settings.getBoolean("pref_winter_snow_hills", true)
-        winterSnowCoverage = settings.getInt("pref_winter_snow_coverage", 50)
+        winterSnowCoverage = settings.getInt("pref_winter_snow_coverage", PreferenceDefaults.WINTER_SNOW_COVERAGE)
         
         generateMountains()
     }

@@ -86,6 +86,9 @@ class WeatherWallApp : Application() {
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             handleUncaughtException(thread, throwable)
         }
+
+        runCatching { info.olli.weatherlwp.settings.SettingsResetManager.ensureDefaults(this) }
+            .onFailure { Log.e(TAG, "Failed to apply preference defaults", it) }
         
         Log.d(TAG, "WeatherWall Application initialized with crash handler")
     }

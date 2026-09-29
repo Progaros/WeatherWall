@@ -82,6 +82,10 @@ class PreferenceDefaultsTest {
             "pref_tree_sway_speed" to PreferenceDefaults.TREE_SWAY_SPEED,
             "pref_hill_amplitude" to PreferenceDefaults.HILL_AMPLITUDE,
             "pref_hill_frequency" to PreferenceDefaults.HILL_FREQUENCY,
+            "pref_tree_size" to PreferenceDefaults.TREE_SIZE,
+            "pref_random_seed" to PreferenceDefaults.RANDOM_SEED,
+            "pref_winter_snow_coverage" to PreferenceDefaults.WINTER_SNOW_COVERAGE,
+            "pref_celestial_arc_height" to PreferenceDefaults.CELESTIAL_ARC_HEIGHT,
             
             // Mountain settings
             "pref_mountain_density" to PreferenceDefaults.MOUNTAIN_DENSITY,
@@ -113,8 +117,6 @@ class PreferenceDefaultsTest {
             // Visual settings
             "pref_night_shade_strength" to PreferenceDefaults.NIGHT_SHADE_STRENGTH,
             "pref_vignette_enabled" to PreferenceDefaults.VIGNETTE_ENABLED,
-            "pref_vignette_strength" to PreferenceDefaults.VIGNETTE_STRENGTH,
-            "pref_vignette_size" to PreferenceDefaults.VIGNETTE_SIZE,
             
             // Debug settings
             "pref_debug_overlay_enabled" to PreferenceDefaults.DEBUG_OVERLAY_ENABLED,
@@ -280,6 +282,31 @@ class PreferenceDefaultsTest {
         }
     }
     
+    @Test
+    fun `literal defaults in code match XML defaults`() {
+        // Catches read sites that hardcode a default instead of using PreferenceDefaults.
+        val readRegex = """(?:get|snap)(?:Int|Boolean|String)\s*\(\s*"(pref_[a-z0-9_]+)"\s*,\s*("[^"]*"|-?\d+|true|false)\s*\)""".toRegex()
+        val xmlPrefs = scanXmlFiles()
+        val errors = mutableListOf<String>()
+
+        File(KOTLIN_PATH).walkTopDown().filter { it.extension == "kt" }.forEach { file ->
+            file.readLines().forEachIndexed { idx, line ->
+                readRegex.findAll(line).forEach { m ->
+                    val key = m.groupValues[1]
+                    val codeDefault = m.groupValues[2].trim('"')
+                    val xmlDefault = xmlPrefs[key]?.firstNotNullOfOrNull { it.defaultValue } ?: return@forEach
+                    if (codeDefault != xmlDefault) {
+                        errors.add("$key: ${file.name}:${idx + 1} uses $codeDefault, XML default is $xmlDefault")
+                    }
+                }
+            }
+        }
+
+        if (errors.isNotEmpty()) {
+            fail("Code defaults disagree with XML defaults:\n${errors.joinToString("\n")}")
+        }
+    }
+
     @Test
     fun `PreferenceDefaults is the single source of truth`() {
         // PreferenceDefaults.kt is the Single Source of Truth (SSOT) for preference defaults.
