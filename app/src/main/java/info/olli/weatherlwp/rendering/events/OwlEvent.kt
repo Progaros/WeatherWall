@@ -33,6 +33,11 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
     private val wingPhase = random.nextFloat() * 6.28f
     private val bank = (-8f + random.nextFloat() * 16f)
     private val bobPhase = random.nextFloat() * 6.28f
+
+    // Head turn: mostly profile, occasionally glances at the viewer (drawn after existing randoms so they stay unchanged)
+    private val lookPeriod = 6.5f + random.nextFloat() * 3.5f
+    private val lookPhase = random.nextFloat() * lookPeriod
+    private val lookHold = 1.0f + random.nextFloat() * 0.5f
     
     // Parallax based on distance
     private val parallaxDepth = 0.2f + distance * 0.15f
@@ -42,6 +47,40 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
     private fun smoothstep01(x: Float): Float {
         val t = x.coerceIn(0f, 1f)
         return t * t * (3f - 2f * t)
+    }
+
+    /** 0 = profile (facing flight direction), 1 = three-quarter, 2 = facing the viewer. */
+    private fun headPose(localTime: Float): Int {
+        val t = ((localTime + lookPhase) % lookPeriod + lookPeriod) % lookPeriod
+        return when {
+            t < TURN_STEP -> 1
+            t < TURN_STEP + lookHold -> 2
+            t < 2f * TURN_STEP + lookHold -> 1
+            else -> 0
+        }
+    }
+
+    private fun drawTuft(
+        canvas: Canvas, paint: Paint, hx: Float, hy: Float, r: Float,
+        b1x: Float, b1y: Float, tipX: Float, tipY: Float, b2x: Float, b2y: Float
+    ) {
+        path.reset()
+        path.moveTo(hx + r * b1x, hy + r * b1y)
+        path.lineTo(hx + r * tipX, hy + r * tipY)
+        path.lineTo(hx + r * b2x, hy + r * b2y)
+        path.close()
+        canvas.drawPath(path, paint)
+    }
+
+    private fun drawEye(
+        canvas: Canvas, paint: Paint, cx: Float, cy: Float,
+        rx: Float, ry: Float, pupilDx: Float, glowAlpha: Int
+    ) {
+        paint.color = Color.rgb(30, 25, 20)
+        canvas.drawOval(cx - rx, cy - ry, cx + rx, cy + ry, paint)
+        paint.color = Color.argb(glowAlpha, 255, 200, 50)
+        val px = cx + pupilDx
+        canvas.drawOval(px - rx * 0.5f, cy - ry * 0.5f, px + rx * 0.5f, cy + ry * 0.5f, paint)
     }
 
     override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
@@ -131,41 +170,105 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         val headR = size * 0.32f
         val headX = currentX + bodyW * 0.15f
         val headY = currentY - bodyH * 0.35f
+        val pose = headPose(localTime)
+        val r = headR
+
+        if (pose == 0) {
+            // Far ear tuft: only its tip peeks out behind the crown
+            paint.color = darkColor
+            drawTuft(canvas, paint, headX, headY, r, -0.35f, -0.8f, -0.45f, -1.25f, -0.05f, -0.9f)
+        }
+
         paint.color = bodyColor
         canvas.drawCircle(headX, headY, headR, paint)
-        
-        // Facial disc - distinctive owl feature (lighter heart-shaped area)
-        paint.color = faceColor
-        val faceW = headR * 0.75f
-        val faceH = headR * 0.85f
-        canvas.drawOval(headX - faceW, headY - faceH * 0.6f,
-                        headX + faceW, headY + faceH * 0.5f, paint)
-        
-        // Brow ridge (darker line above eyes)
-        paint.color = darkColor
-        path.reset()
-        path.moveTo(headX - headR * 0.5f, headY - headR * 0.25f)
-        path.quadTo(headX, headY - headR * 0.45f, headX + headR * 0.5f, headY - headR * 0.25f)
-        path.lineTo(headX + headR * 0.4f, headY - headR * 0.15f)
-        path.quadTo(headX, headY - headR * 0.3f, headX - headR * 0.4f, headY - headR * 0.15f)
-        path.close()
-        canvas.drawPath(path, paint)
-        
-        // Ear tufts (great horned owl style)
-        paint.color = bodyColor
-        path.reset()
-        path.moveTo(headX - headR * 0.55f, headY - headR * 0.6f)
-        path.lineTo(headX - headR * 0.75f, headY - headR * 1.25f)
-        path.lineTo(headX - headR * 0.25f, headY - headR * 0.7f)
-        path.close()
-        canvas.drawPath(path, paint)
-        
-        path.reset()
-        path.moveTo(headX + headR * 0.55f, headY - headR * 0.6f)
-        path.lineTo(headX + headR * 0.75f, headY - headR * 1.25f)
-        path.lineTo(headX + headR * 0.25f, headY - headR * 0.7f)
-        path.close()
-        canvas.drawPath(path, paint)
+
+        when (pose) {
+            0 -> {
+                // Side view of the facial disc: half-disc toward the front, dark ruff along its back rim
+                path.reset()
+                path.moveTo(headX + r * 0.2f, headY - r * 0.6f)
+                path.quadTo(headX + r * 1.0f, headY - r * 0.55f, headX + r * 0.92f, headY + r * 0.05f)
+                path.quadTo(headX + r * 0.8f, headY + r * 0.5f, headX + r * 0.25f, headY + r * 0.55f)
+                path.quadTo(headX - r * 0.15f, headY, headX + r * 0.2f, headY - r * 0.6f)
+                path.close()
+                path.offset(-r * 0.08f, 0f)
+                paint.color = darkColor
+                canvas.drawPath(path, paint)
+                path.offset(r * 0.08f, 0f)
+                paint.color = faceColor
+                canvas.drawPath(path, paint)
+
+                // Brow above the single visible eye
+                paint.color = darkColor
+                path.reset()
+                path.moveTo(headX + r * 0.3f, headY - r * 0.28f)
+                path.quadTo(headX + r * 0.55f, headY - r * 0.42f, headX + r * 0.82f, headY - r * 0.28f)
+                path.lineTo(headX + r * 0.75f, headY - r * 0.2f)
+                path.quadTo(headX + r * 0.55f, headY - r * 0.32f, headX + r * 0.35f, headY - r * 0.2f)
+                path.close()
+                canvas.drawPath(path, paint)
+
+                // Near ear tuft, swept back by the airflow
+                paint.color = bodyColor
+                drawTuft(canvas, paint, headX, headY, r, 0.05f, -0.92f, -0.1f, -1.38f, 0.4f, -0.8f)
+            }
+            1 -> {
+                // Three-quarter: disc foreshortened and shifted toward the front
+                paint.color = faceColor
+                val faceCx = headX + r * 0.4f
+                val faceW = r * 0.56f
+                val faceH = r * 0.85f
+                canvas.drawOval(faceCx - faceW, headY - faceH * 0.6f,
+                                faceCx + faceW, headY + faceH * 0.5f, paint)
+
+                paint.color = darkColor
+                path.reset()
+                path.moveTo(headX - r * 0.1f, headY - r * 0.25f)
+                path.quadTo(headX + r * 0.35f, headY - r * 0.45f, headX + r * 0.85f, headY - r * 0.22f)
+                path.lineTo(headX + r * 0.75f, headY - r * 0.13f)
+                path.quadTo(headX + r * 0.35f, headY - r * 0.3f, headX, headY - r * 0.15f)
+                path.close()
+                canvas.drawPath(path, paint)
+
+                paint.color = bodyColor
+                drawTuft(canvas, paint, headX, headY, r, -0.25f, -0.65f, -0.4f, -1.3f, 0.05f, -0.75f)
+                drawTuft(canvas, paint, headX, headY, r, 0.55f, -0.6f, 0.68f, -1.12f, 0.3f, -0.75f)
+            }
+            else -> {
+                // Facial disc - distinctive owl feature (lighter heart-shaped area)
+                paint.color = faceColor
+                val faceW = headR * 0.75f
+                val faceH = headR * 0.85f
+                canvas.drawOval(headX - faceW, headY - faceH * 0.6f,
+                                headX + faceW, headY + faceH * 0.5f, paint)
+
+                // Brow ridge (darker line above eyes)
+                paint.color = darkColor
+                path.reset()
+                path.moveTo(headX - headR * 0.5f, headY - headR * 0.25f)
+                path.quadTo(headX, headY - headR * 0.45f, headX + headR * 0.5f, headY - headR * 0.25f)
+                path.lineTo(headX + headR * 0.4f, headY - headR * 0.15f)
+                path.quadTo(headX, headY - headR * 0.3f, headX - headR * 0.4f, headY - headR * 0.15f)
+                path.close()
+                canvas.drawPath(path, paint)
+
+                // Ear tufts (great horned owl style)
+                paint.color = bodyColor
+                path.reset()
+                path.moveTo(headX - headR * 0.55f, headY - headR * 0.6f)
+                path.lineTo(headX - headR * 0.75f, headY - headR * 1.25f)
+                path.lineTo(headX - headR * 0.25f, headY - headR * 0.7f)
+                path.close()
+                canvas.drawPath(path, paint)
+
+                path.reset()
+                path.moveTo(headX + headR * 0.55f, headY - headR * 0.6f)
+                path.lineTo(headX + headR * 0.75f, headY - headR * 1.25f)
+                path.lineTo(headX + headR * 0.25f, headY - headR * 0.7f)
+                path.close()
+                canvas.drawPath(path, paint)
+            }
+        }
         
         // === WINGS ===
         // Broad, rounded wings - owls have wide wings for silent flight
@@ -210,30 +313,67 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         
         // Eye glow intensity varies with wing beat
         val eyeGlow = 0.5f + 0.5f * envelope
-        
-        // Left eye
-        paint.color = Color.rgb(30, 25, 20)  // Dark iris
-        canvas.drawCircle(headX - eyeSpacing, eyeY, eyeR, paint)
-        paint.color = Color.argb((220 * eyeGlow).toInt(), 255, 200, 50)  // Glowing pupil
-        canvas.drawCircle(headX - eyeSpacing, eyeY, eyeR * 0.5f, paint)
-        
-        // Right eye
-        paint.color = Color.rgb(30, 25, 20)
-        canvas.drawCircle(headX + eyeSpacing, eyeY, eyeR, paint)
-        paint.color = Color.argb((220 * eyeGlow).toInt(), 255, 200, 50)
-        canvas.drawCircle(headX + eyeSpacing, eyeY, eyeR * 0.5f, paint)
-        
-        // Beak - small, hooked
-        paint.color = Color.rgb(60, 55, 45)
-        path.reset()
-        path.moveTo(headX, headY + headR * 0.1f)
-        path.lineTo(headX - headR * 0.08f, headY + headR * 0.25f)
-        path.lineTo(headX, headY + headR * 0.35f)
-        path.lineTo(headX + headR * 0.08f, headY + headR * 0.25f)
-        path.close()
-        canvas.drawPath(path, paint)
+        val glowAlpha = (220 * eyeGlow).toInt()
+
+        when (pose) {
+            0 -> {
+                // Single near eye at the front, pupil looking ahead
+                drawEye(canvas, paint, headX + r * 0.55f, eyeY - r * 0.03f,
+                        eyeR * 0.8f, eyeR * 0.9f, eyeR * 0.25f, glowAlpha)
+
+                // Hooked beak pointing forward
+                paint.color = Color.rgb(60, 55, 45)
+                path.reset()
+                path.moveTo(headX + r * 0.8f, headY - r * 0.08f)
+                path.quadTo(headX + r * 1.08f, headY - r * 0.06f, headX + r * 1.06f, headY + r * 0.22f)
+                path.quadTo(headX + r * 0.98f, headY + r * 0.12f, headX + r * 0.8f, headY + r * 0.14f)
+                path.close()
+                canvas.drawPath(path, paint)
+            }
+            1 -> {
+                // Near eye full size; far eye foreshortened toward the front edge
+                drawEye(canvas, paint, headX + r * 0.15f, eyeY, eyeR, eyeR, eyeR * 0.1f, glowAlpha)
+                drawEye(canvas, paint, headX + r * 0.7f, eyeY, eyeR * 0.55f, eyeR * 0.85f, eyeR * 0.08f, glowAlpha)
+
+                paint.color = Color.rgb(60, 55, 45)
+                path.reset()
+                path.moveTo(headX + r * 0.44f, headY + r * 0.1f)
+                path.lineTo(headX + r * 0.37f, headY + r * 0.25f)
+                path.lineTo(headX + r * 0.47f, headY + r * 0.36f)
+                path.lineTo(headX + r * 0.54f, headY + r * 0.24f)
+                path.close()
+                canvas.drawPath(path, paint)
+            }
+            else -> {
+                // Left eye
+                paint.color = Color.rgb(30, 25, 20)  // Dark iris
+                canvas.drawCircle(headX - eyeSpacing, eyeY, eyeR, paint)
+                paint.color = Color.argb(glowAlpha, 255, 200, 50)  // Glowing pupil
+                canvas.drawCircle(headX - eyeSpacing, eyeY, eyeR * 0.5f, paint)
+
+                // Right eye
+                paint.color = Color.rgb(30, 25, 20)
+                canvas.drawCircle(headX + eyeSpacing, eyeY, eyeR, paint)
+                paint.color = Color.argb(glowAlpha, 255, 200, 50)
+                canvas.drawCircle(headX + eyeSpacing, eyeY, eyeR * 0.5f, paint)
+
+                // Beak - small, hooked
+                paint.color = Color.rgb(60, 55, 45)
+                path.reset()
+                path.moveTo(headX, headY + headR * 0.1f)
+                path.lineTo(headX - headR * 0.08f, headY + headR * 0.25f)
+                path.lineTo(headX, headY + headR * 0.35f)
+                path.lineTo(headX + headR * 0.08f, headY + headR * 0.25f)
+                path.close()
+                canvas.drawPath(path, paint)
+            }
+        }
 
         canvas.restore() // banking
         canvas.restore() // parallax
+    }
+
+    private companion object {
+        const val TURN_STEP = 0.18f  // seconds per intermediate head pose
     }
 }
