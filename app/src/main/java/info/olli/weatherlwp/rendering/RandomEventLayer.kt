@@ -324,8 +324,9 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
             availableEvents.add { t -> DragonflyEvent(Random(t + 11), t, vr) }
         }
         
-        val isRaining = state.weather == WeatherType.RAIN || state.weather == WeatherType.THUNDERSTORM || state.weather == WeatherType.SNOW
-        if ("balloon" in enabledEvents && !state.isNight && !isRaining) availableEvents.add { t -> HotAirBalloonEvent(Random(t + 4), t) }
+        val isPrecipitating = state.weather == WeatherType.RAIN || state.weather == WeatherType.THUNDERSTORM ||
+            state.weather == WeatherType.SNOW || state.weather == WeatherType.HAIL
+        if ("balloon" in enabledEvents && !state.isNight && !isPrecipitating) availableEvents.add { t -> HotAirBalloonEvent(Random(t + 4), t) }
         
         // Ground animals - some seasonal
         if ("rabbit" in enabledEvents) availableEvents.add { t -> RabbitEvent(Random(t + 5), t, vr) }
@@ -341,7 +342,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         if ("shootingstar" in enabledEvents && state.isNight && isClearEnough) availableEvents.add { t -> ShootingStarEvent(Random(t + 7), t) }
         
         // Fireflies: Summer nights only (warm nights)
-        if ("fireflies" in enabledEvents && state.isNight && !isRaining && isSummer) {
+        if ("fireflies" in enabledEvents && state.isNight && !isPrecipitating && isSummer) {
             availableEvents.add { t -> FireflyEvent(Random(t + 8), t) }
         }
         
@@ -358,7 +359,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         }
         
         // Deer: Autumn/Winter primarily (more visible in sparse foliage)
-        if ("deer" in enabledEvents && !isRaining && (isAutumn || isWinter || random.nextFloat() < 0.2f)) {
+        if ("deer" in enabledEvents && !isPrecipitating && (isAutumn || isWinter || random.nextFloat() < 0.2f)) {
             availableEvents.add { t -> DeerEvent(Random(t + 15), t, vr) }
         }
         
@@ -368,12 +369,12 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         }
         
         // Fish: Day or dusk, non-winter (jump in warm/mild weather)
-        if ("fish" in enabledEvents && !state.isNight && !isWinter && !isRaining) {
+        if ("fish" in enabledEvents && !state.isNight && !isWinter && !isPrecipitating) {
             availableEvents.add { t -> FishJumpEvent(Random(t + 16), t) }
         }
         
         // Ducks: Day, year-round (avoid storms)
-        if ("duck" in enabledEvents && !state.isNight && !isRaining) {
+        if ("duck" in enabledEvents && !state.isNight && !isPrecipitating) {
             availableEvents.add { t -> DuckEvent(Random(t + 17), t, vr) }
         }
         
