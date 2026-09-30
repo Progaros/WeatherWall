@@ -7,7 +7,6 @@ import android.graphics.Path
 import android.graphics.RectF
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.RenderConstants
-import info.olli.weatherlwp.simulation.SimulationState
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -67,7 +66,7 @@ class HotAirBalloonEvent(random: Random, override val spawnTimeMs: Long = System
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
                       hillHeightProvider: EventTerrainProvider?, extendedOffsetY: Float) {
-        // Scale: 0.4-0.8% of height based on distance (was 1%)
+        // Scale: 0.4-0.8% of height based on distance
         val unit = height * 0.005f * sizeScale
         val size = unit * 6f
         
@@ -136,8 +135,7 @@ class HotAirBalloonEvent(random: Random, override val spawnTimeMs: Long = System
         canvas.drawPath(path, paint)
         canvas.restore()
         
-        // Basket hangs below the throat. Ropes were skipped past distance 0.7,
-        // which left the basket floating under about a third of balloons.
+        // Basket hangs below the throat, tied on at every distance.
         val basketColor = RenderConstants.blendWithAmbient(Color.rgb(139, 90, 43), ambientColor, 0.3f)
         paint.color = basketColor
         val basketY = currentY + size * 0.55f

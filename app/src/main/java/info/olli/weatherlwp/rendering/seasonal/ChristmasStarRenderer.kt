@@ -7,8 +7,8 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RadialGradient
 import android.graphics.Shader
+import androidx.core.graphics.toColorInt
 import info.olli.weatherlwp.simulation.SimulationSettings
-import kotlin.random.Random
 
 // Pre-calculated trigonometry for 8-point star (avoids Math.toRadians in render loop)
 // Angles: 0°, 45°, 90°, 135°, 180°, 225°, 270°, 315°
@@ -27,9 +27,6 @@ private const val TRAIL_PERP_RAD = TRAIL_ANGLE_RAD + Math.PI / 2
 private val TRAIL_PERP_COS = kotlin.math.cos(TRAIL_PERP_RAD).toFloat()
 private val TRAIL_PERP_SIN = kotlin.math.sin(TRAIL_PERP_RAD).toFloat()
 
-// Conversion constant
-private const val DEG_TO_RAD = Math.PI / 180.0
-
 /** Christmas (Bethlehem) star with glow, 8-point rays and tapered trail. */
 internal class ChristmasStarRenderer {
 
@@ -42,45 +39,19 @@ internal class ChristmasStarRenderer {
         var twinkleSpeed: Float = 2f
     )
 
-    // Shooting star / trail particles
-    private data class TrailParticle(
-        var x: Float = 0f,
-        var y: Float = 0f,
-        var alpha: Int = 255,
-        var size: Float = 2f
-    )
-
-    // Background twinkling stars
-    private data class Star(
-        var x: Float = 0f,
-        var y: Float = 0f,
-        var size: Float = 0f,
-        var twinkle: Float = 0f,
-        var twinkleSpeed: Float = 0f
-    )
-
-    // Pre-allocated pools
-    private val stars = Array(30) { Star() }
-    private val trailParticles = Array(20) { TrailParticle() }
     private var christmasStar: ChristmasStar? = null
 
     // Pre-allocated paths (avoid allocations in render loop)
     private val christmasTrailPath = Path()
     private val christmasRayPath = Path()
 
-    // Pre-allocated paints
-    private val starPaint = Paint().apply {
-        color = Color.WHITE
-        isAntiAlias = true
-    }
-
     private val christmasStarPaint = Paint().apply {
-        color = Color.parseColor("#FFFFD700")  // Golden
+        color = "#FFFFD700".toColorInt()  // Golden
         isAntiAlias = true
     }
 
     private val trailPaint = Paint().apply {
-        color = Color.parseColor("#FFFFD700")
+        color = "#FFFFD700".toColorInt()
         isAntiAlias = true
     }
 
@@ -93,65 +64,18 @@ internal class ChristmasStarRenderer {
     }
 
     fun init(screenWidth: Int, screenHeight: Int, heightScale: Float) {
-        // Use fixed seed for consistent star placement
-        val starRandom = Random(54321)
-
-        // Scale factor for sizes (min 50% for visibility on small screens)
-        val sizeScale = heightScale.coerceAtLeast(0.5f)
-
-        // Initialize background twinkling stars in upper portion of screen
-        // Avoid the christmas star area (upper right)
-        val christmasStarX = screenWidth * 0.82f
-        val christmasStarY = screenHeight * 0.12f
-        val exclusionRadius = screenWidth * 0.15f
-
-        for (s in stars) {
-            // Keep regenerating until we get a position not too close to christmas star
-            var attempts = 0
-            do {
-                s.x = starRandom.nextFloat() * screenWidth
-                s.y = starRandom.nextFloat() * screenHeight * 0.4f
-                attempts++
-            } while (attempts < 5 &&
-                     kotlin.math.abs(s.x - christmasStarX) < exclusionRadius &&
-                     kotlin.math.abs(s.y - christmasStarY) < exclusionRadius)
-
-            // Size scaled relative to height
-            s.size = (1.5f + starRandom.nextFloat() * 2.5f) * sizeScale
-            s.twinkle = starRandom.nextFloat() * 360f
-            s.twinkleSpeed = 2f + starRandom.nextFloat() * 4f
-        }
-
-        // Initialize the main Christmas star (Bethlehem star) - fixed position in upper right
-        // Size is relative to reference height (35f at 1920px)
+        // Fixed position in upper right; size is relative to reference height (35f at 1920px)
         christmasStar = ChristmasStar(
-            x = christmasStarX,
-            y = christmasStarY,
+            x = screenWidth * 0.82f,
+            y = screenHeight * 0.12f,
             size = 35f * heightScale.coerceAtLeast(0.5f),  // Scale with height, min 50%
             twinkle = 0f,
             twinkleSpeed = 3f
         )
-
-        // Initialize trail particles (emanating from the star)
-        // Sizes are relative to reference height
-        val trailScale = heightScale.coerceAtLeast(0.5f)
-        for (i in trailParticles.indices) {
-            val t = i.toFloat() / trailParticles.size
-            trailParticles[i].apply {
-                x = 0f  // Will be set relative to star
-                y = 0f
-                alpha = (255 * (1f - t * 0.7f)).toInt()  // Fade along trail
-                size = (3f + (1f - t) * 8f) * trailScale  // Larger near star, scaled
-            }
-        }
     }
 
     fun draw(canvas: Canvas, parallaxOffsetX: Float = 0f, parallaxOffsetY: Float = 0f) {
-        // Note: Background twinkling stars are now handled by SkyLayer
-        // This renderer only draws the main Christmas star with trail
-        // This prevents duplicate star rendering at night during Christmas
-
-        // Render the main Christmas star (Bethlehem star) with trail
+        // Background stars come from SkyLayer; only the Bethlehem star and its trail are drawn here.
         val star = christmasStar ?: return
         star.twinkle += star.twinkleSpeed
 

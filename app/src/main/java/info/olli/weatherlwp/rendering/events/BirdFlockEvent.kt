@@ -4,9 +4,9 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
+import androidx.core.graphics.withTranslation
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.RenderConstants
-import info.olli.weatherlwp.simulation.SimulationState
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -89,52 +89,50 @@ class BirdFlockEvent(random: Random, override val spawnTimeMs: Long = System.cur
         
         val px = parallaxCalculator.getOffsetXForDepth(parallaxDepth)
         val py = parallaxCalculator.getOffsetYForDepth(parallaxDepth)
-        canvas.save()
-        canvas.translate(px, py)
-        
-        // Scale: 0.4-0.7% of height based on distance - bird V-shapes
-        val unit = height * 0.003f * sizeScale
-        
-        // Distant birds are more faded
-        val alpha = (1f - distance * 0.3f)
-        strokePaint.color = RenderConstants.blendWithAmbient(
-            Color.argb((255 * alpha).toInt(), 30, 30, 30), ambientColor, 0.4f)
-        strokePaint.style = Paint.Style.STROKE
-        strokePaint.strokeCap = Paint.Cap.ROUND
-        
-        for (bird in birds) {
-            val size = bird.sizeVariation * unit * 4f
-            val birdX = (x + bird.offsetX) * width - extendedOffset
-            val birdY = EventTraversal.mapFieldY(y + bird.offsetY, height, extendedOffsetY)
-            
-            // Smooth wing animation using sine
-            // During flap: fast wing beats with larger amplitude
-            // During glide: slow gentle movement with wings mostly up
-            val wingBeatSpeed = if (isFlapping) 10f else 1.5f
-            // A gliding bird holds a steady dihedral, so keep the trough of the
-            // oscillation well above strokeWidth (size * 0.15f) - otherwise the V
-            // collapses into the line thickness and the bird reads as a flat bar.
-            val wingAmplitude = if (isFlapping) size * 0.45f else size * 0.15f
-            // Base wing angle: wings curve upward (negative Y = up on screen)
-            val baseWingUp = if (isFlapping) size * 0.4f else size * 0.5f
-            
-            // Wing lift oscillates around base position, always keeping wings angled up
-            val sineValue = sin(elapsedSec * wingBeatSpeed + bird.wingPhase)
-            val wingLift = baseWingUp + sineValue * wingAmplitude
-            
-            strokePaint.strokeWidth = (size * 0.15f).coerceAtLeast(1.2f)
-            
-            // Draw bird as smooth curved V-shape (wings always curve up from body).
-            // The far wing is foreshortened so the bird reads as seen at an angle
-            // instead of as a symmetric tick mark.
-            val farSpan = size * 0.82f
-            val farLift = wingLift * 0.88f
-            path.reset()
-            path.moveTo(birdX - farSpan, birdY - farLift)  // Far wingtip (above body)
-            path.quadTo(birdX - farSpan * 0.35f, birdY - farLift * 0.25f, birdX, birdY)  // Far wing curves down to body
-            path.quadTo(birdX + size * 0.35f, birdY - wingLift * 0.25f, birdX + size, birdY - wingLift)  // Near wing curves up to tip
-            canvas.drawPath(path, strokePaint)
+        canvas.withTranslation(px, py) {
+            // Scale: 0.4-0.7% of height based on distance - bird V-shapes
+            val unit = height * 0.003f * sizeScale
+
+            // Distant birds are more faded
+            val alpha = (1f - distance * 0.3f)
+            strokePaint.color = RenderConstants.blendWithAmbient(
+                Color.argb((255 * alpha).toInt(), 30, 30, 30), ambientColor, 0.4f)
+            strokePaint.style = Paint.Style.STROKE
+            strokePaint.strokeCap = Paint.Cap.ROUND
+
+            for (bird in birds) {
+                val size = bird.sizeVariation * unit * 4f
+                val birdX = (x + bird.offsetX) * width - extendedOffset
+                val birdY = EventTraversal.mapFieldY(y + bird.offsetY, height, extendedOffsetY)
+
+                // Smooth wing animation using sine
+                // During flap: fast wing beats with larger amplitude
+                // During glide: slow gentle movement with wings mostly up
+                val wingBeatSpeed = if (isFlapping) 10f else 1.5f
+                // A gliding bird holds a steady dihedral, so keep the trough of the
+                // oscillation well above strokeWidth (size * 0.15f) - otherwise the V
+                // collapses into the line thickness and the bird reads as a flat bar.
+                val wingAmplitude = if (isFlapping) size * 0.45f else size * 0.15f
+                // Base wing angle: wings curve upward (negative Y = up on screen)
+                val baseWingUp = if (isFlapping) size * 0.4f else size * 0.5f
+
+                // Wing lift oscillates around base position, always keeping wings angled up
+                val sineValue = sin(elapsedSec * wingBeatSpeed + bird.wingPhase)
+                val wingLift = baseWingUp + sineValue * wingAmplitude
+
+                strokePaint.strokeWidth = (size * 0.15f).coerceAtLeast(1.2f)
+
+                // Draw bird as smooth curved V-shape (wings always curve up from body).
+                // The far wing is foreshortened so the bird reads as seen at an angle
+                // instead of as a symmetric tick mark.
+                val farSpan = size * 0.82f
+                val farLift = wingLift * 0.88f
+                path.reset()
+                path.moveTo(birdX - farSpan, birdY - farLift)  // Far wingtip (above body)
+                path.quadTo(birdX - farSpan * 0.35f, birdY - farLift * 0.25f, birdX, birdY)  // Far wing curves down to body
+                path.quadTo(birdX + size * 0.35f, birdY - wingLift * 0.25f, birdX + size, birdY - wingLift)  // Near wing curves up to tip
+                canvas.drawPath(path, strokePaint)
+            }
         }
-        canvas.restore()
     }
 }

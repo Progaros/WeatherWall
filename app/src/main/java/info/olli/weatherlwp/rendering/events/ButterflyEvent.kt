@@ -4,9 +4,9 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
+import androidx.core.graphics.withClip
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.RenderConstants
-import info.olli.weatherlwp.simulation.SimulationState
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
@@ -99,8 +99,7 @@ class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
         val flutter = sin(t * 16f + flutterPhase) *
             (0.8f + sin(t * 3f) * 0.2f)
         
-        // Both wings open and close together. Opposite scales made one wing
-        // collapse while the other spread, which is not how a butterfly flaps.
+        // Both wings open and close together.
         val open = (0.22f + (1f + flutter) * 0.39f).coerceIn(0.18f, 1f)
         // Fade markings out as the wing turns edge-on so they don't read as loose dots.
         val spotAlpha = (((open - 0.3f) / 0.3f).coerceIn(0f, 1f) * 170f).toInt()
@@ -125,14 +124,13 @@ class ButterflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
             canvas.drawPath(path, paint)
             if (spotAlpha == 0) return
             // Spots share the wing's flap transform and are clipped to its outline.
-            canvas.save()
-            canvas.clipPath(path)
-            paint.color = spotColor
-            paint.alpha = spotAlpha
-            // Eye-spot near the forewing tip, smaller spot on the outer hindwing.
-            canvas.drawCircle(currentX + size * 1.55f * dir, currentY - size * 0.72f, size * 0.15f, paint)
-            canvas.drawCircle(currentX + size * 0.72f * dir, currentY + size * 1.0f, size * 0.1f, paint)
-            canvas.restore()
+            canvas.withClip(path) {
+                paint.color = spotColor
+                paint.alpha = spotAlpha
+                // Eye-spot near the forewing tip, smaller spot on the outer hindwing.
+                canvas.drawCircle(currentX + size * 1.55f * dir, currentY - size * 0.72f, size * 0.15f, paint)
+                canvas.drawCircle(currentX + size * 0.72f * dir, currentY + size * 1.0f, size * 0.1f, paint)
+            }
         }
 
         canvas.save()

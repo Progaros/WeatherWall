@@ -11,9 +11,6 @@ import kotlin.random.Random
 // Java Random is used for nextGaussian() (normal distribution)
 private val gaussianRandom = java.util.Random()
 
-// Conversion constant
-private const val DEG_TO_RAD = Math.PI / 180.0
-
 /**
  * New Year fireworks: pooled rockets/explosion particles, frequency-based auto-launch
  * and shake-triggered bursts.
@@ -146,7 +143,7 @@ internal class FireworksSystem {
         val normalValue = gaussianRandom.nextGaussian() * stdDev + shakeFireworksCount
         val actualCount = normalValue.toInt().coerceIn(3, 50)
 
-        Log.d(TAG, "Triggering shake fireworks: $actualCount rockets (target: $shakeFireworksCount)")
+        Log.d(SEASONAL_TAG, "Triggering shake fireworks: $actualCount rockets (target: $shakeFireworksCount)")
 
         // Launch rockets up to the requested count (capped by available rocket slots)
         for (i in 0 until actualCount.coerceAtMost(rockets.size)) {
@@ -318,14 +315,11 @@ internal class FireworksSystem {
         for (f in fireworks) {
             if (f.life <= 0 && particleCount < targetParticles) {
                 val angle = Random.nextFloat() * 360f
-                // Starburst effect: clearer shell by reducing speed variance
-                // Was: 4f + Random.nextFloat() * 6f (4-10 range, very messy)
-                // New: 6f + Random.nextFloat() * 2f (6-8 range, clearer ring/star)
+                // Narrow speed range keeps the burst a clear ring
                 val speed = 6f + Random.nextFloat() * 2f
 
                 f.x = cx
                 f.y = cy
-                // Use precalculated DEG_TO_RAD constant
                 val angleRad = angle * DEG_TO_RAD
                 f.vx = (speed * kotlin.math.cos(angleRad)).toFloat()
                 f.vy = (speed * kotlin.math.sin(angleRad)).toFloat()
@@ -343,9 +337,5 @@ internal class FireworksSystem {
                 particleCount++
             }
         }
-    }
-
-    companion object {
-        private const val TAG = "SeasonalEvents"
     }
 }

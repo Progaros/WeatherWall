@@ -5,7 +5,6 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import info.olli.weatherlwp.parallax.ParallaxCalculator
-import info.olli.weatherlwp.simulation.SimulationState
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random

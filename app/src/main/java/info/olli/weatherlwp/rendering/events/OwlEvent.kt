@@ -6,7 +6,6 @@ import android.graphics.Paint
 import android.graphics.Path
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.RenderConstants
-import info.olli.weatherlwp.simulation.SimulationState
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -143,8 +142,7 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         val bodyH = size * 0.45f
         val wingSpan = size * 0.9f
 
-        // Far wing first so the body covers its root; a curve that collapsed to a sliver
-        // used to dangle under the owl like a tail.
+        // Far wing first so the body covers its root.
         canvas.save()
         canvas.rotate(wingAngle * 0.7f, currentX + bodyW * 0.1f, currentY)
         paint.color = darkColor

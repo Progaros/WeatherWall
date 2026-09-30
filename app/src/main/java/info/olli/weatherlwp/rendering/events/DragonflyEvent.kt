@@ -4,9 +4,9 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
+import androidx.core.graphics.withRotation
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.RenderConstants
-import info.olli.weatherlwp.simulation.SimulationState
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -211,24 +211,23 @@ class DragonflyEvent(random: Random, override val spawnTimeMs: Long = System.cur
     /** Long narrow wing pointing up from its root, rotated by [angleDeg]. [stigmaColor] 0 = none. */
     private fun drawWing(canvas: Canvas, paint: Paint, rootX: Float, rootY: Float, angleDeg: Float,
                          unit: Float, length: Float, color: Int, alpha: Int, stigmaColor: Int) {
-        canvas.save()
-        canvas.rotate(angleDeg, rootX, rootY)
-        paint.color = color
-        paint.alpha = alpha
-        canvas.drawOval(
-            rootX - unit * 0.5f, rootY - unit * length,
-            rootX + unit * 0.5f, rootY + unit * 0.2f,
-            paint
-        )
-        if (stigmaColor != 0) {
-            // +x side is the leading edge once the wing is swept back
-            paint.color = stigmaColor
+        canvas.withRotation(angleDeg, rootX, rootY) {
+            paint.color = color
+            paint.alpha = alpha
             canvas.drawOval(
-                rootX + unit * 0.05f, rootY - unit * (length - 0.5f),
-                rootX + unit * 0.4f, rootY - unit * (length - 1.1f),
+                rootX - unit * 0.5f, rootY - unit * length,
+                rootX + unit * 0.5f, rootY + unit * 0.2f,
                 paint
             )
+            if (stigmaColor != 0) {
+                // +x side is the leading edge once the wing is swept back
+                paint.color = stigmaColor
+                canvas.drawOval(
+                    rootX + unit * 0.05f, rootY - unit * (length - 0.5f),
+                    rootX + unit * 0.4f, rootY - unit * (length - 1.1f),
+                    paint
+                )
+            }
         }
-        canvas.restore()
     }
 }

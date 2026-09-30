@@ -34,7 +34,6 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
     // Fallback ground Y based on depth (used when no hill data available)
     override val fallbackGroundY = 0.78f + normalizedDepth * 0.10f  // 0.78 to 0.88
     
-    // Reduced speed: was 0.00008, now 0.000025 (~3x slower)
     override val speed = 0.000025f
     override val durationMs: Long = EventTraversal.durationMsForPath(
         path = traversal,

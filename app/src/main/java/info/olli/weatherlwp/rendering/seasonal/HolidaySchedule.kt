@@ -81,7 +81,7 @@ internal class HolidaySchedule(initialSettings: SimulationSettings) {
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error reading debug prefs", e)
+            Log.e(SEASONAL_TAG, "Error reading debug prefs", e)
         }
 
         val result = getSeasonByDate()
@@ -119,7 +119,6 @@ internal class HolidaySchedule(initialSettings: SimulationSettings) {
     }
 
     companion object {
-        private const val TAG = "SeasonalEvents"
         private const val SEASON_CACHE_TTL_MS = 10_000L  // Re-check season every 10 seconds
 
         /**

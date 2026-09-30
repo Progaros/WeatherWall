@@ -3,8 +3,8 @@ package info.olli.weatherlwp.rendering.events
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import androidx.core.graphics.withTranslation
 import info.olli.weatherlwp.parallax.ParallaxCalculator
-import info.olli.weatherlwp.simulation.SimulationState
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -29,9 +29,9 @@ class FireflyEvent(random: Random, override val spawnTimeMs: Long = System.curre
         val offsetX = (random.nextFloat() - 0.5f) * 0.15f
         val offsetY = (random.nextFloat() - 0.5f) * 0.12f
         val phase = random.nextFloat() * 6.28f
-        val speed = 0.2f + random.nextFloat() * 0.5f  // Slowed 3x (was too fast)
-        val driftX = (random.nextFloat() - 0.5f) * 0.00003f  // Slowed 3x
-        val driftY = (random.nextFloat() - 0.5f) * 0.000025f // Slowed 3x
+        val speed = 0.2f + random.nextFloat() * 0.5f
+        val driftX = (random.nextFloat() - 0.5f) * 0.00003f
+        val driftY = (random.nextFloat() - 0.5f) * 0.000025f
     }
 
     override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
@@ -61,28 +61,25 @@ class FireflyEvent(random: Random, override val spawnTimeMs: Long = System.curre
         // Use foreground depth for parallax (matches front hills where fireflies float)
         val px = parallaxCalculator.getOffsetXForDepth(depthFactor)
         val py = parallaxCalculator.getOffsetYForDepth(depthFactor)
-        canvas.save()
-        canvas.translate(px, py)
-        
-        for (fly in flies) {
-            // Calculate drift from elapsed time
-            val currentOffsetX = fly.offsetX + fly.driftX * elapsedMs
-            val currentOffsetY = fly.offsetY + fly.driftY * elapsedMs
-            
-            val x = (baseX + currentOffsetX) * width - extendedOffset
-            val y = (baseY + currentOffsetY) * height
-            
-            val flicker = sin(timeSeconds * fly.speed * 3f + fly.phase)
-            if (flicker > 0.2f) {
-                val alpha = ((flicker - 0.2f) / 0.8f * 200).toInt().coerceIn(0, 200)
-                paint.color = Color.argb(alpha, 200, 255, 100)
-                canvas.drawCircle(x, y, (2.5f + flicker) * unit, paint)
-                
-                paint.color = Color.argb(alpha / 3, 200, 255, 100)
-                canvas.drawCircle(x, y, (5f + flicker * 2) * unit, paint)
+        canvas.withTranslation(px, py) {
+            for (fly in flies) {
+                // Calculate drift from elapsed time
+                val currentOffsetX = fly.offsetX + fly.driftX * elapsedMs
+                val currentOffsetY = fly.offsetY + fly.driftY * elapsedMs
+
+                val x = (baseX + currentOffsetX) * width - extendedOffset
+                val y = (baseY + currentOffsetY) * height
+
+                val flicker = sin(timeSeconds * fly.speed * 3f + fly.phase)
+                if (flicker > 0.2f) {
+                    val alpha = ((flicker - 0.2f) / 0.8f * 200).toInt().coerceIn(0, 200)
+                    paint.color = Color.argb(alpha, 200, 255, 100)
+                    canvas.drawCircle(x, y, (2.5f + flicker) * unit, paint)
+
+                    paint.color = Color.argb(alpha / 3, 200, 255, 100)
+                    canvas.drawCircle(x, y, (5f + flicker * 2) * unit, paint)
+                }
             }
         }
-        
-        canvas.restore()
     }
 }

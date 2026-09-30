@@ -3,10 +3,9 @@ package info.olli.weatherlwp.rendering.events
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Path
+import androidx.core.graphics.withRotation
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.RenderConstants
-import info.olli.weatherlwp.simulation.SimulationState
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -40,8 +39,6 @@ class SnowflakeEvent(random: Random, override val spawnTimeMs: Long = System.cur
     // Snowflake type (simple 6-pointed crystal)
     private val armCount = 6
     private val branchRatio = 0.4f + random.nextFloat() * 0.2f
-    
-    private val path = Path()
 
     override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
@@ -93,25 +90,22 @@ class SnowflakeEvent(random: Random, override val spawnTimeMs: Long = System.cur
         val armLength = unit * 3f
         for (i in 0 until armCount) {
             val angle = (i * 360f / armCount)
-            canvas.save()
-            canvas.rotate(angle)
-            
-            // Main arm
-            canvas.drawLine(0f, 0f, 0f, -armLength, strokePaint)
-            
-            // Branch on each arm
-            val branchY = -armLength * branchRatio
-            val branchLen = armLength * 0.4f
-            canvas.drawLine(0f, branchY, -branchLen * 0.5f, branchY - branchLen * 0.5f, strokePaint)
-            canvas.drawLine(0f, branchY, branchLen * 0.5f, branchY - branchLen * 0.5f, strokePaint)
-            
-            // Smaller branch near tip
-            val branch2Y = -armLength * 0.75f
-            val branch2Len = armLength * 0.25f
-            canvas.drawLine(0f, branch2Y, -branch2Len * 0.5f, branch2Y - branch2Len * 0.5f, strokePaint)
-            canvas.drawLine(0f, branch2Y, branch2Len * 0.5f, branch2Y - branch2Len * 0.5f, strokePaint)
-            
-            canvas.restore()
+            canvas.withRotation(angle) {
+                // Main arm
+                canvas.drawLine(0f, 0f, 0f, -armLength, strokePaint)
+
+                // Branch on each arm
+                val branchY = -armLength * branchRatio
+                val branchLen = armLength * 0.4f
+                canvas.drawLine(0f, branchY, -branchLen * 0.5f, branchY - branchLen * 0.5f, strokePaint)
+                canvas.drawLine(0f, branchY, branchLen * 0.5f, branchY - branchLen * 0.5f, strokePaint)
+
+                // Smaller branch near tip
+                val branch2Y = -armLength * 0.75f
+                val branch2Len = armLength * 0.25f
+                canvas.drawLine(0f, branch2Y, -branch2Len * 0.5f, branch2Y - branch2Len * 0.5f, strokePaint)
+                canvas.drawLine(0f, branch2Y, branch2Len * 0.5f, branch2Y - branch2Len * 0.5f, strokePaint)
+            }
         }
         
         canvas.restore()

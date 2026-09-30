@@ -34,7 +34,7 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
     // Fallback ground Y based on depth (used when no hill data available)
     override val fallbackGroundY = 0.82f + normalizedDepth * 0.08f  // 0.82 to 0.90
     
-    // Reduced speed: was 0.0001, now 0.00003 (~3x slower); average over the hop cycle
+    // Average over the hop cycle
     override val speed = 0.00003f
     override val durationMs: Long = EventTraversal.durationMsForPath(
         path = traversal,
