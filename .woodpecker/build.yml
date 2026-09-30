@@ -42,7 +42,13 @@ steps:
       GRADLE_USER_HOME: *cache_path
     commands:
       - ./gradlew assembleRelease --no-daemon
-      - grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/' > .version
+      - ./gradlew -q :app:printVersionName --no-daemon > .version
+      - |
+        if [ "$(grep -c '' .version)" != 1 ] || ! grep -Eqx '[0-9A-Za-z._-]+' .version; then
+          echo "printVersionName returned an empty or invalid version:"
+          cat .version
+          exit 1
+        fi
       - VERSION=$(cat .version)
       - echo "Built version $VERSION"
       - cp app/build/outputs/apk/release/app-release.apk "WeatherWall-v$VERSION.apk"
@@ -66,19 +72,27 @@ steps:
         fi
 
         echo "Creating release v$VERSION..."
-        RESP=$(curl -s -X POST -H "Authorization: token $FORGEJO_TOKEN" -H "Content-Type: application/json" \
+        CREATE_CODE=$(curl -sS -o release.json -w '%{http_code}' -X POST -H "Authorization: token $FORGEJO_TOKEN" -H "Content-Type: application/json" \
           -d "{\"tag_name\": \"v$VERSION\", \"name\": \"v$VERSION\", \"body\": \"Automated release v$VERSION\"}" \
           "https://git.olli.info/api/v1/repos/Oliver/WeatherWall/releases")
-        
-        REL_ID=$(echo "$RESP" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+
+        if [ "$CREATE_CODE" != "201" ]; then
+          echo "Error creating release (HTTP $CREATE_CODE). Response:"
+          cat release.json
+          exit 1
+        fi
+
+        # The release object's own id is its first key; nested ids (author, assets) come later.
+        REL_ID=$(tr -d '\r\n' < release.json | grep -oE '^[[:space:]]*\{[[:space:]]*"id"[[:space:]]*:[[:space:]]*[0-9]+' | grep -oE '[0-9]+$' || true)
 
         if [ -z "$REL_ID" ]; then
-          echo "Error creating release. Response: $RESP"
+          echo "Could not parse release id. Response:"
+          cat release.json
           exit 1
         fi
 
         echo "Uploading $APK_FILE..."
-        curl -s -X POST -H "Authorization: token $FORGEJO_TOKEN" -H "Content-Type: application/octet-stream" \
+        curl -sS --fail-with-body -X POST -H "Authorization: token $FORGEJO_TOKEN" -H "Content-Type: application/octet-stream" \
           --data-binary "@$APK_FILE" \
           "https://git.olli.info/api/v1/repos/Oliver/WeatherWall/releases/$REL_ID/assets?name=$APK_FILE"
         
