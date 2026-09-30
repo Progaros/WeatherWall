@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.preference.PreferenceFragmentCompat
 import info.olli.weatherlwp.R
 import info.olli.weatherlwp.simulation.WeatherHistory
+import java.util.Locale
 
 /**
  * Generic sub-screen that loads the preference XML named by the `xml` argument.
@@ -53,6 +54,7 @@ class SystemSimulationFragment : PreferenceFragmentCompat() {
         val displayPref = findPreference<androidx.preference.Preference>("pref_weather_data_display") ?: return
 
         try {
+            val locale = Locale.getDefault()
             val history = WeatherHistory(ctx)
             val snapshot = history.getSnapshot()
             val days = history.getHistory()
@@ -65,11 +67,11 @@ class SystemSimulationFragment : PreferenceFragmentCompat() {
 
             // Today's data
             if (!snapshot.avgTempToday.isNaN()) {
-                sb.append("Today: ${String.format("%.1f", snapshot.avgTempToday)}°C avg")
+                sb.append("Today: ${String.format(locale, "%.1f", snapshot.avgTempToday)}°C avg")
             }
             if (snapshot.totalRainToday > 0f || snapshot.totalSnowToday > 0f) {
-                sb.append(", rain ${String.format("%.1f", snapshot.totalRainToday)}h")
-                sb.append(", snow ${String.format("%.1f", snapshot.totalSnowToday)}h")
+                sb.append(", rain ${String.format(locale, "%.1f", snapshot.totalRainToday)}h")
+                sb.append(", snow ${String.format(locale, "%.1f", snapshot.totalSnowToday)}h")
             }
             sb.append("\n")
 
@@ -77,12 +79,12 @@ class SystemSimulationFragment : PreferenceFragmentCompat() {
             if (days.isNotEmpty()) {
                 sb.append("\nRecent history (${days.size} day${if (days.size != 1) "s" else ""}):\n")
                 for (day in days.takeLast(7).reversed()) {
-                    val tempStr = if (!day.avgTemp.isNaN()) "${String.format("%.0f", day.avgTemp)}°C" else "?"
+                    val tempStr = if (!day.avgTemp.isNaN()) "${String.format(locale, "%.0f", day.avgTemp)}°C" else "?"
                     val rangeStr = if (!day.minTemp.isNaN() && day.minTemp != Float.MAX_VALUE)
-                        " (${String.format("%.0f", day.minTemp)}–${String.format("%.0f", day.maxTemp)})" else ""
+                        " (${String.format(locale, "%.0f", day.minTemp)}–${String.format(locale, "%.0f", day.maxTemp)})" else ""
                     val precipStr = buildList {
-                        if (day.rainHours > 0.1f) add("rain ${String.format("%.1f", day.rainHours)}h")
-                        if (day.snowHours > 0.1f) add("snow ${String.format("%.1f", day.snowHours)}h")
+                        if (day.rainHours > 0.1f) add("rain ${String.format(locale, "%.1f", day.rainHours)}h")
+                        if (day.snowHours > 0.1f) add("snow ${String.format(locale, "%.1f", day.snowHours)}h")
                     }.joinToString(", ").ifEmpty { "dry" }
                     sb.append("  • $tempStr$rangeStr — $precipStr\n")
                 }

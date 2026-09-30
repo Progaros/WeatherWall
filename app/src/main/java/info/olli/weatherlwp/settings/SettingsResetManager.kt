@@ -1,6 +1,7 @@
 package info.olli.weatherlwp.settings
 
 import android.content.Context
+import androidx.core.content.edit
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.BuildConfig
 import info.olli.weatherlwp.R
@@ -45,7 +46,7 @@ object SettingsResetManager {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         if (prefs.getInt(KEY_DEFAULTS_VERSION, 0) == BuildConfig.VERSION_CODE) return
         applyXmlDefaults(context)
-        prefs.edit().putInt(KEY_DEFAULTS_VERSION, BuildConfig.VERSION_CODE).apply()
+        prefs.edit { putInt(KEY_DEFAULTS_VERSION, BuildConfig.VERSION_CODE) }
     }
 
     /**
@@ -54,7 +55,7 @@ object SettingsResetManager {
      */
     fun resetAllToDefaults(context: Context) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        prefs.edit().clear().apply()
+        prefs.edit { clear() }
         applyXmlDefaults(context)
     }
 

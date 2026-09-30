@@ -76,7 +76,7 @@ object PreferenceDefaults {
     const val CELESTIAL_SIZE = 100  // 25-200 %
     
     // === Mountain Settings ===
-    const val MOUNTAIN_DENSITY = 50  // 0-100 (50 = normal, matches old 100 with halved cell size)
+    const val MOUNTAIN_DENSITY = 50  // 0-100 (50 = normal)
     const val MOUNTAIN_HEIGHT = 100  // 25-200 (100% = normal scale)
     const val MOUNTAIN_WIDTH = 100   // 50-200 (100% = normal scale)
     const val MOUNTAIN_ROUGHNESS = 80  // 0-200
@@ -151,7 +151,7 @@ object PreferenceDefaults {
     const val FALLEN_LEAVES_ENABLED = true
     const val FALLEN_LEAVES_DENSITY = 50  // 0-100
     const val MUSHROOMS_ENABLED = true
-    const val MUSHROOM_DENSITY = 12  // 0-100 (lowered from 20 to calm the scene)
+    const val MUSHROOM_DENSITY = 12  // 0-100
     const val BERRIES_ENABLED = true
     const val BERRY_DENSITY = 30     // 0-100
     const val FROST_ENABLED = true   // Winter frost overlay
@@ -163,10 +163,10 @@ object PreferenceDefaults {
     
     // === Flower Cluster Settings ===
     const val FLOWER_CLUSTER_ENABLED = true    // Natural-looking grouped flower patches
-    const val FLOWER_CLUSTER_DENSITY = 25      // 0-100: probability of a cell being a cluster center (lowered from 50 to calm the scene)
+    const val FLOWER_CLUSTER_DENSITY = 25      // 0-100: probability of a cell being a cluster center
     const val FLOWER_CLUSTER_RADIUS = 30       // 0-100: cluster scatter radius (world units scaled)
-    const val FLOWER_CLUSTER_MIN_COUNT = 2     // 1-10: minimum flowers per cluster (lowered from 3 to calm the scene)
-    const val FLOWER_CLUSTER_MAX_COUNT = 5     // 2-20: maximum flowers per cluster (lowered from 8 to calm the scene)
+    const val FLOWER_CLUSTER_MIN_COUNT = 2     // 1-10: minimum flowers per cluster
+    const val FLOWER_CLUSTER_MAX_COUNT = 5     // 2-20: maximum flowers per cluster
     const val FLOWER_CLUSTER_FALLOFF = 50      // 0-100: 0=uniform disk, 100=strong smoothstep falloff
     const val FLOWER_CLUSTER_NOISE = 30        // 0-100: noise-based displacement within cluster
     

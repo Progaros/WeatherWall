@@ -3,6 +3,7 @@ package info.olli.weatherlwp.weather
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
+import androidx.core.content.edit
 import androidx.preference.PreferenceManager
 
 /**
@@ -96,41 +97,40 @@ object WeatherRepository {
     ) {
         ensureListenerRegistered(context)
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        val editor = prefs.edit()
-            .putString(KEY_WEATHER_TYPE, type.name)
-            .putLong(KEY_SUNRISE, sunrise)
-            .putLong(KEY_SUNSET, sunset)
-            .putFloat(KEY_WIND_SPEED, windSpeed)
-            .putLong(KEY_LAST_UPDATE, System.currentTimeMillis())
-        
-        if (rawJson != null) {
-            editor.putString(KEY_RAW_JSON, rawJson)
+        prefs.edit {
+            putString(KEY_WEATHER_TYPE, type.name)
+            putLong(KEY_SUNRISE, sunrise)
+            putLong(KEY_SUNSET, sunset)
+            putFloat(KEY_WIND_SPEED, windSpeed)
+            putLong(KEY_LAST_UPDATE, System.currentTimeMillis())
+
+            if (rawJson != null) {
+                putString(KEY_RAW_JSON, rawJson)
+            }
+
+            // Store extended data if provided
+            if (extendedData != null) {
+                putInt(KEY_PRECIP_PROBABILITY, extendedData.precipProbability)
+                putInt(KEY_CLOUD_COVER, extendedData.cloudCover)
+                putInt(KEY_HUMIDITY, extendedData.humidity)
+                putInt(KEY_VISIBILITY, extendedData.visibility)
+                putInt(KEY_PRESSURE, extendedData.pressure)
+                putInt(KEY_MOON_PHASE, extendedData.moonPhase)
+                putLong(KEY_MOON_RISE, extendedData.moonRise)
+                putLong(KEY_MOON_SET, extendedData.moonSet)
+                putInt(KEY_WIND_DIRECTION, extendedData.windDirection)
+                // Temperature stored as Celsius * 10 for 0.1° precision in Int storage
+                if (!extendedData.temperatureCelsius.isNaN()) {
+                    putInt(KEY_TEMPERATURE, (extendedData.temperatureCelsius * 10).toInt())
+                }
+                if (!extendedData.feelsLikeCelsius.isNaN()) {
+                    putInt(KEY_TEMPERATURE_FEELS, (extendedData.feelsLikeCelsius * 10).toInt())
+                }
+                if (!extendedData.dewPointCelsius.isNaN()) {
+                    putInt(KEY_DEW_POINT, (extendedData.dewPointCelsius * 10).toInt())
+                }
+            }
         }
-        
-        // Store extended data if provided
-        if (extendedData != null) {
-            editor.putInt(KEY_PRECIP_PROBABILITY, extendedData.precipProbability)
-            editor.putInt(KEY_CLOUD_COVER, extendedData.cloudCover)
-            editor.putInt(KEY_HUMIDITY, extendedData.humidity)
-            editor.putInt(KEY_VISIBILITY, extendedData.visibility)
-            editor.putInt(KEY_PRESSURE, extendedData.pressure)
-            editor.putInt(KEY_MOON_PHASE, extendedData.moonPhase)
-            editor.putLong(KEY_MOON_RISE, extendedData.moonRise)
-            editor.putLong(KEY_MOON_SET, extendedData.moonSet)
-            editor.putInt(KEY_WIND_DIRECTION, extendedData.windDirection)
-            // Temperature stored as Celsius * 10 for 0.1° precision in Int storage
-            if (!extendedData.temperatureCelsius.isNaN()) {
-                editor.putInt(KEY_TEMPERATURE, (extendedData.temperatureCelsius * 10).toInt())
-            }
-            if (!extendedData.feelsLikeCelsius.isNaN()) {
-                editor.putInt(KEY_TEMPERATURE_FEELS, (extendedData.feelsLikeCelsius * 10).toInt())
-            }
-            if (!extendedData.dewPointCelsius.isNaN()) {
-                editor.putInt(KEY_DEW_POINT, (extendedData.dewPointCelsius * 10).toInt())
-            }
-        }
-        
-        editor.apply()
         
         // Atomically populate cache from the values we just wrote (avoid re-reading SP)
         cached = WeatherCache(

@@ -17,7 +17,9 @@ import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
+import android.view.ViewConfiguration
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.edit
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import androidx.preference.PreferenceManager
@@ -63,8 +65,6 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
     }
     
     private var previewScene: ParallaxScene? = null
-    // NOTE: WeatherLayer and SeasonalEvents are handled internally by ParallaxScene
-    // No separate instances needed here
     
     // Preview resize tracking
     private var previewHeightPx = 0
@@ -312,7 +312,7 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
     private fun toggleDebugModeWithFeedback() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val enabled = !prefs.getBoolean("pref_debug_overlay_enabled", PreferenceDefaults.DEBUG_OVERLAY_ENABLED)
-        prefs.edit().putBoolean("pref_debug_overlay_enabled", enabled).apply()
+        prefs.edit { putBoolean("pref_debug_overlay_enabled", enabled) }
         doPreferenceReload()
 
         val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -422,8 +422,9 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
     
     private fun setupResizeHandle(previewContainer: FrameLayout) {
         val resizeHandle = findViewById<View>(R.id.resize_handle)
+        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
         
-        resizeHandle.setOnTouchListener { _, event ->
+        resizeHandle.setOnTouchListener { v, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
                     dragStartY = event.rawY
@@ -442,6 +443,12 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
                     true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    // A tap without drag counts as a click (accessibility services rely on performClick).
+                    if (event.action == MotionEvent.ACTION_UP &&
+                        kotlin.math.abs(event.rawY - dragStartY) < touchSlop
+                    ) {
+                        v.performClick()
+                    }
                     // Snap to default if close
                     val defaultPx = (PREVIEW_HEIGHT_DEFAULT_DP * density).toInt()
                     val snapThresholdPx = (SNAP_THRESHOLD_DP * density).toInt()
@@ -452,9 +459,7 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
                     // Save the height preference
                     val heightDp = (previewHeightPx / density).toInt()
                     PreferenceManager.getDefaultSharedPreferences(this)
-                        .edit()
-                        .putInt("preview_height_dp", heightDp)
-                        .apply()
+                        .edit { putInt("preview_height_dp", heightDp) }
                     true
                 }
                 else -> false

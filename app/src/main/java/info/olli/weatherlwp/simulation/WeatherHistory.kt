@@ -3,7 +3,7 @@ package info.olli.weatherlwp.simulation
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
-import androidx.preference.PreferenceManager
+import androidx.core.content.edit
 import info.olli.weatherlwp.weather.WeatherRepository
 import info.olli.weatherlwp.weather.WeatherType
 import org.json.JSONArray
@@ -402,16 +402,16 @@ class WeatherHistory(private val context: Context) {
             })
         }
 
-        historyPrefs.edit()
-            .putString(KEY_DAILY_HISTORY, json.toString())
-            .putInt(KEY_LAST_RECORD_HOUR, lastRecordHour)
-            .putFloat(KEY_SNOW_DEPTH, snowDepth)
-            .putFloat(KEY_RIVER_LEVEL, riverLevel)
-            .putLong(KEY_LAST_PHYSICS_UPDATE_MS, lastPhysicsUpdateMs)
-            .putString(KEY_LAST_WEATHER_TYPE, lastKnownWeatherType.name)
-            .putFloat(KEY_LAST_TEMP_CELSIUS, lastKnownTempCelsius)
-            .putFloat(KEY_LAST_PRECIP_PROB, lastKnownPrecipProb)
-            .apply()
+        historyPrefs.edit {
+            putString(KEY_DAILY_HISTORY, json.toString())
+            putInt(KEY_LAST_RECORD_HOUR, lastRecordHour)
+            putFloat(KEY_SNOW_DEPTH, snowDepth)
+            putFloat(KEY_RIVER_LEVEL, riverLevel)
+            putLong(KEY_LAST_PHYSICS_UPDATE_MS, lastPhysicsUpdateMs)
+            putString(KEY_LAST_WEATHER_TYPE, lastKnownWeatherType.name)
+            putFloat(KEY_LAST_TEMP_CELSIUS, lastKnownTempCelsius)
+            putFloat(KEY_LAST_PRECIP_PROB, lastKnownPrecipProb)
+        }
     }
 
     private fun loadFromPrefs() {

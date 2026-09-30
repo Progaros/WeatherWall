@@ -2,6 +2,7 @@ package info.olli.weatherlwp.settings
 
 import android.os.Bundle
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.edit
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import info.olli.weatherlwp.R
@@ -59,10 +60,10 @@ class SystemSettingsFragment : PreferenceFragmentCompat() {
             val validValues = listOf(5, 10, 30, 60, 120, 300)
             val closestValue = validValues.minByOrNull { kotlin.math.abs(it - intValue) } ?: 5
             
-            prefs.edit()
-                .remove(key)
-                .putString(key, closestValue.toString())
-                .apply()
+            prefs.edit {
+                remove(key)
+                putString(key, closestValue.toString())
+            }
         }
     }
 }

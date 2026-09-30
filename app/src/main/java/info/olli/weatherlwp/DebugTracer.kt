@@ -146,7 +146,7 @@ object DebugTracer {
                 val totalMs = durations.sum() / 1_000_000.0
                 val avgMs = totalMs / count
                 val maxMs = (durations.maxOrNull() ?: 0) / 1_000_000.0
-                sb.appendLine("$label: count=$count, total=${String.format("%.2f", totalMs)}ms, avg=${String.format("%.2f", avgMs)}ms, max=${String.format("%.2f", maxMs)}ms")
+                sb.appendLine("$label: count=$count, total=${String.format(Locale.US, "%.2f", totalMs)}ms, avg=${String.format(Locale.US, "%.2f", avgMs)}ms, max=${String.format(Locale.US, "%.2f", maxMs)}ms")
             }
             sb.appendLine()
         }
@@ -157,7 +157,7 @@ object DebugTracer {
             when {
                 entry.durationNanos != null -> {
                     val ms = entry.durationNanos / 1_000_000.0
-                    sb.appendLine("[$time] ${entry.label}: ${String.format("%.2f", ms)}ms")
+                    sb.appendLine("[$time] ${entry.label}: ${String.format(Locale.US, "%.2f", ms)}ms")
                 }
                 entry.message != null -> {
                     sb.appendLine("[$time] ${entry.label}: ${entry.message}")

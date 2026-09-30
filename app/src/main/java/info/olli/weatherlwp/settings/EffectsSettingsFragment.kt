@@ -1,6 +1,7 @@
 package info.olli.weatherlwp.settings
 
 import android.os.Bundle
+import androidx.core.content.edit
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.R
@@ -32,7 +33,7 @@ class EffectsSettingsFragment : PreferenceFragmentCompat() {
             prefs.getInt(key, -1)
         } catch (_: ClassCastException) {
             // Preference stored as a different type (e.g. String from old version)
-            prefs.edit().remove(key).apply()
+            prefs.edit { remove(key) }
             -1
         }
         val newValue = when {
@@ -42,9 +43,9 @@ class EffectsSettingsFragment : PreferenceFragmentCompat() {
             else -> (currentValue * 5).coerceIn(1, 100)  // Old 0-5 → multiply by 5
         }
         
-        prefs.edit()
-            .putInt(key, newValue)
-            .putBoolean(migrationKey, true)
-            .apply()
+        prefs.edit {
+            putInt(key, newValue)
+            putBoolean(migrationKey, true)
+        }
     }
 }

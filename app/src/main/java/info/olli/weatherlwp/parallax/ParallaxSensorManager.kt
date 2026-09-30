@@ -574,8 +574,6 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
         
         // Sensor warmup: decrement on EVERY accelerometer event (not just high-gForce)
         // so stale queued events burn through the counter before real shakes are processed.
-        // Previously this was after the gForce check, meaning only actual shakes decremented
-        // the counter - allowing queued shake events from unlock to trigger immediately.
         if (shakeWarmupSamplesRemaining > 0) {
             shakeWarmupSamplesRemaining--
             return

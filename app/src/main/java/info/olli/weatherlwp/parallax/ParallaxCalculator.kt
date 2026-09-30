@@ -3,7 +3,6 @@ package info.olli.weatherlwp.parallax
 import info.olli.weatherlwp.BuildConfig
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.exp
-import kotlin.math.pow
 import kotlin.math.tan
 import kotlin.math.tanh
 
@@ -124,10 +123,6 @@ class ParallaxCalculator {
     private var prevTiltY = 0f
     private var hasPreviousTilt = false
 
-    // Smoothed tilt delta (exponential filter, controlled by [smoothing])
-    private var smoothedDeltaX = 0f
-    private var smoothedDeltaY = 0f
-
     // Moving-average delta smoothing buffers (reduces sensor jitter)
     private val deltaBufferX = FloatArray(DELTA_SMOOTHING_SAMPLES)
     private val deltaBufferY = FloatArray(DELTA_SMOOTHING_SAMPLES)
@@ -144,7 +139,7 @@ class ParallaxCalculator {
     // These are overwritten by loadPrefs() but provide sane defaults before settings load
     var strength = 0.075f               // Default: 25% on log scale → ~0.075
     var maxOffsetPx = 130f              // Legacy: used when maxOffsetPercent is 0
-    var maxOffsetPercent = 20f          // Default: 20% of screen height (increased for more movement)
+    var maxOffsetPercent = 20f          // Default: 20% of screen height
     var smoothing = 0.134f              // Default: 30 → 0.02 + 0.3*0.38 = 0.134
     var depthSeparation = 1.32f         // Default: (33/100)*4.0 = 1.32 (pref_parallax_depth=33)
     
@@ -197,7 +192,6 @@ class ParallaxCalculator {
      * Update canvas dimensions for scaling parallax offset.
      * Call this when canvas size changes.
      */
-    @Suppress("UNUSED_PARAMETER")
     fun setCanvasSize(width: Float, height: Float) {
         canvasWidth = width.coerceAtLeast(1f)
         canvasHeight = height.coerceAtLeast(1f)
@@ -284,8 +278,6 @@ class ParallaxCalculator {
             val accumMag = kotlin.math.sqrt(accum.dx * accum.dx + accum.dy * accum.dy)
             // Check for sensor reset BEFORE clamping (huge jump = orientation change)
             if (accumMag > SENSOR_RESET_THRESHOLD) {
-                smoothedDeltaX = 0f
-                smoothedDeltaY = 0f
                 resetDeltaSmoothing()
                 accumulatedDelta.set(DeltaAccum(0f, 0f, 0))
                 prevTiltX = filteredTiltX
@@ -317,8 +309,6 @@ class ParallaxCalculator {
 
         // Sensor reset (orientation change): reset baseline, no visual jump
         if (motionMagnitude > SENSOR_RESET_THRESHOLD) {
-            smoothedDeltaX = 0f
-            smoothedDeltaY = 0f
             resetDeltaSmoothing()
             accumulatedDelta.set(DeltaAccum(0f, 0f, 0))
             return
@@ -411,9 +401,6 @@ class ParallaxCalculator {
             val t = 1f - exp(-rate * dt)
             rawPositionX *= (1f - t)
             rawPositionY *= (1f - t)
-            // Clear smoothed delta so movement detection resets cleanly
-            smoothedDeltaX = 0f
-            smoothedDeltaY = 0f
         }
 
         // Compute display position from raw via soft-limit
@@ -502,8 +489,6 @@ class ParallaxCalculator {
         prevTiltX = 0f
         prevTiltY = 0f
         hasPreviousTilt = false
-        smoothedDeltaX = 0f
-        smoothedDeltaY = 0f
         resetDeltaSmoothing()
         isDeviceStill = false
         stillTimerMs = 0L
@@ -521,8 +506,6 @@ class ParallaxCalculator {
      */
     fun resetInputBaseline() {
         hasPreviousTilt = false
-        smoothedDeltaX = 0f
-        smoothedDeltaY = 0f
         resetDeltaSmoothing()
         accumulatedDelta.set(DeltaAccum(0f, 0f, 0))
         sensorPrevX = 0f
@@ -628,33 +611,5 @@ class ParallaxCalculator {
         val scale = limitedLen / len
         positionX = rawPositionX * scale
         positionY = rawPositionY * scale
-    }
-
-    private fun calculateEdgeEasingMultiplier(xLimit: Float, yLimit: Float): Float {
-        if (edgeEasing <= 0.01f) return 1f
-        val normalizedX = if (xLimit > 0) kotlin.math.abs(positionX) / xLimit else 0f
-        val normalizedY = if (yLimit > 0) kotlin.math.abs(positionY) / yLimit else 0f
-        val normalizedDistance = kotlin.math.sqrt(
-            normalizedX * normalizedX + normalizedY * normalizedY
-        ).coerceIn(0f, 1f)
-        val shapedDistance = normalizedDistance.pow(1f + edgeEasing * 1.5f)
-        val smoothstep = shapedDistance * shapedDistance * (3f - 2f * shapedDistance)
-        val multiplier = 1f - smoothstep
-        return multiplier.coerceIn(0.15f, 1f)
-    }
-
-    private fun isMovingAwayFromCenter(moveX: Float, moveY: Float): Boolean {
-        val currentMag = kotlin.math.sqrt(rawPositionX * rawPositionX + rawPositionY * rawPositionY)
-        val newMag = kotlin.math.sqrt(
-            (rawPositionX + moveX) * (rawPositionX + moveX) +
-                (rawPositionY + moveY) * (rawPositionY + moveY)
-        )
-        return newMag > currentMag
-    }
-
-    /** Smoothstep interpolation for soft resistance curves. */
-    private fun smoothstepF(edge0: Float, edge1: Float, x: Float): Float {
-        val t = ((x - edge0) / (edge1 - edge0)).coerceIn(0f, 1f)
-        return t * t * (3f - 2f * t)
     }
 }

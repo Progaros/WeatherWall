@@ -7,6 +7,7 @@ import android.os.Looper
 import android.util.AttributeSet
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.SwitchCompat
+import androidx.core.content.edit
 import androidx.preference.Preference
 import androidx.preference.PreferenceManager
 import androidx.preference.PreferenceViewHolder
@@ -97,9 +98,7 @@ class DebugOverlayPreference @JvmOverloads constructor(
                         selectedItems.add(itemKeys[i])
                     }
                 }
-                prefs.edit()
-                    .putStringSet("pref_debug_overlay_items", selectedItems)
-                    .apply()
+                prefs.edit { putStringSet("pref_debug_overlay_items", selectedItems) }
                 mainHandler.post {
                     if (preferenceManager != null) {
                         updateSummaryText()
