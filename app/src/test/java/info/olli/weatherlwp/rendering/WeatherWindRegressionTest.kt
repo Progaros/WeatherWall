@@ -85,6 +85,23 @@ class WeatherWindRegressionTest {
     }
 
     @Test
+    fun `seeded weather particles render identically`() {
+        fun render(seed: Int): IntArray {
+            val layer = WeatherLayer(kotlin.random.Random(seed)).apply { resize(width, height) }
+            val bitmap = Bitmap.createBitmap(width.toInt(), height.toInt(), Bitmap.Config.ARGB_8888)
+            val state = stateFor(WeatherType.SNOW, precipIntensity = 1f)
+            repeat(10) { layer.update(state, 16L) }
+            layer.draw(Canvas(bitmap), state, ParallaxCalculator().apply { setCanvasSize(width, height) })
+            return IntArray(bitmap.width * bitmap.height).also {
+                bitmap.getPixels(it, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+                bitmap.recycle()
+            }
+        }
+        assertTrue(render(7).contentEquals(render(7)))
+        assertTrue(!render(7).contentEquals(render(8)))
+    }
+
+    @Test
     fun `clear weather draws nothing`() {
         assertEquals(0, renderWeather(stateFor(WeatherType.CLEAR)).first)
     }

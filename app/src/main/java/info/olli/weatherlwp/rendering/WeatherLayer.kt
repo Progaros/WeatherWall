@@ -24,7 +24,7 @@ import kotlin.random.Random
  * - Fog uses smooth gradients, not solid colors
  * - Weather effects should "sell the feeling" of the weather
  */
-class WeatherLayer : SceneLayer {
+class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
     override val layerType = LayerType.WEATHER
 
     private companion object {
@@ -298,80 +298,80 @@ class WeatherLayer : SceneLayer {
         // Initialize rain particles
         for (p in rainParticles) {
             resetRainParticle(p)
-            p.y = Random.nextFloat() * screenHeight // Spread across screen initially
+            p.y = random.nextFloat() * screenHeight // Spread across screen initially
         }
 
         // Initialize snow particles
         for (p in snowParticles) {
             resetSnowParticle(p)
-            p.y = Random.nextFloat() * screenHeight
+            p.y = random.nextFloat() * screenHeight
         }
         
         // Initialize hail particles
         for (p in hailParticles) {
             resetHailParticle(p)
-            p.y = Random.nextFloat() * screenHeight
+            p.y = random.nextFloat() * screenHeight
         }
     }
 
     private fun resetRainParticle(p: Particle) {
         // Assign to a random layer (0 = front/closest, weatherLayers-1 = back/furthest)
-        p.layer = Random.nextInt(weatherLayers.coerceAtLeast(1))
+        p.layer = random.nextInt(weatherLayers.coerceAtLeast(1))
         val layerScale = getLayerScale(p.layer)
         
-        p.x = Random.nextFloat() * screenWidth
+        p.x = random.nextFloat() * screenWidth
         p.y = -20f
         // Base speed scaled by layer (back layers are slower)
-        p.speed = (15f + Random.nextFloat() * 10f) * layerScale
+        p.speed = (15f + random.nextFloat() * 10f) * layerScale
         // Base size scaled by layer (back layers are smaller)
-        p.size = (15f + Random.nextFloat() * 25f) * layerScale
+        p.size = (15f + random.nextFloat() * 25f) * layerScale
         // Alpha reduced for back layers (more atmospheric)
-        p.alpha = ((120 + Random.nextInt(80)) * layerScale).toInt().coerceIn(60, 255)
+        p.alpha = ((120 + random.nextInt(80)) * layerScale).toInt().coerceIn(60, 255)
     }
 
     private fun recycleRainParticle(p: Particle) {
-        p.x = Random.nextFloat() * screenWidth
+        p.x = random.nextFloat() * screenWidth
         p.y = -20f
     }
 
     private fun resetSnowParticle(p: Particle) {
         // Assign to a random layer
-        p.layer = Random.nextInt(weatherLayers.coerceAtLeast(1))
+        p.layer = random.nextInt(weatherLayers.coerceAtLeast(1))
         val layerScale = getLayerScale(p.layer)
         
-        p.x = Random.nextFloat() * screenWidth
+        p.x = random.nextFloat() * screenWidth
         p.y = -10f
         // Base speed scaled by layer
-        p.speed = (1.5f + Random.nextFloat() * 2f) * layerScale
+        p.speed = (1.5f + random.nextFloat() * 2f) * layerScale
         // Size relative to screen height, also scaled by layer
         val heightScale = RenderConstants.getHeightScale(screenHeight.toFloat(), screenWidth.toFloat())
-        p.size = (3f + Random.nextFloat() * 5f) * heightScale * layerScale
+        p.size = (3f + random.nextFloat() * 5f) * heightScale * layerScale
         // Alpha reduced for back layers
-        p.alpha = ((180 + Random.nextInt(75)) * layerScale).toInt().coerceIn(60, 255)
+        p.alpha = ((180 + random.nextInt(75)) * layerScale).toInt().coerceIn(60, 255)
     }
 
     private fun recycleSnowParticle(p: Particle) {
-        p.x = Random.nextFloat() * screenWidth
+        p.x = random.nextFloat() * screenWidth
         p.y = -10f
     }
     
     private fun resetHailParticle(p: Particle) {
         // Assign to a random layer
-        p.layer = Random.nextInt(weatherLayers.coerceAtLeast(1))
+        p.layer = random.nextInt(weatherLayers.coerceAtLeast(1))
         val layerScale = getLayerScale(p.layer)
         
-        p.x = Random.nextFloat() * screenWidth
+        p.x = random.nextFloat() * screenWidth
         p.y = -15f
         // Base speed scaled by layer
-        p.speed = (18f + Random.nextFloat() * 12f) * layerScale
+        p.speed = (18f + random.nextFloat() * 12f) * layerScale
         // Base size scaled by layer
-        p.size = (5f + Random.nextFloat() * 8f) * layerScale
+        p.size = (5f + random.nextFloat() * 8f) * layerScale
         // Alpha reduced for back layers
-        p.alpha = ((200 + Random.nextInt(55)) * layerScale).toInt().coerceIn(80, 255)
+        p.alpha = ((200 + random.nextInt(55)) * layerScale).toInt().coerceIn(80, 255)
     }
 
     private fun recycleHailParticle(p: Particle) {
-        p.x = Random.nextFloat() * screenWidth
+        p.x = random.nextFloat() * screenWidth
         p.y = -15f
     }
 
@@ -578,7 +578,7 @@ class WeatherLayer : SceneLayer {
         val segmentHeight = screenHeight / (lightningPoints.size / 2f)
 
         for (i in lightningPoints.indices step 2) {
-            x += Random.nextFloat() * 60f - 30f
+            x += random.nextFloat() * 60f - 30f
             y += segmentHeight
             lightningPoints[i] = x
             lightningPoints[i + 1] = y
@@ -845,7 +845,7 @@ class WeatherLayer : SceneLayer {
         // Initialize next flash time if needed
         if (lightningNextFlashMs <= 0L) {
             lightningNextFlashMs = RenderConstants.LIGHTNING_INTERVAL_MIN_MS + 
-                Random.nextLong(RenderConstants.LIGHTNING_INTERVAL_RANGE_MS)
+                random.nextLong(RenderConstants.LIGHTNING_INTERVAL_RANGE_MS)
         }
         
         lightningTimerMs += deltaTimeMs
@@ -856,8 +856,8 @@ class WeatherLayer : SceneLayer {
             lightningFlashRemainingMs = RenderConstants.LIGHTNING_FLASH_DURATION_MS
             lightningTimerMs = 0L
             lightningNextFlashMs = RenderConstants.LIGHTNING_INTERVAL_MIN_MS + 
-                Random.nextLong(RenderConstants.LIGHTNING_INTERVAL_RANGE_MS)
-            lightningX = screenWidth * 0.15f + Random.nextFloat() * screenWidth * 0.7f
+                random.nextLong(RenderConstants.LIGHTNING_INTERVAL_RANGE_MS)
+            lightningX = screenWidth * 0.15f + random.nextFloat() * screenWidth * 0.7f
             generateLightningBolt()
         }
         

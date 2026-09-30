@@ -105,7 +105,7 @@ class SceneScreenshotTest {
             resize(width, height)
             reloadSettings(settings)
         }
-        weatherLayer = WeatherLayer().apply {
+        weatherLayer = WeatherLayer(kotlin.random.Random(1234)).apply {
             resize(width, height)
             setIntensity(0.8f)
         }
