@@ -3,6 +3,7 @@ package info.olli.weatherlwp.rendering.events
 import android.graphics.Canvas
 import android.graphics.Path
 import info.olli.weatherlwp.parallax.ParallaxCalculator
+import info.olli.weatherlwp.rendering.RenderConstants
 
 /**
  * Shared boilerplate for ground animals walking a horizontal path along the hill contour.
@@ -29,11 +30,24 @@ abstract class QuadrupedWalkerEvent : RandomEvent {
 
     protected fun xAt(movingMs: Long): Float = startX + direction * speed * movingMs
 
+    /**
+     * X ratio at [screenHeight]; draw() and the sort/preview anchors all go through this.
+     * Default scales elapsed time first, then applies [movingElapsedMs].
+     */
+    protected open fun traversalX(absoluteTimeMs: Long, screenHeight: Float): Float =
+        xAt(movingElapsedMs(EventTraversal.scaledElapsed(absoluteTimeMs - spawnTimeMs, screenHeight)))
+
     protected fun currentX(absoluteTimeMs: Long): Float =
-        xAt(movingElapsedMs(absoluteTimeMs - spawnTimeMs))
+        traversalX(absoluteTimeMs, RenderConstants.REFERENCE_HEIGHT)
 
     protected fun groundY(x: Float, hillHeightProvider: EventTerrainProvider?): Float =
         hillHeightProvider?.invoke(x, depthFactor) ?: fallbackGroundY
+
+    override fun getCurrentYRatio(
+        absoluteTimeMs: Long,
+        hillHeightProvider: EventTerrainProvider?,
+        screenHeight: Float
+    ): Float = groundY(traversalX(absoluteTimeMs, screenHeight), hillHeightProvider)
 
     override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float = currentX(absoluteTimeMs)
 

@@ -43,7 +43,11 @@ class FishJumpEvent(random: Random, override val spawnTimeMs: Long = System.curr
         return xPos
     }
 
-    override fun getCurrentYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
+    override fun getCurrentYRatio(
+        absoluteTimeMs: Long,
+        hillHeightProvider: EventTerrainProvider?,
+        screenHeight: Float
+    ): Float {
         return hillHeightProvider?.invoke(xPos, depthFactor) ?: fallbackGroundY
     }
 

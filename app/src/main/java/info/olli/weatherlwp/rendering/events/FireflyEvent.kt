@@ -38,6 +38,13 @@ class FireflyEvent(random: Random, override val spawnTimeMs: Long = System.curre
         return baseX
     }
 
+    // The swarm is drawn around baseY, so it sorts against trees there too.
+    override fun getCurrentYRatio(
+        absoluteTimeMs: Long,
+        hillHeightProvider: EventTerrainProvider?,
+        screenHeight: Float
+    ): Float = baseY
+
     override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
         return baseY
     }

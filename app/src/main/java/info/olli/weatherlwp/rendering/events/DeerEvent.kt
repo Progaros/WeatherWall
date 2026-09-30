@@ -73,9 +73,9 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         }
     }
 
-    override fun getPreviewAnchorYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
-        return groundY(currentX(absoluteTimeMs), hillHeightProvider)
-    }
+    // Deer scale the grazing-adjusted moving time, unlike the base (scale first).
+    override fun traversalX(absoluteTimeMs: Long, screenHeight: Float): Float =
+        xAt(EventTraversal.scaledElapsed(movingElapsedMs(absoluteTimeMs - spawnTimeMs), screenHeight))
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
@@ -89,8 +89,7 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         
         // Calculate position considering grazing pauses (height-scaled)
         val movingTime = movingElapsedMs(elapsedMs)
-        val scaledMovingTime = EventTraversal.scaledElapsed(movingTime, height)
-        val x = xAt(scaledMovingTime)
+        val x = traversalX(absoluteTimeMs, height)
         
         // Skip if off-screen
         if (x < -0.2f || x > 1.2f) return

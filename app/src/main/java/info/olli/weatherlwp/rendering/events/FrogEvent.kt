@@ -47,7 +47,12 @@ class FrogEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         return getCurrentX(absoluteTimeMs)
     }
 
-    override fun getCurrentYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
+    // Hop position follows event progress, not height-scaled traversal, so screenHeight is unused.
+    override fun getCurrentYRatio(
+        absoluteTimeMs: Long,
+        hillHeightProvider: EventTerrainProvider?,
+        screenHeight: Float
+    ): Float {
         val currentX = getCurrentX(absoluteTimeMs)
         return (hillHeightProvider?.invoke(currentX, depthFactor) ?: fallbackGroundY) + groundOffset
     }

@@ -45,17 +45,18 @@ class FoxEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
     /**
      * Get current Y position for Y-based draw ordering with trees.
      */
-    override fun getCurrentYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
-        return groundY(currentX(absoluteTimeMs), hillHeightProvider) + groundOffset
-    }
+    override fun getCurrentYRatio(
+        absoluteTimeMs: Long,
+        hillHeightProvider: EventTerrainProvider?,
+        screenHeight: Float
+    ): Float = super.getCurrentYRatio(absoluteTimeMs, hillHeightProvider, screenHeight) + groundOffset
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
                       hillHeightProvider: EventTerrainProvider?, extendedOffsetY: Float) {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
-        val traversalElapsed = EventTraversal.scaledElapsed(elapsedMs, height)
-        val x = xAt(traversalElapsed)
+        val x = traversalX(absoluteTimeMs, height)
         val walkPhase = elapsedMs * 0.008f  // Slower walk animation
         
         // Use depthFactor for parallax so fox moves with terrain at correct depth

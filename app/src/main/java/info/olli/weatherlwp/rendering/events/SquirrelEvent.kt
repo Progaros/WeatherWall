@@ -60,10 +60,6 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
         }
     }
     
-    override fun getCurrentYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
-        return groundY(currentX(absoluteTimeMs), hillHeightProvider)
-    }
-    
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,
@@ -77,11 +73,7 @@ class SquirrelEvent(random: Random, override val spawnTimeMs: Long = System.curr
         val isStopped = cyclePos > stopIntervalMs
         
         // Calculate position (height-scaled traversal)
-        val effectiveElapsed = movingElapsedMs(
-            EventTraversal.scaledElapsed(elapsedMs, height)
-        )
-        
-        val x = xAt(effectiveElapsed)
+        val x = traversalX(absoluteTimeMs, height)
         val y = groundY(x, hillHeightProvider)
         
         saveParallax(canvas, parallaxCalculator)

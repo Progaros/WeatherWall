@@ -45,9 +45,11 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
     /**
      * Get current Y position for Y-based draw ordering with trees.
      */
-    override fun getCurrentYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
-        return groundY(currentX(absoluteTimeMs), hillHeightProvider) + groundOffset
-    }
+    override fun getCurrentYRatio(
+        absoluteTimeMs: Long,
+        hillHeightProvider: EventTerrainProvider?,
+        screenHeight: Float
+    ): Float = super.getCurrentYRatio(absoluteTimeMs, hillHeightProvider, screenHeight) + groundOffset
     
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
@@ -58,8 +60,7 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
         val hopPhase = (elapsedMs * 0.006f) % (2f * 3.14159f)  // Slower hop animation
         
         // Calculate X position based on average speed (height-scaled)
-        val traversalElapsed = EventTraversal.scaledElapsed(elapsedMs, height)
-        val x = xAt(traversalElapsed)
+        val x = traversalX(absoluteTimeMs, height)
         
         // Use depthFactor for parallax so rabbit moves with terrain at correct depth
         saveParallax(canvas, parallaxCalculator)

@@ -10,28 +10,10 @@ import android.view.View
 import androidx.core.graphics.withSave
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.RenderConstants
-import info.olli.weatherlwp.rendering.events.AirplaneEvent
-import info.olli.weatherlwp.rendering.events.AlienEvent
-import info.olli.weatherlwp.rendering.events.BatEvent
-import info.olli.weatherlwp.rendering.events.BirdFlockEvent
-import info.olli.weatherlwp.rendering.events.ButterflyEvent
-import info.olli.weatherlwp.rendering.events.DeerEvent
-import info.olli.weatherlwp.rendering.events.DragonflyEvent
-import info.olli.weatherlwp.rendering.events.DuckEvent
-import info.olli.weatherlwp.rendering.events.EagleEvent
 import info.olli.weatherlwp.rendering.events.EventLayer
-import info.olli.weatherlwp.rendering.events.FireflyEvent
-import info.olli.weatherlwp.rendering.events.FishJumpEvent
-import info.olli.weatherlwp.rendering.events.FoxEvent
-import info.olli.weatherlwp.rendering.events.FrogEvent
+import info.olli.weatherlwp.rendering.events.EventSpec
 import info.olli.weatherlwp.rendering.events.EventTerrainProvider
-import info.olli.weatherlwp.rendering.events.HotAirBalloonEvent
-import info.olli.weatherlwp.rendering.events.OwlEvent
-import info.olli.weatherlwp.rendering.events.RabbitEvent
 import info.olli.weatherlwp.rendering.events.RandomEvent
-import info.olli.weatherlwp.rendering.events.ShootingStarEvent
-import info.olli.weatherlwp.rendering.events.SnowflakeEvent
-import info.olli.weatherlwp.rendering.events.SquirrelEvent
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -47,10 +29,18 @@ class EventPreviewView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr) {
 
-    enum class EventType {
-        AIRPLANE, BIRDS, EAGLE, OWL, BALLOON, SHOOTING_STAR, UFO,
-        BUTTERFLY, DRAGONFLY, RABBIT, FOX, SQUIRREL, FIREFLIES, SNOWFLAKE, BAT, DEER,
-        FISH, DUCK, FROG
+    /** Settings-list order; the ordinal seeds each preview, so entries must not be reordered. */
+    enum class EventType(val spec: EventSpec) {
+        AIRPLANE(EventSpec.AIRPLANE), BIRDS(EventSpec.BIRDS), EAGLE(EventSpec.EAGLE), OWL(EventSpec.OWL),
+        BALLOON(EventSpec.BALLOON), SHOOTING_STAR(EventSpec.SHOOTING_STAR), UFO(EventSpec.ALIEN),
+        BUTTERFLY(EventSpec.BUTTERFLY), DRAGONFLY(EventSpec.DRAGONFLY), RABBIT(EventSpec.RABBIT),
+        FOX(EventSpec.FOX), SQUIRREL(EventSpec.SQUIRREL), FIREFLIES(EventSpec.FIREFLIES),
+        SNOWFLAKE(EventSpec.SNOWFLAKE), BAT(EventSpec.BAT), DEER(EventSpec.DEER),
+        FISH(EventSpec.FISH), DUCK(EventSpec.DUCK), FROG(EventSpec.FROG);
+
+        companion object {
+            fun fromSpec(spec: EventSpec): EventType = entries.first { it.spec == spec }
+        }
     }
 
     enum class PreviewMode {
@@ -255,13 +245,7 @@ class EventPreviewView @JvmOverloads constructor(
             ((animationTimeSeconds - previewClockOriginSeconds) * 1000f).toLong()
 
     private fun getPreviewOffsetMs(event: RandomEvent): Long {
-        val targetOffset = when (eventType) {
-            EventType.SHOOTING_STAR -> (event.durationMs * 0.75f).toLong()
-            EventType.DEER, EventType.FOX, EventType.RABBIT, EventType.SQUIRREL,
-            EventType.DUCK, EventType.FROG -> (event.durationMs * 0.5f).toLong()
-            EventType.FIREFLIES -> (event.durationMs * 0.35f).toLong()
-            else -> (event.durationMs * 0.4f).toLong()
-        }
+        val targetOffset = (event.durationMs * eventType.spec.preview.startFraction).toLong()
 
         val minOffset = 300L
         val maxOffset = (event.durationMs - 300L).coerceAtLeast(minOffset)
@@ -269,36 +253,8 @@ class EventPreviewView @JvmOverloads constructor(
     }
 
     private fun getFraming(type: EventType): PreviewFraming {
-        val smallScale = when (type) {
-            EventType.DEER -> 1.10f
-            EventType.FOX -> 1.15f
-            EventType.RABBIT -> 1.20f
-            EventType.SQUIRREL -> 1.20f
-            EventType.DUCK -> 1.25f
-            EventType.FROG -> 1.25f
-            EventType.FISH -> 1.30f
-            EventType.BAT -> 1.20f
-            EventType.AIRPLANE -> 1.15f
-            EventType.BIRDS -> 1.20f
-            EventType.EAGLE -> 1.15f
-            EventType.OWL -> 1.15f
-            EventType.BALLOON -> 1.15f
-            EventType.SHOOTING_STAR -> 1.25f
-            EventType.UFO -> 1.15f
-            EventType.BUTTERFLY -> 1.25f
-            EventType.DRAGONFLY -> 1.20f
-            EventType.FIREFLIES -> 1.30f
-            EventType.SNOWFLAKE -> 1.35f
-        }
-
-        val baseYOffset = when (type) {
-            EventType.DEER, EventType.FOX, EventType.RABBIT, EventType.SQUIRREL,
-            EventType.DUCK, EventType.FROG -> 0.16f
-            EventType.FISH -> 0.08f
-            EventType.AIRPLANE, EventType.BIRDS, EventType.EAGLE, EventType.OWL,
-            EventType.BALLOON, EventType.SHOOTING_STAR, EventType.UFO, EventType.BAT -> -0.03f
-            else -> 0f
-        }
+        val smallScale = type.spec.preview.smallScale
+        val baseYOffset = type.spec.preview.yOffsetFactor
 
         return if (previewMode == PreviewMode.LARGE) {
             PreviewFraming(
@@ -313,30 +269,8 @@ class EventPreviewView @JvmOverloads constructor(
         }
     }
 
-    private fun createPreviewEvent(type: EventType, seed: Long, spawnTimeMs: Long): RandomEvent {
-        val random = Random(seed)
-        return when (type) {
-            EventType.AIRPLANE -> AirplaneEvent(random, spawnTimeMs)
-            EventType.BIRDS -> BirdFlockEvent(random, spawnTimeMs)
-            EventType.EAGLE -> EagleEvent(random, spawnTimeMs)
-            EventType.OWL -> OwlEvent(random, spawnTimeMs)
-            EventType.BALLOON -> HotAirBalloonEvent(random, spawnTimeMs)
-            EventType.SHOOTING_STAR -> ShootingStarEvent(random, spawnTimeMs)
-            EventType.UFO -> AlienEvent(random, spawnTimeMs)
-            EventType.BUTTERFLY -> ButterflyEvent(random, spawnTimeMs)
-            EventType.DRAGONFLY -> DragonflyEvent(random, spawnTimeMs)
-            EventType.RABBIT -> RabbitEvent(random, spawnTimeMs)
-            EventType.FOX -> FoxEvent(random, spawnTimeMs)
-            EventType.SQUIRREL -> SquirrelEvent(random, spawnTimeMs)
-            EventType.FIREFLIES -> FireflyEvent(random, spawnTimeMs)
-            EventType.SNOWFLAKE -> SnowflakeEvent(random, spawnTimeMs)
-            EventType.BAT -> BatEvent(random, spawnTimeMs)
-            EventType.DEER -> DeerEvent(random, spawnTimeMs)
-            EventType.FISH -> FishJumpEvent(random, spawnTimeMs)
-            EventType.DUCK -> DuckEvent(random, spawnTimeMs)
-            EventType.FROG -> FrogEvent(random, spawnTimeMs)
-        }
-    }
+    private fun createPreviewEvent(type: EventType, seed: Long, spawnTimeMs: Long): RandomEvent =
+        type.spec.create(Random(seed), spawnTimeMs)
 
     private fun previewAmbientColor(): Int {
         val color = backgroundColor

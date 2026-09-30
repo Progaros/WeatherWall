@@ -44,14 +44,19 @@ class DuckEvent(random: Random, override val spawnTimeMs: Long = System.currentT
 
     private val duckPath = Path()
 
-    override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
-        val elapsedMs = absoluteTimeMs - spawnTimeMs
-        return startX + direction * speed * elapsedMs
-    }
+    /** X ratio at [screenHeight]; shared by draw(), Y sorting and the preview anchor. */
+    private fun traversalX(absoluteTimeMs: Long, screenHeight: Float): Float =
+        startX + direction * speed * EventTraversal.scaledElapsed(absoluteTimeMs - spawnTimeMs, screenHeight)
 
-    override fun getCurrentYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
-        val elapsedMs = absoluteTimeMs - spawnTimeMs
-        val x = startX + direction * speed * elapsedMs
+    override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float =
+        traversalX(absoluteTimeMs, RenderConstants.REFERENCE_HEIGHT)
+
+    override fun getCurrentYRatio(
+        absoluteTimeMs: Long,
+        hillHeightProvider: EventTerrainProvider?,
+        screenHeight: Float
+    ): Float {
+        val x = traversalX(absoluteTimeMs, screenHeight)
         return (hillHeightProvider?.invoke(x, depthFactor) ?: fallbackGroundY) + groundOffset
     }
 
@@ -60,8 +65,7 @@ class DuckEvent(random: Random, override val spawnTimeMs: Long = System.currentT
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float,
                   absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?, extendedOffsetY: Float) {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
-        val traversalElapsed = EventTraversal.scaledElapsed(elapsedMs, height)
-        val x = startX + direction * speed * traversalElapsed
+        val x = traversalX(absoluteTimeMs, height)
 
         val px = parallaxCalculator.getOffsetXForDepth(depthFactor)
         val py = parallaxCalculator.getOffsetYForDepth(depthFactor)

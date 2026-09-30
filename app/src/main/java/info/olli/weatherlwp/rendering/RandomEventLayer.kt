@@ -6,11 +6,9 @@ import android.graphics.Color
 import android.graphics.Paint
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.events.*
-import info.olli.weatherlwp.simulation.CloudDensity
 import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
 import info.olli.weatherlwp.util.SeasonHelper
-import info.olli.weatherlwp.weather.WeatherType
 import kotlin.math.pow
 import kotlin.random.Random
 
@@ -293,96 +291,27 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     private var lastSpawnBucket = 0L
     
     private fun spawnRandomEvent(state: SimulationState, currentEvents: MutableList<RandomEvent>, random: Random, spawnTime: Long) {
-        val availableEvents = mutableListOf<(Long) -> RandomEvent?>()
-        val vr = viewportRatio
-        
-        // Check current season for seasonal restrictions
-        val isSpring = currentSeason == "spring"
-        val isSummer = currentSeason == "summer"
-        val isAutumn = currentSeason == "autumn"
-        val isWinter = currentSeason == "winter"
-        val isWarmSeason = isSpring || isSummer
-        
-        // Day events (lambda takes spawnTime to create deterministic event)
-        if ("airplane" in enabledEvents && !state.isNight) availableEvents.add { t -> AirplaneEvent(Random(t), t) }
-        if ("birds" in enabledEvents && !state.isNight) availableEvents.add { t -> BirdFlockEvent(Random(t + 1), t) }
-        if ("eagle" in enabledEvents && !state.isNight) availableEvents.add { t -> EagleEvent(Random(t + 2), t) }
-        
-        // Butterflies: Spring & Summer only (warm weather insects)
-        if ("butterfly" in enabledEvents && !state.isNight && isWarmSeason) {
-            availableEvents.add { t -> ButterflyEvent(Random(t + 3), t, vr) }
-        }
-        
-        // Dragonflies: Summer only (peak insect season)
-        if ("dragonfly" in enabledEvents && !state.isNight && isSummer) {
-            availableEvents.add { t -> DragonflyEvent(Random(t + 11), t, vr) }
-        }
-        
-        val isPrecipitating = state.weather == WeatherType.RAIN || state.weather == WeatherType.THUNDERSTORM ||
-            state.weather == WeatherType.SNOW || state.weather == WeatherType.HAIL
-        if ("balloon" in enabledEvents && !state.isNight && !isPrecipitating) availableEvents.add { t -> HotAirBalloonEvent(Random(t + 4), t) }
-        
-        // Ground animals - some seasonal
-        if ("rabbit" in enabledEvents) availableEvents.add { t -> RabbitEvent(Random(t + 5), t, vr) }
-        if ("fox" in enabledEvents) availableEvents.add { t -> FoxEvent(Random(t + 6), t, vr) }
-        
-        // Squirrels: Autumn primarily (gathering nuts), but can appear year-round
-        if ("squirrel" in enabledEvents && (isAutumn || random.nextFloat() < 0.3f)) {
-            availableEvents.add { t -> SquirrelEvent(Random(t + 12), t, vr) }
-        }
-        
-        // Night events
-        val isClearEnough = state.cloudDensity == CloudDensity.LIGHT || state.cloudDensity == CloudDensity.MEDIUM
-        if ("shootingstar" in enabledEvents && state.isNight && isClearEnough) availableEvents.add { t -> ShootingStarEvent(Random(t + 7), t) }
-        
-        // Fireflies: Summer nights only (warm nights)
-        if ("fireflies" in enabledEvents && state.isNight && !isPrecipitating && isSummer) {
-            availableEvents.add { t -> FireflyEvent(Random(t + 8), t) }
-        }
-        
-        if ("owl" in enabledEvents && state.isNight) availableEvents.add { t -> OwlEvent(Random(t + 9), t) }
-        
-        // Decorative snowflakes: Winter only, when not already snowing
-        if ("snowflake" in enabledEvents && isWinter && state.weather != WeatherType.SNOW && !state.isNight) {
-            availableEvents.add { t -> SnowflakeEvent(Random(t + 13), t) }
-        }
-        
-        // Bats: Night only, year-round
-        if ("bat" in enabledEvents && state.isNight) {
-            availableEvents.add { t -> BatEvent(Random(t + 14), t) }
-        }
-        
-        // Deer: Autumn/Winter primarily (more visible in sparse foliage)
-        if ("deer" in enabledEvents && !isPrecipitating && (isAutumn || isWinter || random.nextFloat() < 0.2f)) {
-            availableEvents.add { t -> DeerEvent(Random(t + 15), t, vr) }
-        }
-        
-        // Rare alien event - night only, very low chance
-        if ("alien" in enabledEvents && state.isNight && random.nextFloat() < 0.05f) {
-            availableEvents.add { t -> AlienEvent(Random(t + 10), t) }
-        }
-        
-        // Fish: Day or dusk, non-winter (jump in warm/mild weather)
-        if ("fish" in enabledEvents && !state.isNight && !isWinter && !isPrecipitating) {
-            availableEvents.add { t -> FishJumpEvent(Random(t + 16), t) }
-        }
-        
-        // Ducks: Day, year-round (avoid storms)
-        if ("duck" in enabledEvents && !state.isNight && !isPrecipitating) {
-            availableEvents.add { t -> DuckEvent(Random(t + 17), t, vr) }
-        }
-        
-        // Frogs: Evening/dusk/warm nights, spring/summer
-        if ("frog" in enabledEvents && !isWinter && !isAutumn && (state.isDusk || state.isNight)) {
-            availableEvents.add { t -> FrogEvent(Random(t + 18), t) }
+        val conditions = EventSpawnConditions(
+            isNight = state.isNight,
+            isDusk = state.isDusk,
+            season = currentSeason,
+            weather = state.weather,
+            cloudDensity = state.cloudDensity
+        )
+        // Registry order and the enabled-first short-circuit fix which conditions draw from [random].
+        val availableEvents = ArrayList<EventSpec>(EventSpec.entries.size)
+        for (spec in EventSpec.entries) {
+            if (spec.id in enabledEvents && spec.canSpawn(conditions, random)) {
+                availableEvents.add(spec)
+            }
         }
         
         if (availableEvents.isEmpty()) return
         
         // Use deterministic selection based on spawnTime
         val selectionRandom = Random(spawnTime + 99999)
-        val event = availableEvents[selectionRandom.nextInt(availableEvents.size)](spawnTime)
-        event?.let { currentEvents.add(it) }
+        val spec = availableEvents[selectionRandom.nextInt(availableEvents.size)]
+        currentEvents.add(spec.createForSpawn(spawnTime, viewportRatio))
     }
     
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
@@ -477,7 +406,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
                     ?: event.depthFactor
                 if (effectiveDepth >= minDepth && effectiveDepth < maxDepth) {
                     // Get the event's current Y position for depth sorting
-                    val eventY = event.getCurrentYRatio(groundDrawAbsoluteTimeMs, eventTerrainProvider)
+                    val eventY = event.getCurrentYRatio(groundDrawAbsoluteTimeMs, eventTerrainProvider, height)
                     val entry = groundEventEntryPool[resultCount]
                     entry.bind(event, eventY)
                     result.add(entry)
@@ -564,30 +493,8 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         val currentEvents = events.toMutableList()
         val random = Random(seed)
         
-        val vr = viewportRatio
-        val eventTypes = listOf<() -> RandomEvent>(
-            { AirplaneEvent(random, seed) },
-            { BirdFlockEvent(random, seed) },
-            { EagleEvent(random, seed) },
-            { ButterflyEvent(random, seed, vr) },
-            { RabbitEvent(random, seed, vr) },
-            { FoxEvent(random, seed, vr) },
-            { ShootingStarEvent(random, seed) },
-            { FireflyEvent(random, seed) },
-            { OwlEvent(random, seed) },
-            { HotAirBalloonEvent(random, seed) },
-            { AlienEvent(random, seed) },
-            { SquirrelEvent(random, seed, vr) },
-            { DragonflyEvent(random, seed, vr) },
-            { SnowflakeEvent(random, seed) },
-            { BatEvent(random, seed) },
-            { DeerEvent(random, seed, vr) },
-            { FishJumpEvent(random, seed) },
-            { DuckEvent(random, seed, vr) },
-            { FrogEvent(random, seed) }
-        )
-        
-        val event = eventTypes[random.nextInt(eventTypes.size)]()
+        val specs = EventSpec.DEBUG_SPAWN_ORDER
+        val event = specs[random.nextInt(specs.size)].create(random, seed, viewportRatio)
         currentEvents.add(event)
         events = currentEvents.toList()
         
@@ -603,29 +510,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         val currentEvents = events.toMutableList()
         val random = Random(seed)
         
-        val vr = viewportRatio
-        val event: RandomEvent? = when (eventType) {
-            "airplane" -> AirplaneEvent(random, seed)
-            "birds" -> BirdFlockEvent(random, seed)
-            "eagle" -> EagleEvent(random, seed)
-            "butterfly" -> ButterflyEvent(random, seed, vr)
-            "rabbit" -> RabbitEvent(random, seed, vr)
-            "fox" -> FoxEvent(random, seed, vr)
-            "shootingstar" -> ShootingStarEvent(random, seed)
-            "fireflies" -> FireflyEvent(random, seed)
-            "owl" -> OwlEvent(random, seed)
-            "balloon" -> HotAirBalloonEvent(random, seed)
-            "alien" -> AlienEvent(random, seed)
-            "squirrel" -> SquirrelEvent(random, seed, vr)
-            "dragonfly" -> DragonflyEvent(random, seed, vr)
-            "snowflake" -> SnowflakeEvent(random, seed)
-            "bat" -> BatEvent(random, seed)
-            "deer" -> DeerEvent(random, seed, vr)
-            "fish" -> FishJumpEvent(random, seed)
-            "duck" -> DuckEvent(random, seed, vr)
-            "frog" -> FrogEvent(random, seed)
-            else -> null
-        }
+        val event: RandomEvent? = EventSpec.fromId(eventType)?.create(random, seed, viewportRatio)
         
         event?.let {
             currentEvents.add(it)
@@ -656,14 +541,9 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         currentSeason = SeasonHelper.getEffectiveTerrainSeasonKey(settings)
 
         enabledEvents.clear()
-        val eventKeys = listOf(
-            "airplane", "birds", "eagle", "butterfly", "rabbit", "fox",
-            "shootingstar", "fireflies", "owl", "balloon", "alien", "squirrel",
-            "dragonfly", "snowflake", "bat", "deer", "fish", "duck", "frog"
-        )
-        for (key in eventKeys) {
-            if (settings.getBoolean("pref_event_$key", true)) {
-                enabledEvents.add(key)
+        for (spec in EventSpec.entries) {
+            if (settings.getBoolean(spec.prefKey, true)) {
+                enabledEvents.add(spec.id)
             }
         }
     }

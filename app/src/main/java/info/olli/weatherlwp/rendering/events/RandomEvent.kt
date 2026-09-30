@@ -3,6 +3,7 @@ package info.olli.weatherlwp.rendering.events
 import android.graphics.Canvas
 import android.graphics.Paint
 import info.olli.weatherlwp.parallax.ParallaxCalculator
+import info.olli.weatherlwp.rendering.RenderConstants
 import info.olli.weatherlwp.simulation.SimulationState
 
 /**
@@ -110,11 +111,16 @@ interface RandomEvent {
      * Only applicable for GROUND layer events.
      * @param absoluteTimeMs Current time for position calculation
      * @param hillHeightProvider Function to get hill Y at given X and depth
+     * @param screenHeight Height passed to [draw]; traversal is height-scaled, so it must match
      * @return Y position as ratio of screen height (0.0=top, 1.0=bottom)
      */
-    fun getCurrentYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float {
+    fun getCurrentYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?, screenHeight: Float): Float {
         return 0.85f  // Default fallback - subclasses should override
     }
+
+    /** [getCurrentYRatio] at the reference height, where traversal is unscaled (used by previews). */
+    fun getCurrentYRatio(absoluteTimeMs: Long, hillHeightProvider: EventTerrainProvider?): Float =
+        getCurrentYRatio(absoluteTimeMs, hillHeightProvider, RenderConstants.REFERENCE_HEIGHT)
 
     /**
      * Preview-only X anchor as ratio of virtual canvas width.

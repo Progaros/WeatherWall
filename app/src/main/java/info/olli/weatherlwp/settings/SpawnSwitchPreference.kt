@@ -12,6 +12,7 @@ import androidx.appcompat.widget.SwitchCompat
 import androidx.preference.PreferenceViewHolder
 import androidx.preference.SwitchPreferenceCompat
 import info.olli.weatherlwp.R
+import info.olli.weatherlwp.rendering.events.EventSpec
 
 /**
  * Custom preference that adds an inline "Spawn" button and animated preview next to the switch toggle.
@@ -105,30 +106,7 @@ class SpawnSwitchPreference @JvmOverloads constructor(
      * Map preference key to event preview type.
      */
     private fun getEventTypeFromKey(key: String?): EventPreviewView.EventType {
-        return when (key) {
-            // Sky events
-            "pref_event_airplane" -> EventPreviewView.EventType.AIRPLANE
-            "pref_event_birds" -> EventPreviewView.EventType.BIRDS
-            "pref_event_eagle" -> EventPreviewView.EventType.EAGLE
-            "pref_event_owl" -> EventPreviewView.EventType.OWL
-            "pref_event_balloon" -> EventPreviewView.EventType.BALLOON
-            "pref_event_shootingstar" -> EventPreviewView.EventType.SHOOTING_STAR
-            "pref_event_alien" -> EventPreviewView.EventType.UFO
-            // Ground events
-            "pref_event_butterfly" -> EventPreviewView.EventType.BUTTERFLY
-            "pref_event_dragonfly" -> EventPreviewView.EventType.DRAGONFLY
-            "pref_event_rabbit" -> EventPreviewView.EventType.RABBIT
-            "pref_event_fox" -> EventPreviewView.EventType.FOX
-            "pref_event_squirrel" -> EventPreviewView.EventType.SQUIRREL
-            "pref_event_fireflies" -> EventPreviewView.EventType.FIREFLIES
-            "pref_event_snowflake" -> EventPreviewView.EventType.SNOWFLAKE
-            "pref_event_bat" -> EventPreviewView.EventType.BAT
-            "pref_event_deer" -> EventPreviewView.EventType.DEER
-            // Water events
-            "pref_event_fish" -> EventPreviewView.EventType.FISH
-            "pref_event_duck" -> EventPreviewView.EventType.DUCK
-            "pref_event_frog" -> EventPreviewView.EventType.FROG
-            else -> EventPreviewView.EventType.BUTTERFLY  // Default fallback
-        }
+        val spec = EventSpec.fromPrefKey(key) ?: EventSpec.BUTTERFLY
+        return EventPreviewView.EventType.fromSpec(spec)
     }
 }
