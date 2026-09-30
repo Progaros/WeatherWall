@@ -2,7 +2,16 @@ package info.olli.weatherlwp.rendering
 
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Semaphore
+import java.util.concurrent.TimeUnit
 
 /**
  * Regression tests for CloudLayer thread safety fixes.
@@ -11,7 +20,40 @@ import java.util.concurrent.ConcurrentHashMap
  * - cellCache uses ConcurrentHashMap (not plain HashMap)
  * - bitmap.isRecycled guard in draw loop
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class CloudLayerThreadSafetyTest {
+
+    @Test
+    fun `destroy does not wait for workers or allow late bitmap publication`() {
+        val layer = CloudLayer(RuntimeEnvironment.getApplication()).apply { resize(360f, 640f) }
+        val group = layer.getCloudGroups().first()
+        val executorField = CloudLayer::class.java.getDeclaredField("bitmapExecutor").apply { isAccessible = true }
+        val executor = executorField.get(layer) as ExecutorService
+        val render = CloudLayer::class.java.getDeclaredMethod(
+            "renderGroupToBitmap", CloudLayer.CloudGroup::class.java, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType
+        ).apply { isAccessible = true }
+        val started = CountDownLatch(1)
+        val release = Semaphore(0)
+        executor.execute {
+            started.countDown()
+            release.acquireUninterruptibly()
+            render.invoke(layer, group, 64, 32)
+        }
+        try {
+            assertTrue(started.await(5, TimeUnit.SECONDS))
+            val startNanos = System.nanoTime()
+            layer.destroy()
+            assertTrue("Teardown must not wait for the worker", System.nanoTime() - startNanos < 500_000_000L)
+        } finally {
+            release.release()
+            layer.destroy()
+        }
+        assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS))
+        assertNull("A late worker must not publish into the destroyed layer", group.cachedBitmap)
+        assertTrue(layer.getCloudGroups().isEmpty())
+    }
 
     @Test
     fun `ConcurrentHashMap supports concurrent clear during iteration`() {

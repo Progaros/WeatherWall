@@ -424,22 +424,17 @@ class CloudLayer(private val context: Context) : SceneLayer {
      * fluffinessMultiplier controls how many puffs make up each cloud (more puffs = denser/fluffier).
      * Clouds are rendered as WHITE - color tint applied at draw time for performance.
      */
+    private val bitmapPublicationLock = Any()
+    @Volatile private var destroyed = false
+
     private fun renderGroupToBitmap(group: CloudGroup, bitmapWidth: Int, bitmapHeight: Int) {
+        if (destroyed) return
         val (paddingX, paddingY) = computePadding(bitmapWidth, bitmapHeight, cloudStretch)
         val paddedWidth = bitmapWidth + paddingX * 2
         val paddedHeight = bitmapHeight + paddingY * 2
-        
-        // Recycle old bitmap if size changed
-        val oldBitmap = group.cachedBitmap
-        if (oldBitmap != null && 
-            (group.lastWidth != paddedWidth || group.lastHeight != paddedHeight)) {
-            group.cachedBitmap = null  // Clear reference first to prevent use-after-recycle
-            oldBitmap.recycle()
-        }
-        
-        // Create or reuse bitmap with padding; bail on OOM without crashing
+
         val bitmap = try {
-            group.cachedBitmap ?: createBitmap(
+            createBitmap(
                 paddedWidth, paddedHeight, Bitmap.Config.ARGB_8888
             )
         } catch (_: OutOfMemoryError) {
@@ -510,9 +505,15 @@ class CloudLayer(private val context: Context) : SceneLayer {
             )
         }
         
-        group.cachedBitmap = bitmap
-        group.lastWidth = paddedWidth
-        group.lastHeight = paddedHeight
+        synchronized(bitmapPublicationLock) {
+            if (destroyed) {
+                bitmap.recycle()
+            } else {
+                group.lastWidth = paddedWidth
+                group.lastHeight = paddedHeight
+                group.cachedBitmap = bitmap
+            }
+        }
     }
 
     private fun clearGroupBitmaps() {
@@ -957,20 +958,12 @@ class CloudLayer(private val context: Context) : SceneLayer {
     }
 
     override fun destroy() {
-        // Graceful shutdown: let in-flight bitmap renders finish (up to 2s)
-        bitmapExecutor.shutdown()
-        try {
-            if (!bitmapExecutor.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS)) {
-                bitmapExecutor.shutdownNow()
-            }
-        } catch (_: InterruptedException) {
-            bitmapExecutor.shutdownNow()
-            Thread.currentThread().interrupt()
+        synchronized(bitmapPublicationLock) {
+            destroyed = true
+            releaseCaches()
+            cellCache.clear()
+            cloudGroups = emptyList()
         }
-        
-        // Cleanup cached cloud group bitmaps to prevent memory leaks
-        clearGroupBitmaps()
-        cellCache.clear()
-        cloudGroups = emptyList()
+        bitmapExecutor.shutdownNow()
     }
 }
