@@ -3,6 +3,7 @@ package info.olli.weatherlwp.simulation
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import kotlin.random.Random
 
 /**
  * Unit tests for WindSimulator — extracted wind gust, smoothing, and direction logic.
@@ -17,6 +18,33 @@ class WindSimulatorTest {
     }
 
     // ============== Gust Tests ==============
+
+    @Test
+    fun `seeded gusts replay exactly with supplied frame times`() {
+        val first = WindSimulator(Random(42))
+        val second = WindSimulator(Random(42))
+        val different = WindSimulator(Random(73))
+        var diverged = false
+        repeat(1000) { frame ->
+            val now = frame * 16L
+            val gust = first.calculateWindGust(0.8f, 16L, now)
+            assertEquals(gust, second.calculateWindGust(0.8f, 16L, now), 0f)
+            if (gust != different.calculateWindGust(0.8f, 16L, now)) diverged = true
+        }
+        assertTrue("The random seed must influence gusts", diverged)
+    }
+
+    @Test
+    fun `gust onset follows supplied time rather than execution speed`() {
+        val progressing = WindSimulator(Random(42))
+        val frozen = WindSimulator(Random(42))
+        var diverged = false
+        repeat(1000) { frame ->
+            val gust = progressing.calculateWindGust(0.8f, 16L, frame * 16L)
+            if (gust != frozen.calculateWindGust(0.8f, 16L, 0L)) diverged = true
+        }
+        assertTrue("Only advancing time should schedule further gusts", diverged)
+    }
 
     @Test
     fun `calm wind produces no gusts`() {

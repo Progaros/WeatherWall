@@ -8,7 +8,7 @@ import kotlin.random.Random
  *
  * Extracted from SimulationController (SRP) to enable independent testing.
  */
-class WindSimulator {
+class WindSimulator(private val random: Random = Random.Default) {
 
     // Wind gust state
     private var nextGustTime = 0L
@@ -35,8 +35,7 @@ class WindSimulator {
      * - High wind: strong gusts every 1-2 seconds
      * - Gusts ramp up gradually for natural feel
      */
-    fun calculateWindGust(baseWind: Float, deltaMs: Long): Float {
-        val currentMs = System.currentTimeMillis()
+    fun calculateWindGust(baseWind: Float, deltaMs: Long, currentMs: Long = System.nanoTime() / 1_000_000L): Float {
         // Cap deltaSec to 100ms to prevent explosion after visibility changes
         val deltaSec = (deltaMs / 1000f).coerceIn(0f, 0.1f)
 
@@ -55,13 +54,13 @@ class WindSimulator {
             // Gust interval: 1-2s at high wind, 4-7s at low wind
             val minInterval = (1000 + (1 - baseWind) * 3000).toLong()
             val maxInterval = (2000 + (1 - baseWind) * 5000).toLong()
-            val interval = minInterval + (Random.nextDouble() * (maxInterval - minInterval)).toLong()
+            val interval = minInterval + (random.nextDouble() * (maxInterval - minInterval)).toLong()
             nextGustTime = currentMs + interval
 
             // Gust intensity: proportional to base wind (no fixed floor)
             val minGust = baseWind * 0.5f
             val maxGust = baseWind * 0.3f + baseWind * 0.7f
-            targetGust = minGust + Random.nextFloat() * (maxGust - minGust)
+            targetGust = minGust + random.nextFloat() * (maxGust - minGust)
 
             // Decay rate: faster at higher wind (gusts are shorter but more frequent)
             gustDecay = 0.3f + baseWind * 0.5f
