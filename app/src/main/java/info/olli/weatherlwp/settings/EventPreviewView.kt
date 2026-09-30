@@ -9,6 +9,7 @@ import android.util.Log
 import android.view.View
 import androidx.core.graphics.withSave
 import info.olli.weatherlwp.parallax.ParallaxCalculator
+import info.olli.weatherlwp.rendering.RenderConstants
 import info.olli.weatherlwp.rendering.events.AirplaneEvent
 import info.olli.weatherlwp.rendering.events.AlienEvent
 import info.olli.weatherlwp.rendering.events.BatEvent
@@ -103,12 +104,15 @@ class EventPreviewView @JvmOverloads constructor(
     private var animationTimeSeconds = 0f
     private var previewEvent: RandomEvent? = null
     private var previewSpawnTimeMs = 0L
+    private var previewStartOffsetMs = 0L
+    private var previewClockOriginSeconds = 0f
 
     private val animator = object : Runnable {
         override fun run() {
             animationTimeSeconds += 0.016f
             if (animationTimeSeconds > 120f) {
                 animationTimeSeconds = 0f
+                recreatePreviewEvent()
             }
             invalidate()
             postDelayed(this, FRAME_DELAY_MS)
@@ -166,11 +170,11 @@ class EventPreviewView @JvmOverloads constructor(
         }
 
         var event = previewEvent ?: return
-        var absoluteTimeMs = previewSpawnTimeMs + (animationTimeSeconds * 1000f).toLong()
+        var absoluteTimeMs = previewTimeMs()
         if (!event.isActive(absoluteTimeMs)) {
             recreatePreviewEvent()
             event = previewEvent ?: return
-            absoluteTimeMs = previewSpawnTimeMs + (animationTimeSeconds * 1000f).toLong()
+            absoluteTimeMs = previewTimeMs()
         }
 
         val centerX = w * 0.5f
@@ -203,10 +207,11 @@ class EventPreviewView @JvmOverloads constructor(
         val anchorX = anchorXRatio * PREVIEW_WORLD_WIDTH - PREVIEW_EXTENDED_OFFSET
         val anchorY = anchorYRatio * PREVIEW_WORLD_HEIGHT
         val framing = getFraming(eventType)
+        val worldScale = framing.scale * FRAMING_REFERENCE_HEIGHT / PREVIEW_WORLD_HEIGHT
 
         canvas.withSave {
             translate(centerX, centerY + framing.yOffsetFactor * size)
-            scale(framing.scale, framing.scale)
+            scale(worldScale, worldScale)
             translate(-anchorX, -anchorY)
             try {
                 event.draw(
@@ -237,10 +242,17 @@ class EventPreviewView @JvmOverloads constructor(
         val offsetMs = getPreviewOffsetMs(sample)
 
         previewSpawnTimeMs = now - offsetMs
+        previewStartOffsetMs = offsetMs
+        previewClockOriginSeconds = animationTimeSeconds
         previewEvent = createPreviewEvent(eventType, seed, previewSpawnTimeMs)
         previewParallax.reset()
         invalidate()
     }
+
+    /** Event time: starts at the chosen offset into the event and advances with the animation clock. */
+    private fun previewTimeMs(): Long =
+        previewSpawnTimeMs + previewStartOffsetMs +
+            ((animationTimeSeconds - previewClockOriginSeconds) * 1000f).toLong()
 
     private fun getPreviewOffsetMs(event: RandomEvent): Long {
         val targetOffset = when (eventType) {
@@ -333,8 +345,11 @@ class EventPreviewView @JvmOverloads constructor(
 
     companion object {
         private const val FRAME_DELAY_MS = 16L
-        private const val PREVIEW_WORLD_WIDTH = 1920f
-        private const val PREVIEW_WORLD_HEIGHT = 1080f
+        // At the reference height traversal scaling is 1, so preview anchors match draw() positions.
+        private const val PREVIEW_WORLD_HEIGHT = RenderConstants.REFERENCE_HEIGHT
+        private const val PREVIEW_WORLD_WIDTH = PREVIEW_WORLD_HEIGHT * 16f / 9f
         private const val PREVIEW_EXTENDED_OFFSET = 0f
+        // World height the per-event framing scales were tuned for.
+        private const val FRAMING_REFERENCE_HEIGHT = 1080f
     }
 }
