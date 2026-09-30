@@ -139,6 +139,43 @@ class ParallaxEdgeAndMovementTest {
     // ============== Edge Resistance Tests ==============
 
     @Test
+    fun `edge easing changes actual offsets for identical input`() {
+        fun travel(easing: Float): Float {
+            val calc = createCalculator().apply {
+                edgeEasing = easing
+                returnSpeed = 0f
+            }
+            rampTilt(calc, 1f, 0f)
+            return calc.getOffsetX()
+        }
+        val baseline = travel(0f)
+        val moderate = travel(0.5f)
+        val strongest = travel(1f)
+        assertTrue("Easing must reduce near-edge travel", baseline > moderate && moderate > strongest)
+        assertTrue("The setting must have a visible effect", baseline - strongest > 1f)
+    }
+
+    @Test
+    fun `eased offsets stay monotonic bounded and symmetric`() {
+        for (easing in listOf(0f, 0.5f, 1f)) {
+            val positive = createCalculator().apply { edgeEasing = easing; returnSpeed = 0f }
+            val negative = createCalculator().apply { edgeEasing = easing; returnSpeed = 0f }
+            var previous = 0f
+            for (step in 1..16) {
+                val from = (step - 1) * 0.1f
+                val to = step * 0.1f
+                rampTiltFromTo(positive, from, 0f, to, 0f, steps = 10)
+                rampTiltFromTo(negative, -from, 0f, -to, 0f, steps = 10)
+                val offset = positive.getOffsetX()
+                assertTrue(offset >= previous)
+                assertTrue(offset <= 1920f * 0.2f)
+                assertEquals(offset, -negative.getOffsetX(), 0.01f)
+                previous = offset
+            }
+        }
+    }
+
+    @Test
     fun `edge resistance reduces movement near limit`() {
         val calc = createCalculator()
         calc.edgeEasing = 0.5f

@@ -154,12 +154,10 @@ class ParallaxCalculator {
     
     /**
      * Edge easing curve: controls how movement slows near edges.
-     * 0.0 = linear (no easing, hard edges)
-     * 0.5 = moderate easing (smooth deceleration near edges)
-     * 1.0 = extreme easing (only moves freely in center, steep slowdown near edges)
-     * Uses quadratic falloff: movement multiplier = 1 - (distance^(1+edgeEasing*3))
+    * 0.0 retains the tanh soft limit; 1.0 uses a gentler approach to the limit.
+    * Both curves have unit slope at the center and remain radially bounded.
      */
-    var edgeEasing = 0.0f               // Default: 0 = linear (no easing)
+    var edgeEasing = 0.0f
     
     /**
      * Return speed unlocked: when true, return to center uses full speed regardless of position.
@@ -607,7 +605,11 @@ class ParallaxCalculator {
         if (maxOffset <= 0f) { positionX = 0f; positionY = 0f; return }
         val len = kotlin.math.sqrt(rawPositionX * rawPositionX + rawPositionY * rawPositionY)
         if (len <= 0f) { positionX = 0f; positionY = 0f; return }
-        val limitedLen = maxOffset * tanh(len / maxOffset)
+        val normalized = len / maxOffset
+        val baseLimit = tanh(normalized)
+        val easedLimit = normalized / kotlin.math.sqrt(1f + normalized * normalized)
+        val easing = edgeEasing.coerceIn(0f, 1f)
+        val limitedLen = maxOffset * (baseLimit + (easedLimit - baseLimit) * easing)
         val scale = limitedLen / len
         positionX = rawPositionX * scale
         positionY = rawPositionY * scale
