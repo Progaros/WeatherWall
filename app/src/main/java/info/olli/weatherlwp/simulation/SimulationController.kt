@@ -5,6 +5,9 @@ import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.weather.WeatherRepository
 import info.olli.weatherlwp.weather.WeatherType
 import info.olli.weatherlwp.util.SeasonHelper
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** Inclusive [start, end] window on a 24 h clock; bounds outside [0, 24) wrap past midnight. */
 internal fun inHourWindow(time: Float, start: Float, end: Float): Boolean {
@@ -25,12 +28,20 @@ private fun normalizeHour(hour: Float): Float {
  * Coordinates the clock, settings, and weather data to produce
  * a consistent SimulationState that layers can use for rendering.
  */
-class SimulationController(private val context: Context) {
+class SimulationController(
+    private val context: Context,
+    private val windSimulator: WindSimulator = WindSimulator(),
+    private val historyExecutor: ExecutorService = Executors.newSingleThreadExecutor { task ->
+        Thread(task, "WeatherHistory").apply { isDaemon = true }
+    }
+) {
     
     private val clock = SimulationClock()
     @Volatile private var settings = SimulationSettings.fromSnapshot(emptyMap<String, Any?>())
     private val weatherHistory = WeatherHistory(context)
-    private val windSimulator = WindSimulator()
+    private val historyRecordPending = AtomicBoolean(false)
+    private var destroyed = false
+    private var stateSnapshot = SimulationState.default()
     
     private var screenWidth = 1080f
     private var screenHeight = 1920f
@@ -40,8 +51,8 @@ class SimulationController(private val context: Context) {
     private var timeInitialized = false  // Skip smoothing on first frame
     
     // Frame delta tracking
-    private var lastUpdateMs = 0L
-    private var lastRecordAttemptMs = 0L
+    private var lastUpdateMs: Long? = null
+    private var lastRecordAttemptMs: Long? = null
 
     // Season blend is date-based (changes ~once/day) yet getEffectiveSeasonBlend allocates
     // Calendars; cache it and recompute only when the local day or a relevant setting changes.
@@ -86,7 +97,7 @@ class SimulationController(private val context: Context) {
      * Call this when the wallpaper becomes visible again.
      */
     fun resetTiming() {
-        lastUpdateMs = 0L
+        lastUpdateMs = null
         windSimulator.reset()
         // Reset time smoothing so sun/moon position initializes immediately without jumping
         timeInitialized = false
@@ -132,11 +143,10 @@ class SimulationController(private val context: Context) {
         return blend
     }
 
-    /**
-     * Get current simulation state.
-     * This is called every frame to get the latest state.
-     */
-    fun getState(): SimulationState {
+    fun getState(): SimulationState = stateSnapshot
+
+    fun advance(frameTimeMs: Long = System.nanoTime() / 1_000_000L) {
+        if (destroyed || lastUpdateMs == frameTimeMs) return
         val currentSettings = settings
 
         // Get real weather from repository
@@ -153,12 +163,11 @@ class SimulationController(private val context: Context) {
         }
         
         // Calculate wind gust
-        val currentMs = System.currentTimeMillis()
-        val deltaMs = if (lastUpdateMs > 0) (currentMs - lastUpdateMs).coerceIn(0, 100) else 16L
-        lastUpdateMs = currentMs
+        val deltaMs = lastUpdateMs?.let { (frameTimeMs - it).coerceIn(0, 100) } ?: 16L
+        lastUpdateMs = frameTimeMs
         val deltaSec = deltaMs / 1000f
         
-        val windGust = windSimulator.calculateWindGust(effectiveWind, deltaMs)
+        val windGust = windSimulator.calculateWindGust(effectiveWind, deltaMs, frameTimeMs)
         
         // Get extended weather data from repository
         val extendedData = WeatherRepository.getExtendedData(context)
@@ -203,23 +212,7 @@ class SimulationController(private val context: Context) {
         val isBlueHour = inHourWindow(rawTime, sunriseHours - blueHourDuration, sunriseHours) ||
                          inHourWindow(rawTime, sunsetHours, sunsetHours + blueHourDuration)
         
-        // Record weather history (throttled to once per minute; deduplicates internally to once per hour)
-        // In debug mode, pass the effective (overridden) weather so history tracks simulated conditions
-        if (currentMs - lastRecordAttemptMs >= 60_000L) {
-            lastRecordAttemptMs = currentMs
-            if (currentSettings.debugEnabled) {
-                val overridePrecipProb = when (effectiveWeather) {
-                    WeatherType.RAIN, WeatherType.THUNDERSTORM, WeatherType.SNOW, WeatherType.HAIL -> 0.85f
-                    else -> 0f
-                }
-                weatherHistory.recordCurrentWeather(
-                    overrideWeather = effectiveWeather,
-                    overridePrecipProb = overridePrecipProb
-                )
-            } else {
-                weatherHistory.recordCurrentWeather()
-            }
-        }
+        recordWeatherIfDue(frameTimeMs, currentSettings, effectiveWeather)
         val historySnapshot = weatherHistory.getSnapshot()
         
         // Apply simulation overrides for snow/river levels when enabled
@@ -232,7 +225,7 @@ class SimulationController(private val context: Context) {
         val seasonTransitionDays = currentSettings.seasonTransitionDays
         val seasonBlend = effectiveSeasonBlend(currentSettings)
         
-        return SimulationState(
+        stateSnapshot = SimulationState(
             timeOfDayHours = rawTime,
             timeSeconds = clock.getTimeSeconds(),
             absoluteTimeMs = clock.getAbsoluteTimeMs(),
@@ -277,6 +270,36 @@ class SimulationController(private val context: Context) {
             seasonTransitionDays = seasonTransitionDays,
             isDebugMode = currentSettings.debugEnabled
         )
+    }
+
+    private fun recordWeatherIfDue(frameTimeMs: Long, currentSettings: SimulationSettings, effectiveWeather: WeatherType) {
+        val previousAttempt = lastRecordAttemptMs
+        if (previousAttempt != null && frameTimeMs - previousAttempt < 60_000L) return
+        if (!historyRecordPending.compareAndSet(false, true)) return
+        lastRecordAttemptMs = frameTimeMs
+        historyExecutor.execute {
+            try {
+                if (currentSettings.debugEnabled) {
+                    val overridePrecipProb = when (effectiveWeather) {
+                        WeatherType.RAIN, WeatherType.THUNDERSTORM, WeatherType.SNOW, WeatherType.HAIL -> 0.85f
+                        else -> 0f
+                    }
+                    weatherHistory.recordCurrentWeather(
+                        overrideWeather = effectiveWeather,
+                        overridePrecipProb = overridePrecipProb
+                    )
+                } else {
+                    weatherHistory.recordCurrentWeather()
+                }
+            } finally {
+                historyRecordPending.set(false)
+            }
+        }
+    }
+
+    fun destroy() {
+        destroyed = true
+        historyExecutor.shutdown()
     }
     
     /**

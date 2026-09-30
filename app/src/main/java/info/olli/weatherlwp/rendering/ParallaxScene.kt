@@ -311,6 +311,7 @@ class ParallaxScene(
             }
             
             // Get current simulation state (single source of truth)
+            simulationController.advance()
             val state = simulationController.getState()
             
             // Store for ground event drawer callback
@@ -613,6 +614,7 @@ class ParallaxScene(
         // Stop sensor flow and detach callbacks first to avoid late events during teardown.
         stop()
         sensor.clearCallbacks()
+        simulationController.destroy()
 
         // Break callback chains between layers so destroyed objects are not retained.
         terrainLayer.groundEventDrawer = null
