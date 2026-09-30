@@ -209,6 +209,7 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
      * @param unlockDelayMs Delay in ms after screen on before shake triggers are accepted
      */
     fun setShakeSettings(enabled: Boolean, sensitivity: Float = 0.5f, unlockDelayMs: Int = 500) {
+        val enabledChanged = shakeEnabled != enabled
         shakeEnabled = enabled
         shakeUnlockDelayMs = unlockDelayMs.toLong()
         
@@ -227,8 +228,8 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
         
         Log.d(TAG, "Shake settings: enabled=$enabled sens=$s gThresh=$shakeThresholdGravity wiggleRate=${longAxisWiggle.rateThreshold}")
         
-        // If manager is already started, re-register shake sensors to handle runtime toggle
-        if (isStarted) {
+        // Thresholds are read per event; only a runtime toggle needs re-registration
+        if (isStarted && enabledChanged) {
             // Unregister sensors if not the active parallax sensor
             accelerometer?.let { if (it != activeSensor) sensorManager.unregisterListener(this, it) }
             gyroscope?.let { if (it != activeSensor) sensorManager.unregisterListener(this, it) }
