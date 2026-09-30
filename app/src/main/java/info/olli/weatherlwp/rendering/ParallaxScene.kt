@@ -55,6 +55,17 @@ class ParallaxScene(
 
     @Volatile
     private var currentSettings: SimulationSettings = SimulationSettings.fromSnapshot(emptyMap<String, Any?>())
+    private var running = false
+
+    private fun updateSensorActivation() {
+        val parallaxEnabled = currentSettings.getBoolean("pref_parallax_enabled", PreferenceDefaults.PARALLAX_ENABLED)
+        val shakeEnabled = currentSettings.getBoolean("pref_shake_fireworks_enabled", PreferenceDefaults.SHAKE_FIREWORKS_ENABLED)
+        if (running && (parallaxEnabled || shakeEnabled)) {
+            if (!sensor.isRunning()) sensor.start()
+        } else {
+            sensor.stop()
+        }
+    }
     
     // Trigger key suffixes based on context (preview vs wallpaper)
     private val triggerSuffix = if (isPreview) "_preview" else "_wallpaper"
@@ -217,10 +228,12 @@ class ParallaxScene(
         // no visible slide-back-to-center animation.
         parallaxCalculator.reset()
         simulationController.resetTiming()
-        sensor.start()
+        running = true
+        updateSensorActivation()
     }
 
     fun stop() {
+        running = false
         sensor.stop()
     }
     
@@ -481,17 +494,7 @@ class ParallaxScene(
             }
             sensor.setParallaxMode(parallaxMode)
 
-            // Start/stop sensor based on parallax enabled state
-            if (parallaxEnabled) {
-                if (!sensor.isRunning()) {
-                    sensor.start()
-                }
-            } else {
-                if (sensor.isRunning()) {
-                    sensor.stop()
-                    parallaxCalculator.reset()  // Reset to center when disabled
-                }
-            }
+            if (!parallaxEnabled) parallaxCalculator.reset()
 
             // Input sensitivity: slider 1-100% with LOGARITHMIC curve
             val sensitivityVal = settings.getInt("pref_parallax_strength", PreferenceDefaults.PARALLAX_STRENGTH).coerceIn(1, 100)
@@ -579,6 +582,7 @@ class ParallaxScene(
             val shakeSensitivity = settings.getInt("pref_shake_sensitivity", PreferenceDefaults.SHAKE_SENSITIVITY) / 100f
             val shakeDelayMs = settings.getInt("pref_shake_delay", PreferenceDefaults.SHAKE_DELAY_MS).coerceIn(0, 5000)
             sensor.setShakeSettings(shakeEnabled, shakeSensitivity, shakeDelayMs)
+            updateSensorActivation()
 
             // Frame time logging (debug feature for performance analysis)
             frameTimeLoggingEnabled = settings.getBoolean("pref_debug_frame_timing", PreferenceDefaults.DEBUG_FRAME_TIMING)
@@ -606,7 +610,7 @@ class ParallaxScene(
 
     fun destroy() {
         // Stop sensor flow and detach callbacks first to avoid late events during teardown.
-        sensor.stop()
+        stop()
         sensor.clearCallbacks()
 
         // Break callback chains between layers so destroyed objects are not retained.
