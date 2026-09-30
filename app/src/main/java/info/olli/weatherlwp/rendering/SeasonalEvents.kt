@@ -136,13 +136,6 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
             HolidaySchedule.dayOfYear(month, day, referenceCal)
     }
 
-    /**
-     * Legacy no-op retained for compatibility with older call sites.
-     */
-    fun updateSettingsIfNeeded() {
-        // Settings now come from ParallaxScene.reloadSettings(settings).
-    }
-
     fun render(canvas: Canvas, enabled: Boolean) {
         if (!enabled) return
 
@@ -237,7 +230,6 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
 
     override fun update(state: SimulationState, deltaTimeMs: Long) {
         // Seasonal animation is frame-driven inside render methods
-        updateSettingsIfNeeded()
     }
 
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {

@@ -9,14 +9,15 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Shader
 import android.os.Trace
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.withClip
+import androidx.core.graphics.withRotation
+import androidx.core.graphics.withTranslation
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
 import info.olli.weatherlwp.util.ColorMath
-import info.olli.weatherlwp.util.SeasonHelper
-import kotlin.math.sin
-import kotlin.random.Random
 
 /**
  * Renders hills and trees with wind-based animation.
@@ -211,7 +212,6 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private var hillDepthSpread = 0.5f
     
     // Seasonal settings
-    private var terrainSeasonOverride = "auto"
     private var springFlowersEnabled = true
     private var springFlowerDensity = 500
     private var springFlowerSpread = 0.5f
@@ -222,9 +222,6 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     
     // Dynamic snow from weather history
     private var useWeatherSnow = true
-    
-    // Season transition
-    private var seasonTransitionDays = 14
     
     // Seasonal decoration settings
     private var fallenLeavesEnabled = true
@@ -286,37 +283,24 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     )
     @Volatile private var mushroomsByHill: Map<Int, List<MushroomData>> = emptyMap()
     
-    // Pre-generated snow patch positions (per hill)
-    private data class SnowPatchData(
-        val startWorldX: Float,
-        val endWorldX: Float,
-        val alpha: Int
-    )
-    @Volatile private var snowByHill: Map<Int, List<SnowPatchData>> = emptyMap()
-    
     private val leafPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val mushroomPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val mushroomCapPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val mushroomShadowPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
-    // Hairline stroke reproduces the previous per-segment drawLine() appearance in one path op.
+    // strokeWidth 0 = hairline stroke
     private val frostPaint = Paint().apply {
         style = Paint.Style.STROKE
         strokeWidth = 0f
         isAntiAlias = true
     }
     private val flowerPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
-    private val snowPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
 
     // ===== Static decoration bitmap cache =====
     // One Bitmap per hill containing pre-rendered flowers, mushrooms, and foliage.
     // Re-baked when decoration settings, season weights, or ambient color change.
     // Frost is drawn per-frame and is never baked.
     @Volatile private var decorationBitmaps: Array<Bitmap?> = emptyArray()
-    /**
-     * Per-hill top screen-Y: bitmap for hill i starts at screen y = decorationBitmapTopYs[i].
-     * Computed as (hill.heightOffset - DECOR_BITMAP_MARGIN).coerceAtLeast(0f) * height.
-     * Background hills have larger bitmaps; foreground hills' bitmaps are smaller.
-     */
+    /** Per-hill top screen-Y: bitmap for hill i starts at screen y = decorationBitmapTopYs[i]. */
     private var decorationBitmapTopYs: FloatArray = floatArrayOf()
     private var decorationBitmapW = 0
     /** Last screen height used for baking; detects height-only size changes. */
@@ -344,10 +328,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     init {
         reloadSettings(SimulationSettings.fromSnapshot(emptyMap<String, Any?>()))
     }
-    
 
-
-    // Pseudo-random hash function for value noise
     private fun darkenColor(color: Int, factor: Float = 0.65f): Int = ColorMath.darkenColor(color, factor)
     
     // Blend color towards brown for autumn
@@ -453,7 +434,6 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val flowerCellSize = 5f
         val leafCellSize = 8f
         val mushroomCellSize = 20f
-        val snowCellSize = 40f
         
         // Generate spring flowers using cell-based placement (with optional clustering)
         if (springFlowersEnabled) {
@@ -519,7 +499,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                         }
                     }
                 } else {
-                    // Uniform placement (original behavior)
+                    // Uniform placement
                     for (cellIndex in indexRange) {
                         val cellSeed = randomSeed + 6000 + hillIndex
                         val h = DeterministicLayout.hashToFloat(cellSeed, cellIndex, 0)
@@ -544,35 +524,6 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             flowersByHill = newFlowers
         } else {
             flowersByHill = emptyMap()
-        }
-        
-        // Generate winter snow patches using cell-based placement
-        if (winterSnowEnabled) {
-            val newSnow = mutableMapOf<Int, List<SnowPatchData>>()
-            val densityFraction = (winterSnowCoverage / 100f).coerceIn(0.1f, 1f)
-            val snowIndexRange = WorldViewportTransform.indexRangeForWorldRange(-worldHalf, worldHalf, snowCellSize)
-            
-            for ((hillIndex, _) in currentHills.withIndex()) {
-                val hillSnow = mutableListOf<SnowPatchData>()
-                for (cellIndex in snowIndexRange) {
-                    val cellSeed = randomSeed + 7000 + hillIndex
-                    val h = DeterministicLayout.hashToFloat(cellSeed, cellIndex, 0)
-                    if (h > densityFraction) continue
-                    
-                    val startWX = cellIndex * snowCellSize +
-                        (DeterministicLayout.hashToFloat(cellSeed, cellIndex, 1) - 0.5f) * snowCellSize * 0.8f
-                    val patchWidth = (0.3f + DeterministicLayout.hashToFloat(cellSeed, cellIndex, 2) * 0.7f) * snowCellSize
-                    hillSnow.add(SnowPatchData(
-                        startWorldX = startWX,
-                        endWorldX = startWX + patchWidth,
-                        alpha = 150 + (DeterministicLayout.hashToFloat(cellSeed, cellIndex, 3) * 80).toInt()
-                    ))
-                }
-                newSnow[hillIndex] = hillSnow
-            }
-            snowByHill = newSnow
-        } else {
-            snowByHill = emptyMap()
         }
         
         // Generate fallen leaves with optional tree-biased accumulation
@@ -745,7 +696,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                         }
                     }
                 } else {
-                    // Uniform placement (original behavior)
+                    // Uniform placement
                     for (cellIndex in mushIndexRange) {
                         val cellSeed = randomSeed + 9000 + hillIndex
                         val h = DeterministicLayout.hashToFloat(cellSeed, cellIndex, 0)
@@ -1003,26 +954,23 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         ambientColor: Int,
         treeAutumnWeight: Float
     ) {
-        canvas.save()
-        canvas.translate(hillPx, hillPy)
+        canvas.withTranslation(hillPx, hillPy) {
+            // Needle trees stay green year-round; only leaf trees get autumn colours
+            val effectiveTreeColor = if (tree.treeType == TreeRenderer.TreeType.LEAF) {
+                treeRenderer.autumnTreeColor(tree.dayColor, treeAutumnWeight, tree.index)
+            } else {
+                tree.dayColor
+            }
 
-        // Needle trees stay green year-round; only leaf trees get autumn colours
-        val effectiveTreeColor = if (tree.treeType == TreeRenderer.TreeType.LEAF) {
-            treeRenderer.autumnTreeColor(tree.dayColor, treeAutumnWeight, tree.index)
-        } else {
-            tree.dayColor
+            val yBasedDepth = ((tree.yRatio - 0.6f) / 0.35f).coerceIn(0f, 1f)
+            // Continuous ambient tint: full at night (1.0), minimal during day (0.15)
+            val lightLevel = state.getLightLevel()
+            val dayFactor = ((lightLevel - 0.15f) / 0.85f).coerceIn(0f, 1f)
+            val timeMultiplier = 1.0f - dayFactor * 0.85f
+            val treeBlendAmount = RenderConstants.applyAmbientTint(effectiveTreeColor, ambientColor, yBasedDepth) * timeMultiplier
+            val treeColor = RenderConstants.blendWithAmbient(effectiveTreeColor, ambientColor, treeBlendAmount)
+            treeRenderer.drawTree(canvas, tree, state, tree.index, treeColor)
         }
-
-        val yBasedDepth = ((tree.yRatio - 0.6f) / 0.35f).coerceIn(0f, 1f)
-        // Continuous ambient tint: full at night (1.0), minimal during day (0.15)
-        val lightLevel = state.getLightLevel()
-        val dayFactor = ((lightLevel - 0.15f) / 0.85f).coerceIn(0f, 1f)
-        val timeMultiplier = 1.0f - dayFactor * 0.85f
-        val treeBlendAmount = RenderConstants.applyAmbientTint(effectiveTreeColor, ambientColor, yBasedDepth) * timeMultiplier
-        val treeColor = RenderConstants.blendWithAmbient(effectiveTreeColor, ambientColor, treeBlendAmount)
-        treeRenderer.drawTree(canvas, tree, state, tree.index, treeColor)
-
-        canvas.restore()
     }
 
     /**
@@ -1036,10 +984,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         hillPy: Float,
         ambientColor: Int
     ) {
-        canvas.save()
-        canvas.translate(hillPx, hillPy)
-        bushRenderer.drawBush(canvas, bush, state, ambientColor)
-        canvas.restore()
+        canvas.withTranslation(hillPx, hillPy) {
+            bushRenderer.drawBush(canvas, bush, state, ambientColor)
+        }
     }
     
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
@@ -1190,19 +1137,19 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             // Flowers, mushrooms, and foliage are pre-baked into per-hill Bitmaps to
             // avoid per-object draw calls every frame. Frost is drawn per-frame because
             // it follows the dynamic snow level which changes continuously.
-            canvas.save()
-            canvas.translate(px, py)
-            val decorBitmap = decorationBitmaps.getOrNull(index)
-            val hillTopY = decorationBitmapTopYs.getOrElse(index) { 0f }
-            if (decorBitmap != null && !decorBitmap.isRecycled) {
-                // Bitmap was drawn with translate(width*MARGIN, -topY); undo both here.
-                canvas.drawBitmap(decorBitmap, -(width * DECOR_BITMAP_MARGIN), hillTopY, decorationBitmapPaint)
-                drawFrostOnly(canvas, index)
-            } else {
-                // OOM fallback: draw per-object (slower but always correct)
-                drawSeasonalDecorations(canvas, index, hill, ambientColor)
+            canvas.withTranslation(px, py) {
+                val decorBitmap = decorationBitmaps.getOrNull(index)
+                val hillTopY = decorationBitmapTopYs.getOrElse(index) { 0f }
+                if (decorBitmap != null && !decorBitmap.isRecycled) {
+                    // Bitmap was drawn with translate(width*MARGIN, -topY); undo both here.
+                    // Qualified: inside this Canvas-receiver lambda a bare `width` would be Canvas.width.
+                    canvas.drawBitmap(decorBitmap, -(this@TerrainLayer.width * DECOR_BITMAP_MARGIN), hillTopY, decorationBitmapPaint)
+                    drawFrostOnly(canvas, index)
+                } else {
+                    // OOM fallback: draw per-object (slower but always correct)
+                    drawSeasonalDecorations(canvas, index, hill, ambientColor)
+                }
             }
-            canvas.restore()
             
             // Get trees and animals for this depth range
             val nextDepth = if (index + 1 < currentHills.size) {
@@ -1441,17 +1388,16 @@ class TerrainLayer(private val context: Context) : SceneLayer {
 
                 if (!anyShadow) {
                     paths[h] = null
-                    continue
+                } else {
+                    val band = Path()
+                    band.moveTo(startX, surfaceYs[0])
+                    for (i in 1..numSteps) band.lineTo(startX + i * stepX, surfaceYs[i])
+                    for (i in numSteps downTo 0) {
+                        band.lineTo(startX + i * stepX, surfaceYs[i] + depths[i])
+                    }
+                    band.close()
+                    paths[h] = band
                 }
-
-                val band = Path()
-                band.moveTo(startX, surfaceYs[0])
-                for (i in 1..numSteps) band.lineTo(startX + i * stepX, surfaceYs[i])
-                for (i in numSteps downTo 0) {
-                    band.lineTo(startX + i * stepX, surfaceYs[i] + depths[i])
-                }
-                band.close()
-                paths[h] = band
             }
 
             hillShadowPaths = paths
@@ -1553,12 +1499,11 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         if (hillShadowAlpha > 0) {
             val band = hillShadowPaths.getOrNull(hillIndex)
             if (band != null) {
-                canvas.save()
-                canvas.clipPath(path)
-                hillShadowPaint.color = Color.BLACK
-                hillShadowPaint.alpha = hillShadowAlpha
-                canvas.drawPath(band, hillShadowPaint)
-                canvas.restore()
+                canvas.withClip(path) {
+                    hillShadowPaint.color = Color.BLACK
+                    hillShadowPaint.alpha = hillShadowAlpha
+                    canvas.drawPath(band, hillShadowPaint)
+                }
             }
         }
     }
@@ -1574,9 +1519,6 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // Use a generous margin to avoid popping at edges with parallax shift.
         val cullLeft = -width * 0.15f
         val cullRight = width * 1.15f
-        
-        // Note: Snow is now integrated into the hill gradient (drawHill),
-        // so we no longer draw floating snow patches here.
         
         // Compute season weights for gradual visibility control
         val springWeight = getSeasonWeight("spring")
@@ -1625,11 +1567,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 leafPaint.alpha = (Color.alpha(blendedColor) * leafAlpha).toInt()
                 val leafSize = leaf.size * height
                 
-                canvas.save()
-                canvas.rotate(leaf.rotation, x, y)
                 // Oval leaf shape
-                canvas.drawOval(x - leafSize, y - leafSize * 0.5f, x + leafSize, y + leafSize * 0.5f, leafPaint)
-                canvas.restore()
+                canvas.withRotation(leaf.rotation, x, y) {
+                    canvas.drawOval(x - leafSize, y - leafSize * 0.5f, x + leafSize, y + leafSize * 0.5f, leafPaint)
+                }
             }
             leafPaint.alpha = 255
         }
@@ -1735,8 +1676,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
      * or when season/ambient/size state changes.
      *
      * Each bitmap covers screen width * (1 + 2 * DECOR_BITMAP_MARGIN) horizontally
-     * to absorb ±DECOR_BITMAP_MARGIN parallax headroom, and extends from
-     * [hillDecorationTopY] to the bottom of the screen.
+     * to absorb ±DECOR_BITMAP_MARGIN parallax headroom, and vertically spans the hill's
+     * decoration band ([decorBandTopRatio]..[decorBandBottomRatio]).
      *
      * Ambient tint and season weights are baked into pixel colors at generation time.
      * On OOM the bitmap slot is left null and the hill falls back to per-object drawing.
@@ -1768,7 +1709,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 continue
             }
             try {
-                val bmp = Bitmap.createBitmap(bmpW, bmpH, Bitmap.Config.ARGB_8888)
+                val bmp = createBitmap(bmpW, bmpH, Bitmap.Config.ARGB_8888)
                 val bmpCanvas = android.graphics.Canvas(bmp)
                 // Map screen coordinates into bitmap space:
                 // screen (x, y) → bitmap (x + width*MARGIN, y - topY)
@@ -1879,14 +1820,6 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val spreadVal = settings.getInt("pref_hill_depth_spread", PreferenceDefaults.HILL_DEPTH_SPREAD)
         hillDepthSpread = spreadVal / 100f
         
-        // Seasonal terrain settings
-        // Only use terrain season override when debug/simulation mode is enabled
-        val debugEnabled = settings.getBoolean("pref_debug_enabled", PreferenceDefaults.DEBUG_ENABLED)
-        terrainSeasonOverride = if (debugEnabled) {
-            settings.getString("pref_terrain_season", PreferenceDefaults.TERRAIN_SEASON)
-        } else {
-            "auto"  // Always use real season when not in debug mode
-        }
         springFlowersEnabled = settings.getBoolean("pref_spring_flowers", PreferenceDefaults.SPRING_FLOWERS_ENABLED)
         springFlowerDensity = settings.getInt("pref_spring_flower_density", PreferenceDefaults.SPRING_FLOWER_DENSITY)
         springFlowerSpread = settings.getInt("pref_spring_flower_spread", PreferenceDefaults.SPRING_FLOWER_SPREAD) / 100f
@@ -1895,7 +1828,6 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         winterSnowEnabled = settings.getBoolean("pref_winter_snow_hills", PreferenceDefaults.WINTER_SNOW_HILLS_ENABLED)
         winterSnowCoverage = settings.getInt("pref_winter_snow_coverage", PreferenceDefaults.WINTER_SNOW_COVERAGE)
         useWeatherSnow = settings.getBoolean("pref_weather_snow_enabled", PreferenceDefaults.WEATHER_SNOW_ENABLED)
-        seasonTransitionDays = settings.getInt("pref_season_transition_days", PreferenceDefaults.SEASON_TRANSITION_DAYS)
         
         // Seasonal decoration settings
         fallenLeavesEnabled = settings.getBoolean("pref_fallen_leaves_enabled", PreferenceDefaults.FALLEN_LEAVES_ENABLED)

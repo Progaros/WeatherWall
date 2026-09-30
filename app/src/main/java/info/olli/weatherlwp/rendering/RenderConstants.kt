@@ -1,6 +1,7 @@
 package info.olli.weatherlwp.rendering
 
 import android.graphics.Color
+import androidx.core.graphics.toColorInt
 import info.olli.weatherlwp.util.ColorMath
 
 /**
@@ -114,10 +115,6 @@ object RenderConstants {
      * increases, elements spread apart and previously off-screen content
      * becomes visible from both sides (zoom-out effect).
      *
-     * Layers store element positions as xRatio (0–1) across the generation
-     * world range. At draw time: `screenX = xRatio * extendedWidth - extendedOffset`
-     * produces the zoom-from-center transform automatically.
-     *
      * @param screenWidth The actual visible screen width
      * @param screenHeight The actual visible screen height
      * @return The extended width for draw-time position mapping
@@ -157,11 +154,6 @@ object RenderConstants {
     fun getExtendedOffset(screenWidth: Float, extendedWidth: Float): Float {
         return (extendedWidth - screenWidth) / 2f
     }
-    
-    /** World coordinate bounds for scene elements (deprecated - use extended width system) */
-    const val WORLD_MIN_X = -4.0f
-    const val WORLD_MAX_X = 5.0f
-    const val WORLD_WIDTH = WORLD_MAX_X - WORLD_MIN_X
     
     // ============== Parallax Depth Factors ==============
     // All values 0.0 to 1.0: 0 = far (moves least), 1 = near (moves most)
@@ -219,35 +211,35 @@ object RenderConstants {
     
     // Night: Deep space -> Dark blue -> Slightly warmer horizon
     // True dark sky has subtle blue tint, not pure black (atmospheric airglow + light pollution)
-    val SKY_NIGHT_TOP: Int by lazy { Color.parseColor("#0B0D1E") }      // Deep space (hint of blue)
-    val SKY_NIGHT_MID: Int by lazy { Color.parseColor("#151830") }      // Dark navy blue
-    val SKY_NIGHT_BOTTOM: Int by lazy { Color.parseColor("#252848") }   // Warmer blue at horizon
+    val SKY_NIGHT_TOP: Int by lazy { "#0B0D1E".toColorInt() }      // Deep space (hint of blue)
+    val SKY_NIGHT_MID: Int by lazy { "#151830".toColorInt() }      // Dark navy blue
+    val SKY_NIGHT_BOTTOM: Int by lazy { "#252848".toColorInt() }   // Warmer blue at horizon
     
     // Dawn: Navy-blue transitioning through muted coral to warm golden horizon
     // Dawn colors are slightly less vivid than dusk per atmospheric science
     // (morning air is cleaner -> less Rayleigh scattering -> softer sunrise colors)
-    val SKY_DAWN_TOP: Int by lazy { Color.parseColor("#354880") }       // Brighter navy-blue (more light reaching)
-    val SKY_DAWN_MID: Int by lazy { Color.parseColor("#D08868") }       // Warm coral-salmon (slightly more vivid)
-    val SKY_DAWN_BOTTOM: Int by lazy { Color.parseColor("#F0B880") }    // Warm golden-orange horizon
+    val SKY_DAWN_TOP: Int by lazy { "#354880".toColorInt() }       // Brighter navy-blue (more light reaching)
+    val SKY_DAWN_MID: Int by lazy { "#D08868".toColorInt() }       // Warm coral-salmon (slightly more vivid)
+    val SKY_DAWN_BOTTOM: Int by lazy { "#F0B880".toColorInt() }    // Warm golden-orange horizon
     
     // Day: Clear blue -> Blue -> Light horizon haze
     // Lighter/paler than Material Design blues for photorealistic sky
-    val SKY_DAY_TOP: Int by lazy { Color.parseColor("#2E80D0") }        // Clear sky blue (less saturated)
-    val SKY_DAY_MID: Int by lazy { Color.parseColor("#60B8F5") }        // Bright sky blue
-    val SKY_DAY_BOTTOM: Int by lazy { Color.parseColor("#D0EFFF") }     // Pale hazy horizon
+    val SKY_DAY_TOP: Int by lazy { "#2E80D0".toColorInt() }        // Clear sky blue (less saturated)
+    val SKY_DAY_MID: Int by lazy { "#60B8F5".toColorInt() }        // Bright sky blue
+    val SKY_DAY_BOTTOM: Int by lazy { "#D0EFFF".toColorInt() }     // Pale hazy horizon
     
     // Dusk: Deep purple-blue -> Warm terracotta -> Soft golden-orange horizon
     // Dusk is more vivid than dawn (NOAA: evening air contains more particles
     // from daytime convection -> enhanced Rayleigh scattering)
-    val SKY_DUSK_TOP: Int by lazy { Color.parseColor("#2E2850") }       // Rich purple-blue
-    val SKY_DUSK_MID: Int by lazy { Color.parseColor("#D05838") }       // Vivid terracotta-orange
-    val SKY_DUSK_BOTTOM: Int by lazy { Color.parseColor("#E89050") }    // Warm deep golden-orange horizon
+    val SKY_DUSK_TOP: Int by lazy { "#2E2850".toColorInt() }       // Rich purple-blue
+    val SKY_DUSK_MID: Int by lazy { "#D05838".toColorInt() }       // Vivid terracotta-orange
+    val SKY_DUSK_BOTTOM: Int by lazy { "#E89050".toColorInt() }    // Warm deep golden-orange horizon
     
     // Ambient tint colors for global tinting (more muted for realism)
-    val AMBIENT_NIGHT: Int by lazy { Color.parseColor("#2A2040") }      // Purple-blue night tint
-    val AMBIENT_DAWN: Int by lazy { Color.parseColor("#E89070") }       // Muted warm salmon dawn tint
-    val AMBIENT_DAY: Int by lazy { Color.parseColor("#E8F0F8") }        // Very light neutral (nearly white with hint of sky)
-    val AMBIENT_DUSK: Int by lazy { Color.parseColor("#D06040") }       // Warm terracotta dusk tint
+    val AMBIENT_NIGHT: Int by lazy { "#2A2040".toColorInt() }      // Purple-blue night tint
+    val AMBIENT_DAWN: Int by lazy { "#E89070".toColorInt() }       // Muted warm salmon dawn tint
+    val AMBIENT_DAY: Int by lazy { "#E8F0F8".toColorInt() }        // Very light neutral (nearly white with hint of sky)
+    val AMBIENT_DUSK: Int by lazy { "#D06040".toColorInt() }       // Warm terracotta dusk tint
     
     // ============== Time Thresholds (hours) ==============
     // These are fallback defaults. SkyLayer uses dynamic sunrise/sunset from weather data.
@@ -308,16 +300,16 @@ object RenderConstants {
     
     /** Tree sway animation parameters */
     const val TREE_SWAY_FREQUENCY = 0.6f   // Base frequency (slower, more natural)
-    const val TREE_SWAY_AMPLITUDE = 0.20f  // Reduced for subtler base sway (user multiplier scales this)
+    const val TREE_SWAY_AMPLITUDE = 0.20f  // User multiplier scales this
     
     /** Gust effect multiplier for tree lean */
-    const val GUST_LEAN_FACTOR = 0.25f     // Moderate gust bending (balance of 0.15 and 0.4)
+    const val GUST_LEAN_FACTOR = 0.25f
     
     /** Star twinkle animation */
     const val STAR_TWINKLE_SPEED = 0.001f
     
     /** Cloud movement speed multiplier (base delta-time scale) */
-    const val CLOUD_MOVEMENT_SCALE = 0.06f  // Increased for faster cloud movement
+    const val CLOUD_MOVEMENT_SCALE = 0.06f
     
     /** Lightning timing (milliseconds) */
     const val LIGHTNING_INTERVAL_MIN_MS = 1500L    // Minimum time between flashes (1.5s)
@@ -351,8 +343,8 @@ object RenderConstants {
     const val CLOUD_Y_RANGE = 0.35f
     const val CLOUD_SIZE_MIN = 0.08f
     const val CLOUD_SIZE_RANGE = 0.25f
-    const val CLOUD_SPEED_BASE = 0.15f   // Increased for visible movement
-    const val CLOUD_SPEED_RANGE = 0.25f  // More speed variation
+    const val CLOUD_SPEED_BASE = 0.15f
+    const val CLOUD_SPEED_RANGE = 0.25f
     
     // ============== Atmospheric Haze ==============
     
@@ -476,7 +468,7 @@ object RenderConstants {
     fun applyAmbientTint(baseColor: Int, ambientColor: Int, distance: Float): Float {
         // More distant objects blend more with ambient (atmospheric perspective)
         // Foreground: 5% ambient, Background: 45% ambient
-        // Reduced from 20-60% to preserve foreground colors, especially tree greens during day
+        // Kept low to preserve foreground colors, especially tree greens during day
         return 0.05f + distance * 0.4f
     }
     
@@ -524,7 +516,6 @@ object RenderConstants {
      * - Day→Dusk: sunset-1.5h .. sunset  → lerp(DAY, DUSK)
      * - Post-dusk: sunset .. sunset+1h    → lerp(DUSK, NIGHT)
      */
-    @Suppress("UNUSED_PARAMETER")
     fun getAmbientColor(
         timeOfDayHours: Float,
         isNight: Boolean,
@@ -571,7 +562,7 @@ object RenderConstants {
                 else -> AMBIENT_NIGHT
             }
         } else {
-            // Fallback: boolean-based (legacy callers)
+            // Fallback when sunrise/sunset are unknown: boolean-based
             when {
                 isNight -> AMBIENT_NIGHT
                 isDawn -> AMBIENT_DAWN

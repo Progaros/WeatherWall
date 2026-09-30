@@ -7,6 +7,7 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Shader
+import androidx.core.graphics.withTranslation
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
@@ -75,11 +76,11 @@ class MountainLayer(private val context: Context) : SceneLayer {
     
     /**
      * Pre-computed mountain shape: ridge + slope points cached at generation time.
-     * Avoids per-frame Random + ArrayList + Pair allocations (~800 objects/frame saved).
+     * Avoids per-frame Random + ArrayList + Pair allocations.
      *
      * Slope arrays are split into **progress** (monotonic 0→1 from peak to base) and
      * **noise** (small random displacement). At draw time, progress is scaled by
-     * `mountainH` and noise by `noiseScale`, matching the original per-frame code.
+     * `mountainH` and noise by `noiseScale`.
      */
     private class MountainShape(
         val ridgeXs: FloatArray,
@@ -153,9 +154,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
     companion object {
         /**
          * World-space cell size for mountain placement.
-         * Halved from 220 to create more potential slots so that density 50
-         * produces the same count as old density 100, and the full slider
-         * range (0-100) remains useful.
+         * Small enough that the full density slider range (0-100) remains useful.
          */
         const val MOUNTAIN_CELL_SIZE = 110f
 
@@ -389,25 +388,21 @@ class MountainLayer(private val context: Context) : SceneLayer {
             val px = parallaxCalculator.getOffsetXForDepth(mountain.depthFactor)
             val py = parallaxCalculator.getOffsetYForDepth(mountain.depthFactor)
             
-            canvas.save()
-            canvas.translate(px, py)
-            
-            drawMountain(canvas, mountainIdx, mountain, state, bucketedAmbientColor, transform)
-            
-            canvas.restore()
+            canvas.withTranslation(px, py) {
+                drawMountain(canvas, mountainIdx, mountain, state, bucketedAmbientColor, transform)
+            }
         }
         
         // Draw atmospheric haze at the base of mountains (fog overlay)
         // This blends the mountains into the terrain and adds depth
-        drawAtmosphericHaze(canvas, state.isNight, bucketedAmbientColor)
+        drawAtmosphericHaze(canvas, bucketedAmbientColor)
     }
     
     /**
      * Draw a soft atmospheric haze at the bottom portion of the screen.
      * This simulates fog/mist at the base of mountains.
      */
-    @Suppress("UNUSED_PARAMETER")
-    private fun drawAtmosphericHaze(canvas: Canvas, isNight: Boolean, ambientColor: Int) {
+    private fun drawAtmosphericHaze(canvas: Canvas, ambientColor: Int) {
         val hazeStartY = height * RenderConstants.HAZE_START_Y
         val hazeEndY = height * RenderConstants.HAZE_END_Y
         val hazeBucket = ambientColorBucket(ambientColor)
@@ -437,7 +432,6 @@ class MountainLayer(private val context: Context) : SceneLayer {
         canvas.drawRect(0f, hazeStartY, width, hazeEndY, hazePaint)
     }
     
-    @Suppress("UNUSED_PARAMETER")
     private fun drawMountain(canvas: Canvas, mountainIdx: Int, mountain: MountainData, state: SimulationState, ambientColor: Int, transform: WorldViewportTransform) {
         pathLeft.reset()
         pathRight.reset()

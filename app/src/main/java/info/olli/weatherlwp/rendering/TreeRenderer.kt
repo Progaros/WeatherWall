@@ -4,6 +4,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
+import androidx.core.graphics.withRotation
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.util.ColorMath
 import info.olli.weatherlwp.simulation.SimulationSettings
@@ -492,7 +493,7 @@ class TreeRenderer {
         treePaint.color = treeColor
 
         if (tree.treeType == TreeType.LEAF) {
-            drawLeafTree(canvas, tree, state, treeIndex)
+            drawLeafTree(canvas, tree, state)
             return
         }
         // --- NEEDLE tree (conifer) rendering below ---
@@ -593,114 +594,112 @@ class TreeRenderer {
         val totalRotationDeg = (baseRotationDeg + gustRotationDeg).coerceIn(-25f, 25f)
 
         // Apply rotation transform around tree base
-        canvas.save()
-        canvas.rotate(totalRotationDeg, x, groundY)
+        canvas.withRotation(totalRotationDeg, x, groundY) {
+            for (seg in 0 until treeSegments) {
+                val segBaseY = groundY - seg * segmentHeight * 0.7f
+                val segTipY = segBaseY - segmentHeight
 
-        for (seg in 0 until treeSegments) {
-            val segBaseY = groundY - seg * segmentHeight * 0.7f
-            val segTipY = segBaseY - segmentHeight
+                // Width decreases with each segment (tapers towards top)
+                val widthMultiplier = 1.0f - (seg.toFloat() / treeSegments * 0.6f)
+                val segWidth = baseTreeWidth * widthMultiplier
 
-            // Width decreases with each segment (tapers towards top)
-            val widthMultiplier = 1.0f - (seg.toFloat() / treeSegments * 0.6f)
-            val segWidth = baseTreeWidth * widthMultiplier
+                val baseHeightRatio = seg.toFloat() / treeSegments
+                val tipHeightRatio = (seg + 1).toFloat() / treeSegments
 
-            val baseHeightRatio = seg.toFloat() / treeSegments
-            val tipHeightRatio = (seg + 1).toFloat() / treeSegments
+                // Phase varies up the tree for wave-like bending
+                val basePhase = spatialPhase + baseHeightRatio * 0.4f
+                val tipPhase = spatialPhase + tipHeightRatio * 0.4f
 
-            // Phase varies up the tree for wave-like bending
-            val basePhase = spatialPhase + baseHeightRatio * 0.4f
-            val tipPhase = spatialPhase + tipHeightRatio * 0.4f
+                // Multi-frequency oscillation for organic feel
+                val baseWave = sin(timeSec * baseFreq + basePhase) * 0.3f +
+                    sin(timeSec * baseFreq * 2.5f + basePhase) * 0.15f
+                val tipWaveSeg = sin(timeSec * baseFreq + tipPhase) * 0.3f +
+                    sin(timeSec * baseFreq * 2.5f + tipPhase) * 0.15f
 
-            // Multi-frequency oscillation for organic feel
-            val baseWave = sin(timeSec * baseFreq + basePhase) * 0.3f +
-                sin(timeSec * baseFreq * 2.5f + basePhase) * 0.15f
-            val tipWaveSeg = sin(timeSec * baseFreq + tipPhase) * 0.3f +
-                sin(timeSec * baseFreq * 2.5f + tipPhase) * 0.15f
+                // Additional local sway within the rotated frame (creates curve)
+                val localBaseSway = baseWave * windFactor * maxAmplitude * baseHeightRatio * 0.3f
+                val localTipSway = tipWaveSeg * windFactor * maxAmplitude * tipHeightRatio * tipHeightRatio * 0.3f
 
-            // Additional local sway within the rotated frame (creates curve)
-            val localBaseSway = baseWave * windFactor * maxAmplitude * baseHeightRatio * 0.3f
-            val localTipSway = tipWaveSeg * windFactor * maxAmplitude * tipHeightRatio * tipHeightRatio * 0.3f
+                treePath.reset()
+                treePath.moveTo(x + localTipSway, segTipY)
+                treePath.lineTo(x - segWidth + localBaseSway, segBaseY)
+                treePath.lineTo(x + segWidth + localBaseSway, segBaseY)
+                treePath.close()
 
-            treePath.reset()
-            treePath.moveTo(x + localTipSway, segTipY)
-            treePath.lineTo(x - segWidth + localBaseSway, segBaseY)
-            treePath.lineTo(x + segWidth + localBaseSway, segBaseY)
-            treePath.close()
+                canvas.drawPath(treePath, treePaint)
 
-            canvas.drawPath(treePath, treePaint)
-
-            // Draw snow on tree if snow is present (weather-driven or calendar)
-            // When useWeatherSnow is true, use ONLY weather snow level to avoid
-            // falling back to calendar-based snow (which causes sudden jumps)
-            val treeSnowActive = if (useWeatherSnow) {
-                dynamicSnowLevel > 0.005f
-            } else {
-                (winterSnowEnabled && cachedSeason == "winter") ||
-                (cachedPrevSeason == "winter" && cachedSeasonBlend < 1f)
-            }
-            if (treeSnowActive) {
-                val treeSnowAmount = if (useWeatherSnow) {
-                    dynamicSnowLevel
-                } else if (cachedSeason == "winter") {
-                    (winterSnowCoverage / 100f) * (if (cachedPrevSeason != "winter") cachedSeasonBlend else 1f)
+                // Draw snow on tree if snow is present (weather-driven or calendar)
+                // When useWeatherSnow is true, use ONLY weather snow level to avoid
+                // falling back to calendar-based snow (which causes sudden jumps)
+                val treeSnowActive = if (useWeatherSnow) {
+                    dynamicSnowLevel > 0.005f
                 } else {
-                    (winterSnowCoverage / 100f) * (1f - cachedSeasonBlend)
+                    (winterSnowEnabled && cachedSeason == "winter") ||
+                    (cachedPrevSeason == "winter" && cachedSeasonBlend < 1f)
                 }
-                val snowCoverage = treeSnowAmount.coerceIn(0.01f, 0.8f)
-                val segmentSnowFactor = (1f - baseHeightRatio) * 0.3f + 0.5f
-                val snowHeight = segmentHeight * snowCoverage * segmentSnowFactor
-                val snowTipY = segTipY
-                val snowBaseY = segTipY + snowHeight
-                val snowBaseWidth = segWidth * (snowHeight / segmentHeight).coerceIn(0.2f, 0.6f)
+                if (treeSnowActive) {
+                    val treeSnowAmount = if (useWeatherSnow) {
+                        dynamicSnowLevel
+                    } else if (cachedSeason == "winter") {
+                        (winterSnowCoverage / 100f) * (if (cachedPrevSeason != "winter") cachedSeasonBlend else 1f)
+                    } else {
+                        (winterSnowCoverage / 100f) * (1f - cachedSeasonBlend)
+                    }
+                    val snowCoverage = treeSnowAmount.coerceIn(0.01f, 0.8f)
+                    val segmentSnowFactor = (1f - baseHeightRatio) * 0.3f + 0.5f
+                    val snowHeight = segmentHeight * snowCoverage * segmentSnowFactor
+                    val snowTipY = segTipY
+                    val snowBaseY = segTipY + snowHeight
+                    val snowBaseWidth = segWidth * (snowHeight / segmentHeight).coerceIn(0.2f, 0.6f)
 
-                treeSnowPath.reset()
-                treeSnowPath.moveTo(x + localTipSway, snowTipY)
-                treeSnowPath.lineTo(x - snowBaseWidth + localTipSway * 0.7f, snowBaseY)
-                treeSnowPath.lineTo(x + snowBaseWidth + localTipSway * 0.7f, snowBaseY)
-                treeSnowPath.close()
+                    treeSnowPath.reset()
+                    treeSnowPath.moveTo(x + localTipSway, snowTipY)
+                    treeSnowPath.lineTo(x - snowBaseWidth + localTipSway * 0.7f, snowBaseY)
+                    treeSnowPath.lineTo(x + snowBaseWidth + localTipSway * 0.7f, snowBaseY)
+                    treeSnowPath.close()
 
-                canvas.drawPath(treeSnowPath, treeSnowPaint)
+                    canvas.drawPath(treeSnowPath, treeSnowPaint)
+                }
+            }
+
+            // Draw pinecones hanging from branches: visible in autumn + winter
+            val pineconeAlpha = (getSeasonWeight("autumn") + getSeasonWeight("winter")).coerceIn(0f, 1f)
+            if (pineconeAlpha > 0.01f) {
+                pineconesByTree[treeIndex]?.let { cones ->
+                    val ambientColor = cachedAmbientColor
+                    for (cone in cones) {
+                        val segIndex = (cone.yRatio * treeSegments).toInt().coerceIn(0, treeSegments - 1)
+                        val segBaseY = groundY - segIndex * segmentHeight * 0.7f
+                        val widthMultiplier = 1.0f - (segIndex.toFloat() / treeSegments * 0.6f)
+                        val segWidth = baseTreeWidth * widthMultiplier
+
+                        val coneX = x + cone.xOffset * segWidth * 2f
+                        val coneY = segBaseY - segmentHeight * 0.3f
+                        // Qualified: inside this Canvas-receiver lambda a bare `height` would be Canvas.height.
+                        val coneSize = cone.size * this@TreeRenderer.height * (0.5f + pineconeAlpha * 0.5f)
+
+                        // Brown pinecone
+                        val coneColor = RenderConstants.blendWithAmbient(
+                            Color.rgb(120, 80, 30), ambientColor, 0.2f)
+                        pineconePaint.color = coneColor
+                        pineconePaint.alpha = (Color.alpha(coneColor) * pineconeAlpha).toInt()
+                        // Teardrop shape: oval body
+                        canvas.drawOval(
+                            coneX - coneSize * 0.4f, coneY - coneSize,
+                            coneX + coneSize * 0.4f, coneY + coneSize * 0.3f,
+                            pineconePaint)
+                    }
+                    pineconePaint.alpha = 255
+                }
             }
         }
-
-        // Draw pinecones hanging from branches: visible in autumn + winter
-        val pineconeAlpha = (getSeasonWeight("autumn") + getSeasonWeight("winter")).coerceIn(0f, 1f)
-        if (pineconeAlpha > 0.01f) {
-            pineconesByTree[treeIndex]?.let { cones ->
-                val ambientColor = cachedAmbientColor
-                for (cone in cones) {
-                    val segIndex = (cone.yRatio * treeSegments).toInt().coerceIn(0, treeSegments - 1)
-                    val segBaseY = groundY - segIndex * segmentHeight * 0.7f
-                    val widthMultiplier = 1.0f - (segIndex.toFloat() / treeSegments * 0.6f)
-                    val segWidth = baseTreeWidth * widthMultiplier
-
-                    val coneX = x + cone.xOffset * segWidth * 2f
-                    val coneY = segBaseY - segmentHeight * 0.3f
-                    val coneSize = cone.size * height * (0.5f + pineconeAlpha * 0.5f)
-
-                    // Brown pinecone
-                    val coneColor = RenderConstants.blendWithAmbient(
-                        Color.rgb(120, 80, 30), ambientColor, 0.2f)
-                    pineconePaint.color = coneColor
-                    pineconePaint.alpha = (Color.alpha(coneColor) * pineconeAlpha).toInt()
-                    // Teardrop shape: oval body
-                    canvas.drawOval(
-                        coneX - coneSize * 0.4f, coneY - coneSize,
-                        coneX + coneSize * 0.4f, coneY + coneSize * 0.3f,
-                        pineconePaint)
-                }
-                pineconePaint.alpha = 255
-            }
-        }
-
-        canvas.restore()
     }
 
     /**
      * Draw a deciduous (leaf) tree: trunk + round crown in spring-autumn, bare branches in winter.
      * Crown fades out in late autumn and regrows in spring using season transition weights.
      */
-    private fun drawLeafTree(canvas: Canvas, tree: TreeData, state: SimulationState, @Suppress("UNUSED_PARAMETER") treeIndex: Int) {
+    private fun drawLeafTree(canvas: Canvas, tree: TreeData, state: SimulationState) {
         val x = cachedTransform.worldToScreenX(tree.worldX)
         val groundY = tree.yRatio * height
 
@@ -756,88 +755,85 @@ class TreeRenderer {
             )
         }
 
-        canvas.save()
-        canvas.rotate(totalRotationDeg, x, groundY)
+        canvas.withRotation(totalRotationDeg, x, groundY) {
+            // Season weights for leaf behavior
+            val winterWeight = getSeasonWeight("winter")
+            // Crown visibility: full in summer/autumn, fades in late autumn -> winter, regrows spring
+            val crownScale = (1f - winterWeight * 0.95f).coerceIn(0.05f, 1f)
 
-        // Season weights for leaf behavior
-        val winterWeight = getSeasonWeight("winter")
-        // Crown visibility: full in summer/autumn, fades in late autumn -> winter, regrows spring
-        val crownScale = (1f - winterWeight * 0.95f).coerceIn(0.05f, 1f)
+            // Trunk color (brown)
+            val trunkColor = Color.rgb(90, 65, 40)
+            val ambientColor = cachedAmbientColor
+            trunkPaint.color = RenderConstants.blendWithAmbient(trunkColor, ambientColor, 0.2f)
+            trunkPaint.strokeWidth = trunkWidth
+            trunkPaint.style = Paint.Style.STROKE
 
-        // Trunk color (brown)
-        val trunkColor = Color.rgb(90, 65, 40)
-        val ambientColor = cachedAmbientColor
-        trunkPaint.color = RenderConstants.blendWithAmbient(trunkColor, ambientColor, 0.2f)
-        trunkPaint.strokeWidth = trunkWidth
-        trunkPaint.style = Paint.Style.STROKE
+            // Draw trunk — extend higher when bare so branch attachment looks natural
+            val trunkTopRatio = if (crownScale < 0.3f) 0.82f else 0.55f
+            canvas.drawLine(x, groundY, x, groundY - totalHeight * trunkTopRatio, trunkPaint)
 
-        // Draw trunk — extend higher when bare so branch attachment looks natural
-        val trunkTopRatio = if (crownScale < 0.3f) 0.82f else 0.55f
-        canvas.drawLine(x, groundY, x, groundY - totalHeight * trunkTopRatio, trunkPaint)
-
-        // Draw bare branches when crown is partially or fully absent (winter/transition)
-        if (crownScale < 0.8f) {
-            val branchAlpha = ((1f - crownScale) * 255).toInt().coerceIn(0, 255)
-            trunkPaint.strokeCap = Paint.Cap.ROUND
-            for (branch in tree.branches) {
-                val bStartX = x + branch.startXOffset * crownRadius
-                val bStartY = groundY - totalHeight * (0.20f + branch.startYRatio * 0.62f)
-                val bEndX = x + branch.endXOffset * crownRadius * 1.8f
-                val bEndY = groundY - totalHeight * (0.20f + branch.endYRatio * 0.62f)
-                // Main branches thicker (startXOffset==0), sub-branches thinner
-                val isSub = branch.startXOffset != 0f
-                trunkPaint.strokeWidth = trunkWidth * (if (isSub) 0.25f else 0.42f)
-                trunkPaint.alpha = branchAlpha
-                canvas.drawLine(bStartX, bStartY, bEndX, bEndY, trunkPaint)
-            }
-            trunkPaint.alpha = 255
-            trunkPaint.strokeCap = Paint.Cap.BUTT
-        }
-
-        // Draw crown circles: scaled by crownScale (shrinks into winter, grows in spring)
-        // Skip when too small to avoid floating green dots above bare trees
-        if (crownScale > 0.15f) {
-            // Fade crown alpha smoothly in the 0.15–0.4 range so it doesn't pop in/out
-            val crownAlpha = if (crownScale < 0.4f)
-                ((crownScale - 0.15f) / 0.25f * 255f).toInt().coerceIn(0, 255)
-            else 255
-            for (circle in tree.crownCircles) {
-                val cx = x + circle.xOffset * crownRadius * crownScale
-                val cy = crownCenterY + circle.yOffset * crownRadius * crownScale
-                val r = crownRadius * circle.radiusScale * crownScale
-
-                crownPaint.color = darkenColor(treePaint.color, circle.darkenFactor)
-                crownPaint.alpha = crownAlpha
-                canvas.drawCircle(cx, cy, r, crownPaint)
-            }
-            crownPaint.alpha = 255
-
-            // Snow on crown
-            // When useWeatherSnow is true, use ONLY weather snow level (no calendar fallback)
-            val treeSnowActive = if (useWeatherSnow) {
-                dynamicSnowLevel > 0.005f
-            } else {
-                (winterSnowEnabled && cachedSeason == "winter") ||
-                (cachedPrevSeason == "winter" && cachedSeasonBlend < 1f)
-            }
-            if (treeSnowActive && crownScale > 0.3f) {
-                val treeSnowAmount = if (useWeatherSnow) {
-                    dynamicSnowLevel
-                } else if (cachedSeason == "winter") {
-                    (winterSnowCoverage / 100f) * (if (cachedPrevSeason != "winter") cachedSeasonBlend else 1f)
-                } else {
-                    (winterSnowCoverage / 100f) * (1f - cachedSeasonBlend)
+            // Draw bare branches when crown is partially or fully absent (winter/transition)
+            if (crownScale < 0.8f) {
+                val branchAlpha = ((1f - crownScale) * 255).toInt().coerceIn(0, 255)
+                trunkPaint.strokeCap = Paint.Cap.ROUND
+                for (branch in tree.branches) {
+                    val bStartX = x + branch.startXOffset * crownRadius
+                    val bStartY = groundY - totalHeight * (0.20f + branch.startYRatio * 0.62f)
+                    val bEndX = x + branch.endXOffset * crownRadius * 1.8f
+                    val bEndY = groundY - totalHeight * (0.20f + branch.endYRatio * 0.62f)
+                    // Main branches thicker (startXOffset==0), sub-branches thinner
+                    val isSub = branch.startXOffset != 0f
+                    trunkPaint.strokeWidth = trunkWidth * (if (isSub) 0.25f else 0.42f)
+                    trunkPaint.alpha = branchAlpha
+                    canvas.drawLine(bStartX, bStartY, bEndX, bEndY, trunkPaint)
                 }
-                val snowR = crownRadius * crownScale * treeSnowAmount.coerceIn(0.01f, 0.5f)
-                canvas.drawOval(
-                    x - snowR, crownCenterY - crownRadius * crownScale * 0.6f,
-                    x + snowR, crownCenterY - crownRadius * crownScale * 0.3f,
-                    treeSnowPaint
-                )
+                trunkPaint.alpha = 255
+                trunkPaint.strokeCap = Paint.Cap.BUTT
+            }
+
+            // Draw crown circles: scaled by crownScale (shrinks into winter, grows in spring)
+            // Skip when too small to avoid floating green dots above bare trees
+            if (crownScale > 0.15f) {
+                // Fade crown alpha smoothly in the 0.15–0.4 range so it doesn't pop in/out
+                val crownAlpha = if (crownScale < 0.4f)
+                    ((crownScale - 0.15f) / 0.25f * 255f).toInt().coerceIn(0, 255)
+                else 255
+                for (circle in tree.crownCircles) {
+                    val cx = x + circle.xOffset * crownRadius * crownScale
+                    val cy = crownCenterY + circle.yOffset * crownRadius * crownScale
+                    val r = crownRadius * circle.radiusScale * crownScale
+
+                    crownPaint.color = darkenColor(treePaint.color, circle.darkenFactor)
+                    crownPaint.alpha = crownAlpha
+                    canvas.drawCircle(cx, cy, r, crownPaint)
+                }
+                crownPaint.alpha = 255
+
+                // Snow on crown
+                // When useWeatherSnow is true, use ONLY weather snow level (no calendar fallback)
+                val treeSnowActive = if (useWeatherSnow) {
+                    dynamicSnowLevel > 0.005f
+                } else {
+                    (winterSnowEnabled && cachedSeason == "winter") ||
+                    (cachedPrevSeason == "winter" && cachedSeasonBlend < 1f)
+                }
+                if (treeSnowActive && crownScale > 0.3f) {
+                    val treeSnowAmount = if (useWeatherSnow) {
+                        dynamicSnowLevel
+                    } else if (cachedSeason == "winter") {
+                        (winterSnowCoverage / 100f) * (if (cachedPrevSeason != "winter") cachedSeasonBlend else 1f)
+                    } else {
+                        (winterSnowCoverage / 100f) * (1f - cachedSeasonBlend)
+                    }
+                    val snowR = crownRadius * crownScale * treeSnowAmount.coerceIn(0.01f, 0.5f)
+                    canvas.drawOval(
+                        x - snowR, crownCenterY - crownRadius * crownScale * 0.6f,
+                        x + snowR, crownCenterY - crownRadius * crownScale * 0.3f,
+                        treeSnowPaint
+                    )
+                }
             }
         }
-
-        canvas.restore()
     }
 
     // ========================================================================

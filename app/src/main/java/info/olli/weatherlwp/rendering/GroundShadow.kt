@@ -11,14 +11,12 @@ import android.graphics.PorterDuffXfermode
 import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
+import androidx.core.graphics.createBitmap
 import info.olli.weatherlwp.simulation.SimulationState
 
 /**
- * Single ground-shadow model shared by every upright object in the scene.
- *
- * Previously needle trees drew a height-scaled wedge, round trees drew a
- * crown-radius ellipse and bushes drew nothing at all, so neighbouring objects
- * disagreed about where the light was coming from.
+ * Single ground-shadow model shared by every upright object in the scene, so
+ * neighbouring objects agree about where the light is coming from.
  *
  * Shadows are stamped from a single soft, alpha-only gradient bitmap (feathered
  * edge) instead of a hard-edged oval, so they read as soft contact shadows
@@ -43,7 +41,7 @@ object GroundShadow {
         val size = MASK_SIZE
         val sizeF = size.toFloat()
         val radius = size / 2f
-        val src = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val src = createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val maskCanvas = Canvas(src)
         val gradientPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = RadialGradient(

@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Shader
+import androidx.core.graphics.withTranslation
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
@@ -34,10 +35,6 @@ import kotlin.math.sin
  */
 class RiverLayer(private val context: Context) : SceneLayer {
     override val layerType = LayerType.RIVER
-
-    companion object {
-        private const val TAG = "RiverLayer"
-    }
 
     /** World-space callback to query terrain Y position at a given (worldX, depthFactor). */
     var terrainYWorldProvider: ((worldX: Float, depthFactor: Float) -> Float)? = null
@@ -98,7 +95,6 @@ class RiverLayer(private val context: Context) : SceneLayer {
     // Dimensions
     private var width = 0f
     private var height = 0f
-    private var extendedWidth = 0f
     private var extendedOffset = 0f
 
     // Cached transform: rebuilt on resize only
@@ -117,9 +113,9 @@ class RiverLayer(private val context: Context) : SceneLayer {
     // Animation phase
     private var flowPhase = 0f
 
-    // River water palette — increased saturation for visibility
+    // River water palette
     private val waterPalette = WaterColorUtil.WaterPalette(
-        day   = Color.rgb(45, 115, 170),   // Stronger steel blue
+        day   = Color.rgb(45, 115, 170),   // Steel blue
         dawn  = Color.rgb(120, 105, 135),
         dusk  = Color.rgb(105, 70, 85),
         night = Color.rgb(12, 22, 45),
@@ -130,7 +126,6 @@ class RiverLayer(private val context: Context) : SceneLayer {
     override fun resize(w: Float, h: Float) {
         width = w
         height = h
-        extendedWidth = w
         extendedOffset = 0f
         cachedTransform = WorldViewportTransform(w, h)
     }
@@ -229,7 +224,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
                     if (segmentStart < 0) segmentStart = i
                 } else if (segmentStart >= 0) {
                     buildAndDrawSegment(
-                        canvas, state, segmentStart, i - 1, left, sampleStepX,
+                        canvas, segmentStart, i - 1, left, sampleStepX,
                         waterSurfaceY, isFrozen, waterColor, layerAlpha, waterLevel, layerWidthFactor
                     )
                     segmentStart = -1
@@ -239,7 +234,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
             // Close any remaining segment
             if (segmentStart >= 0) {
                 buildAndDrawSegment(
-                    canvas, state, segmentStart, numSamples, left, sampleStepX,
+                    canvas, segmentStart, numSamples, left, sampleStepX,
                     waterSurfaceY, isFrozen, waterColor, layerAlpha, waterLevel, layerWidthFactor
                 )
             }
@@ -332,7 +327,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
             } else if (segmentStart >= 0) {
                 // End of valley segment - build proper polygon and draw
                 buildAndDrawSegment(
-                    canvas, state, segmentStart, i - 1, left, sampleStepX,
+                    canvas, segmentStart, i - 1, left, sampleStepX,
                     waterSurfaceY, isFrozen, waterColor, layerAlpha, waterLevel, layerWidthFactor
                 )
                 segmentStart = -1
@@ -342,7 +337,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
         // Trailing segment
         if (segmentStart >= 0) {
             buildAndDrawSegment(
-                canvas, state, segmentStart, numSamples, left, sampleStepX,
+                canvas, segmentStart, numSamples, left, sampleStepX,
                 waterSurfaceY, isFrozen, waterColor, layerAlpha, waterLevel, layerWidthFactor
             )
         }
@@ -355,7 +350,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
      * Top edge traces the animated water surface; bottom edge follows terrain contour.
      */
     private fun buildAndDrawSegment(
-        canvas: Canvas, state: SimulationState,
+        canvas: Canvas,
         startIdx: Int, endIdx: Int,
         left: Float, sampleStepX: Float,
         waterSurfaceY: Float, isFrozen: Boolean,
@@ -384,18 +379,16 @@ class RiverLayer(private val context: Context) : SceneLayer {
         }
 
         riverPath.close()
-        drawRiverSegment(canvas, state, waterColor, layerAlpha, isFrozen, waterLevel, layerWidthFactor, waterSurfaceY)
+        drawRiverSegment(canvas, waterColor, layerAlpha, isFrozen, waterLevel, layerWidthFactor)
     }
 
     /**
      * Draw a single river segment (a contiguous valley filled with water).
      */
-    @Suppress("UNUSED_PARAMETER")
     private fun drawRiverSegment(
-        canvas: Canvas, state: SimulationState,
+        canvas: Canvas,
         color: Int, alphaFactor: Float, isFrozen: Boolean,
-        waterLevel: Float, widthFactor: Float,
-        waterSurfaceY: Float
+        waterLevel: Float, widthFactor: Float
     ) {
         // Boost minimum alpha for visibility
         val alphaMultiplier = (alphaFactor * 255).toInt().coerceIn(60, 255)
@@ -474,25 +467,22 @@ class RiverLayer(private val context: Context) : SceneLayer {
 
         val px = parallaxCalculator.getOffsetXForDepth(RenderConstants.PARALLAX_HILLS_MAX - 0.05f)
         val py = parallaxCalculator.getOffsetYForDepth(RenderConstants.PARALLAX_HILLS_MAX - 0.05f)
-        canvas.save()
-        canvas.translate(px, py)
+        canvas.withTranslation(px, py) {
+            val riverTop = riverBaseY - riverHeight
+            val riverBottom = riverBaseY
 
-        val riverTop = riverBaseY - riverHeight
-        val riverBottom = riverBaseY
-
-        when (style) {
-            RiverStyle.FLAT -> drawFlat(canvas, state, riverTop, riverBottom, waterColor, isFrozen)
-            RiverStyle.WAVY -> drawWavy(canvas, state, riverTop, riverBottom, waterColor, waterLevel, isFrozen)
-            RiverStyle.REFLECTIVE -> drawReflective(canvas, state, riverTop, riverBottom, waterColor, waterLevel, isFrozen)
+            when (style) {
+                RiverStyle.FLAT -> drawFlat(canvas, riverTop, riverBottom, waterColor, isFrozen)
+                RiverStyle.WAVY -> drawWavy(canvas, riverTop, riverBottom, waterColor, waterLevel, isFrozen)
+                RiverStyle.REFLECTIVE -> drawReflective(canvas, state, riverTop, riverBottom, waterColor, waterLevel, isFrozen)
+            }
         }
-        canvas.restore()
     }
 
     // ========================= Flat Style =========================
 
-    @Suppress("UNUSED_PARAMETER")
     private fun drawFlat(
-        canvas: Canvas, state: SimulationState,
+        canvas: Canvas,
         top: Float, bottom: Float, color: Int, isFrozen: Boolean
     ) {
         val left = -extendedOffset - width * 0.1f
@@ -518,9 +508,8 @@ class RiverLayer(private val context: Context) : SceneLayer {
 
     // ========================= Wavy Style =========================
 
-    @Suppress("UNUSED_PARAMETER")
     private fun drawWavy(
-        canvas: Canvas, state: SimulationState,
+        canvas: Canvas,
         top: Float, bottom: Float, color: Int, waterLevel: Float, isFrozen: Boolean
     ) {
         val left = -extendedOffset - width * 0.1f
@@ -703,8 +692,6 @@ class RiverLayer(private val context: Context) : SceneLayer {
 
     // ========================= Color Helpers =========================
 
-
-
     private fun getSkyReflectionColor(state: SimulationState): Int {
         val hour = state.timeOfDayHours
         val sunrise = state.sunriseHours
@@ -716,7 +703,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
         val duskColor = Color.rgb(160, 100, 80)
 
         if (sunrise <= 0f || sunset <= 0f) {
-            // Legacy fallback
+            // Fallback when sunrise/sunset are unknown
             return when {
                 state.isNight -> nightColor
                 state.isDawn -> dawnColor

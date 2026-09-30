@@ -336,7 +336,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     }
     
     /**
-     * Draw all ground events (legacy method).
+     * Draw all ground events.
      */
     fun drawGroundEvents(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         drawEventsByLayer(canvas, state, parallaxCalculator, EventLayer.GROUND)

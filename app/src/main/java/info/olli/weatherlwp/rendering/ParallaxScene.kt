@@ -105,7 +105,7 @@ class ParallaxScene(
     
     // Settings - defaults match pref_effects.xml
     private var parallaxStrength = 0.075f  // Default: 25% on log scale → ~0.075
-    private var parallaxMaxOffsetPx = 130f  // pref_parallax_max_offset=130
+    private val parallaxMaxOffsetPx = 130f  // Only used by ParallaxCalculator when maxOffsetPercent is 0
     private var weatherEnabled = true
     private var seasonalEnabled = true
     
@@ -116,9 +116,7 @@ class ParallaxScene(
     init {
         // Add layers in draw order (Background -> Foreground)
         layers.add(skyLayer)
-        layers.add(cloudLayer) // Clouds behind mountains? Or in front? Usually behind or mixed.
-                               // Original code had clouds behind mountains (layer 0.5).
-                               // Let's put them behind mountains for now.
+        layers.add(cloudLayer) // Clouds behind mountains
         cloudLayer.isPreviewMode = isPreview
         layers.add(mountainLayer)
         layers.add(randomEventLayer)  // Ground animals and sky events (behind trees)
@@ -507,9 +505,6 @@ class ParallaxScene(
             // Max offset as percentage of screen height: 2..40% (default 20%)
             val maxOffsetPercentVal = settings.getInt("pref_parallax_max_offset", PreferenceDefaults.PARALLAX_MAX_OFFSET).coerceIn(2, 40)
             val maxOffsetPercent = maxOffsetPercentVal.toFloat()
-
-            // Legacy pixel offset (not used when percentage is set, but kept for compatibility)
-            parallaxMaxOffsetPx = 130f
 
             // Smoothing slider: map 0..100 -> 0f..0.40f
             val smoothingVal = settings.getInt("pref_parallax_smoothing", PreferenceDefaults.PARALLAX_SMOOTHING).coerceIn(0, 100)

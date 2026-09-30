@@ -8,6 +8,9 @@ import android.graphics.Paint
 import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
+import androidx.core.graphics.toColorInt
+import androidx.core.graphics.withClip
+import androidx.core.graphics.withTranslation
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
@@ -59,12 +62,12 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
     private val moonShadowPaint = Paint().apply {
         isAntiAlias = true
         style = Paint.Style.FILL
-        color = Color.parseColor("#1A1A24")  // Earthshine/shadow color
+        color = "#1A1A24".toColorInt()  // Earthshine/shadow color
     }
     private val moonPath = android.graphics.Path()  // Reusable path for moon phase
     private val moonRect = RectF()  // Reusable rect for moon disc
     private val termRect = RectF()  // Reusable rect for terminator ellipse
-    private val moonShadowColor = Color.parseColor("#1A1A24")  // Pre-parsed shadow color
+    private val moonShadowColor = "#1A1A24".toColorInt()  // Pre-parsed shadow color
     
     private var width = 0f
     private var height = 0f
@@ -299,10 +302,9 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
             safetyPx = 4f
         )
         
-        canvas.save()
-        canvas.translate(skyPx, skyPy)
-        canvas.drawRect(safeRect, skyPaint)
-        canvas.restore()
+        canvas.withTranslation(skyPx, skyPy) {
+            canvas.drawRect(safeRect, skyPaint)
+        }
 
         // Stars visible at night, dusk, and dawn (fading as sunrise approaches)
         // Per atmospheric science: stars remain visible until civil twilight
@@ -349,10 +351,6 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
     }
     
     /**
-     * Draw a radial vignette (darker corners) for atmospheric effect.
-     * Uses cached gradient to avoid allocations every frame.
-     */
-    /**
      * Compute a smooth alpha value for night/dusk/dawn effects based on time of day.
      * Uses continuous interpolation instead of hard boolean checks.
      * 
@@ -393,6 +391,10 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         return nightVal
     }
     
+    /**
+     * Draw a radial vignette (darker corners) for atmospheric effect.
+     * Uses cached gradient to avoid allocations every frame.
+     */
     private fun drawVignette(canvas: Canvas, alpha: Int) {
         val centerX = width / 2f
         val centerY = height / 2f
@@ -640,11 +642,10 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
             
             // Draw simple maria as low-alpha circles (no gradients for performance)
             moonPaint.color = Color.argb(20, 100, 110, 130)
-            canvas.save()
-            canvas.clipPath(moonPath)
-            canvas.drawCircle(moonX - radius * 0.25f, moonY - radius * 0.15f, radius * 0.4f, moonPaint)
-            canvas.drawCircle(moonX + radius * 0.15f, moonY + radius * 0.2f, radius * 0.3f, moonPaint)
-            canvas.restore()
+            canvas.withClip(moonPath) {
+                canvas.drawCircle(moonX - radius * 0.25f, moonY - radius * 0.15f, radius * 0.4f, moonPaint)
+                canvas.drawCircle(moonX + radius * 0.15f, moonY + radius * 0.2f, radius * 0.3f, moonPaint)
+            }
         }
         
         moonPaint.shader = null

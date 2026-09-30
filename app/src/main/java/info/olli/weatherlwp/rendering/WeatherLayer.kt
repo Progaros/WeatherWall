@@ -283,8 +283,8 @@ class WeatherLayer : SceneLayer {
 
         when (currentEffect) {
             EffectType.RAIN -> renderRain(canvas)
-            EffectType.SNOW -> renderSnow(canvas, state)
-            EffectType.HAIL -> renderHail(canvas, state)
+            EffectType.SNOW -> renderSnow(canvas)
+            EffectType.HAIL -> renderHail(canvas)
             EffectType.LIGHTNING -> renderLightning(canvas, state)
             EffectType.FOG -> renderFog(canvas, state)
             EffectType.NONE -> {}
@@ -457,9 +457,7 @@ class WeatherLayer : SceneLayer {
         }
     }
 
-    @Suppress("UNUSED_PARAMETER")
-    private fun renderSnow(canvas: Canvas, state: SimulationState) {
-        // state kept for API consistency with other render methods
+    private fun renderSnow(canvas: Canvas) {
         // Draw pre-bucketed snow points with fixed paints (small/mid/large depth)
         if (snowSmallCoordCount > 0) {
             canvas.drawPoints(snowCoordsSmall, 0, snowSmallCoordCount, snowPaintSmall)
@@ -476,9 +474,7 @@ class WeatherLayer : SceneLayer {
      * Render hail as icy spheres falling faster than rain/snow.
      * Hail has a slight bounce/irregular motion and is larger.
      */
-    @Suppress("UNUSED_PARAMETER")
-    private fun renderHail(canvas: Canvas, state: SimulationState) {
-        // state kept for API consistency with other render methods
+    private fun renderHail(canvas: Canvas) {
         // Dim the world during hail (similar to rain but slightly darker)
         val dimAlpha = (25 + intensity * 50).toInt()
         rainDimPaint.color = Color.argb(dimAlpha, 90, 95, 110)

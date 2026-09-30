@@ -8,6 +8,8 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.withClip
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
@@ -41,8 +43,7 @@ import kotlin.random.Random
 class CloudLayer(private val context: Context) : SceneLayer {
     override val layerType = LayerType.CLOUDS
     
-    // Paint for rendering to bitmap (with blur)
-    // PERFORMANCE: Reduced blur radius from 15 to 10 for faster rendering
+    // Paint for rendering to bitmap (with blur); small blur radius keeps rendering fast
     private val bitmapPaint = Paint().apply {
         color = Color.WHITE
         style = Paint.Style.FILL
@@ -207,7 +208,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         const val FRONT_LAYER_DEPTH_MAX = 0.35f
         
         // Group size ranges - relative to minDim (min of width/height) for consistent sizing
-        // REDUCED for performance: smaller bitmaps = faster drawing
+        // Kept small for performance: smaller bitmaps = faster drawing
         const val GROUP_WIDTH_MIN = 0.40f
         const val GROUP_WIDTH_MAX = 0.65f
         const val GROUP_HEIGHT_MIN = 0.15f
@@ -218,7 +219,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         const val BLUR_PADDING_VERTICAL = 0.35f  // Larger vertical: puffs can extend ±0.80 from center
         
         // Hard cap on bitmap dimensions to avoid GPU texture limits
-        // REDUCED for performance: smaller max = less GPU work
+        // Kept low for performance: smaller max = less GPU work
         const val MAX_BITMAP_DIMENSION = 512
         const val MAX_BITMAP_DIMENSION_PREVIEW = 256
         
@@ -268,7 +269,6 @@ class CloudLayer(private val context: Context) : SceneLayer {
         }
 
     private val effectiveMaxDimension get() = if (isPreviewMode) MAX_BITMAP_DIMENSION_PREVIEW else MAX_BITMAP_DIMENSION
-    private val effectiveMaxGroups get() = if (isPreviewMode) MAX_GROUPS_PREVIEW else MAX_GROUPS
     
     init {
         reloadSettings(SimulationSettings.fromSnapshot(emptyMap<String, Any?>()))
@@ -386,7 +386,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
             Triple(FRONT_LAYER_ALPHA_MULT, FRONT_LAYER_DEPTH_MIN, FRONT_LAYER_DEPTH_MAX)
         }
         
-        // Increased base alpha range for better visibility (was 30-70, now 60-120)
+        // Base alpha range 60-120
         val baseAlpha = (60 + random.nextFloat() * 60).toInt()
         val alpha = (baseAlpha * alphaMult * cloudOpacity).toInt().coerceIn(20, 220)
         val depth = depthMin + random.nextFloat() * (depthMax - depthMin)
@@ -408,29 +408,6 @@ class CloudLayer(private val context: Context) : SceneLayer {
         )
     }
     
-    /**
-     * Map raw cloud count to coverage-driven group parameters.
-     * Fewer groups drawn larger produces same visual coverage with less GPU cost.
-     * @return Pair(effectiveGroupCount, sizeMultiplier)
-     */
-    internal fun cloudCountToCoverageGroups(rawCount: Int): Pair<Int, Float> {
-        return when {
-            rawCount <= 0 -> 0 to 1.0f
-            rawCount <= 5 -> rawCount.coerceAtLeast(2) to 1.0f
-            rawCount <= 15 -> ((rawCount * 0.7f).toInt().coerceAtLeast(4)) to 1.15f
-            rawCount <= 30 -> ((rawCount * 0.5f).toInt().coerceAtLeast(8)) to 1.3f
-            else -> ((rawCount * 0.4f).toInt().coerceIn(12, 20)) to 1.5f
-        }
-    }
-    
-    /**
-     * Render a cloud group to its cached bitmap.
-     * This is called once per group, then the bitmap is reused.
-     * 
-     * Includes edge fadeout and extra padding for blur to prevent cutoff.
-     * fluffinessMultiplier controls how many puffs make up each cloud (more puffs = denser/fluffier).
-     * Clouds are rendered as WHITE - color tint applied at draw time for performance.
-     */
     /** Compute padding for a cloud bitmap. Shared between render and draw paths for consistency. */
     private fun computePadding(contentWidth: Int, contentHeight: Int, stretch: Float): Pair<Int, Int> {
         val stretchPaddingMult = (stretch / 2f).coerceIn(1f, 3f)
@@ -439,13 +416,20 @@ class CloudLayer(private val context: Context) : SceneLayer {
         return paddingX to paddingY
     }
 
+    /**
+     * Render a cloud group to its cached bitmap.
+     * This is called once per group, then the bitmap is reused.
+     * 
+     * Includes edge fadeout and extra padding for blur to prevent cutoff.
+     * fluffinessMultiplier controls how many puffs make up each cloud (more puffs = denser/fluffier).
+     * Clouds are rendered as WHITE - color tint applied at draw time for performance.
+     */
     private fun renderGroupToBitmap(group: CloudGroup, bitmapWidth: Int, bitmapHeight: Int) {
         val (paddingX, paddingY) = computePadding(bitmapWidth, bitmapHeight, cloudStretch)
         val paddedWidth = bitmapWidth + paddingX * 2
         val paddedHeight = bitmapHeight + paddingY * 2
         
         // Recycle old bitmap if size changed
-        // Fix race condition: null the reference first, then recycle
         val oldBitmap = group.cachedBitmap
         if (oldBitmap != null && 
             (group.lastWidth != paddedWidth || group.lastHeight != paddedHeight)) {
@@ -455,7 +439,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         
         // Create or reuse bitmap with padding; bail on OOM without crashing
         val bitmap = try {
-            group.cachedBitmap ?: Bitmap.createBitmap(
+            group.cachedBitmap ?: createBitmap(
                 paddedWidth, paddedHeight, Bitmap.Config.ARGB_8888
             )
         } catch (_: OutOfMemoryError) {
@@ -844,27 +828,26 @@ class CloudLayer(private val context: Context) : SceneLayer {
             backBudget + frontBudget
         }
 
-        canvas.save()
-        canvas.clipRect(0f, 0f, canvasW, canvasH)
-        for (j in 0 until limit) {
-            val c = drawCandidates[j]
-            val bitmap = c.group.cachedBitmap ?: continue
-            if (bitmap.isRecycled) continue  // Guard against race with background recycle
-            // Subtle scale oscillation: each cloud "breathes" slightly at its own rate.
-            // ±3% size variation makes the scene feel alive without being distracting.
-            val oscPhase = (c.group.seed % 10000L).toFloat()
-            val scaleOsc = 1f + 0.03f * sin(animationTime * 0.25 + oscPhase * 0.003).toFloat()
-            val finalScale = c.drawScale * scaleOsc
-            // Direct draw via dst rect — avoids per-cloud save/translate/scale/restore
-            val halfW = c.paddedWidth / 2f * finalScale
-            val halfH = c.paddedHeight / 2f * finalScale
-            dstRect.set(
-                c.screenX - halfW, c.screenY - halfH,
-                c.screenX + halfW, c.screenY + halfH
-            )
-            canvas.drawBitmap(bitmap, null, dstRect, drawPaint)
+        canvas.withClip(0f, 0f, canvasW, canvasH) {
+            for (j in 0 until limit) {
+                val c = drawCandidates[j]
+                val bitmap = c.group.cachedBitmap ?: continue
+                if (bitmap.isRecycled) continue  // Guard against race with background recycle
+                // Subtle scale oscillation: each cloud "breathes" slightly at its own rate.
+                // ±3% size variation makes the scene feel alive without being distracting.
+                val oscPhase = (c.group.seed % 10000L).toFloat()
+                val scaleOsc = 1f + 0.03f * sin(animationTime * 0.25 + oscPhase * 0.003).toFloat()
+                val finalScale = c.drawScale * scaleOsc
+                // Direct draw via dst rect — avoids per-cloud save/translate/scale/restore
+                val halfW = c.paddedWidth / 2f * finalScale
+                val halfH = c.paddedHeight / 2f * finalScale
+                dstRect.set(
+                    c.screenX - halfW, c.screenY - halfH,
+                    c.screenX + halfW, c.screenY + halfH
+                )
+                canvas.drawBitmap(bitmap, null, dstRect, drawPaint)
+            }
         }
-        canvas.restore()
     }
 
     private fun calculateCloudColor(state: SimulationState): Int {

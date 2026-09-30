@@ -32,10 +32,6 @@ import kotlin.math.sin
 class LakeLayer(private val context: Context) : SceneLayer {
     override val layerType = LayerType.LAKE
 
-    companion object {
-        private const val TAG = "LakeLayer"
-    }
-
     /** World-space callback to query terrain Y position at a given (worldX, depthFactor). */
     var terrainYWorldProvider: ((worldX: Float, depthFactor: Float) -> Float)? = null
 
@@ -73,8 +69,6 @@ class LakeLayer(private val context: Context) : SceneLayer {
     // Dimensions
     private var width = 0f
     private var height = 0f
-    private var extendedWidth = 0f
-    private var extendedOffset = 0f
 
     // Cached transform: rebuilt on resize only
     private var cachedTransform = WorldViewportTransform(1f, 1f)
@@ -89,21 +83,19 @@ class LakeLayer(private val context: Context) : SceneLayer {
     // Animation
     private var shimmerPhase = 0f
 
-    // Lake water palette — increased saturation/brightness for visibility
+    // Lake water palette
     private val waterPalette = WaterColorUtil.WaterPalette(
-        day   = Color.rgb(40, 110, 170),   // Deeper blue for readability
+        day   = Color.rgb(40, 110, 170),   // Deep blue
         dawn  = Color.rgb(110, 100, 140),
         dusk  = Color.rgb(100, 65, 85),
         night = Color.rgb(12, 22, 50),
-        deep  = Color.rgb(15, 40, 70),     // Much darker deep for contrast
+        deep  = Color.rgb(15, 40, 70),     // Dark deep water for contrast
         ice   = Color.rgb(195, 215, 235)
     )
 
     override fun resize(w: Float, h: Float) {
         width = w
         height = h
-        extendedWidth = w
-        extendedOffset = 0f
         cachedTransform = WorldViewportTransform(w, h)
     }
 
@@ -184,7 +176,7 @@ class LakeLayer(private val context: Context) : SceneLayer {
             // Flat terrain - draw a simple oval lake
             val lakeY = maxTerrainY
             val lakeDepthPx = height * 0.025f * effectiveLevel
-            drawSimpleLake(canvas, state, lakeCenterX, lakeY, lakeWidthPx, lakeDepthPx, waterColor, isFrozen)
+            drawSimpleLake(canvas, lakeCenterX, lakeY, lakeWidthPx, lakeDepthPx, waterColor, isFrozen)
             canvas.restore()
             return
         }
@@ -204,7 +196,7 @@ class LakeLayer(private val context: Context) : SceneLayer {
                 if (segmentStart < 0) segmentStart = i
             } else if (segmentStart >= 0) {
                 buildAndDrawLakeSegment(
-                    canvas, state, segmentStart, i - 1, lakeLeft, sampleStepX,
+                    canvas, segmentStart, i - 1, lakeLeft, sampleStepX,
                     waterSurfaceY, isFrozen, waterColor, effectiveLevel, maxTerrainY
                 )
                 segmentStart = -1
@@ -213,7 +205,7 @@ class LakeLayer(private val context: Context) : SceneLayer {
 
         if (segmentStart >= 0) {
             buildAndDrawLakeSegment(
-                canvas, state, segmentStart, numSamples, lakeLeft, sampleStepX,
+                canvas, segmentStart, numSamples, lakeLeft, sampleStepX,
                 waterSurfaceY, isFrozen, waterColor, effectiveLevel, maxTerrainY
             )
         }
@@ -229,9 +221,8 @@ class LakeLayer(private val context: Context) : SceneLayer {
     /**
      * Simple oval lake for flat terrain.
      */
-    @Suppress("UNUSED_PARAMETER")
     private fun drawSimpleLake(
-        canvas: Canvas, state: SimulationState,
+        canvas: Canvas,
         cx: Float, cy: Float, w: Float, h: Float,
         color: Int, isFrozen: Boolean
     ) {
@@ -289,7 +280,7 @@ class LakeLayer(private val context: Context) : SceneLayer {
      * Top edge traces the animated water surface; bottom edge follows terrain contour.
      */
     private fun buildAndDrawLakeSegment(
-        canvas: Canvas, state: SimulationState,
+        canvas: Canvas,
         startIdx: Int, endIdx: Int,
         lakeLeft: Float, sampleStepX: Float,
         waterSurfaceY: Float, isFrozen: Boolean,
@@ -317,15 +308,14 @@ class LakeLayer(private val context: Context) : SceneLayer {
         }
 
         lakePath.close()
-        drawLakeSegment(canvas, state, waterColor, isFrozen, waterSurfaceY, maxTerrainY)
+        drawLakeSegment(canvas, waterColor, isFrozen, waterSurfaceY, maxTerrainY)
     }
 
     /**
      * Draw a filled lake segment (valley).
      */
-    @Suppress("UNUSED_PARAMETER")
     private fun drawLakeSegment(
-        canvas: Canvas, state: SimulationState,
+        canvas: Canvas,
         color: Int, isFrozen: Boolean,
         surfaceY: Float, bottomY: Float
     ) {
@@ -410,10 +400,6 @@ class LakeLayer(private val context: Context) : SceneLayer {
             }
         }
     }
-
-    // ========================= Color Helpers =========================
-
-
 
     // ========================= Settings =========================
 

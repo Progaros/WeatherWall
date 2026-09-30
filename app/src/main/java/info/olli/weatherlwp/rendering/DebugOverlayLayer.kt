@@ -8,6 +8,7 @@ import android.graphics.Typeface
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
+import java.util.Locale
 
 /**
  * Debug overlay layer that displays performance and state information.
@@ -47,7 +48,6 @@ class DebugOverlayLayer(private val context: Context) : SceneLayer {
     private var enabledItems = mutableSetOf<DebugItem>()
     private var simulationEnabled = false
     
-    private var width = 0f
     private var height = 0f
     
     // Frame timing
@@ -105,7 +105,6 @@ class DebugOverlayLayer(private val context: Context) : SceneLayer {
     }
     
     override fun resize(w: Float, h: Float) {
-        width = w
         height = h
         // Scale text size based on screen density
         val scaleFactor = (h / 2000f).coerceIn(0.6f, 1.5f)
@@ -148,12 +147,12 @@ class DebugOverlayLayer(private val context: Context) : SceneLayer {
         for (item in enabledItems) {
             val (label, value, isWarning) = when (item) {
                 DebugItem.FPS -> {
-                    val fpsStr = String.format("%.1f / %.1f", currentFps, avgFps)
+                    val fpsStr = String.format(Locale.US, "%.1f / %.1f", currentFps, avgFps)
                     val warn = currentFps < 25f
                     Triple("FPS (cur/avg)", fpsStr, warn)
                 }
                 DebugItem.FRAME_TIME -> {
-                    val ftStr = String.format("%.1f ms", frameTimeMs)
+                    val ftStr = String.format(Locale.US, "%.1f ms", frameTimeMs)
                     val warn = frameTimeMs > 30f
                     Triple("Frame Time", ftStr, warn)
                 }
@@ -164,7 +163,7 @@ class DebugOverlayLayer(private val context: Context) : SceneLayer {
                 DebugItem.TIME_OF_DAY -> {
                     val hours = state.timeOfDayHours.toInt()
                     val minutes = ((state.timeOfDayHours - hours) * 60).toInt()
-                    val timeStr = String.format("%02d:%02d", hours, minutes)
+                    val timeStr = String.format(Locale.US, "%02d:%02d", hours, minutes)
                     val period = when {
                         state.isNight -> "Night"
                         state.isDawn -> "Dawn"
@@ -177,7 +176,7 @@ class DebugOverlayLayer(private val context: Context) : SceneLayer {
                     Triple("Weather", state.weather.name, false)
                 }
                 DebugItem.WIND -> {
-                    val windStr = String.format("%.0f%% @ %.0f°", state.windStrength * 100, state.windDirection)
+                    val windStr = String.format(Locale.US, "%.0f%% @ %.0f°", state.windStrength * 100, state.windDirection)
                     val warn = state.windStrength > 0.8f
                     Triple("Wind", windStr, warn)
                 }
@@ -211,7 +210,7 @@ class DebugOverlayLayer(private val context: Context) : SceneLayer {
                     }
                 }
                 DebugItem.PARALLAX -> {
-                    val offsetStr = String.format("%.1f, %.1f", parallaxOffsetX, parallaxOffsetY)
+                    val offsetStr = String.format(Locale.US, "%.1f, %.1f", parallaxOffsetX, parallaxOffsetY)
                     Triple("Parallax", offsetStr, false)
                 }
                 DebugItem.SIMULATION -> {

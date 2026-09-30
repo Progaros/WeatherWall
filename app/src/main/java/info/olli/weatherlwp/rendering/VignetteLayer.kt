@@ -125,9 +125,7 @@ class VignetteLayer(private val context: Context) : SceneLayer {
      * @param inward If true, gradient goes from transparent to solid (top/left edges)
      *               If false, gradient goes from solid to transparent (bottom/right edges)
      */
-    @Suppress("UNUSED_PARAMETER")
     private fun buildEdgeGradient(
-        distance: Float,  // Kept for API consistency with potential future use
         fadePercent: Int,
         alpha: Int,
         startX: Float, startY: Float,
@@ -169,7 +167,7 @@ class VignetteLayer(private val context: Context) : SceneLayer {
             val alpha = (topAlpha * 2.55f).toInt().coerceIn(0, 255)
             // Top vignette: dark at screen top, fades to transparent as it goes down
             topGradient = buildEdgeGradient(
-                topHeight, topFade, alpha,
+                topFade, alpha,
                 0f, 0f, 0f, topHeight,
                 inward = false  // solid at top (screen edge), transparent toward center
             )
@@ -183,7 +181,7 @@ class VignetteLayer(private val context: Context) : SceneLayer {
             val alpha = (bottomAlpha * 2.55f).toInt().coerceIn(0, 255)
             // Bottom vignette: dark at screen bottom, fades to transparent as it goes up
             bottomGradient = buildEdgeGradient(
-                bottomHeight, bottomFade, alpha,
+                bottomFade, alpha,
                 0f, height, 0f, height - bottomHeight,
                 inward = false  // solid at bottom (screen edge), transparent toward center
             )
@@ -196,7 +194,7 @@ class VignetteLayer(private val context: Context) : SceneLayer {
             val leftWidth = width * (leftDistance / 100f)
             val alpha = (leftAlpha * 2.55f).toInt().coerceIn(0, 255)
             leftGradient = buildEdgeGradient(
-                leftWidth, leftFade, alpha,
+                leftFade, alpha,
                 0f, 0f, leftWidth, 0f,
                 inward = false  // solid at left (screen edge), transparent toward center
             )
@@ -209,7 +207,7 @@ class VignetteLayer(private val context: Context) : SceneLayer {
             val rightWidth = width * (rightDistance / 100f)
             val alpha = (rightAlpha * 2.55f).toInt().coerceIn(0, 255)
             rightGradient = buildEdgeGradient(
-                rightWidth, rightFade, alpha,
+                rightFade, alpha,
                 width, 0f, width - rightWidth, 0f,
                 inward = false  // solid at right (screen edge), transparent toward center
             )
