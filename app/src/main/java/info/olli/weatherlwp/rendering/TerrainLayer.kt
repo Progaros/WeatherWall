@@ -299,23 +299,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     // One Bitmap per hill containing pre-rendered flowers, mushrooms, and foliage.
     // Re-baked when decoration settings, season weights, or ambient color change.
     // Frost is drawn per-frame and is never baked.
-    @Volatile private var decorationBitmaps: Array<Bitmap?> = emptyArray()
-    /** Per-hill top screen-Y: bitmap for hill i starts at screen y = decorationBitmapTopYs[i]. */
-    private var decorationBitmapTopYs: FloatArray = floatArrayOf()
-    private var decorationBitmapW = 0
-    /** Last screen height used for baking; detects height-only size changes. */
-    private var decorationBitmapScreenH = 0f
-    /** Set to true whenever generateSeasonalDecorations() runs; cleared after baking. */
-    @Volatile private var decorationsDirty = true
-    /**
-     * Set to true after any OOM during baking. Prevents repeated retries on season/ambient
-     * bucket changes. Cleared when decoration settings or screen size change.
-     */
-    private var decorationOomBlocked = false
-    private var decorationCacheSuppressed = false
-    private var decorationBitmapSeasonBucket = -1
-    private var decorationBitmapAmbientBucket = -1
-    private var decorationBitmapShadowBucket = Int.MIN_VALUE
+    internal val decorationCache = DecorationBitmapCache()
     private val decorationBitmapPaint = Paint()
 
     /**
@@ -722,8 +706,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             mushroomsByHill = emptyMap()
         }
         computeDecorationBands(currentHills)
-        decorationsDirty = true
-        decorationOomBlocked = false  // settings changed: allow bake retry even after prior OOM
+        decorationCache.markDirty()
+        decorationCache.oomBlocked = false  // settings changed: allow bake retry even after prior OOM
     }
 
     /** Measure the vertical band each hill's decorations occupy, in screen-height ratios. */
@@ -840,7 +824,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         hillGeometryDirty = true
 
         // Size change may produce smaller bitmaps — allow bake retry even after prior OOM.
-        decorationOomBlocked = false
+        decorationCache.oomBlocked = false
 
         // Any geometry change invalidates cached gradients that embed old coordinates.
         cachedHillGradients.clear()
@@ -1048,21 +1032,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val alphaBucket = decorShadowAlpha / 8
         val shadowBkt = dirBucket or (lengthBucket shl 8) or (alphaBucket shl 16)
         val newBmpW = (width * (1f + 2f * DECOR_BITMAP_MARGIN)).toInt()
-        val sizeChanged = decorationBitmapW != newBmpW ||
-            decorationBitmapScreenH != height ||
-            decorationBitmaps.size != currentHills.size
-        val rebakeNeeded = decorationsDirty || sizeChanged ||
-            seasonBkt != decorationBitmapSeasonBucket ||
-            ambientBkt != decorationBitmapAmbientBucket ||
-            shadowBkt != decorationBitmapShadowBucket
-        // After OOM, skip rebakes that are driven only by season/ambient transitions.
-        // Allow retry when decoration layout changes (decorationsDirty) or screen resizes.
-        if (!decorationCacheSuppressed && rebakeNeeded && (!decorationOomBlocked || decorationsDirty || sizeChanged)) {
+        if (decorationCache.needsRebake(newBmpW, height, currentHills.size, seasonBkt, ambientBkt, shadowBkt)) {
             bakeDecorationBitmaps(currentHills.toTypedArray(), ambientColor)
-            decorationsDirty = false
-            decorationBitmapSeasonBucket = seasonBkt
-            decorationBitmapAmbientBucket = ambientBkt
-            decorationBitmapShadowBucket = shadowBkt
+            decorationCache.markBaked(seasonBkt, ambientBkt, shadowBkt)
         }
         
         // Invalidate cached hill gradients only when bucketed ambient, snow or light angle changes.
@@ -1139,8 +1111,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             // avoid per-object draw calls every frame. Frost is drawn per-frame because
             // it follows the dynamic snow level which changes continuously.
             canvas.withTranslation(px, py) {
-                val decorBitmap = decorationBitmaps.getOrNull(index)
-                val hillTopY = decorationBitmapTopYs.getOrElse(index) { 0f }
+                val decorBitmap = decorationCache.bitmapAt(index)
+                val hillTopY = decorationCache.topYAt(index)
                 if (decorBitmap != null && !decorBitmap.isRecycled) {
                     // Bitmap was drawn with translate(width*MARGIN, -topY); undo both here.
                     // Qualified: inside this Canvas-receiver lambda a bare `width` would be Canvas.width.
@@ -1654,31 +1626,18 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         return sp or (su shl 5) or (au shl 10) or (wi shl 15)
     }
 
-    /**
-     * Recycles all decoration bitmaps and clears the array.
-     * Must be called before replacing with new bitmaps, and in destroy().
-     */
-    private fun recycleDecorationBitmaps() {
-        val old = decorationBitmaps
-        decorationBitmaps = emptyArray()
-        old.forEach { it?.recycle() }
-    }
-
     override fun releaseCaches() {
-        // Null only (no recycle): a posted hardware canvas may still reference them; GC reclaims.
-        decorationBitmaps = emptyArray()
-        decorationsDirty = true
-        decorationCacheSuppressed = true
+        decorationCache.release()
     }
 
     override fun resumeCaching() {
-        decorationCacheSuppressed = false
+        decorationCache.resume()
     }
 
     /**
      * Bakes static decorations (flowers, mushrooms, foliage) for every hill into
-     * per-hill Bitmaps. Called lazily from draw() when [decorationsDirty] is set
-     * or when season/ambient/size state changes.
+     * per-hill Bitmaps. Called lazily from draw() when [decorationCache] reports
+     * that a rebake is needed.
      *
      * Each bitmap covers screen width * (1 + 2 * DECOR_BITMAP_MARGIN) horizontally
      * to absorb ±DECOR_BITMAP_MARGIN parallax headroom, and vertically spans the hill's
@@ -1732,13 +1691,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
 
         if (anyOom) {
             // Suppress retries on season/ambient changes until settings or size changes.
-            decorationOomBlocked = true
+            decorationCache.oomBlocked = true
         }
-        recycleDecorationBitmaps()
-        decorationBitmaps = newBitmaps
-        decorationBitmapTopYs = newTopYs
-        decorationBitmapW = bmpW
-        decorationBitmapScreenH = height
+        decorationCache.publish(newBitmaps, newTopYs, bmpW, height)
 
         val totalBytes = newBitmaps.sumOf { bmp ->
             if (bmp == null) 0L else bmp.width.toLong() * bmp.height * 4L
@@ -1923,6 +1878,6 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     }
 
     override fun destroy() {
-        recycleDecorationBitmaps()
+        decorationCache.recycle()
     }
 }

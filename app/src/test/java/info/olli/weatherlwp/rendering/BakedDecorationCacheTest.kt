@@ -33,8 +33,7 @@ class BakedDecorationCacheTest {
         val canvas = Canvas(bitmap)
         val calculator = ParallaxCalculator().apply { setCanvasSize(360f, 640f) }
         val state = SimulationState.default().copy(screenWidth = 360f, screenHeight = 640f)
-        val caches = TerrainLayer::class.java.getDeclaredField("decorationBitmaps").apply { isAccessible = true }
-        fun cached() = (caches.get(layer) as Array<*>).any { it != null }
+        fun cached() = layer.decorationCache.hasAnyBitmap()
         try {
             layer.resize(360f, 640f)
             layer.reloadSettings(settingsFrom(defaultMap()))
