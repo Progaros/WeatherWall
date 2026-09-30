@@ -77,13 +77,14 @@ Run mutation tests:
 ### Visual renders
 
 Event and scene artwork is reviewed from generated PNGs rather than committed images.
-`event_renders/` is gitignored and is meant to be rebuilt on demand:
+`event_renders/` is gitignored and is meant to be rebuilt on demand. The render tests always
+render and run their assertions, but only write PNGs when `-Drender.artifacts=true` is passed:
 
 ```bash
-./gradlew :app:testDebugUnitTest --tests '*EventRenderTest' --tests '*SceneScreenshotTest'
+./gradlew :app:testDebugUnitTest --tests '*EventRenderTest' --tests '*SceneScreenshotTest' -Drender.artifacts=true
 ```
 
-Both tests run under Robolectric with native graphics and write to `event_renders/`:
+Both tests run under Robolectric with native graphics and, with that flag, write to `event_renders/`:
 
 | Output | Produced by | Shows |
 | --- | --- | --- |
@@ -94,6 +95,14 @@ Both tests run under Robolectric with native graphics and write to `event_render
 
 Use the gait sheets to judge leg motion and body attachment — the lifetime frames only show
 the animal at different screen positions, never at different points of its stride.
+
+The render suites (`EventRenderTest`, `SceneScreenshotTest`, `ReadmeScreenshotTest`,
+`EventPreviewViewTest`) dominate test wall time. For a fast local loop, skip them with
+`-PskipRenderTests`; CI always runs the full suite:
+
+```bash
+./gradlew :app:testDebugUnitTest -PskipRenderTests
+```
 
 ### README screenshots
 

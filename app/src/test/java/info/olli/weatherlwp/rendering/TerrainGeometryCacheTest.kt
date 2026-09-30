@@ -4,7 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
-import info.olli.weatherlwp.simulation.SimulationState
+import info.olli.weatherlwp.testutil.stateAt
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -58,10 +58,7 @@ class TerrainGeometryCacheTest {
             reloadSettings(settings)
         }
 
-    private fun winterState(timeSeconds: Float) = SimulationState.default().copy(
-        timeOfDayHours = 12f,
-        isNight = false, isDawn = false, isDusk = false,
-        dayProgress = 0.5f,
+    private fun winterState(timeSeconds: Float) = stateAt(12f).copy(
         snowLevel = 0.8f,
         currentSeason = "winter",
         screenWidth = width, screenHeight = height,

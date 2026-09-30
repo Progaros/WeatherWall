@@ -75,10 +75,28 @@ tasks.withType<Test>().configureEach {
         "http.proxyHost", "http.proxyPort",
         "https.proxyHost", "https.proxyPort",
         "http.nonProxyHosts",
-        "readme.screenshots"
+        "readme.screenshots",
+        "render.artifacts"
     ).forEach { key ->
         System.getProperty(key)?.let { systemProperty(key, it) }
     }
+
+    // Fast local loop: `-PskipRenderTests` drops the heavy Robolectric render suites. CI runs everything.
+    val skipRenderTests = providers.gradleProperty("skipRenderTests").map { it != "false" }.getOrElse(false)
+    if (skipRenderTests) {
+        filter {
+            excludeTestsMatching("info.olli.weatherlwp.EventRenderTest")
+            excludeTestsMatching("info.olli.weatherlwp.SceneScreenshotTest")
+            excludeTestsMatching("info.olli.weatherlwp.ReadmeScreenshotTest")
+            excludeTestsMatching("info.olli.weatherlwp.settings.EventPreviewViewTest")
+        }
+    }
+}
+
+// CI reads the release version from here instead of grepping this file.
+tasks.register("printVersionName") {
+    val versionName = checkNotNull(android.defaultConfig.versionName) { "versionName is not set" }
+    doLast { println(versionName) }
 }
 
 dependencies {

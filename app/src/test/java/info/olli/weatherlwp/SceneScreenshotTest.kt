@@ -16,6 +16,8 @@ import info.olli.weatherlwp.rendering.events.*
 import info.olli.weatherlwp.simulation.CloudDensity
 import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
+import info.olli.weatherlwp.testutil.RenderArtifacts
+import info.olli.weatherlwp.testutil.stateAt
 import info.olli.weatherlwp.weather.WeatherType
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -35,8 +37,8 @@ import kotlin.random.Random
  * Renders events integrated into actual scene layers (sky, mountains, terrain, clouds, weather).
  * Outputs full-scene, medium-crop, and detail-crop variants for review.
  *
- * Run in Docker: ./gradlew testDebugUnitTest --tests "info.olli.weatherlwp.SceneScreenshotTest"
- * Output: /workspace/event_renders/screenshots/
+ * Run in Docker: ./gradlew testDebugUnitTest --tests "info.olli.weatherlwp.SceneScreenshotTest" -Drender.artifacts=true
+ * Output (only with -Drender.artifacts=true): /workspace/event_renders/screenshots/
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -47,7 +49,7 @@ class SceneScreenshotTest {
     private val height = 1920f
     private val widthInt = width.toInt()
     private val heightInt = height.toInt()
-    private val outputDir = File("/workspace/event_renders/screenshots").also { it.mkdirs() }
+    private val outputDir = File("/workspace/event_renders/screenshots")
 
     private lateinit var skyLayer: SkyLayer
     private lateinit var mountainLayer: MountainLayer
@@ -110,59 +112,51 @@ class SceneScreenshotTest {
 
         parallax = ParallaxCalculator().apply { setCanvasSize(width, height) }
 
-        stateDay = SimulationState.default().copy(
-            timeOfDayHours = 14f, isNight = false, isDawn = false, isDusk = false,
-            dayProgress = 0.58f, weather = WeatherType.CLEAR,
+        stateDay = stateAt(14f).copy(
+            weather = WeatherType.CLEAR,
             cloudDensity = CloudDensity.LIGHT, windStrength = 0.3f,
             screenWidth = width, screenHeight = height,
             timeSeconds = 50000f, absoluteTimeMs = baseTime
         )
-        stateDawn = SimulationState.default().copy(
-            timeOfDayHours = 6.5f, isNight = false, isDawn = true, isDusk = false,
-            dayProgress = 0.1f, weather = WeatherType.CLEAR,
+        stateDawn = stateAt(6.5f).copy(
+            weather = WeatherType.CLEAR,
             cloudDensity = CloudDensity.LIGHT, windStrength = 0.2f,
             screenWidth = width, screenHeight = height,
             timeSeconds = 23400f, absoluteTimeMs = baseTime
         )
-        stateDusk = SimulationState.default().copy(
-            timeOfDayHours = 19.5f, isNight = false, isDawn = false, isDusk = true,
-            dayProgress = 0.9f, weather = WeatherType.CLEAR,
+        stateDusk = stateAt(19.5f).copy(
+            weather = WeatherType.CLEAR,
             cloudDensity = CloudDensity.MEDIUM, windStrength = 0.2f,
             screenWidth = width, screenHeight = height,
             timeSeconds = 70200f, absoluteTimeMs = baseTime
         )
-        stateNight = SimulationState.default().copy(
-            timeOfDayHours = 23f, isNight = true, isDawn = false, isDusk = false,
-            dayProgress = 0.0f, weather = WeatherType.CLEAR,
+        stateNight = stateAt(23f).copy(
+            weather = WeatherType.CLEAR,
             cloudDensity = CloudDensity.LIGHT, windStrength = 0.1f,
             nightShadeStrength = 0.7f, screenWidth = width, screenHeight = height,
             timeSeconds = 82800f, absoluteTimeMs = baseTime
         )
-        stateOvercast = SimulationState.default().copy(
-            timeOfDayHours = 12f, isNight = false, isDawn = false, isDusk = false,
-            dayProgress = 0.5f, weather = WeatherType.OVERCAST,
+        stateOvercast = stateAt(12f).copy(
+            weather = WeatherType.OVERCAST,
             cloudDensity = CloudDensity.OVERCAST, windStrength = 0.4f,
             cloudCover = 0.9f, screenWidth = width, screenHeight = height,
             timeSeconds = 43200f, absoluteTimeMs = baseTime
         )
-        stateRain = SimulationState.default().copy(
-            timeOfDayHours = 15f, isNight = false, isDawn = false, isDusk = false,
-            dayProgress = 0.6f, weather = WeatherType.RAIN,
+        stateRain = stateAt(15f).copy(
+            weather = WeatherType.RAIN,
             cloudDensity = CloudDensity.HEAVY, windStrength = 0.6f,
             cloudCover = 0.95f, precipIntensity = 0.7f,
             screenWidth = width, screenHeight = height,
             timeSeconds = 54000f, absoluteTimeMs = baseTime
         )
-        stateFog = SimulationState.default().copy(
-            timeOfDayHours = 7f, isNight = false, isDawn = true, isDusk = false,
-            dayProgress = 0.12f, weather = WeatherType.FOG,
+        stateFog = stateAt(7f).copy(
+            weather = WeatherType.FOG,
             cloudDensity = CloudDensity.MEDIUM, windStrength = 0.1f,
             visibility = 0.3f, screenWidth = width, screenHeight = height,
             timeSeconds = 25200f, absoluteTimeMs = baseTime
         )
-        stateSnow = SimulationState.default().copy(
-            timeOfDayHours = 11f, isNight = false, isDawn = false, isDusk = false,
-            dayProgress = 0.45f, weather = WeatherType.SNOW,
+        stateSnow = stateAt(11f).copy(
+            weather = WeatherType.SNOW,
             cloudDensity = CloudDensity.HEAVY, windStrength = 0.3f,
             snowLevel = 0.8f, currentSeason = "winter",
             screenWidth = width, screenHeight = height,
@@ -362,10 +356,7 @@ class SceneScreenshotTest {
         return diffPixels.toFloat() / (w * h)
     }
 
-    private fun savePng(file: File, bitmap: Bitmap) {
-        file.parentFile?.mkdirs()
-        file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-    }
+    private fun savePng(file: File, bitmap: Bitmap) = RenderArtifacts.savePng(file, bitmap)
 
     private fun scaleToWidth(bitmap: Bitmap, targetWidth: Int): Bitmap {
         val ratio = targetWidth.toFloat() / bitmap.width
@@ -400,10 +391,11 @@ class SceneScreenshotTest {
     }
 
     private fun saveAllCrops(dir: File, baseName: String, result: RenderResult): String {
-        dir.mkdirs()
-        savePng(File(dir, "${baseName}_scene.png"), scaleToWidth(result.fullScene, 540))
-        result.mediumCrop?.let { savePng(File(dir, "${baseName}_medium.png"), it) }
-        result.detailCrop?.let { savePng(File(dir, "${baseName}_detail.png"), it) }
+        if (RenderArtifacts.enabled) {
+            savePng(File(dir, "${baseName}_scene.png"), scaleToWidth(result.fullScene, 540))
+            result.mediumCrop?.let { savePng(File(dir, "${baseName}_medium.png"), it) }
+            result.detailCrop?.let { savePng(File(dir, "${baseName}_detail.png"), it) }
+        }
 
         val m = result.metrics
         return "$baseName: bounds=${m.boundsWidthPx}x${m.boundsHeightPx} " +

@@ -7,6 +7,7 @@ import android.graphics.Paint
 import android.graphics.Rect
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.events.*
+import info.olli.weatherlwp.testutil.RenderArtifacts
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -24,7 +25,8 @@ import kotlin.random.Random
  * Uses Robolectric native graphics for real Canvas rendering.
  * Produces both full-scene and auto-cropped+zoomed views.
  * 
- * Output: /workspace/event_renders/<EventName>.png (cropped)
+ * Output (only with -Drender.artifacts=true):
+ *         /workspace/event_renders/<EventName>.png (cropped)
  *         /workspace/event_renders/<EventName>_full.png (full scene)
  */
 @RunWith(RobolectricTestRunner::class)
@@ -35,7 +37,7 @@ class EventRenderTest {
     private val width = 1080f
     private val height = 2400f
     private val cropSize = 400  // Output size for cropped view
-    private val outputDir = File("/workspace/event_renders").also { it.mkdirs() }
+    private val outputDir = File("/workspace/event_renders")
 
     // ~4x4 px: far below the smallest event (a single firefly glow is several hundred px).
     private val minEventPixels = 16
@@ -185,9 +187,7 @@ class EventRenderTest {
             println("WARNING: No content found for $name")
             // Save empty render anyway
             val bitmap = renderToBitmap(event, 0.5f, bgColor, withGround = true)
-            File(outputDir, "$name.png").outputStream().use {
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
-            }
+            RenderArtifacts.savePng(File(outputDir, "$name.png"), bitmap)
             fail("$name drew nothing at progress $progresses")
             return
         }
@@ -197,15 +197,11 @@ class EventRenderTest {
         
         // Save full scene (with ground)
         val fullBitmap = renderToBitmap(event, bestProgress, bgColor, withGround = true)
-        File(outputDir, "${name}_full.png").outputStream().use {
-            fullBitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
-        }
+        RenderArtifacts.savePng(File(outputDir, "${name}_full.png"), fullBitmap)
         
         // Save cropped + zoomed version
         val cropped = cropAndScale(bestBitmap, bestBounds, bgColor)
-        File(outputDir, "$name.png").outputStream().use {
-            cropped.compress(Bitmap.CompressFormat.PNG, 100, it)
-        }
+        RenderArtifacts.savePng(File(outputDir, "$name.png"), cropped)
         
         println("Rendered $name: content at [${bestBounds.left},${bestBounds.top}]-[${bestBounds.right},${bestBounds.bottom}] (${bestBounds.width()}x${bestBounds.height()}px)")
     }
@@ -240,9 +236,7 @@ class EventRenderTest {
         // Save each frame cropped to the union bounding box
         bitmaps.forEachIndexed { idx, bitmap ->
             val cropped = cropAndScale(bitmap, unionBounds, bgColor)
-            File(outputDir, "${name}_f${idx + 1}.png").outputStream().use {
-                cropped.compress(Bitmap.CompressFormat.PNG, 100, it)
-            }
+            RenderArtifacts.savePng(File(outputDir, "${name}_f${idx + 1}.png"), cropped)
         }
     }
 
@@ -343,10 +337,7 @@ class EventRenderTest {
         }
         if (tiles.isEmpty()) return
 
-        val dir = File(outputDir, "gait").also { it.mkdirs() }
-        File(dir, "$name.png").outputStream().use {
-            buildSheet(tiles, cols = min(4, tiles.size)).compress(Bitmap.CompressFormat.PNG, 100, it)
-        }
+        RenderArtifacts.savePng(File(outputDir, "gait/$name.png"), buildSheet(tiles, cols = min(4, tiles.size)))
         println("Gait sheet $name: ${tiles.size} frames, ${stepMs}ms apart, tile source ${side}px")
     }
 

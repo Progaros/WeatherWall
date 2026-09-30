@@ -1,5 +1,6 @@
 package info.olli.weatherlwp.simulation
 
+import info.olli.weatherlwp.testutil.stateAt
 import info.olli.weatherlwp.weather.WeatherType
 import org.junit.Assert.*
 import org.junit.Test
@@ -227,84 +228,82 @@ class SimulationStateTest {
     
     @Test
     fun `getLightLevel returns low value at midnight`() {
-        val state = SimulationState.default().copy(timeOfDayHours = 0f)
+        val state = stateAt(0f)
         assertEquals(0.15f, state.getLightLevel(), 0.01f)
     }
     
     @Test
     fun `getLightLevel returns low value at 3am`() {
-        val state = SimulationState.default().copy(timeOfDayHours = 3f)
+        val state = stateAt(3f)
         assertEquals(0.15f, state.getLightLevel(), 0.01f)
     }
     
     @Test
     fun `getLightLevel transitions during dawn with default sun times`() {
         // At 5am, just starting dawn (default sunrise=6, so dawn starts at 5)
-        val state5am = SimulationState.default().copy(timeOfDayHours = 5f)
+        val state5am = stateAt(5f)
         assertEquals(0.15f, state5am.getLightLevel(), 0.01f)
         
         // At 5:30am, halfway through dawn transition (smoothStep gives ~0.5)
-        val state530am = SimulationState.default().copy(timeOfDayHours = 5.5f)
+        val state530am = stateAt(5.5f)
         assertTrue("Light at 5:30am should be > 0.4", state530am.getLightLevel() > 0.4f)
         assertTrue("Light at 5:30am should be < 0.7", state530am.getLightLevel() < 0.7f)
         
         // At 6am, dawn complete - start of day
-        val state6am = SimulationState.default().copy(timeOfDayHours = 6f)
+        val state6am = stateAt(6f)
         assertEquals(1f, state6am.getLightLevel(), 0.01f)
     }
     
     @Test
     fun `getLightLevel returns full value during day`() {
-        val stateNoon = SimulationState.default().copy(timeOfDayHours = 12f)
+        val stateNoon = stateAt(12f)
         assertEquals(1f, stateNoon.getLightLevel(), 0.01f)
         
-        val state3pm = SimulationState.default().copy(timeOfDayHours = 15f)
+        val state3pm = stateAt(15f)
         assertEquals(1f, state3pm.getLightLevel(), 0.01f)
         
         // 17:00 is now daytime (before sunset at 20:00)
-        val state5pm = SimulationState.default().copy(timeOfDayHours = 17f)
+        val state5pm = stateAt(17f)
         assertEquals(1f, state5pm.getLightLevel(), 0.01f)
     }
     
     @Test
     fun `getLightLevel transitions during dusk with default sun times`() {
         // At 19:59, still day (sunset at 20:00)
-        val state759pm = SimulationState.default().copy(timeOfDayHours = 19.9f)
+        val state759pm = stateAt(19.9f)
         assertEquals(1f, state759pm.getLightLevel(), 0.01f)
         
         // At 20:30, halfway through dusk transition (smoothStep gives ~0.5)
-        val state830pm = SimulationState.default().copy(timeOfDayHours = 20.5f)
+        val state830pm = stateAt(20.5f)
         assertTrue("Light at 20:30 should be > 0.4", state830pm.getLightLevel() > 0.4f)
         assertTrue("Light at 20:30 should be < 0.7", state830pm.getLightLevel() < 0.7f)
         
         // At 21:00, dusk complete - night begins
-        val state9pm = SimulationState.default().copy(timeOfDayHours = 21f)
+        val state9pm = stateAt(21f)
         assertEquals(0.15f, state9pm.getLightLevel(), 0.01f)
     }
     
     @Test
     fun `getLightLevel returns low value at 11pm`() {
-        val state = SimulationState.default().copy(timeOfDayHours = 23f)
+        val state = stateAt(23f)
         assertEquals(0.15f, state.getLightLevel(), 0.01f)
     }
     
     @Test
     fun `getLightLevel uses dynamic sunrise sunset times`() {
         // Winter day: sunrise at 7:30, sunset at 15:30
-        val winterState = SimulationState.default().copy(
-            timeOfDayHours = 16f,  // After winter sunset
-            sunriseHours = 7.5f,
-            sunsetHours = 15.5f
+        val winterState = stateAt(
+            16f,  // After winter sunset
+            SimulationState.default().copy(sunriseHours = 7.5f, sunsetHours = 15.5f)
         )
         // At 16:00 with sunset at 15:30, we're in dusk transition
         assertTrue("Winter 16:00 should be in dusk (< 1.0)", winterState.getLightLevel() < 1f)
         assertTrue("Winter 16:00 should still have some light (> 0.15)", winterState.getLightLevel() > 0.15f)
         
         // Summer day: sunrise at 5:00, sunset at 21:30
-        val summerState = SimulationState.default().copy(
-            timeOfDayHours = 21f,  // Still daylight in summer
-            sunriseHours = 5f,
-            sunsetHours = 21.5f
+        val summerState = stateAt(
+            21f,  // Still daylight in summer
+            SimulationState.default().copy(sunriseHours = 5f, sunsetHours = 21.5f)
         )
         assertEquals(1f, summerState.getLightLevel(), 0.01f)
     }
@@ -313,13 +312,13 @@ class SimulationStateTest {
     fun `getLightLevel uses smoothStep for natural transitions`() {
         // Test that transition is non-linear (smoothStep has S-curve)
         // At 25% progress through dawn, light should be less than 25% (slow start)
-        val state525am = SimulationState.default().copy(timeOfDayHours = 5.25f)
+        val state525am = stateAt(5.25f)
         val expectedLinear = 0.15f + 0.25f * 0.85f  // ~0.36
         val actual = state525am.getLightLevel()
         assertTrue("SmoothStep should start slow (actual=$actual)", actual < expectedLinear)
         
         // At 75% progress, light should be more than 75% (slow end)
-        val state575am = SimulationState.default().copy(timeOfDayHours = 5.75f)
+        val state575am = stateAt(5.75f)
         val expectedLinear75 = 0.15f + 0.75f * 0.85f  // ~0.79
         val actual75 = state575am.getLightLevel()
         assertTrue("SmoothStep should accelerate then decelerate (actual=$actual75)", actual75 > expectedLinear75 * 0.9f)
@@ -329,47 +328,47 @@ class SimulationStateTest {
     
     @Test
     fun `getAtmospherePhase returns day during midday`() {
-        val state = SimulationState.default().copy(timeOfDayHours = 12f)
+        val state = stateAt(12f)
         assertEquals(1.0f, state.getAtmospherePhase(), 0.01f)
     }
     
     @Test
     fun `getAtmospherePhase returns golden hour at sunrise`() {
         // Just after sunrise (6:00), should be golden hour
-        val state = SimulationState.default().copy(timeOfDayHours = 6.3f)
+        val state = stateAt(6.3f)
         assertEquals(0.0f, state.getAtmospherePhase(), 0.01f)
     }
     
     @Test
     fun `getAtmospherePhase returns golden hour before sunset`() {
         // 45 min before sunset (20:00), should be golden hour
-        val state = SimulationState.default().copy(timeOfDayHours = 19.5f)
+        val state = stateAt(19.5f)
         assertEquals(0.0f, state.getAtmospherePhase(), 0.01f)
     }
     
     @Test
     fun `getAtmospherePhase returns blue hour before sunrise`() {
         // 30 min before sunrise (6:00), should be blue hour
-        val state = SimulationState.default().copy(timeOfDayHours = 5.7f)
+        val state = stateAt(5.7f)
         assertEquals(-0.5f, state.getAtmospherePhase(), 0.01f)
     }
     
     @Test
     fun `getAtmospherePhase returns blue hour after sunset`() {
         // Just after sunset (20:00), should be blue hour
-        val state = SimulationState.default().copy(timeOfDayHours = 20.2f)
+        val state = stateAt(20.2f)
         assertEquals(-0.5f, state.getAtmospherePhase(), 0.01f)
     }
     
     @Test
     fun `getAtmospherePhase returns night at midnight`() {
-        val state = SimulationState.default().copy(timeOfDayHours = 0f)
+        val state = stateAt(0f)
         assertEquals(-1.0f, state.getAtmospherePhase(), 0.01f)
     }
     
     @Test
     fun `getAtmospherePhase returns night late at night`() {
-        val state = SimulationState.default().copy(timeOfDayHours = 3f)
+        val state = stateAt(3f)
         assertEquals(-1.0f, state.getAtmospherePhase(), 0.01f)
     }
     
@@ -377,11 +376,10 @@ class SimulationStateTest {
     
     @Test
     fun `getEffectiveShadowStrength scales with light level at midday`() {
-        val state = SimulationState.default().copy(
+        val state = stateAt(12f).copy(
             mountainShadowsEnabled = true,
             treeShadowsEnabled = true,
-            shadowStrength = 0.5f,
-            timeOfDayHours = 12f
+            shadowStrength = 0.5f
         )
         // Light level at noon = 1.0, so effective = 0.5 * 1.0 = 0.5
         assertEquals(0.5f, state.getEffectiveShadowStrength(), 0.01f)
@@ -389,11 +387,10 @@ class SimulationStateTest {
     
     @Test
     fun `getEffectiveShadowStrength scales with moon illumination at night`() {
-        val state = SimulationState.default().copy(
+        val state = stateAt(0f).copy(  // Midnight
             mountainShadowsEnabled = true,
             treeShadowsEnabled = true,
             shadowStrength = 1f,
-            timeOfDayHours = 0f,  // Midnight
             moonIllumination = 0.5f  // Half moon
         )
         // At night: dayFactor=0, lightFactor = moonIllumination * 0.4 = 0.2
@@ -403,9 +400,8 @@ class SimulationStateTest {
     
     @Test
     fun `getEffectiveShadowStrength zero at night with new moon`() {
-        val state = SimulationState.default().copy(
+        val state = stateAt(0f).copy(
             shadowStrength = 1f,
-            timeOfDayHours = 0f,
             moonIllumination = 0f  // New moon = no shadows
         )
         assertEquals(0f, state.getEffectiveShadowStrength(), 0.01f)
@@ -639,30 +635,19 @@ class SimulationStateTest {
         
         // At 16:00, should be in dusk transition (sunset was at 15:35)
         // Dusk: 15.58 to 16.58, at 16:00 progress = (16 - 15.58) / 1 = 0.42
-        val state4pm = SimulationState.default().copy(
-            timeOfDayHours = 16f,
-            sunriseHours = sunrise,
-            sunsetHours = sunset
-        )
+        val winterSun = SimulationState.default().copy(sunriseHours = sunrise, sunsetHours = sunset)
+        val state4pm = stateAt(16f, winterSun)
         assertTrue("Winter 16:00 after sunset should be dim", state4pm.getLightLevel() < 0.8f)
         assertTrue("Winter 16:00 still has some twilight", state4pm.getLightLevel() > 0.15f)
         
         // At 6:30, before sunrise (7:05) - should be in dawn transition
         // Dawn: 6.05 to 7.05, at 6:30 progress = (6.5 - 6.05) / 1 = 0.45
-        val state630am = SimulationState.default().copy(
-            timeOfDayHours = 6.5f,
-            sunriseHours = sunrise,
-            sunsetHours = sunset
-        )
+        val state630am = stateAt(6.5f, winterSun)
         assertTrue("Winter 6:30 during dawn should be dim", state630am.getLightLevel() < 0.8f)
         assertTrue("Winter 6:30 in dawn should have some light", state630am.getLightLevel() > 0.15f)
         
         // At noon, full daylight
-        val stateNoon = SimulationState.default().copy(
-            timeOfDayHours = 12f,
-            sunriseHours = sunrise,
-            sunsetHours = sunset
-        )
+        val stateNoon = stateAt(12f, winterSun)
         assertEquals(1f, stateNoon.getLightLevel(), 0.01f)
     }
 
@@ -671,14 +656,14 @@ class SimulationStateTest {
     @Test
     fun `getLightSourceAngle at solar noon is PI div 2 (overhead)`() {
         // Default sunrise=6, sunset=20: solar noon = (6+20)/2 = 13h
-        val state = SimulationState.default().copy(timeOfDayHours = 13f)
+        val state = stateAt(13f)
         // dayProgress = (13-6)/14 = 0.5, angle = PI*(1-0.5) = PI/2
         assertEquals(kotlin.math.PI.toFloat() / 2f, state.getLightSourceAngle(), 0.01f)
     }
 
     @Test
     fun `getLightSourceAngle at 6am is PI (left)`() {
-        val state = SimulationState.default().copy(timeOfDayHours = 6f)
+        val state = stateAt(6f)
         // sunrise: dayProgress = 0, angle = PI
         assertEquals(kotlin.math.PI.toFloat(), state.getLightSourceAngle(), 0.01f)
     }
@@ -686,7 +671,7 @@ class SimulationStateTest {
     @Test
     fun `getLightSourceAngle at sunset is 0 (right)`() {
         // Default sunset = 20h
-        val state = SimulationState.default().copy(timeOfDayHours = 20f)
+        val state = stateAt(20f)
         // sunset: dayProgress = 1, angle = PI*(1-1) = 0
         assertEquals(0f, state.getLightSourceAngle(), 0.01f)
     }
@@ -694,7 +679,7 @@ class SimulationStateTest {
     @Test
     fun `getLightSourceAngle at lunar midnight is PI div 2`() {
         // Default sunset=20, sunrise=6: night=10h, lunar midnight = sunset + 5h = 1:00 AM
-        val state = SimulationState.default().copy(timeOfDayHours = 1f)
+        val state = stateAt(1f)
         // nightProgress = (24-20+1)/10 = 5/10 = 0.5, angle = PI*0.5 = PI/2
         assertEquals(kotlin.math.PI.toFloat() / 2f, state.getLightSourceAngle(), 0.01f)
     }
@@ -704,8 +689,7 @@ class SimulationStateTest {
     @Test
     fun `getShadowOffset at solar noon points down`() {
         // Solar noon = (6+20)/2 = 13h for default sun times
-        val state = SimulationState.default().copy(
-            timeOfDayHours = 13f,
+        val state = stateAt(13f).copy(
             mountainShadowsEnabled = true,
             treeShadowsEnabled = true,
             shadowStrength = 1f
@@ -719,8 +703,7 @@ class SimulationStateTest {
 
     @Test
     fun `getShadowOffset at morning points right`() {
-        val state = SimulationState.default().copy(
-            timeOfDayHours = 7f,
+        val state = stateAt(7f).copy(
             mountainShadowsEnabled = true,
             treeShadowsEnabled = true,
             shadowStrength = 1f
@@ -732,8 +715,7 @@ class SimulationStateTest {
 
     @Test
     fun `getShadowOffset at evening points left`() {
-        val state = SimulationState.default().copy(
-            timeOfDayHours = 17f,
+        val state = stateAt(17f).copy(
             mountainShadowsEnabled = true,
             treeShadowsEnabled = true,
             shadowStrength = 1f
@@ -745,8 +727,7 @@ class SimulationStateTest {
 
     @Test
     fun `getShadowOffset returns zero when shadows disabled`() {
-        val state = SimulationState.default().copy(
-            timeOfDayHours = 12f,
+        val state = stateAt(12f).copy(
             mountainShadowsEnabled = false,
             treeShadowsEnabled = false,
             shadowsEnabled = false,
@@ -759,9 +740,7 @@ class SimulationStateTest {
 
     @Test
     fun `getEffectiveShadowStrength at night uses moon illumination`() {
-        val state = SimulationState.default().copy(
-            isNight = true,
-            timeOfDayHours = 0f,
+        val state = stateAt(0f).copy(
             mountainShadowsEnabled = true,
             treeShadowsEnabled = true,
             shadowStrength = 1f,
@@ -773,9 +752,7 @@ class SimulationStateTest {
 
     @Test
     fun `getEffectiveShadowStrength at night with new moon is near zero`() {
-        val state = SimulationState.default().copy(
-            isNight = true,
-            timeOfDayHours = 0f,
+        val state = stateAt(0f).copy(
             mountainShadowsEnabled = true,
             treeShadowsEnabled = true,
             shadowStrength = 1f,
