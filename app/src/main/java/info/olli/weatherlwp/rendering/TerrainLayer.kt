@@ -312,6 +312,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
      * bucket changes. Cleared when decoration settings or screen size change.
      */
     private var decorationOomBlocked = false
+    private var decorationCacheSuppressed = false
     private var decorationBitmapSeasonBucket = -1
     private var decorationBitmapAmbientBucket = -1
     private var decorationBitmapShadowBucket = Int.MIN_VALUE
@@ -1056,7 +1057,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             shadowBkt != decorationBitmapShadowBucket
         // After OOM, skip rebakes that are driven only by season/ambient transitions.
         // Allow retry when decoration layout changes (decorationsDirty) or screen resizes.
-        if (rebakeNeeded && (!decorationOomBlocked || decorationsDirty || sizeChanged)) {
+        if (!decorationCacheSuppressed && rebakeNeeded && (!decorationOomBlocked || decorationsDirty || sizeChanged)) {
             bakeDecorationBitmaps(currentHills.toTypedArray(), ambientColor)
             decorationsDirty = false
             decorationBitmapSeasonBucket = seasonBkt
@@ -1667,7 +1668,11 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // Null only (no recycle): a posted hardware canvas may still reference them; GC reclaims.
         decorationBitmaps = emptyArray()
         decorationsDirty = true
-        decorationOomBlocked = false
+        decorationCacheSuppressed = true
+    }
+
+    override fun resumeCaching() {
+        decorationCacheSuppressed = false
     }
 
     /**

@@ -229,6 +229,7 @@ class ParallaxScene(
         parallaxCalculator.reset()
         simulationController.resetTiming()
         running = true
+        for (layer in layers) layer.resumeCaching()
         updateSensorActivation()
     }
 
@@ -596,7 +597,7 @@ class ParallaxScene(
         }
     }
     
-    /** Release regenerable layer caches if [level] warrants it; they rebuild on the next draw. */
+    /** Release regenerable layer caches if [level] warrants it. */
     fun onTrimMemory(level: Int, visible: Boolean) {
         if (!shouldReleaseCaches(level, visible)) return
         Log.d(TAG, "onTrimMemory($level, visible=$visible): releasing layer caches")

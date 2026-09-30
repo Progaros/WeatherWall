@@ -1,12 +1,18 @@
 package info.olli.weatherlwp.rendering
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import info.olli.weatherlwp.PreferenceDefaults
+import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
+import info.olli.weatherlwp.simulation.SimulationState
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 /**
  * Tests for the static decoration bitmap baking system:
@@ -18,6 +24,37 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class BakedDecorationCacheTest {
+
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun `memory trim uses direct drawing until caching resumes`() {
+        val layer = TerrainLayer(RuntimeEnvironment.getApplication())
+        val bitmap = Bitmap.createBitmap(360, 640, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val calculator = ParallaxCalculator().apply { setCanvasSize(360f, 640f) }
+        val state = SimulationState.default().copy(screenWidth = 360f, screenHeight = 640f)
+        val caches = TerrainLayer::class.java.getDeclaredField("decorationBitmaps").apply { isAccessible = true }
+        fun cached() = (caches.get(layer) as Array<*>).any { it != null }
+        try {
+            layer.resize(360f, 640f)
+            layer.reloadSettings(settingsFrom(defaultMap()))
+            layer.update(state, 16L)
+            layer.draw(canvas, state, calculator)
+            assertTrue("Baseline must bake decorations", cached())
+            layer.releaseCaches()
+            repeat(5) {
+                layer.update(state, 16L)
+                layer.draw(canvas, state, calculator)
+                assertFalse("Draw must not recreate trimmed bitmaps", cached())
+            }
+            layer.resumeCaching()
+            layer.draw(canvas, state, calculator)
+            assertTrue("Caching must recover on resume", cached())
+        } finally {
+            layer.destroy()
+            bitmap.recycle()
+        }
+    }
 
     // ===================== DecorationCategory classification =====================
 

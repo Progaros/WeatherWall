@@ -53,9 +53,11 @@ interface SceneLayer {
 
     /**
      * Drop regenerable caches (e.g. bitmaps) under memory pressure.
-     * Caches must be rebuilt lazily on the next draw.
+    * Layers with uncached fallbacks may defer rebuilding until [resumeCaching].
      */
     fun releaseCaches() {}
+
+    fun resumeCaching() {}
     
     /**
      * Clean up resources.
