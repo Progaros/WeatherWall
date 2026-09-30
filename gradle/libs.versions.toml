@@ -6,12 +6,12 @@ coreKtx = "1.16.0"
 appcompat = "1.7.1"
 material = "1.12.0"
 preference = "1.2.1"
-coroutines = "1.10.2"
+# 1.11.0 is compiled with Kotlin 2.2.20, matching the pinned compiler.
+coroutines = "1.11.0"
 junit = "4.13.2"
 mockito = "5.24.0"
-mockitoKotlin = "6.4.0"
 robolectric = "4.17"
-pitest = "1.17.4"
+pitest = "1.30.0"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -21,7 +21,6 @@ material = { module = "com.google.android.material:material", version.ref = "mat
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 junit = { module = "junit:junit", version.ref = "junit" }
 mockito-core = { module = "org.mockito:mockito-core", version.ref = "mockito" }
-mockito-kotlin = { module = "org.mockito.kotlin:mockito-kotlin", version.ref = "mockitoKotlin" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 pitest-command-line = { module = "org.pitest:pitest-command-line", version.ref = "pitest" }
 pitest-entry = { module = "org.pitest:pitest-entry", version.ref = "pitest" }

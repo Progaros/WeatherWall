@@ -1,5 +1,7 @@
 package info.olli.weatherlwp.parallax
 
+import info.olli.weatherlwp.testutil.rampTilt
+import info.olli.weatherlwp.testutil.rampTiltFromTo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -12,40 +14,6 @@ import org.junit.Test
  * matching the per-frame delta integration model.
  */
 class ParallaxCalculatorTest {
-
-    // ============== Ramp helpers ==============
-
-    /** Ramp tilt from (0,0) to (toX, toY). Auto-calculates steps to keep per-frame
-     *  delta above the stillness-enter threshold so recenter never engages during a ramp. */
-    private fun rampTilt(calc: ParallaxCalculator, toX: Float, toY: Float, steps: Int = -1) {
-        val mag = kotlin.math.sqrt(toX * toX + toY * toY)
-        val autoSteps = (mag / 0.025f).toInt().coerceIn(5, 100)
-        val actualSteps = if (steps > 0) steps else autoSteps
-        for (i in 0..actualSteps) {
-            val t = i.toFloat() / actualSteps
-            calc.updateFromSensor(toX * t, toY * t)
-            calc.update(16)
-        }
-    }
-
-    /** Ramp tilt between two absolute values. Auto-calculates steps. */
-    private fun rampTiltFromTo(
-        calc: ParallaxCalculator,
-        fromX: Float, fromY: Float,
-        toX: Float, toY: Float,
-        steps: Int = -1
-    ) {
-        val dx = toX - fromX
-        val dy = toY - fromY
-        val mag = kotlin.math.sqrt(dx * dx + dy * dy)
-        val autoSteps = (mag / 0.025f).toInt().coerceIn(5, 100)
-        val actualSteps = if (steps > 0) steps else autoSteps
-        for (i in 1..actualSteps) {
-            val t = i.toFloat() / actualSteps
-            calc.updateFromSensor(fromX + dx * t, fromY + dy * t)
-            calc.update(16)
-        }
-    }
 
     // ============== Basic behavior tests ==============
 

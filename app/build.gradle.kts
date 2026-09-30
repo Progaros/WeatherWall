@@ -108,7 +108,6 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.mockito.core)
-    testImplementation(libs.mockito.kotlin)
     testImplementation(libs.robolectric)
 }
 
@@ -128,9 +127,11 @@ tasks.register<JavaExec>("pitest") {
     mainClass.set("org.pitest.mutationtest.commandline.MutationCoverageReport")
     classpath = configurations["pitest"]
     
-    val androidJar = android.sdkDirectory.resolve("platforms/android-${android.compileSdk}/android.jar")
+    val sdkDirectory = androidComponents.sdkComponents.sdkDirectory
+    val compileSdkVersion = android.compileSdk
 
     doFirst {
+        val androidJar = sdkDirectory.get().file("platforms/android-$compileSdkVersion/android.jar").asFile
         val buildDir = layout.buildDirectory.get().asFile
         val runtimeCp = configurations["debugUnitTestRuntimeClasspath"].resolve().joinToString(",")
         

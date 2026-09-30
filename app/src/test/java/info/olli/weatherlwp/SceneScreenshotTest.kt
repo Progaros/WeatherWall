@@ -695,14 +695,13 @@ class SceneScreenshotTest {
         val dir = File(outputDir, "owl")
         // Replicate Random(42) sequence to derive OwlEvent's animation params:
         val rng = Random(42)
-        val distance = 0.2f + rng.nextFloat() * 0.4f
-        @Suppress("UNUSED_VARIABLE") val sizeScale = 1.0f - distance * 0.5f
-        @Suppress("UNUSED_VARIABLE") val y = 0.18f + rng.nextFloat() * 0.12f
+        rng.nextFloat() // distance
+        rng.nextFloat() // y
         val speed = 0.000025f + rng.nextFloat() * 0.000015f
         val durationMs = (1.35f / speed).toLong()
         val flapInterval = 1.8f + rng.nextFloat() * 0.8f
         val flapDuration = 0.45f + rng.nextFloat() * 0.2f
-        @Suppress("UNUSED_VARIABLE") val flapRate = 2.4f + rng.nextFloat() * 0.8f
+        rng.nextFloat() // flapRate
         val wingPhase = rng.nextFloat() * 6.28f
 
         // Find a progress where envelope is maximized (cycleT near 0):

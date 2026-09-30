@@ -80,7 +80,7 @@ class EventRenderTest {
     /**
      * Crop bitmap around content bounds with padding, then scale up to cropSize.
      */
-    private fun cropAndScale(bitmap: Bitmap, bounds: Rect, @Suppress("UNUSED_PARAMETER") bgColor: Int): Bitmap {
+    private fun cropAndScale(bitmap: Bitmap, bounds: Rect): Bitmap {
         // Add generous padding (80% of content size on each side, min 30px)
         val contentW = bounds.width()
         val contentH = bounds.height()
@@ -200,7 +200,7 @@ class EventRenderTest {
         RenderArtifacts.savePng(File(outputDir, "${name}_full.png"), fullBitmap)
         
         // Save cropped + zoomed version
-        val cropped = cropAndScale(bestBitmap, bestBounds, bgColor)
+        val cropped = cropAndScale(bestBitmap, bestBounds)
         RenderArtifacts.savePng(File(outputDir, "$name.png"), cropped)
         
         println("Rendered $name: content at [${bestBounds.left},${bestBounds.top}]-[${bestBounds.right},${bestBounds.bottom}] (${bestBounds.width()}x${bestBounds.height()}px)")
@@ -235,7 +235,7 @@ class EventRenderTest {
         
         // Save each frame cropped to the union bounding box
         bitmaps.forEachIndexed { idx, bitmap ->
-            val cropped = cropAndScale(bitmap, unionBounds, bgColor)
+            val cropped = cropAndScale(bitmap, unionBounds)
             RenderArtifacts.savePng(File(outputDir, "${name}_f${idx + 1}.png"), cropped)
         }
     }

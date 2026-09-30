@@ -1,5 +1,7 @@
 package info.olli.weatherlwp.parallax
 
+import info.olli.weatherlwp.testutil.rampTilt
+import info.olli.weatherlwp.testutil.rampTiltFromTo
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -23,31 +25,8 @@ class ParallaxCalculatorPixelModeTest {
         calculator.smoothing = 0f         // No smoothing for deterministic tests
     }
 
-    /** Gradually ramp tilt from (0,0) to (toX, toY). Auto-calculates steps. */
-    private fun rampTiltFromZero(toX: Float, toY: Float, steps: Int = -1) {
-        val mag = kotlin.math.sqrt(toX * toX + toY * toY)
-        val autoSteps = (mag / 0.025f).toInt().coerceIn(5, 100)
-        val actualSteps = if (steps > 0) steps else autoSteps
-        for (i in 0..actualSteps) {
-            val t = i.toFloat() / actualSteps
-            calculator.updateFromSensor(toX * t, toY * t)
-            calculator.update(16)
-        }
-    }
-
-    /** Gradually ramp tilt from (fromX, fromY) to (toX, toY). Auto-calculates steps. */
-    private fun rampTilt(fromX: Float, fromY: Float, toX: Float, toY: Float, steps: Int = -1) {
-        val dx = toX - fromX
-        val dy = toY - fromY
-        val mag = kotlin.math.sqrt(dx * dx + dy * dy)
-        val autoSteps = (mag / 0.025f).toInt().coerceIn(5, 100)
-        val actualSteps = if (steps > 0) steps else autoSteps
-        for (i in 1..actualSteps) {
-            val t = i.toFloat() / actualSteps
-            calculator.updateFromSensor(fromX + dx * t, fromY + dy * t)
-            calculator.update(16)
-        }
-    }
+    private fun rampTiltFromZero(toX: Float, toY: Float, steps: Int = -1) =
+        rampTilt(calculator, toX, toY, steps)
 
     // P1: Test position follows tilt and respects maxOffset
     @Test
@@ -135,7 +114,7 @@ class ParallaxCalculatorPixelModeTest {
         assertTrue("Should have moved", calculator.getOffsetX() > 10f)
 
         // Ramp back to zero, then hold for recenter
-        rampTilt(1.0f, 0f, 0f, 0f, 20)
+        rampTiltFromTo(calculator, 1.0f, 0f, 0f, 0f, 20)
         repeat(200) { calculator.update(16) }
 
         assertTrue("Should return near center", kotlin.math.abs(calculator.getOffsetX()) < 5f)
@@ -244,7 +223,7 @@ class ParallaxCalculatorPixelModeTest {
         assertTrue("Should be right", rightOffset > 20f)
 
         // Ramp from right to left
-        rampTilt(1.0f, 0f, -1.0f, 0f, 100)
+        rampTiltFromTo(calculator, 1.0f, 0f, -1.0f, 0f, 100)
         val leftOffset = calculator.getOffsetX()
         assertTrue("Should reach left side: $leftOffset", leftOffset < -20f)
     }
@@ -267,7 +246,7 @@ class ParallaxCalculatorPixelModeTest {
             assertTrue("Should have moved for $direction: $mag", mag > 5f)
 
             // Ramp back to zero then hold for recenter
-            rampTilt(direction.first, direction.second, 0f, 0f, 20)
+            rampTiltFromTo(calculator, direction.first, direction.second, 0f, 0f, 20)
             repeat(200) { calculator.update(16) }
 
             assertEquals("X near center", 0f, calculator.getOffsetX(), 5f)
@@ -292,36 +271,7 @@ class ParallaxCalculatorPixelModeTest {
         assertTrue("Half tilt > quarter of full", halfTiltOffset > fullTiltOffset * 0.25f)
     }
 
-    // ============== Pure math tests (unchanged) ==============
-
-    @Test
-    fun testCircularClampingPrinciple() {
-        val targetX = 1.0f
-        val targetY = 1.0f
-        val magnitude = kotlin.math.sqrt(targetX * targetX + targetY * targetY)
-        assertTrue("Corner magnitude exceeds 1", magnitude > 1f)
-        assertEquals("Corner magnitude is sqrt(2)", kotlin.math.sqrt(2f), magnitude, 0.01f)
-        val scale = 1f / magnitude
-        val clampedMagnitude = kotlin.math.sqrt((targetX * scale).let { it * it } + (targetY * scale).let { it * it })
-        assertEquals("Clamped magnitude should be 1", 1f, clampedMagnitude, 0.01f)
-    }
-
-    @Test
-    fun testCircularClampingPreservesDirection() {
-        val targetX = 0.8f
-        val targetY = 0.6f
-        val magnitude = kotlin.math.sqrt(targetX * targetX + targetY * targetY)
-        assertEquals("Already on unit circle", 1f, magnitude, 0.01f)
-    }
-
-    @Test
-    fun testCircularClampingVsSquare() {
-        val squareMagnitude = kotlin.math.sqrt(1f * 1f + 1f * 1f)
-        val circularX = 1f / squareMagnitude
-        val circularMagnitude = kotlin.math.sqrt(circularX * circularX + circularX * circularX)
-        assertTrue("Square allows overflow", squareMagnitude > 1f)
-        assertEquals("Circular constrains to 1", 1f, circularMagnitude, 0.01f)
-    }
+    // ============== Defaults ==============
 
     @Test
     fun testMaxOffsetPercentIs20() {

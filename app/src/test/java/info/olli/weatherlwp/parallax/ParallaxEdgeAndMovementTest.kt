@@ -1,5 +1,7 @@
 package info.olli.weatherlwp.parallax
 
+import info.olli.weatherlwp.testutil.rampTilt
+import info.olli.weatherlwp.testutil.rampTiltFromTo
 import org.junit.Assert.*
 import org.junit.Test
 import kotlin.math.abs
@@ -10,37 +12,6 @@ import kotlin.math.sqrt
  * and recenter interaction.
  */
 class ParallaxEdgeAndMovementTest {
-
-    // ---- Ramp helpers (from ParallaxCalculatorTest) ----
-
-    private fun rampTilt(calc: ParallaxCalculator, toX: Float, toY: Float, steps: Int = -1) {
-        val mag = sqrt(toX * toX + toY * toY)
-        val autoSteps = (mag / 0.025f).toInt().coerceIn(5, 100)
-        val actualSteps = if (steps > 0) steps else autoSteps
-        for (i in 0..actualSteps) {
-            val t = i.toFloat() / actualSteps
-            calc.updateFromSensor(toX * t, toY * t)
-            calc.update(16)
-        }
-    }
-
-    private fun rampTiltFromTo(
-        calc: ParallaxCalculator,
-        fromX: Float, fromY: Float,
-        toX: Float, toY: Float,
-        steps: Int = -1
-    ) {
-        val dx = toX - fromX
-        val dy = toY - fromY
-        val mag = sqrt(dx * dx + dy * dy)
-        val autoSteps = (mag / 0.025f).toInt().coerceIn(5, 100)
-        val actualSteps = if (steps > 0) steps else autoSteps
-        for (i in 1..actualSteps) {
-            val t = i.toFloat() / actualSteps
-            calc.updateFromSensor(fromX + dx * t, fromY + dy * t)
-            calc.update(16)
-        }
-    }
 
     private fun createCalculator(): ParallaxCalculator {
         return ParallaxCalculator().apply {
