@@ -50,6 +50,12 @@ interface SceneLayer {
      * Reload settings from an immutable snapshot pushed by the engine.
      */
     fun reloadSettings(settings: SimulationSettings) {}
+
+    /**
+     * Drop regenerable caches (e.g. bitmaps) under memory pressure.
+     * Caches must be rebuilt lazily on the next draw.
+     */
+    fun releaseCaches() {}
     
     /**
      * Clean up resources.

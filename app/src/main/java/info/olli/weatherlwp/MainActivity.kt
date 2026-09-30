@@ -19,6 +19,7 @@ import android.view.SurfaceView
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
 import androidx.preference.PreferenceManager
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import androidx.viewpager2.widget.ViewPager2
@@ -310,7 +311,7 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
 
     private fun toggleDebugModeWithFeedback() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        val enabled = !prefs.getBoolean("pref_debug_overlay_enabled", false)
+        val enabled = !prefs.getBoolean("pref_debug_overlay_enabled", PreferenceDefaults.DEBUG_OVERLAY_ENABLED)
         prefs.edit().putBoolean("pref_debug_overlay_enabled", enabled).apply()
         doPreferenceReload()
 
@@ -355,6 +356,12 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
         // Stop render loop and sensor when activity is not visible to save battery
         stopPreview()
         previewScene?.stop()
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        val visible = lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+        previewScene?.onTrimMemory(level, visible)
     }
     
     /**
@@ -505,7 +512,7 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
         preferHardwareCanvas = true
         // Honor the user's max-FPS setting in the preview too (matches the wallpaper's [10,60] range).
         previewTargetFps = PreferenceManager.getDefaultSharedPreferences(this)
-            .getString("pref_max_fps", TARGET_FPS.toString())?.toIntOrNull()?.coerceIn(10, 60) ?: TARGET_FPS
+            .getString("pref_max_fps", PreferenceDefaults.MAX_FPS)?.toIntOrNull()?.coerceIn(10, 60) ?: TARGET_FPS
         
         choreographer = Choreographer.getInstance()
         postNextFrame()

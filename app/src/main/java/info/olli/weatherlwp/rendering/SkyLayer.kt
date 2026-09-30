@@ -651,9 +651,9 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
     }
 
     override fun reloadSettings(settings: SimulationSettings) {
-        sunEnabled = settings.getBoolean("pref_sun_enabled", true)
-        moonEnabled = settings.getBoolean("pref_moon_enabled", true)
-        celestialSize = settings.getInt("pref_celestial_size", 100) / 100f
+        sunEnabled = settings.getBoolean("pref_sun_enabled", PreferenceDefaults.SUN_ENABLED)
+        moonEnabled = settings.getBoolean("pref_moon_enabled", PreferenceDefaults.MOON_ENABLED)
+        celestialSize = settings.getInt("pref_celestial_size", PreferenceDefaults.CELESTIAL_SIZE) / 100f
         celestialArcHeight = settings.getInt("pref_celestial_arc_height", PreferenceDefaults.CELESTIAL_ARC_HEIGHT) / 100f
     }
 

@@ -86,11 +86,26 @@ class PreferenceDefaultsTest {
             "pref_random_seed" to PreferenceDefaults.RANDOM_SEED,
             "pref_winter_snow_coverage" to PreferenceDefaults.WINTER_SNOW_COVERAGE,
             "pref_celestial_arc_height" to PreferenceDefaults.CELESTIAL_ARC_HEIGHT,
+            "pref_tree_width" to PreferenceDefaults.TREE_WIDTH,
+            "pref_tree_segments" to PreferenceDefaults.TREE_SEGMENTS,
+            "pref_hill_count" to PreferenceDefaults.HILL_COUNT,
+            "pref_hill_lower_start" to PreferenceDefaults.HILL_LOWER_START,
+            "pref_hill_upper_end" to PreferenceDefaults.HILL_UPPER_END,
+            "pref_hill_roughness" to PreferenceDefaults.HILL_ROUGHNESS,
+            "pref_hill_distance" to PreferenceDefaults.HILL_DISTANCE,
+            "pref_hill_depth_spread" to PreferenceDefaults.HILL_DEPTH_SPREAD,
+            
+            // Sky settings
+            "pref_sun_enabled" to PreferenceDefaults.SUN_ENABLED,
+            "pref_moon_enabled" to PreferenceDefaults.MOON_ENABLED,
+            "pref_celestial_size" to PreferenceDefaults.CELESTIAL_SIZE,
             
             // Mountain settings
             "pref_mountain_density" to PreferenceDefaults.MOUNTAIN_DENSITY,
             "pref_mountain_height" to PreferenceDefaults.MOUNTAIN_HEIGHT,
             "pref_mountain_width" to PreferenceDefaults.MOUNTAIN_WIDTH,
+            "pref_mountain_roughness" to PreferenceDefaults.MOUNTAIN_ROUGHNESS,
+            "pref_mountain_ridge_roughness" to PreferenceDefaults.MOUNTAIN_RIDGE_ROUGHNESS,
             "pref_mountain_bottom_offset" to PreferenceDefaults.MOUNTAIN_BOTTOM_OFFSET,
             
             // Weather settings
@@ -117,15 +132,30 @@ class PreferenceDefaultsTest {
             // Visual settings
             "pref_night_shade_strength" to PreferenceDefaults.NIGHT_SHADE_STRENGTH,
             "pref_vignette_enabled" to PreferenceDefaults.VIGNETTE_ENABLED,
+            "pref_vignette_top_distance" to PreferenceDefaults.VIGNETTE_TOP_DISTANCE,
+            "pref_vignette_top_fade" to PreferenceDefaults.VIGNETTE_TOP_FADE,
+            "pref_vignette_top_alpha" to PreferenceDefaults.VIGNETTE_TOP_ALPHA,
+            "pref_vignette_bottom_distance" to PreferenceDefaults.VIGNETTE_BOTTOM_DISTANCE,
+            "pref_vignette_bottom_fade" to PreferenceDefaults.VIGNETTE_BOTTOM_FADE,
+            "pref_vignette_bottom_alpha" to PreferenceDefaults.VIGNETTE_BOTTOM_ALPHA,
+            "pref_vignette_left_distance" to PreferenceDefaults.VIGNETTE_LEFT_DISTANCE,
+            "pref_vignette_left_fade" to PreferenceDefaults.VIGNETTE_LEFT_FADE,
+            "pref_vignette_left_alpha" to PreferenceDefaults.VIGNETTE_LEFT_ALPHA,
+            "pref_vignette_right_distance" to PreferenceDefaults.VIGNETTE_RIGHT_DISTANCE,
+            "pref_vignette_right_fade" to PreferenceDefaults.VIGNETTE_RIGHT_FADE,
+            "pref_vignette_right_alpha" to PreferenceDefaults.VIGNETTE_RIGHT_ALPHA,
             
             // Debug settings
+            "pref_debug_enabled" to PreferenceDefaults.DEBUG_ENABLED,
+            "pref_terrain_season" to PreferenceDefaults.TERRAIN_SEASON,
             "pref_debug_overlay_enabled" to PreferenceDefaults.DEBUG_OVERLAY_ENABLED,
             "pref_debug_frame_timing" to PreferenceDefaults.DEBUG_FRAME_TIMING,
             
             // Idle mode settings
-            "pref_idle_enabled" to PreferenceDefaults.IDLE_ENABLED,
+            "pref_idle_mode_enabled" to PreferenceDefaults.IDLE_ENABLED,
             "pref_idle_timeout" to PreferenceDefaults.IDLE_TIMEOUT,
             "pref_idle_fps" to PreferenceDefaults.IDLE_FPS,
+            "pref_max_fps" to PreferenceDefaults.MAX_FPS,
             
             // Season transition settings
             "pref_season_transition_days" to PreferenceDefaults.SEASON_TRANSITION_DAYS,
@@ -145,6 +175,13 @@ class PreferenceDefaultsTest {
             "pref_lake_opacity" to PreferenceDefaults.LAKE_OPACITY,
             
             // Seasonal decoration settings
+            "pref_weather_snow_enabled" to PreferenceDefaults.WEATHER_SNOW_ENABLED,
+            "pref_spring_flowers" to PreferenceDefaults.SPRING_FLOWERS_ENABLED,
+            "pref_spring_flower_density" to PreferenceDefaults.SPRING_FLOWER_DENSITY,
+            "pref_spring_flower_spread" to PreferenceDefaults.SPRING_FLOWER_SPREAD,
+            "pref_autumn_grass" to PreferenceDefaults.AUTUMN_GRASS_ENABLED,
+            "pref_autumn_grass_intensity" to PreferenceDefaults.AUTUMN_GRASS_INTENSITY,
+            "pref_winter_snow_hills" to PreferenceDefaults.WINTER_SNOW_HILLS_ENABLED,
             "pref_pinecones_enabled" to PreferenceDefaults.PINECONES_ENABLED,
             "pref_pinecone_density" to PreferenceDefaults.PINECONE_DENSITY,
             "pref_fallen_leaves_enabled" to PreferenceDefaults.FALLEN_LEAVES_ENABLED,

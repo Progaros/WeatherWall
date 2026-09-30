@@ -61,11 +61,26 @@ object PreferenceDefaults {
     const val RANDOM_SEED = 208  // 1-999, scene layout seed
     const val WINTER_SNOW_COVERAGE = 25  // 0-100 %
     const val CELESTIAL_ARC_HEIGHT = 66  // % of maximum sun/moon arc
+    const val TREE_WIDTH = 100  // 20-200 %
+    const val TREE_SEGMENTS = 1  // 1-5 tiers per tree
+    const val HILL_COUNT = 5  // 0-20 hill layers
+    const val HILL_LOWER_START = 60  // 30-70 % (far hills start)
+    const val HILL_UPPER_END = 95  // 60-100 % (near hills end)
+    const val HILL_ROUGHNESS = 100  // 0-200
+    const val HILL_DISTANCE = 0  // 0-100
+    const val HILL_DEPTH_SPREAD = 50  // 0-100
+    
+    // === Sky Settings ===
+    const val SUN_ENABLED = true
+    const val MOON_ENABLED = true
+    const val CELESTIAL_SIZE = 100  // 25-200 %
     
     // === Mountain Settings ===
     const val MOUNTAIN_DENSITY = 50  // 0-100 (50 = normal, matches old 100 with halved cell size)
     const val MOUNTAIN_HEIGHT = 100  // 25-200 (100% = normal scale)
     const val MOUNTAIN_WIDTH = 100   // 50-200 (100% = normal scale)
+    const val MOUNTAIN_ROUGHNESS = 80  // 0-200
+    const val MOUNTAIN_RIDGE_ROUGHNESS = 50  // 0-200
     const val MOUNTAIN_BOTTOM_OFFSET = 0  // -30 to 30
     
     // === Weather Settings ===
@@ -95,6 +110,18 @@ object PreferenceDefaults {
     // === Visual Settings ===
     const val NIGHT_SHADE_STRENGTH = 35  // 0-100
     const val VIGNETTE_ENABLED = false  // off by default, opt-in
+    const val VIGNETTE_TOP_DISTANCE = 0      // 0-50
+    const val VIGNETTE_TOP_FADE = 20         // 5-50
+    const val VIGNETTE_TOP_ALPHA = 60        // 0-100
+    const val VIGNETTE_BOTTOM_DISTANCE = 25  // 0-50
+    const val VIGNETTE_BOTTOM_FADE = 15      // 5-50
+    const val VIGNETTE_BOTTOM_ALPHA = 70     // 0-100
+    const val VIGNETTE_LEFT_DISTANCE = 0     // 0-50
+    const val VIGNETTE_LEFT_FADE = 20        // 5-50
+    const val VIGNETTE_LEFT_ALPHA = 50       // 0-100
+    const val VIGNETTE_RIGHT_DISTANCE = 0    // 0-50
+    const val VIGNETTE_RIGHT_FADE = 20       // 5-50
+    const val VIGNETTE_RIGHT_ALPHA = 50      // 0-100
     
     // === River Settings ===
     const val RIVER_ENABLED = false  // Off by default (opt-in)
@@ -112,6 +139,13 @@ object PreferenceDefaults {
     const val LAKE_OPACITY = 75      // 0-100
     
     // === Seasonal Decoration Settings ===
+    const val WEATHER_SNOW_ENABLED = true  // weather-driven snow accumulation
+    const val SPRING_FLOWERS_ENABLED = true
+    const val SPRING_FLOWER_DENSITY = 500  // 0-1000 total flowers
+    const val SPRING_FLOWER_SPREAD = 50    // 0-100
+    const val AUTUMN_GRASS_ENABLED = true
+    const val AUTUMN_GRASS_INTENSITY = 50  // 0-100
+    const val WINTER_SNOW_HILLS_ENABLED = true
     const val PINECONES_ENABLED = true
     const val PINECONE_DENSITY = 30  // 0-100
     const val FALLEN_LEAVES_ENABLED = true
@@ -156,6 +190,8 @@ object PreferenceDefaults {
     const val LEAF_TREE_RATIO = 50   // 0-100: percentage of deciduous trees (0=all needle, 100=all leaf)
     
     // === Debug Settings ===
+    const val DEBUG_ENABLED = false  // simulation mode (pref_debug_enabled)
+    const val TERRAIN_SEASON = "auto"  // simulation terrain season override
     const val DEBUG_OVERLAY_ENABLED = false
     const val DEBUG_FRAME_TIMING = false
     

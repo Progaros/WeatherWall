@@ -228,24 +228,24 @@ class VignetteLayer(private val context: Context) : SceneLayer {
         vignetteEnabled = settings.getBoolean("pref_vignette_enabled", PreferenceDefaults.VIGNETTE_ENABLED)
         
         // Top edge vignette
-        topDistance = settings.getInt("pref_vignette_top_distance", 0).coerceIn(0, 50)
-        topFade = settings.getInt("pref_vignette_top_fade", 20).coerceIn(5, 50)
-        topAlpha = settings.getInt("pref_vignette_top_alpha", 60).coerceIn(0, 100)
+        topDistance = settings.getInt("pref_vignette_top_distance", PreferenceDefaults.VIGNETTE_TOP_DISTANCE).coerceIn(0, 50)
+        topFade = settings.getInt("pref_vignette_top_fade", PreferenceDefaults.VIGNETTE_TOP_FADE).coerceIn(5, 50)
+        topAlpha = settings.getInt("pref_vignette_top_alpha", PreferenceDefaults.VIGNETTE_TOP_ALPHA).coerceIn(0, 100)
         
         // Bottom edge vignette (default for app dock)
-        bottomDistance = settings.getInt("pref_vignette_bottom_distance", 25).coerceIn(0, 50)
-        bottomFade = settings.getInt("pref_vignette_bottom_fade", 15).coerceIn(5, 50)
-        bottomAlpha = settings.getInt("pref_vignette_bottom_alpha", 70).coerceIn(0, 100)
+        bottomDistance = settings.getInt("pref_vignette_bottom_distance", PreferenceDefaults.VIGNETTE_BOTTOM_DISTANCE).coerceIn(0, 50)
+        bottomFade = settings.getInt("pref_vignette_bottom_fade", PreferenceDefaults.VIGNETTE_BOTTOM_FADE).coerceIn(5, 50)
+        bottomAlpha = settings.getInt("pref_vignette_bottom_alpha", PreferenceDefaults.VIGNETTE_BOTTOM_ALPHA).coerceIn(0, 100)
         
         // Left edge vignette
-        leftDistance = settings.getInt("pref_vignette_left_distance", 0).coerceIn(0, 50)
-        leftFade = settings.getInt("pref_vignette_left_fade", 20).coerceIn(5, 50)
-        leftAlpha = settings.getInt("pref_vignette_left_alpha", 50).coerceIn(0, 100)
+        leftDistance = settings.getInt("pref_vignette_left_distance", PreferenceDefaults.VIGNETTE_LEFT_DISTANCE).coerceIn(0, 50)
+        leftFade = settings.getInt("pref_vignette_left_fade", PreferenceDefaults.VIGNETTE_LEFT_FADE).coerceIn(5, 50)
+        leftAlpha = settings.getInt("pref_vignette_left_alpha", PreferenceDefaults.VIGNETTE_LEFT_ALPHA).coerceIn(0, 100)
         
         // Right edge vignette
-        rightDistance = settings.getInt("pref_vignette_right_distance", 0).coerceIn(0, 50)
-        rightFade = settings.getInt("pref_vignette_right_fade", 20).coerceIn(5, 50)
-        rightAlpha = settings.getInt("pref_vignette_right_alpha", 50).coerceIn(0, 100)
+        rightDistance = settings.getInt("pref_vignette_right_distance", PreferenceDefaults.VIGNETTE_RIGHT_DISTANCE).coerceIn(0, 50)
+        rightFade = settings.getInt("pref_vignette_right_fade", PreferenceDefaults.VIGNETTE_RIGHT_FADE).coerceIn(5, 50)
+        rightAlpha = settings.getInt("pref_vignette_right_alpha", PreferenceDefaults.VIGNETTE_RIGHT_ALPHA).coerceIn(0, 100)
         
         gradientsDirty = true
     }

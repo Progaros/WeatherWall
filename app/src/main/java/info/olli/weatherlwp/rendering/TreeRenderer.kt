@@ -878,20 +878,20 @@ class TreeRenderer {
         val sizeVal = settings.getInt("pref_tree_size", PreferenceDefaults.TREE_SIZE)
         treeSizeScale = sizeVal / 200f
 
-        val widthVal = settings.getInt("pref_tree_width", 100)
+        val widthVal = settings.getInt("pref_tree_width", PreferenceDefaults.TREE_WIDTH)
         treeWidthScale = widthVal / 100f
 
         treeColorVariation = settings.getInt("pref_tree_color_variation", PreferenceDefaults.TREE_COLOR_VARIATION) / 100f
-        treeSegments = settings.getInt("pref_tree_segments", 1).coerceIn(1, 5)
+        treeSegments = settings.getInt("pref_tree_segments", PreferenceDefaults.TREE_SEGMENTS).coerceIn(1, 5)
 
         // Pinecone settings
         pineconesEnabled = settings.getBoolean("pref_pinecones_enabled", PreferenceDefaults.PINECONES_ENABLED)
         pineconeDensity = settings.getInt("pref_pinecone_density", PreferenceDefaults.PINECONE_DENSITY)
 
         // Snow settings (also read by TerrainLayer for hills, both need them)
-        winterSnowEnabled = settings.getBoolean("pref_winter_snow_hills", true)
+        winterSnowEnabled = settings.getBoolean("pref_winter_snow_hills", PreferenceDefaults.WINTER_SNOW_HILLS_ENABLED)
         winterSnowCoverage = settings.getInt("pref_winter_snow_coverage", PreferenceDefaults.WINTER_SNOW_COVERAGE)
-        useWeatherSnow = settings.getBoolean("pref_weather_snow_enabled", true)
+        useWeatherSnow = settings.getBoolean("pref_weather_snow_enabled", PreferenceDefaults.WEATHER_SNOW_ENABLED)
 
         return prevDensity != treeDensity ||
             prevRatio != leafTreeRatio ||

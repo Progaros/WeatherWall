@@ -1722,6 +1722,13 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         old.forEach { it?.recycle() }
     }
 
+    override fun releaseCaches() {
+        // Null only (no recycle): a posted hardware canvas may still reference them; GC reclaims.
+        decorationBitmaps = emptyArray()
+        decorationsDirty = true
+        decorationOomBlocked = false
+    }
+
     /**
      * Bakes static decorations (flowers, mushrooms, foliage) for every hill into
      * per-hill Bitmaps. Called lazily from draw() when [decorationsDirty] is set
@@ -1844,15 +1851,15 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // Random seed for consistent placement
         randomSeed = settings.getInt("pref_random_seed", PreferenceDefaults.RANDOM_SEED)
         
-        hillCount = settings.getInt("pref_hill_count", 5)  // 5 hill layers default, range 0-20
+        hillCount = settings.getInt("pref_hill_count", PreferenceDefaults.HILL_COUNT)  // range 0-20
         
-        hillStartY = settings.getInt("pref_hill_lower_start", 60) / 100f  // 60% instead of 50%
+        hillStartY = settings.getInt("pref_hill_lower_start", PreferenceDefaults.HILL_LOWER_START) / 100f
         // Hills extend below screen (1.0 = bottom edge, >1.0 = below screen)
         // This allows parallax movement to reveal more terrain
-        hillEndY = settings.getInt("pref_hill_upper_end", 95) / 100f      // 95% - closer to bottom for parallax room
+        hillEndY = settings.getInt("pref_hill_upper_end", PreferenceDefaults.HILL_UPPER_END) / 100f
         
         // Hill roughness: controls sine wave detail (0-200 -> 0.0-2.0)
-        val roughVal = settings.getInt("pref_hill_roughness", 100)
+        val roughVal = settings.getInt("pref_hill_roughness", PreferenceDefaults.HILL_ROUGHNESS)
         hillRoughness = roughVal / 100f
         
         // Hill amplitude: controls hill vertical height (0-1000)
@@ -1865,29 +1872,29 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         hillFrequency = freqVal / 100f
         
         // Hill distance: pushes hills away from camera (0=at camera, 100=near mountains)
-        val distVal = settings.getInt("pref_hill_distance", 0)
+        val distVal = settings.getInt("pref_hill_distance", PreferenceDefaults.HILL_DISTANCE)
         hillDistance = distVal / 100f
         
         // Hill depth spread: controls z-axis spread (0=flat layer, 100=deep range)
-        val spreadVal = settings.getInt("pref_hill_depth_spread", 50)
+        val spreadVal = settings.getInt("pref_hill_depth_spread", PreferenceDefaults.HILL_DEPTH_SPREAD)
         hillDepthSpread = spreadVal / 100f
         
         // Seasonal terrain settings
         // Only use terrain season override when debug/simulation mode is enabled
-        val debugEnabled = settings.getBoolean("pref_debug_enabled", false)
+        val debugEnabled = settings.getBoolean("pref_debug_enabled", PreferenceDefaults.DEBUG_ENABLED)
         terrainSeasonOverride = if (debugEnabled) {
-            settings.getString("pref_terrain_season", "auto")
+            settings.getString("pref_terrain_season", PreferenceDefaults.TERRAIN_SEASON)
         } else {
             "auto"  // Always use real season when not in debug mode
         }
-        springFlowersEnabled = settings.getBoolean("pref_spring_flowers", true)
-        springFlowerDensity = settings.getInt("pref_spring_flower_density", 500)
-        springFlowerSpread = settings.getInt("pref_spring_flower_spread", 50) / 100f
-        autumnGrassEnabled = settings.getBoolean("pref_autumn_grass", true)
-        autumnGrassIntensity = settings.getInt("pref_autumn_grass_intensity", 50)
-        winterSnowEnabled = settings.getBoolean("pref_winter_snow_hills", true)
+        springFlowersEnabled = settings.getBoolean("pref_spring_flowers", PreferenceDefaults.SPRING_FLOWERS_ENABLED)
+        springFlowerDensity = settings.getInt("pref_spring_flower_density", PreferenceDefaults.SPRING_FLOWER_DENSITY)
+        springFlowerSpread = settings.getInt("pref_spring_flower_spread", PreferenceDefaults.SPRING_FLOWER_SPREAD) / 100f
+        autumnGrassEnabled = settings.getBoolean("pref_autumn_grass", PreferenceDefaults.AUTUMN_GRASS_ENABLED)
+        autumnGrassIntensity = settings.getInt("pref_autumn_grass_intensity", PreferenceDefaults.AUTUMN_GRASS_INTENSITY)
+        winterSnowEnabled = settings.getBoolean("pref_winter_snow_hills", PreferenceDefaults.WINTER_SNOW_HILLS_ENABLED)
         winterSnowCoverage = settings.getInt("pref_winter_snow_coverage", PreferenceDefaults.WINTER_SNOW_COVERAGE)
-        useWeatherSnow = settings.getBoolean("pref_weather_snow_enabled", true)
+        useWeatherSnow = settings.getBoolean("pref_weather_snow_enabled", PreferenceDefaults.WEATHER_SNOW_ENABLED)
         seasonTransitionDays = settings.getInt("pref_season_transition_days", PreferenceDefaults.SEASON_TRANSITION_DAYS)
         
         // Seasonal decoration settings

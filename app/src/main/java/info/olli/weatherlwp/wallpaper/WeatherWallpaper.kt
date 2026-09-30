@@ -51,7 +51,17 @@ class WeatherWallpaper : WallpaperService() {
         }
     }
 
+    // Engines receive no onTrimMemory themselves; the service forwards it. Main thread only.
+    private val activeEngines = LinkedHashSet<WeatherEngine>()
+
     override fun onCreateEngine(): Engine = WeatherEngine()
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        for (engine in activeEngines.toList()) {
+            engine.handleTrimMemory(level)
+        }
+    }
 
     inner class WeatherEngine : Engine(), Choreographer.FrameCallback {
         private var choreographer: Choreographer? = null
@@ -88,6 +98,7 @@ class WeatherWallpaper : WallpaperService() {
 
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             super.onCreate(surfaceHolder)
+            activeEngines.add(this)
             // This wallpaper uses device tilt for parallax, not scroll offsets.
             // Disabling offset notifications is a performance optimization per Android docs.
             setOffsetNotificationsEnabled(false)
@@ -175,6 +186,7 @@ class WeatherWallpaper : WallpaperService() {
 
         override fun onDestroy() {
             isVisible = false
+            activeEngines.remove(this)
 
             runCatching { unregisterPowerSaveReceiver() }
                 .onFailure { Log.e(TAG, "Error unregistering power-save receiver", it) }
@@ -213,6 +225,12 @@ class WeatherWallpaper : WallpaperService() {
             preferHardwareCanvas = true
             currentSettings = SimulationSettings.fromSnapshot(emptyMap<String, Any?>())
             super.onDestroy()
+        }
+
+        fun handleTrimMemory(level: Int) {
+            if (!::scene.isInitialized) return
+            runCatching { scene.onTrimMemory(level, isVisible) }
+                .onFailure { Log.e(TAG, "Error handling onTrimMemory($level)", it) }
         }
 
         /**

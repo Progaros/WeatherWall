@@ -1,5 +1,6 @@
 package info.olli.weatherlwp.rendering
 
+import android.content.ComponentCallbacks2
 import android.content.Context
 import android.graphics.Canvas
 import android.os.Trace
@@ -44,6 +45,12 @@ class ParallaxScene(
     companion object {
         private const val TAG = "ParallaxScene"
         private const val DRAW_ERROR_LOG_INTERVAL_MS = 5000L
+
+        // RUNNING_LOW and above; visible scenes ignore UI_HIDDEN (it means the settings UI closed, not pressure).
+        @Suppress("DEPRECATION")
+        fun shouldReleaseCaches(level: Int, visible: Boolean): Boolean =
+            level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW &&
+                !(visible && level == ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN)
     }
 
     @Volatile
@@ -553,14 +560,14 @@ class ParallaxScene(
             sensor.setAutoReturnRate(returnSpeed)
 
             // Weather and seasonal toggles
-            weatherEnabled = settings.getBoolean("pref_weather_enabled", true)
-            seasonalEnabled = settings.getBoolean("pref_seasonal_enabled", true)
+            weatherEnabled = settings.getBoolean("pref_weather_enabled", PreferenceDefaults.WEATHER_ENABLED)
+            seasonalEnabled = settings.getBoolean("pref_seasonal_enabled", PreferenceDefaults.SEASONAL_ENABLED)
             seasonalEvents.enabled = seasonalEnabled
 
             // Weather particle layer settings (depth effect for rain/snow/lightning)
-            val weatherLayers = settings.getInt("pref_weather_layers", 3).coerceIn(1, 5)
-            val weatherSeparation = settings.getInt("pref_weather_layer_separation", 30) / 100f
-            val weatherDepth = settings.getInt("pref_weather_layer_depth", 20) / 100f
+            val weatherLayers = settings.getInt("pref_weather_layers", PreferenceDefaults.WEATHER_LAYERS).coerceIn(1, 5)
+            val weatherSeparation = settings.getInt("pref_weather_layer_separation", PreferenceDefaults.WEATHER_LAYER_SEPARATION) / 100f
+            val weatherDepth = settings.getInt("pref_weather_layer_depth", PreferenceDefaults.WEATHER_LAYER_DEPTH) / 100f
             weatherLayer.setLayerSettings(weatherLayers, weatherSeparation, weatherDepth)
 
             // Push settings into simulation and layers
@@ -573,13 +580,13 @@ class ParallaxScene(
             debugOverlayLayer.reloadSettings(settings)
 
             // Configure shake detection based on settings
-            val shakeEnabled = settings.getBoolean("pref_shake_fireworks_enabled", true)
+            val shakeEnabled = settings.getBoolean("pref_shake_fireworks_enabled", PreferenceDefaults.SHAKE_FIREWORKS_ENABLED)
             val shakeSensitivity = settings.getInt("pref_shake_sensitivity", PreferenceDefaults.SHAKE_SENSITIVITY) / 100f
             val shakeDelayMs = settings.getInt("pref_shake_delay", PreferenceDefaults.SHAKE_DELAY_MS).coerceIn(0, 5000)
             sensor.setShakeSettings(shakeEnabled, shakeSensitivity, shakeDelayMs)
 
             // Frame time logging (debug feature for performance analysis)
-            frameTimeLoggingEnabled = settings.getBoolean("pref_debug_frame_timing", false)
+            frameTimeLoggingEnabled = settings.getBoolean("pref_debug_frame_timing", PreferenceDefaults.DEBUG_FRAME_TIMING)
             if (frameTimeLoggingEnabled) {
                 slowFrameCount = 0
                 totalFrameCount = 0
@@ -590,6 +597,18 @@ class ParallaxScene(
         }
     }
     
+    /** Release regenerable layer caches if [level] warrants it; they rebuild on the next draw. */
+    fun onTrimMemory(level: Int, visible: Boolean) {
+        if (!shouldReleaseCaches(level, visible)) return
+        Log.d(TAG, "onTrimMemory($level, visible=$visible): releasing layer caches")
+        for (layer in layers) {
+            layer.releaseCaches()
+        }
+        weatherLayer.releaseCaches()
+        vignetteLayer.releaseCaches()
+        debugOverlayLayer.releaseCaches()
+    }
+
     fun destroy() {
         // Stop sensor flow and detach callbacks first to avoid late events during teardown.
         sensor.stop()

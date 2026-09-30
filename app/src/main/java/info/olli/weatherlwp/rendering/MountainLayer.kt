@@ -118,6 +118,17 @@ class MountainLayer(private val context: Context) : SceneLayer {
     private var ridgeRoughness = 0.5f
     private var mountainBottomOffset = 0f  // Shift mountains up (0-1 of screen height)
     private var randomSeed = PreferenceDefaults.RANDOM_SEED
+
+    private data class GenerationKey(
+        val seed: Int,
+        val density: Int,
+        val heightScale: Float,
+        val widthScale: Float,
+        val roughness: Float,
+        val ridgeRoughness: Float
+    )
+    /** Settings used for the last generateMountains() from reloadSettings; null forces the first run. */
+    private var lastGenerationKey: GenerationKey? = null
     
     // Seasonal settings (read from terrain settings)
     private var terrainSeasonOverride = "auto"
@@ -685,29 +696,37 @@ class MountainLayer(private val context: Context) : SceneLayer {
         mountainWidthScale = widthVal / 100f
         
         // Roughness: 0-200 -> 0.0 - 2.0
-        val roughVal = settings.getInt("pref_mountain_roughness", 80)
+        val roughVal = settings.getInt("pref_mountain_roughness", PreferenceDefaults.MOUNTAIN_ROUGHNESS)
         mountainRoughness = roughVal / 100f
         
         // Ridge roughness: 0-200 -> 0.0 - 2.0
-        val ridgeVal = settings.getInt("pref_mountain_ridge_roughness", 50)
+        val ridgeVal = settings.getInt("pref_mountain_ridge_roughness", PreferenceDefaults.MOUNTAIN_RIDGE_ROUGHNESS)
         ridgeRoughness = ridgeVal / 100f
         
         // Bottom offset: 0-50 -> 0.0 - 0.5 (shift mountains up by % of screen height)
-        val bottomOffsetVal = settings.getInt("pref_mountain_bottom_offset", 0)
+        val bottomOffsetVal = settings.getInt("pref_mountain_bottom_offset", PreferenceDefaults.MOUNTAIN_BOTTOM_OFFSET)
         mountainBottomOffset = bottomOffsetVal / 100f
         
         // Seasonal settings (same preferences as TerrainLayer for consistency)
         // Only use terrain season override when debug/simulation mode is enabled
-        val debugEnabled = settings.getBoolean("pref_debug_enabled", false)
+        val debugEnabled = settings.getBoolean("pref_debug_enabled", PreferenceDefaults.DEBUG_ENABLED)
         terrainSeasonOverride = if (debugEnabled) {
-            settings.getString("pref_terrain_season", "auto")
+            settings.getString("pref_terrain_season", PreferenceDefaults.TERRAIN_SEASON)
         } else {
             "auto"  // Always use real season when not in debug mode
         }
-        winterSnowEnabled = settings.getBoolean("pref_winter_snow_hills", true)
+        winterSnowEnabled = settings.getBoolean("pref_winter_snow_hills", PreferenceDefaults.WINTER_SNOW_HILLS_ENABLED)
         winterSnowCoverage = settings.getInt("pref_winter_snow_coverage", PreferenceDefaults.WINTER_SNOW_COVERAGE)
         
-        generateMountains()
+        // Bottom offset, season and snow are draw-time only; regenerate just for geometry inputs.
+        val key = GenerationKey(
+            randomSeed, mountainDensity, mountainHeightScale, mountainWidthScale,
+            mountainRoughness, ridgeRoughness
+        )
+        if (key != lastGenerationKey) {
+            lastGenerationKey = key
+            generateMountains()
+        }
     }
 
     override fun destroy() {

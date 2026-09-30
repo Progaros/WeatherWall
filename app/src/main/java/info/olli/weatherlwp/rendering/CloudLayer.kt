@@ -542,6 +542,14 @@ class CloudLayer(private val context: Context) : SceneLayer {
         cellCache.clear()
     }
 
+    override fun releaseCaches() {
+        // Null only, never recycle: the executor or a posted hardware canvas may still use them.
+        for (group in cloudGroups) group.cachedBitmap = null
+        for (groups in cellCache.values) {
+            for (group in groups) group.cachedBitmap = null
+        }
+    }
+
     override fun resize(w: Float, h: Float) {
         val oldW = width
         val oldH = height
@@ -918,7 +926,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
     override fun reloadSettings(settings: SimulationSettings) {
         
         // Cloud enable/disable switch
-        val newEnabled = settings.getBoolean("pref_clouds_enabled", true)
+        val newEnabled = settings.getBoolean("pref_clouds_enabled", PreferenceDefaults.CLOUDS_ENABLED)
         val enabledChanged = newEnabled != cloudsEnabled
         cloudsEnabled = newEnabled
         
