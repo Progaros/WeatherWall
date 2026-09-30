@@ -2,53 +2,28 @@ package info.olli.weatherlwp.rendering
 
 import android.content.Context
 import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.LinearGradient
-import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.RadialGradient
-import android.graphics.Shader
 import android.util.Log
-import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
+import info.olli.weatherlwp.rendering.seasonal.ChristmasStarRenderer
+import info.olli.weatherlwp.rendering.seasonal.DragonRenderer
+import info.olli.weatherlwp.rendering.seasonal.FireworksSystem
+import info.olli.weatherlwp.rendering.seasonal.HolidaySchedule
+import info.olli.weatherlwp.rendering.seasonal.RainbowRenderer
 import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
 import java.util.Calendar
-import kotlin.random.Random
-
-// Java Random is used for nextGaussian() (normal distribution)
-private val gaussianRandom = java.util.Random()
-
-// Pre-calculated trigonometry for 8-point star (avoids Math.toRadians in render loop)
-// Angles: 0°, 45°, 90°, 135°, 180°, 225°, 270°, 315°
-private val STAR_RAY_ANGLES_RAD = doubleArrayOf(
-    0.0, Math.PI / 4, Math.PI / 2, 3 * Math.PI / 4,
-    Math.PI, 5 * Math.PI / 4, 3 * Math.PI / 2, 7 * Math.PI / 4
-)
-private val STAR_RAY_COS = STAR_RAY_ANGLES_RAD.map { kotlin.math.cos(it).toFloat() }.toFloatArray()
-private val STAR_RAY_SIN = STAR_RAY_ANGLES_RAD.map { kotlin.math.sin(it).toFloat() }.toFloatArray()
-
-// Pre-calculated trail angle (225° = down-left from star)
-private const val TRAIL_ANGLE_RAD = 225.0 * Math.PI / 180.0
-private val TRAIL_COS = kotlin.math.cos(TRAIL_ANGLE_RAD).toFloat()
-private val TRAIL_SIN = kotlin.math.sin(TRAIL_ANGLE_RAD).toFloat()
-private const val TRAIL_PERP_RAD = TRAIL_ANGLE_RAD + Math.PI / 2
-private val TRAIL_PERP_COS = kotlin.math.cos(TRAIL_PERP_RAD).toFloat()
-private val TRAIL_PERP_SIN = kotlin.math.sin(TRAIL_PERP_RAD).toFloat()
-
-// Conversion constant
-private const val DEG_TO_RAD = Math.PI / 180.0
 
 /**
  * Seasonal event effects: Christmas star with trail and New Year fireworks.
  * Active during December 15 - January 7, or when debug override is set.
+ * Facade that dispatches to the renderers in [info.olli.weatherlwp.rendering.seasonal].
  */
 class SeasonalEvents(private val context: Context? = null) : SceneLayer {
     override val layerType = LayerType.SEASONAL_EVENTS
-    
+
     /** Whether seasonal rendering is enabled (set by ParallaxScene). */
     var enabled: Boolean = true
-    
+
     enum class Season {
         NONE,
         CHRISTMAS,      // Dec 15-26
@@ -57,215 +32,43 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
         ST_PATRICKS     // St. Patrick's Day (Mar 14-18)
     }
 
-    // Christmas star (Bethlehem star with trail/Schweif)
-    private data class ChristmasStar(
-        val x: Float,      // Fixed position (top right area)
-        val y: Float,
-        val size: Float,
-        var twinkle: Float = 0f,
-        var twinkleSpeed: Float = 2f
-    )
-    
-    // Shooting star / trail particles
-    private data class TrailParticle(
-        var x: Float = 0f,
-        var y: Float = 0f,
-        var alpha: Int = 255,
-        var size: Float = 2f
-    )
-
-    // Background twinkling stars
-    private data class Star(
-        var x: Float = 0f,
-        var y: Float = 0f,
-        var size: Float = 0f,
-        var twinkle: Float = 0f,
-        var twinkleSpeed: Float = 0f
-    )
-
-    // Firework particles for New Year
-    private data class Firework(
-        var x: Float = 0f,
-        var y: Float = 0f,
-        var vx: Float = 0f,
-        var vy: Float = 0f,
-        var color: Int = 0,
-        var life: Int = 0,
-        var maxLife: Int = 0,
-        var size: Float = 3f,
-        var hasSparkle: Boolean = false,
-        var sparkleTrailX: Float = 0f,
-        var sparkleTrailY: Float = 0f
-    )
-    
-    // Rocket that shoots up before exploding
-    private data class Rocket(
-        var x: Float = 0f,
-        var y: Float = 0f,
-        var vy: Float = 0f,
-        var targetY: Float = 0f,
-        var colors: List<Int> = emptyList(),  // 1-3 colors for this rocket's explosion
-        var active: Boolean = false,
-        var explodeAfterFrame: Long = 0,  // Frame number when rocket should explode
-        var trailX1: Float = 0f, var trailY1: Float = 0f,
-        var trailX2: Float = 0f, var trailY2: Float = 0f,
-        var trailX3: Float = 0f, var trailY3: Float = 0f
-    )
-
-    // Pre-allocated pools
-    private val stars = Array(30) { Star() }
-    private val fireworks = Array(2000) { Firework() }  // Large pool for shake fireworks (prevents late-exploding rockets from disappearing)
-    private val rockets = Array(50) { Rocket() }  // Up to 50 rockets in flight for shake fireworks
-
-    // Set true whenever a rocket/firework is activated; lets renderBehindTerrain skip the
-    // full pool scan while nothing is in flight. Self-clears once a scan finds none active.
-    @Volatile private var fireworksPossiblyActive = false
-    private val trailParticles = Array(20) { TrailParticle() }
-    private var christmasStar: ChristmasStar? = null
-    
-    // Pre-allocated paths (avoid allocations in render loop)
-    private val christmasTrailPath = Path()
-    private val christmasRayPath = Path()
-
-    // Pre-allocated paths for Chinese New Year dragon (avoid per-frame allocations)
-    private val dragonAntlerPath = Path()
-    private val dragonHeadPath = Path()
-    private val dragonEyePath = Path()
-    private val dragonBrowPath = Path()
-    private val dragonWhiskerPath = Path()
-
-    // Pre-allocated paints
-    private val starPaint = Paint().apply {
-        color = Color.WHITE
-        isAntiAlias = true
-    }
-    
-    private val christmasStarPaint = Paint().apply {
-        color = Color.parseColor("#FFFFD700")  // Golden
-        isAntiAlias = true
-    }
-    
-    private val trailPaint = Paint().apply {
-        color = Color.parseColor("#FFFFD700")
-        isAntiAlias = true
-    }
-
-    private val fireworkPaint = Paint().apply {
-        isAntiAlias = true
-    }
+    private val christmasStar = ChristmasStarRenderer()
+    private val fireworks = FireworksSystem()
+    private val rainbow = RainbowRenderer()
+    private val dragon = DragonRenderer()
+    private val holidaySchedule: HolidaySchedule
 
     private var initialized = false
     private var screenWidth = 0
     private var screenHeight = 0
-    
+
     // Scale factor for height-relative sizing (uses RenderConstants.REFERENCE_HEIGHT)
     // All pixel values are designed for 1920px height and scaled proportionally
     private var heightScale = 1f
-    
-    // Global frame counter for time-based rocket explosions (Long to avoid overflow)
-    private var frameCounter = 0L
 
-    // Cached season result to avoid Calendar allocations every frame (3× per frame)
-    private var cachedSeason: Season = Season.NONE
-    private var cachedSeasonTimeMs: Long = 0L
-    private val SEASON_CACHE_TTL_MS = 10_000L  // Re-check season every 10 seconds
-
-    private var fireworkTimer = 0
-    private val fireworkColors = intArrayOf(
-        Color.RED, Color.YELLOW, Color.GREEN, Color.CYAN,
-        Color.MAGENTA, Color.WHITE, 0xFFFF6600.toInt(),  // Orange
-        0xFFFF69B4.toInt(),  // Hot pink
-        0xFF00FF7F.toInt(),  // Spring green
-        0xFFFFD700.toInt(),  // Gold
-        0xFF7B68EE.toInt()   // Medium slate blue
-    )
-    
-    private val rocketPaint = Paint().apply {
-        color = Color.WHITE
-        isAntiAlias = true
-    }
-    
-    private val sparklePaint = Paint().apply {
-        isAntiAlias = true
-        color = Color.WHITE
-    }
-
-    @Volatile private var currentSettings: SimulationSettings = SimulationSettings.fromSnapshot(emptyMap<String, Any?>())
-    
-    // Settings-controlled values
-    private var starSizeMultiplier = 1.0f
-    private var trailLengthMultiplier = 1.0f
-    private var fireworkFrequency = 50  // 0-100, default 50
-    private var fireworkAmount = 100    // 10-200, controls particles per explosion
-    
-    // Rainbow settings (St. Patrick's Day)
-    private var rainbowPositionX = 50    // 0-100, horizontal position (50 = center)
-    private var rainbowPositionY = 50    // 0-100, vertical position (0 = top, 100 = bottom)
-    private var rainbowSize = 100        // 0-200, size percentage
-    
-    // Per-event toggles (each seasonal event can be individually enabled/disabled)
-    private var christmasEnabled = true
-    private var newyearEnabled = true
-    private var cnNewyearEnabled = true
-    private var stPatricksEnabled = true
-    
-    // Per-event intervals (±days around the center holiday date)
-    private var christmasInterval = 5   // ±days around Dec 25
-    private var newyearInterval = 7     // ±days around Jan 1
-    private var cnNewyearInterval = 14  // ±days around Feb 1
-    private var stPatricksInterval = 2  // ±days around Mar 17
-    
-    // Shake-to-fireworks settings
-    private var shakeFireworksEnabled = true
-    private var shakeFireworksCount = 12  // Number of fireworks to launch on shake (10-15)
-    
     init {
-        applySettings(currentSettings)
+        val defaults = SimulationSettings.fromSnapshot(emptyMap<String, Any?>())
+        holidaySchedule = HolidaySchedule(defaults)
+        applySettings(defaults)
     }
-    
+
     /**
      * Apply settings from immutable snapshot.
      */
     private fun applySettings(settings: SimulationSettings) {
-        currentSettings = settings
-
-        starSizeMultiplier = (settings.getInt("pref_christmas_star_size", 100) / 100f).coerceIn(0.5f, 2.0f)
-        trailLengthMultiplier = (settings.getInt("pref_christmas_star_trail", 100) / 100f).coerceIn(0f, 2.0f)
-        fireworkFrequency = settings.getInt("pref_firework_frequency", PreferenceDefaults.FIREWORK_FREQUENCY).coerceIn(0, 100)
-        fireworkAmount = settings.getInt("pref_firework_amount", PreferenceDefaults.FIREWORK_AMOUNT).coerceIn(10, 200)
-
-        // Rainbow settings
-        rainbowPositionX = settings.getInt("pref_rainbow_position_x", 50).coerceIn(0, 100)
-        rainbowPositionY = settings.getInt("pref_rainbow_position_y", 40).coerceIn(0, 100)
-        rainbowSize = settings.getInt("pref_rainbow_size", 100).coerceIn(20, 200)
-
-        // Per-event toggles
-        christmasEnabled = settings.getBoolean("pref_christmas_enabled", PreferenceDefaults.CHRISTMAS_ENABLED)
-        newyearEnabled = settings.getBoolean("pref_newyear_enabled", PreferenceDefaults.NEWYEAR_ENABLED)
-        cnNewyearEnabled = settings.getBoolean("pref_cn_newyear_enabled", PreferenceDefaults.CN_NEWYEAR_ENABLED)
-        stPatricksEnabled = settings.getBoolean("pref_st_patricks_enabled", PreferenceDefaults.ST_PATRICKS_ENABLED)
-
-        // Per-event intervals (±days)
-        christmasInterval = settings.getInt("pref_christmas_interval", PreferenceDefaults.CHRISTMAS_INTERVAL).coerceIn(0, 30)
-        newyearInterval = settings.getInt("pref_newyear_interval", PreferenceDefaults.NEWYEAR_INTERVAL).coerceIn(0, 30)
-        cnNewyearInterval = settings.getInt("pref_cn_newyear_interval", PreferenceDefaults.CN_NEWYEAR_INTERVAL).coerceIn(0, 30)
-        stPatricksInterval = settings.getInt("pref_st_patricks_interval", PreferenceDefaults.ST_PATRICKS_INTERVAL).coerceIn(0, 30)
-
-        // Shake-to-fireworks settings
-        shakeFireworksEnabled = settings.getBoolean("pref_shake_fireworks_enabled", PreferenceDefaults.SHAKE_FIREWORKS_ENABLED)
-        shakeFireworksCount = settings.getInt("pref_shake_fireworks_count", 15).coerceIn(5, 50)
+        holidaySchedule.applySettings(settings)
+        christmasStar.applySettings(settings)
+        fireworks.applySettings(settings)
+        rainbow.applySettings(settings)
     }
-    
+
     /**
      * Check if shake-to-fireworks is enabled.
      */
-    fun isShakeFireworksEnabled(): Boolean = shakeFireworksEnabled
-    
-    /**
-     * Ensure shake fireworks can work even when seasonal events are disabled.
-     * Initializes screen dimensions if needed.
-     */
-    private fun ensureInitializedForShake(width: Int, height: Int) {
+    fun isShakeFireworksEnabled(): Boolean = fireworks.shakeFireworksEnabled
+
+    /** (Re)initialize all renderers when not yet initialized or the surface size changed. */
+    private fun ensureInitialized(width: Int, height: Int) {
         if (!initialized || screenWidth != width || screenHeight != height) {
             screenWidth = width
             screenHeight = height
@@ -274,7 +77,7 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
             initialized = true
         }
     }
-    
+
     /**
      * Trigger fireworks on shake gesture.
      * Launches multiple rockets in quick succession for a burst effect.
@@ -282,82 +85,29 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
      * Works regardless of seasonal settings being enabled.
      */
     fun triggerShakeFireworks() {
-        if (!shakeFireworksEnabled) return
-        
+        if (!fireworks.shakeFireworksEnabled) return
+
         // Ensure initialization even if seasonal events are disabled
         // This allows shake fireworks to work year-round
         if (!initialized) {
             Log.d(TAG, "Shake triggered but not initialized - waiting for next frame")
             return
         }
-        
-        // Use normal distribution for variety in firework count
-        // Mean = shakeFireworksCount, stdDev = 15% of count
-        val stdDev = shakeFireworksCount * 0.15
-        val normalValue = gaussianRandom.nextGaussian() * stdDev + shakeFireworksCount
-        val actualCount = normalValue.toInt().coerceIn(3, 50)
-        
-        Log.d(TAG, "Triggering shake fireworks: $actualCount rockets (target: $shakeFireworksCount)")
-        
-        // Launch rockets up to the requested count (capped by available rocket slots)
-        for (i in 0 until actualCount.coerceAtMost(rockets.size)) {
-            launchRocket()
-        }
+
+        fireworks.triggerShake()
     }
-    
+
     /**
      * Initialize for shake fireworks if not already done.
      * Called from ParallaxScene to ensure shake works even without seasonal rendering.
      */
     fun ensureShakeReady(width: Int, height: Int) {
-        if (shakeFireworksEnabled && !initialized) {
-            ensureInitializedForShake(width, height)
+        if (fireworks.shakeFireworksEnabled && !initialized) {
+            ensureInitialized(width, height)
         }
     }
 
-    fun getCurrentSeason(): Season {
-        val now = System.currentTimeMillis()
-        if (now - cachedSeasonTimeMs < SEASON_CACHE_TTL_MS) {
-            return cachedSeason
-        }
-
-        val settings = currentSettings
-
-        // Check if seasonal events are enabled
-        try {
-            val seasonalEnabled = settings.getBoolean("pref_seasonal_enabled", true)
-            if (!seasonalEnabled) {
-                cachedSeason = Season.NONE
-                cachedSeasonTimeMs = now
-                return Season.NONE
-            }
-
-            val debugEnabled = settings.getBoolean("pref_debug_enabled", false)
-            if (debugEnabled) {
-                val debugSeason = settings.getString("pref_debug_season", "auto")
-                val result = when (debugSeason) {
-                    "christmas" -> Season.CHRISTMAS
-                    "newyear" -> Season.NEW_YEAR
-                    "cn_newyear" -> Season.CN_NEW_YEAR
-                    "st_patricks" -> Season.ST_PATRICKS
-                    "none" -> Season.NONE
-                    else -> null
-                }
-                if (result != null) {
-                    cachedSeason = result
-                    cachedSeasonTimeMs = now
-                    return result
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error reading debug prefs", e)
-        }
-
-        val result = getSeasonByDate()
-        cachedSeason = result
-        cachedSeasonTimeMs = now
-        return result
-    }
+    fun getCurrentSeason(): Season = holidaySchedule.getCurrentSeason()
 
     /**
      * Determine season from current date using circular day distance.
@@ -366,26 +116,7 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
      */
     internal fun getSeasonByDate(
         cal: Calendar = Calendar.getInstance()
-    ): Season {
-        val currentDoy = cal.get(Calendar.DAY_OF_YEAR)
-        val daysInYear = cal.getActualMaximum(Calendar.DAY_OF_YEAR)
-
-        // Check in priority order (first match wins on overlap days)
-        if (christmasEnabled && circularDayDistance(currentDoy, dayOfYear(Calendar.DECEMBER, 25, cal), daysInYear) <= christmasInterval) {
-            return Season.CHRISTMAS
-        }
-        if (newyearEnabled && circularDayDistance(currentDoy, dayOfYear(Calendar.JANUARY, 1, cal), daysInYear) <= newyearInterval) {
-            return Season.NEW_YEAR
-        }
-        if (cnNewyearEnabled && circularDayDistance(currentDoy, dayOfYear(Calendar.FEBRUARY, 1, cal), daysInYear) <= cnNewyearInterval) {
-            return Season.CN_NEW_YEAR
-        }
-        if (stPatricksEnabled && circularDayDistance(currentDoy, dayOfYear(Calendar.MARCH, 17, cal), daysInYear) <= stPatricksInterval) {
-            return Season.ST_PATRICKS
-        }
-
-        return Season.NONE
-    }
+    ): Season = holidaySchedule.getSeasonByDate(cal)
 
     companion object {
         private const val TAG = "SeasonalEvents"
@@ -394,21 +125,15 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
          * Circular distance between two day-of-year values,
          * correctly wrapping around year-end (e.g. Dec 31→Jan 1 = 1 day).
          */
-        internal fun circularDayDistance(day1: Int, day2: Int, daysInYear: Int = 365): Int {
-            val diff = kotlin.math.abs(day1 - day2)
-            return minOf(diff, daysInYear - diff)
-        }
+        internal fun circularDayDistance(day1: Int, day2: Int, daysInYear: Int = 365): Int =
+            HolidaySchedule.circularDayDistance(day1, day2, daysInYear)
 
         /**
          * Get the day-of-year for a given month and day.
          * @param month 0-indexed Calendar month (Calendar.JANUARY=0, Calendar.DECEMBER=11)
          */
-        internal fun dayOfYear(month: Int, day: Int, referenceCal: Calendar = Calendar.getInstance()): Int {
-            val c = referenceCal.clone() as Calendar
-            c.set(Calendar.MONTH, month)
-            c.set(Calendar.DAY_OF_MONTH, day)
-            return c.get(Calendar.DAY_OF_YEAR)
-        }
+        internal fun dayOfYear(month: Int, day: Int, referenceCal: Calendar = Calendar.getInstance()): Int =
+            HolidaySchedule.dayOfYear(month, day, referenceCal)
     }
 
     /**
@@ -425,13 +150,7 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
             val season = getCurrentSeason()
             if (season == Season.NONE) return
 
-            if (!initialized || screenWidth != canvas.width || screenHeight != canvas.height) {
-                screenWidth = canvas.width
-                screenHeight = canvas.height
-                heightScale = RenderConstants.getHeightScale(screenHeight.toFloat(), screenWidth.toFloat())
-                initParticles()
-                initialized = true
-            }
+            ensureInitialized(canvas.width, canvas.height)
 
             // All rendering is now handled by renderBehindMountains/renderBehindTerrain
             // This method only ensures initialization for screen size changes
@@ -450,65 +169,47 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
     fun renderBehindMountains(canvas: Canvas, enabled: Boolean, parallaxOffsetX: Float = 0f, parallaxOffsetY: Float = 0f) {
         if (!enabled) return
         try {
-            // Settings are now reloaded centrally via updateSettingsIfNeeded()
             val season = getCurrentSeason()
             if (season == Season.NONE) return
-            if (!initialized || screenWidth != canvas.width || screenHeight != canvas.height) {
-                screenWidth = canvas.width
-                screenHeight = canvas.height
-                heightScale = RenderConstants.getHeightScale(screenHeight.toFloat(), screenWidth.toFloat())
-                initParticles()
-                initialized = true
-            }
+            ensureInitialized(canvas.width, canvas.height)
             when (season) {
-                Season.ST_PATRICKS -> renderStPatricksDay(canvas, parallaxOffsetX, parallaxOffsetY)
-                Season.CHRISTMAS -> renderChristmasStars(canvas, parallaxOffsetX, parallaxOffsetY)
+                Season.ST_PATRICKS -> rainbow.draw(canvas, screenWidth, screenHeight, parallaxOffsetX, parallaxOffsetY)
+                Season.CHRISTMAS -> christmasStar.draw(canvas, parallaxOffsetX, parallaxOffsetY)
                 else -> {}
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error rendering behind-mountain seasonal events", e)
         }
     }
-    
+
     /**
      * Render elements that belong in front of mountains but behind terrain/hills.
      * This includes New Year fireworks and Chinese New Year effects.
      * Called from scene renderer after mountains but before terrain layer.
      */
     fun renderBehindTerrain(canvas: Canvas, enabled: Boolean) {
-        // Check for active fireworks first - shake fireworks should work independent of season/master switch
-        // if user has enabled the specific shake setting.
-        // The fireworksPossiblyActive gate lets us skip the O(rockets+fireworks) scan in the common
-        // idle case (no fireworks launched), which otherwise runs every frame year-round for all users.
-        val hasActiveFireworks = if (fireworksPossiblyActive) {
-            val active = rockets.any { it.active } || fireworks.any { it.life > 0 }
-            if (!active) fireworksPossiblyActive = false
-            active
-        } else {
-            false
-        }
+        // Shake fireworks should render independent of season/master switch
+        val hasActiveFireworks = fireworks.hasActiveFireworks()
 
         if (!enabled && !hasActiveFireworks) return
         try {
-            // Settings are now reloaded centrally via updateSettingsIfNeeded()
             val season = getCurrentSeason()
-            
+
             // Allow rendering if we have active fireworks (from shake) even if season is NONE
             if (season == Season.NONE && !hasActiveFireworks) return
-            
-            if (!initialized || screenWidth != canvas.width || screenHeight != canvas.height) {
-                screenWidth = canvas.width
-                screenHeight = canvas.height
-                heightScale = RenderConstants.getHeightScale(screenHeight.toFloat(), screenWidth.toFloat())
-                initParticles()
-                initialized = true
-            }
+
+            ensureInitialized(canvas.width, canvas.height)
             // Fireworks should appear behind hills but in front of mountains
             when {
-                season == Season.NEW_YEAR -> renderNewYearFireworks(canvas, autoLaunch = true)
-                season == Season.CN_NEW_YEAR -> renderChineseNewYear(canvas)
+                season == Season.NEW_YEAR -> fireworks.render(canvas, autoLaunch = true)
+                season == Season.CN_NEW_YEAR -> {
+                    dragon.advance()
+                    // New Year fireworks as backdrop for the dragon
+                    fireworks.render(canvas, autoLaunch = true)
+                    dragon.draw(canvas, screenWidth, screenHeight, heightScale)
+                }
                 // If not in season but we have active fireworks (e.g. from shake), render them without auto-launch
-                hasActiveFireworks -> renderNewYearFireworks(canvas, autoLaunch = false)
+                hasActiveFireworks -> fireworks.render(canvas, autoLaunch = false)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error rendering behind-terrain seasonal events", e)
@@ -516,752 +217,12 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
     }
 
     private fun initParticles() {
-        // Use fixed seed for consistent star placement
-        val starRandom = Random(54321)
-        
-        // Scale factor for sizes (min 50% for visibility on small screens)
-        val sizeScale = heightScale.coerceAtLeast(0.5f)
-        
-        // Initialize background twinkling stars in upper portion of screen
-        // Avoid the christmas star area (upper right)
-        val christmasStarX = screenWidth * 0.82f
-        val christmasStarY = screenHeight * 0.12f
-        val exclusionRadius = screenWidth * 0.15f
-        
-        for (s in stars) {
-            // Keep regenerating until we get a position not too close to christmas star
-            var attempts = 0
-            do {
-                s.x = starRandom.nextFloat() * screenWidth
-                s.y = starRandom.nextFloat() * screenHeight * 0.4f
-                attempts++
-            } while (attempts < 5 && 
-                     kotlin.math.abs(s.x - christmasStarX) < exclusionRadius && 
-                     kotlin.math.abs(s.y - christmasStarY) < exclusionRadius)
-            
-            // Size scaled relative to height
-            s.size = (1.5f + starRandom.nextFloat() * 2.5f) * sizeScale
-            s.twinkle = starRandom.nextFloat() * 360f
-            s.twinkleSpeed = 2f + starRandom.nextFloat() * 4f
-        }
-        
-        // Initialize the main Christmas star (Bethlehem star) - fixed position in upper right
-        // Size is relative to reference height (35f at 1920px)
-        christmasStar = ChristmasStar(
-            x = christmasStarX,
-            y = christmasStarY,
-            size = 35f * heightScale.coerceAtLeast(0.5f),  // Scale with height, min 50%
-            twinkle = 0f,
-            twinkleSpeed = 3f
-        )
-        
-        // Initialize trail particles (emanating from the star)
-        // Sizes are relative to reference height
-        val trailScale = heightScale.coerceAtLeast(0.5f)
-        for (i in trailParticles.indices) {
-            val t = i.toFloat() / trailParticles.size
-            trailParticles[i].apply {
-                x = 0f  // Will be set relative to star
-                y = 0f
-                alpha = (255 * (1f - t * 0.7f)).toInt()  // Fade along trail
-                size = (3f + (1f - t) * 8f) * trailScale  // Larger near star, scaled
-            }
-        }
-
-        // Reset fireworks
-        for (f in fireworks) {
-            f.life = 0
-        }
-        
-        // Reset rockets
-        for (r in rockets) {
-            r.active = false
-        }
+        christmasStar.init(screenWidth, screenHeight, heightScale)
+        fireworks.reset(screenWidth, screenHeight, heightScale)
     }
 
-    private fun renderChristmasStars(canvas: Canvas, parallaxOffsetX: Float = 0f, parallaxOffsetY: Float = 0f) {
-        // Note: Background twinkling stars are now handled by SkyLayer
-        // SeasonalEvents only renders the main Christmas star with trail
-        // This prevents duplicate star rendering at night during Christmas
-        
-        // Render the main Christmas star (Bethlehem star) with trail
-        val star = christmasStar ?: return
-        star.twinkle += star.twinkleSpeed
-        
-        // Apply parallax offset for sky-layer depth effect
-        val starX = star.x + parallaxOffsetX
-        val starY = star.y + parallaxOffsetY
-        
-        // Apply size multiplier
-        val effectiveSize = star.size * starSizeMultiplier
-        
-        // Twinkle factor for the whole star (use precalculated DEG_TO_RAD)
-        val twinkleFactor = 0.85f + 0.15f * kotlin.math.sin(star.twinkle * DEG_TO_RAD).toFloat()
-        
-        // Trail/Schweif - gradient path going down-left from the star (use precalculated angles)
-        val trailLength = effectiveSize * 7f * trailLengthMultiplier
-        
-        // Only render trail if length > 0
-        if (trailLengthMultiplier > 0.01f) {
-            // Smooth gradient trail using LinearGradient instead of discrete circles
-            val trailEndX = starX + trailLength * TRAIL_COS
-            val trailEndY = starY + trailLength * TRAIL_SIN
-            
-            // Create a tapered trail path (wider near star, narrower at end)
-            val startWidth = effectiveSize * 0.35f
-            val endWidth = effectiveSize * 0.05f
-            
-            // Use pre-allocated path (avoid allocation in render loop)
-            christmasTrailPath.reset()
-            // Starting edge (near star) - wider
-            christmasTrailPath.moveTo(
-                starX + startWidth * TRAIL_PERP_COS,
-                starY + startWidth * TRAIL_PERP_SIN
-            )
-            christmasTrailPath.lineTo(
-                starX - startWidth * TRAIL_PERP_COS,
-                starY - startWidth * TRAIL_PERP_SIN
-            )
-            // End edge (far from star) - narrower
-            christmasTrailPath.lineTo(
-                trailEndX - endWidth * TRAIL_PERP_COS,
-                trailEndY - endWidth * TRAIL_PERP_SIN
-            )
-            christmasTrailPath.lineTo(
-                trailEndX + endWidth * TRAIL_PERP_COS,
-                trailEndY + endWidth * TRAIL_PERP_SIN
-            )
-            christmasTrailPath.close()
-            
-            // Linear gradient from star (bright gold) to end (transparent)
-            trailPaint.shader = LinearGradient(
-                starX, starY, trailEndX, trailEndY,
-                intArrayOf(
-                    Color.argb((220 * twinkleFactor).toInt(), 255, 215, 0),
-                    Color.argb((120 * twinkleFactor).toInt(), 255, 215, 0),
-                    Color.argb(0, 255, 215, 0)
-                ),
-                floatArrayOf(0f, 0.4f, 1f),
-                Shader.TileMode.CLAMP
-            )
-            trailPaint.alpha = 255
-            canvas.drawPath(christmasTrailPath, trailPaint)
-            trailPaint.shader = null
-        }
-        
-        // Outer soft glow - radial gradient
-        val glowRadius = effectiveSize * 2.5f * twinkleFactor
-        christmasStarPaint.shader = RadialGradient(
-            starX, starY, glowRadius,
-            intArrayOf(
-                Color.argb(80, 255, 230, 150),
-                Color.argb(40, 255, 215, 0),
-                Color.argb(0, 255, 215, 0)
-            ),
-            floatArrayOf(0f, 0.4f, 1f),
-            Shader.TileMode.CLAMP
-        )
-        canvas.drawCircle(starX, starY, glowRadius, christmasStarPaint)
-        christmasStarPaint.shader = null
-        
-        // 8-point star rays as filled triangles with alpha falloff (use precalculated sin/cos)
-        val primaryRayLength = effectiveSize * 1.6f * twinkleFactor
-        val secondaryRayLength = effectiveSize * 0.9f * twinkleFactor
-        val rayBaseWidth = effectiveSize * 0.12f
-        
-        // Use pre-allocated path (avoid allocation in render loop)
-        christmasRayPath.reset()
-        for (index in 0 until 8) {
-            val isPrimary = index % 2 == 0  // 0, 90, 180, 270 are primary
-            val rayLen = if (isPrimary) primaryRayLength else secondaryRayLength
-            // Use precalculated cos/sin arrays
-            val cosVal = STAR_RAY_COS[index]
-            val sinVal = STAR_RAY_SIN[index]
-            // Perpendicular is 90° ahead in the array (with wrap)
-            val perpIndex = (index + 2) % 8
-            val perpCos = STAR_RAY_COS[perpIndex]
-            val perpSin = STAR_RAY_SIN[perpIndex]
-            
-            val tipX = starX + rayLen * cosVal
-            val tipY = starY + rayLen * sinVal
-            
-            val baseOffset = rayBaseWidth * (if (isPrimary) 1f else 0.7f)
-            val baseX1 = starX + baseOffset * perpCos
-            val baseY1 = starY + baseOffset * perpSin
-            val baseX2 = starX - baseOffset * perpCos
-            val baseY2 = starY - baseOffset * perpSin
-            
-            christmasRayPath.moveTo(baseX1, baseY1)
-            christmasRayPath.lineTo(tipX, tipY)
-            christmasRayPath.lineTo(baseX2, baseY2)
-            christmasRayPath.close()
-        }
-        
-        // Fill rays with gradient from center
-        christmasStarPaint.shader = RadialGradient(
-            starX, starY, primaryRayLength,
-            intArrayOf(
-                Color.argb(255, 255, 255, 240),
-                Color.argb(220, 255, 220, 100),
-                Color.argb(150, 255, 200, 50)
-            ),
-            floatArrayOf(0f, 0.3f, 1f),
-            Shader.TileMode.CLAMP
-        )
-        canvas.drawPath(christmasRayPath, christmasStarPaint)
-        christmasStarPaint.shader = null
-        
-        // Bright central core with radial gradient
-        val coreRadius = effectiveSize * 0.5f * twinkleFactor
-        christmasStarPaint.shader = RadialGradient(
-            starX, starY, coreRadius,
-            intArrayOf(
-                Color.argb(255, 255, 255, 255),
-                Color.argb(255, 255, 240, 200),
-                Color.argb(200, 255, 215, 0)
-            ),
-            floatArrayOf(0f, 0.5f, 1f),
-            Shader.TileMode.CLAMP
-        )
-        canvas.drawCircle(starX, starY, coreRadius, christmasStarPaint)
-        christmasStarPaint.shader = null
-    }
-
-    private fun renderNewYearFireworks(canvas: Canvas, autoLaunch: Boolean = true) {
-        if (autoLaunch) {
-            fireworkTimer++
-
-            // Launch new rocket based on frequency setting
-            // At 0: every 200+ frames (rare), at 50: every 40-90 frames, at 100: every 10-30 frames
-            val minInterval = when {
-                fireworkFrequency >= 80 -> 10
-                fireworkFrequency >= 50 -> 30
-                fireworkFrequency >= 20 -> 60
-                else -> 150
-            }
-            val intervalRange = when {
-                fireworkFrequency >= 80 -> 20
-                fireworkFrequency >= 50 -> 50
-                fireworkFrequency >= 20 -> 80
-                else -> 100
-            }
-            
-            if (fireworkFrequency > 0 && fireworkTimer > minInterval + Random.nextInt(intervalRange)) {
-                fireworkTimer = 0
-                launchRocket()
-            }
-        }
-
-        // Increment frame counter for time-based rocket explosions
-        frameCounter++
-
-        // Update and render rockets
-        for (r in rockets) {
-            if (r.active) {
-                // Store trail positions (previous positions for trail effect)
-                r.trailX3 = r.trailX2
-                r.trailY3 = r.trailY2
-                r.trailX2 = r.trailX1
-                r.trailY2 = r.trailY1
-                r.trailX1 = r.x
-                r.trailY1 = r.y
-                
-                // Move rocket upward (scale velocity by height for consistent physics)
-                r.y += r.vy * heightScale
-                r.vy += 0.06f * heightScale  // Gentle deceleration
-                
-                // Draw rocket trail (fading dots behind, scaled by height)
-                val trailScale = heightScale.coerceAtLeast(0.5f)  // Don't go below 50% size
-                rocketPaint.color = Color.argb(60, 255, 200, 100)
-                canvas.drawCircle(r.trailX3, r.trailY3, 1.5f * trailScale, rocketPaint)
-                rocketPaint.color = Color.argb(120, 255, 220, 150)
-                canvas.drawCircle(r.trailX2, r.trailY2, 2f * trailScale, rocketPaint)
-                rocketPaint.color = Color.argb(200, 255, 240, 200)
-                canvas.drawCircle(r.trailX1, r.trailY1, 2.5f * trailScale, rocketPaint)
-                
-                // Draw rocket head (scaled by height)
-                rocketPaint.color = Color.WHITE
-                canvas.drawCircle(r.x, r.y, 3f * trailScale, rocketPaint)
-                
-                // Explode at target apex or fallback frame timeout.
-                if (r.y <= r.targetY || frameCounter >= r.explodeAfterFrame) {
-                    explodeRocket(r)
-                    r.active = false
-                }
-            }
-        }
-
-        // Update and render explosion particles
-        // Scale factor for particle sizes (min 50% to keep visible on very small screens)
-        val particleScale = heightScale.coerceAtLeast(0.5f)
-        
-        for (f in fireworks) {
-            if (f.life > 0) {
-                // Store previous position for sparkle trail
-                f.sparkleTrailX = f.x
-                f.sparkleTrailY = f.y
-                
-                // Update physics (scale velocity and gravity by height for consistent motion)
-                f.x += f.vx * heightScale
-                f.y += f.vy * heightScale
-                f.vy += 0.12f // gravity (in reference pixels per frame)
-                f.vx *= 0.98f // air resistance
-                f.life--
-
-                val lifeRatio = f.life / f.maxLife.toFloat()
-                val alpha = (255 * lifeRatio).toInt().coerceIn(0, 255)
-                
-                // Scaled size for this particle
-                val scaledSize = f.size * particleScale
-                
-                // Draw sparkle trail behind the ball (fine particles)
-                if (f.hasSparkle && lifeRatio > 0.3f) {
-                    sparklePaint.color = f.color
-                    sparklePaint.alpha = (alpha * 0.4f).toInt()
-                    canvas.drawCircle(f.sparkleTrailX, f.sparkleTrailY, scaledSize * 0.4f, sparklePaint)
-                    
-                    // Additional tiny sparkles (spread scaled by height)
-                    val sparkleAlpha = (alpha * 0.25f).toInt()
-                    sparklePaint.alpha = sparkleAlpha
-                    canvas.drawCircle(
-                        f.sparkleTrailX + (Random.nextFloat() - 0.5f) * 4f * heightScale,
-                        f.sparkleTrailY + (Random.nextFloat() - 0.5f) * 4f * heightScale,
-                        scaledSize * 0.2f, sparklePaint
-                    )
-                }
-                
-                // Draw main colorful ball
-                fireworkPaint.color = f.color
-                fireworkPaint.alpha = alpha
-                val size = scaledSize * (0.5f + lifeRatio * 0.5f)  // Shrink as it fades
-                canvas.drawCircle(f.x, f.y, size, fireworkPaint)
-                
-                // Bright core
-                fireworkPaint.alpha = (alpha * 0.7f).toInt()
-                fireworkPaint.color = Color.WHITE
-                canvas.drawCircle(f.x, f.y, size * 0.4f, fireworkPaint)
-            }
-        }
-    }
-    
-    private fun launchRocket() {
-        // Find an inactive rocket slot
-        for (r in rockets) {
-            if (!r.active) {
-                r.x = screenWidth * 0.15f + Random.nextFloat() * screenWidth * 0.7f
-                r.y = screenHeight.toFloat()
-                // Upward velocity: -14 to -20 (negative = up, faster to reach height)
-                r.vy = -14f - Random.nextFloat() * 6f
-                r.targetY = screenHeight * 0.08f + Random.nextFloat() * screenHeight * 0.22f
-                
-                // Explode after 75-119 frames (~1.25-2.0 seconds at 60fps)
-                // Longer flight time ensures rockets clear mountains (which are at 30-60% from bottom)
-                r.explodeAfterFrame = frameCounter + 75 + Random.nextInt(45)
-                
-                // Choose 1-3 colors for this rocket's explosion
-                val numColors = 1 + Random.nextInt(3)  // 1, 2, or 3 colors
-                r.colors = List(numColors) { fireworkColors[Random.nextInt(fireworkColors.size)] }
-                
-                r.active = true
-                fireworksPossiblyActive = true
-                r.trailX1 = r.x
-                r.trailY1 = r.y
-                r.trailX2 = r.x
-                r.trailY2 = r.y
-                r.trailX3 = r.x
-                r.trailY3 = r.y
-                break
-            }
-        }
-    }
-    
-    private fun explodeRocket(rocket: Rocket) {
-        val cx = rocket.x
-        val cy = rocket.y.coerceIn(0f, screenHeight.toFloat())
-        val colors = rocket.colors
-        
-        // Spawn explosion particles based on fireworkAmount setting
-        // Reduced particle count for shake to ensure pool isn't exhausted
-        // At 10: 8-12 particles, at 100: 25-35 particles, at 200: 45-55 particles
-        var particleCount = 0
-        val baseParticles = (fireworkAmount * 0.2f + 5).toInt()   // 10→7, 100→25, 200→45
-        val varianceParticles = (fireworkAmount * 0.1f + 3).toInt()  // 10→4, 100→13, 200→23
-        val targetParticles = baseParticles + Random.nextInt(varianceParticles.coerceAtLeast(1))
-        
-        for (f in fireworks) {
-            if (f.life <= 0 && particleCount < targetParticles) {
-                val angle = Random.nextFloat() * 360f
-                // Starburst effect: clearer shell by reducing speed variance
-                // Was: 4f + Random.nextFloat() * 6f (4-10 range, very messy)
-                // New: 6f + Random.nextFloat() * 2f (6-8 range, clearer ring/star)
-                val speed = 6f + Random.nextFloat() * 2f
-
-                f.x = cx
-                f.y = cy
-                // Use precalculated DEG_TO_RAD constant
-                val angleRad = angle * DEG_TO_RAD
-                f.vx = (speed * kotlin.math.cos(angleRad)).toFloat()
-                f.vy = (speed * kotlin.math.sin(angleRad)).toFloat()
-                
-                // Randomly pick one of the rocket's colors
-                f.color = colors[Random.nextInt(colors.size)]
-                f.maxLife = 50 + Random.nextInt(40)
-                f.life = f.maxLife
-                fireworksPossiblyActive = true
-                f.size = 2.5f + Random.nextFloat() * 3f
-                f.hasSparkle = Random.nextFloat() > 0.4f  // 60% have sparkle trails
-                f.sparkleTrailX = cx
-                f.sparkleTrailY = cy
-                
-                particleCount++
-            }
-        }
-    }
-    
-    // ========== ST. PATRICK'S DAY ==========
-    
-    private val rainbowColors = intArrayOf(
-        Color.rgb(255, 0, 0),      // Red
-        Color.rgb(255, 127, 0),    // Orange  
-        Color.rgb(255, 255, 0),    // Yellow
-        Color.rgb(0, 255, 0),      // Green
-        Color.rgb(0, 0, 255),      // Blue
-        Color.rgb(75, 0, 130),     // Indigo
-        Color.rgb(148, 0, 211)     // Violet
-    )
-    
-    private var rainbowPhase = 0f
-    
-    // Pre-allocated paint for rainbow bands (avoid allocation in render loop)
-    private val rainbowBandPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.BUTT
-    }
-    
-    // Cached rainbow fade shader — only depends on screen dimensions and position settings
-    private var cachedRainbowFadeShader: android.graphics.LinearGradient? = null
-    private var cachedRainbowCenterX = 0f
-    private var cachedRainbowFadeTop = 0f
-    private var cachedRainbowFadeBottom = 0f
-    
-    private fun renderStPatricksDay(canvas: Canvas, parallaxOffsetX: Float = 0f, parallaxOffsetY: Float = 0f) {
-        rainbowPhase += 0.02f
-        
-        // Position and size based on settings
-        val centerX = screenWidth * (rainbowPositionX / 100f) + parallaxOffsetX
-        val baseY = screenHeight * (rainbowPositionY / 100f) + parallaxOffsetY
-        val sizeMultiplier = rainbowSize / 100f
-        // Keep rainbow size stable across portrait/landscape by anchoring to height.
-        // Width cap prevents clipping on very narrow canvases.
-        val arcRadius = (screenHeight * 0.36f * sizeMultiplier)
-            .coerceAtMost(screenWidth * 0.48f)
-        
-        // Full semi-circle: 180° to 360° (or equivalently 180° sweep starting at 180°)
-        val startAngle = 180f
-        val sweepAngle = 180f
-        
-        // Create/cache vertical fade shader (only depends on screen dimensions and position settings)
-        val fadeHeight = arcRadius * 0.6f  // How much of bottom portion fades
-        val fadeTop = baseY - fadeHeight
-        val fadeBottom = baseY + arcRadius * 0.1f
-        
-        // Only recreate gradient when parameters actually change (resize or settings change)
-        val fadeShader = if (cachedRainbowFadeShader != null &&
-            cachedRainbowCenterX == centerX &&
-            cachedRainbowFadeTop == fadeTop &&
-            cachedRainbowFadeBottom == fadeBottom) {
-            cachedRainbowFadeShader!!
-        } else {
-            android.graphics.LinearGradient(
-                centerX, fadeTop,
-                centerX, fadeBottom,
-                intArrayOf(Color.WHITE, Color.WHITE, Color.TRANSPARENT),
-                floatArrayOf(0f, 0.5f, 1f),
-                android.graphics.Shader.TileMode.CLAMP
-            ).also {
-                cachedRainbowFadeShader = it
-                cachedRainbowCenterX = centerX
-                cachedRainbowFadeTop = fadeTop
-                cachedRainbowFadeBottom = fadeBottom
-            }
-        }
-        
-        // Draw rainbow arc bands from outer (red) to inner (violet)
-        for (i in rainbowColors.indices.reversed()) {
-            val bandWidth = arcRadius * 0.055f
-            val bandRadius = arcRadius - i * bandWidth
-            
-            // Shimmer effect - subtle pulsing
-            val shimmer = kotlin.math.sin(rainbowPhase + i * 0.5f) * 0.1f + 0.9f
-            
-            // Base alpha for the center of the band
-            val centerAlpha = (90 * shimmer).toInt()
-            
-            // Create a sweep gradient that fades at the edges of the arc
-            // The gradient goes around the arc: transparent -> color -> color -> transparent
-            val bandColor = rainbowColors[i]
-            val transparentColor = Color.argb(0, Color.red(bandColor), Color.green(bandColor), Color.blue(bandColor))
-            val visibleColor = Color.argb(centerAlpha, Color.red(bandColor), Color.green(bandColor), Color.blue(bandColor))
-            
-            // SweepGradient with fade at edges (positions 0.0=3 o'clock, going counter-clockwise)
-            // For 180° arc starting at 180° (9 o'clock), we need fade at 180° and 360°
-            // Map: 0.0=0°, 0.25=90°, 0.5=180° (start), 0.75=270° (top), 1.0=360° (end)
-            val sweepGradient = android.graphics.SweepGradient(
-                centerX, baseY,
-                intArrayOf(
-                    transparentColor,   // 0° (right) - not visible
-                    transparentColor,   // ~170° approaching start
-                    visibleColor,       // ~195° just after start - fade in
-                    visibleColor,       // ~270° top - full color
-                    visibleColor,       // ~345° approaching end - still full
-                    transparentColor,   // ~355° fade out
-                    transparentColor    // 360° end
-                ),
-                floatArrayOf(0f, 0.47f, 0.54f, 0.75f, 0.96f, 0.995f, 1f)
-            )
-            
-            // Combine sweep gradient with vertical fade using ComposeShader
-            val compositeShader = android.graphics.ComposeShader(
-                sweepGradient, 
-                fadeShader,
-                android.graphics.PorterDuff.Mode.DST_IN
-            )
-            
-            rainbowBandPaint.strokeWidth = bandWidth
-            rainbowBandPaint.shader = compositeShader
-            
-            // Draw full semi-circle arc (180° sweep from 180°)
-            canvas.drawArc(
-                centerX - bandRadius,
-                baseY - bandRadius,
-                centerX + bandRadius,
-                baseY + bandRadius,
-                startAngle, sweepAngle, false, rainbowBandPaint
-            )
-        }
-        
-        // Clear shader to avoid affecting other drawing
-        rainbowBandPaint.shader = null
-    }
-    
-    // ========== CHINESE NEW YEAR ==========
-    
-    private var dragonPhase = 0f
-    // Pre-allocated dragon segment positions to avoid per-frame Array+Pair allocations
-    private val dragonSegmentX = FloatArray(12)
-    private val dragonSegmentY = FloatArray(12)
-    private val dragonColors = intArrayOf(
-        Color.rgb(200, 30, 30),    // Red (body)
-        Color.rgb(255, 200, 50),   // Gold (accents)
-        Color.rgb(255, 80, 30),    // Orange-red (scales)
-        Color.rgb(180, 20, 20)     // Dark red (outline)
-    )
-    
-    private val dragonPaint = Paint().apply {
-        isAntiAlias = true
-        style = Paint.Style.FILL
-    }
-    
-    private val dragonOutlinePaint = Paint().apply {
-        isAntiAlias = true
-        style = Paint.Style.STROKE
-        strokeWidth = 2f
-        color = dragonColors[3]
-    }
-    
-    private fun renderChineseNewYear(canvas: Canvas) {
-        dragonPhase += 0.025f
-        
-        // Render New Year fireworks as base
-        renderNewYearFireworks(canvas)
-        
-        // --- 1. CALCULATE POSITIONS ---
-        val scale = heightScale.coerceIn(0.5f, 1.5f)
-        val segmentRadius = 18f * scale
-        val segmentCount = 12
-        val segmentSpacing = segmentRadius * 1.6f
-        val totalBodyLength = segmentCount * segmentSpacing
-        val margin = segmentRadius * 4f
-        
-        // Dragon moves right-to-left
-        // Wrap distance accounts for full body length + margins so dragon fully
-        // exits left edge before re-entering from the right (fixes despawn-on-screen bug)
-        val wrapDistance = screenWidth + totalBodyLength + margin * 2f + 200f * heightScale
-        val baseX = screenWidth + (margin + 100f) * heightScale - (dragonPhase * 40f * heightScale) % wrapDistance
-        val baseY = screenHeight * 0.18f
-        
-        for (i in 0 until segmentCount) {
-            val t = i.toFloat()
-            // Wave motion
-            val wave1 = kotlin.math.sin((dragonPhase * 3f - t * 0.5f).toDouble()).toFloat() * 25f * scale
-            val wave2 = kotlin.math.sin((dragonPhase * 5f - t * 0.8f).toDouble()).toFloat() * 8f * scale
-            dragonSegmentX[i] = baseX + t * segmentSpacing
-            dragonSegmentY[i] = baseY + wave1 + wave2
-        }
-        
-        // --- VISIBILITY CHECK ---
-        // Skip rendering if dragon is completely off-screen
-        // Use generous margin to include head features that extend beyond segment positions
-        var leftmostX = dragonSegmentX[0]
-        var rightmostX = dragonSegmentX[0]
-        for (i in 1 until segmentCount) {
-            if (dragonSegmentX[i] < leftmostX) leftmostX = dragonSegmentX[i]
-            if (dragonSegmentX[i] > rightmostX) rightmostX = dragonSegmentX[i]
-        }
-        
-        // Dragon moves right-to-left, so skip if entirely past left edge or waiting to enter from right
-        if (rightmostX < -margin || leftmostX > screenWidth + margin) {
-            return  // Dragon completely off-screen, skip rendering
-        }
-
-        // --- 2. DRAW BODY (Tail to Neck) ---
-        // Stop at i=1 so head (i=0) is drawn last on top
-        for (i in (segmentCount - 1) downTo 1) {
-            val x = dragonSegmentX[i]
-            val y = dragonSegmentY[i]
-            // Taper tail
-            val sizeFactor = 1f - (i.toFloat() / segmentCount) * 0.4f
-            val radius = segmentRadius * sizeFactor
-            
-            // Body Segment
-            dragonPaint.color = if (i % 2 == 0) dragonColors[0] else dragonColors[2]
-            canvas.drawCircle(x, y, radius, dragonPaint)
-            
-            // Gold Scales (SKIP for segments close to head to reduce clutter)
-            if (i % 2 == 1 && i > 2) { 
-                dragonPaint.color = dragonColors[1]
-                canvas.drawCircle(x, y - radius * 0.3f, radius * 0.5f, dragonPaint)
-            }
-            
-            // Outline
-            canvas.drawCircle(x, y, radius, dragonOutlinePaint)
-        }
-        
-        // --- 3. DRAW HEAD (Complex Path) ---
-        val headX = dragonSegmentX[0]
-        val headY = dragonSegmentY[0]
-        val headSize = segmentRadius * 2.4f 
-
-        // A. Rear Antlers (Solid Fill, not just lines)
-        // Draw these BEFORE the head so they look like they grow out of the skull
-        dragonPaint.color = dragonColors[1] // Gold
-        dragonAntlerPath.reset()
-        // Main beam (polygon shape for solidity)
-        dragonAntlerPath.moveTo(headX + headSize * 0.1f, headY - headSize * 0.6f) // Base
-        dragonAntlerPath.lineTo(headX + headSize * 0.4f, headY - headSize * 1.5f) // Tip
-        dragonAntlerPath.lineTo(headX + headSize * 0.25f, headY - headSize * 1.5f) // Thickness at tip
-        dragonAntlerPath.lineTo(headX - headSize * 0.05f, headY - headSize * 0.6f) // Base width
-        dragonAntlerPath.close()
-        // Small branch
-        dragonAntlerPath.moveTo(headX + headSize * 0.2f, headY - headSize * 1.0f)
-        dragonAntlerPath.lineTo(headX + headSize * 0.0f, headY - headSize * 1.3f)
-        dragonAntlerPath.lineTo(headX - headSize * 0.1f, headY - headSize * 1.2f)
-        dragonAntlerPath.close()
-        
-        // Draw filled antler + outline
-        canvas.drawPath(dragonAntlerPath, dragonPaint) // Fill Gold
-        dragonOutlinePaint.color = dragonColors[3]
-        canvas.drawPath(dragonAntlerPath, dragonOutlinePaint) // Outline Dark Red
-
-        // B. Head Shape (Snout & Jaw with distinct overbite)
-        dragonHeadPath.reset()
-        val snoutLen = headSize * 1.4f
-        
-        // Forehead
-        dragonHeadPath.moveTo(headX + headSize * 0.2f, headY - headSize * 0.5f)
-        dragonHeadPath.cubicTo(
-            headX - headSize * 0.2f, headY - headSize * 0.6f,
-            headX - snoutLen * 0.4f, headY - headSize * 0.5f,
-            headX - snoutLen, headY - headSize * 0.2f // Snout Tip
-        )
-        
-        // Upper Lip / Snout (Overhanging - creates overbite)
-        dragonHeadPath.cubicTo(
-            headX - snoutLen - headSize * 0.2f, headY + headSize * 0.1f, // Curve down/out
-            headX - snoutLen * 0.8f, headY + headSize * 0.2f,            // Curve back in
-            headX - headSize * 0.5f, headY + headSize * 0.1f             // Corner of mouth
-        )
-        
-        // Lower Jaw (Distinct from upper - step down)
-        dragonHeadPath.lineTo(headX - headSize * 0.6f, headY + headSize * 0.2f) // Step down slightly
-        dragonHeadPath.cubicTo(
-            headX - headSize * 0.6f, headY + headSize * 0.5f, // Jaw chin curve
-            headX - headSize * 0.2f, headY + headSize * 0.7f, // Jaw bottom
-            headX + headSize * 0.3f, headY + headSize * 0.4f  // Jaw hinge/neck
-        )
-        
-        // Close at back of head
-        dragonHeadPath.quadTo(
-            headX + headSize * 0.5f, headY - headSize * 0.2f,
-            headX + headSize * 0.2f, headY - headSize * 0.5f
-        )
-
-        // Fill Head (Red)
-        dragonPaint.color = dragonColors[0]
-        canvas.drawPath(dragonHeadPath, dragonPaint)
-        
-        // Outline Head
-        dragonOutlinePaint.color = dragonColors[3]
-        canvas.drawPath(dragonHeadPath, dragonOutlinePaint)
-
-        // C. Face Details
-        // Eye (Almond shaped - demon/eagle style)
-        val eyeX = headX - headSize * 0.25f
-        val eyeY = headY - headSize * 0.25f
-        val eyeRad = headSize * 0.22f
-        
-        dragonPaint.color = Color.WHITE
-        dragonEyePath.reset()
-        dragonEyePath.moveTo(eyeX - eyeRad, eyeY)
-        dragonEyePath.quadTo(eyeX, eyeY - eyeRad * 0.7f, eyeX + eyeRad, eyeY - eyeRad * 0.2f)
-        dragonEyePath.quadTo(eyeX, eyeY + eyeRad * 0.7f, eyeX - eyeRad, eyeY)
-        canvas.drawPath(dragonEyePath, dragonPaint)
-        
-        // Pupil
-        dragonPaint.color = Color.BLACK
-        canvas.drawCircle(eyeX - eyeRad * 0.1f, eyeY, eyeRad * 0.3f, dragonPaint)
-
-        // Brow Ridge (Gold)
-        dragonOutlinePaint.color = dragonColors[1] // Gold
-        dragonOutlinePaint.strokeWidth = 3f * scale
-        dragonOutlinePaint.style = Paint.Style.STROKE
-        dragonBrowPath.reset()
-        dragonBrowPath.moveTo(eyeX - eyeRad * 1.2f, eyeY - eyeRad * 0.6f)
-        dragonBrowPath.quadTo(eyeX, eyeY - eyeRad * 1.3f, eyeX + eyeRad * 1.2f, eyeY - eyeRad * 0.5f)
-        canvas.drawPath(dragonBrowPath, dragonOutlinePaint)
-        
-        // Nostril (Flared)
-        dragonPaint.color = dragonColors[3]
-        canvas.drawOval(
-            headX - snoutLen * 0.85f, headY - headSize * 0.1f,
-            headX - snoutLen * 0.7f, headY + headSize * 0.05f,
-            dragonPaint
-        )
-
-        // D. Whiskers (Flowing from Snout)
-        val whiskerStartX = headX - snoutLen * 0.7f
-        val whiskerStartY = headY - headSize * 0.1f
-        
-        dragonWhiskerPath.reset()
-        dragonWhiskerPath.moveTo(whiskerStartX, whiskerStartY)
-        dragonWhiskerPath.cubicTo(
-            whiskerStartX - headSize * 0.5f, whiskerStartY + headSize * 0.8f, // Loop forward/down
-            headX - headSize * 0.2f, headY + headSize * 1.2f,                 // Loop under jaw
-            headX + headSize * 1.5f, headY + headSize * 0.5f                  // Trail back
-        )
-        
-        dragonOutlinePaint.color = dragonColors[1] // Gold
-        dragonOutlinePaint.strokeWidth = 2.5f * scale
-        canvas.drawPath(dragonWhiskerPath, dragonOutlinePaint)
-        
-        // Reset paint for next frame
-        dragonOutlinePaint.color = dragonColors[3]
-        dragonOutlinePaint.strokeWidth = 2f * scale
-        dragonOutlinePaint.style = Paint.Style.STROKE
-    }
-    
     // === SceneLayer interface implementation ===
-    
+
     override fun resize(w: Float, h: Float) {
         val newW = w.toInt()
         val newH = h.toInt()
@@ -1273,17 +234,17 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
             initialized = true
         }
     }
-    
+
     override fun update(state: SimulationState, deltaTimeMs: Long) {
         // Seasonal animation is frame-driven inside render methods
         updateSettingsIfNeeded()
     }
-    
+
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         // No-op: SeasonalEvents renders via drawBehindMountains/drawBehindTerrain
         // called from ParallaxScene at the correct z-depth compositing points
     }
-    
+
     /**
      * Draw elements behind mountains (Christmas star, rainbow).
      * Called from ParallaxScene at the sky z-depth.
@@ -1293,7 +254,7 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
         val skyPy = parallaxCalculator.getOffsetYForDepth(RenderConstants.PARALLAX_SKY)
         renderBehindMountains(canvas, enabled, skyPx, skyPy)
     }
-    
+
     /**
      * Draw elements behind terrain (fireworks, CN dragon).
      * Called from ParallaxScene between mountains and terrain.
@@ -1301,11 +262,11 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
     fun drawBehindTerrain(canvas: Canvas) {
         renderBehindTerrain(canvas, enabled)
     }
-    
+
     override fun reloadSettings(settings: SimulationSettings) {
         applySettings(settings)
     }
-    
+
     override fun destroy() {
         // Pools are fixed-size arrays, no cleanup needed
     }
