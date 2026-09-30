@@ -55,7 +55,7 @@ class SystemSimulationFragment : PreferenceFragmentCompat() {
 
         try {
             val locale = Locale.getDefault()
-            val history = WeatherHistory(ctx)
+            val history = WeatherHistory.shared(ctx)
             val snapshot = history.getSnapshot()
             val days = history.getHistory()
 

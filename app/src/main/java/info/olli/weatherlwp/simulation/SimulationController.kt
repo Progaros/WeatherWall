@@ -6,7 +6,6 @@ import info.olli.weatherlwp.weather.WeatherRepository
 import info.olli.weatherlwp.weather.WeatherType
 import info.olli.weatherlwp.util.SeasonHelper
 import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Inclusive [start, end] window on a 24 h clock; bounds outside [0, 24) wrap past midnight. */
@@ -31,14 +30,12 @@ private fun normalizeHour(hour: Float): Float {
 class SimulationController(
     private val context: Context,
     private val windSimulator: WindSimulator = WindSimulator(),
-    private val historyExecutor: ExecutorService = Executors.newSingleThreadExecutor { task ->
-        Thread(task, "WeatherHistory").apply { isDaemon = true }
-    }
+    private val historyExecutor: ExecutorService = WeatherHistory.recordExecutor,
+    private val weatherHistory: WeatherHistory = WeatherHistory.shared(context)
 ) {
     
     private val clock = SimulationClock()
     @Volatile private var settings = SimulationSettings.fromSnapshot(emptyMap<String, Any?>())
-    private val weatherHistory = WeatherHistory(context)
     private val historyRecordPending = AtomicBoolean(false)
     private var destroyed = false
     private var stateSnapshot = SimulationState.default()
@@ -299,7 +296,6 @@ class SimulationController(
 
     fun destroy() {
         destroyed = true
-        historyExecutor.shutdown()
     }
     
     /**

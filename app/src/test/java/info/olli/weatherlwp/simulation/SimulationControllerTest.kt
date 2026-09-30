@@ -67,7 +67,7 @@ class SimulationControllerTest {
     }
 
     @Test
-    fun `pending history work is coalesced and shutdown accepts no new work`() {
+    fun `pending history work is coalesced and destroyed scenes stop submitting`() {
         controller.advance(0L)
         controller.advance(60_000L)
         verify(executor, times(1)).execute(any(Runnable::class.java))
@@ -75,7 +75,7 @@ class SimulationControllerTest {
         val stopped = controller.getState()
         controller.advance(120_000L)
         assertSame(stopped, controller.getState())
-        verify(executor).shutdown()
+        verify(executor, never()).shutdown()
         verify(executor, times(1)).execute(any(Runnable::class.java))
     }
 

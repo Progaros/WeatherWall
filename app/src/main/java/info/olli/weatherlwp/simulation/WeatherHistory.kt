@@ -9,6 +9,8 @@ import info.olli.weatherlwp.weather.WeatherType
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Calendar
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 /**
  * Tracks weather conditions over time to derive accumulated snow depth,
@@ -39,7 +41,31 @@ class WeatherHistory(private val context: Context) {
         private const val KEY_LAST_WEATHER_TYPE = "last_weather_type"
         private const val KEY_LAST_TEMP_CELSIUS = "last_temp_celsius"
         private const val KEY_LAST_PRECIP_PROB = "last_precip_prob"
+        private const val KEY_TODAY_DAY_ID = "today_day_id"
+        private const val KEY_TODAY_TEMP_SUM = "today_temp_sum"
+        private const val KEY_TODAY_TEMP_COUNT = "today_temp_count"
+        private const val KEY_TODAY_MIN_TEMP = "today_min_temp"
+        private const val KEY_TODAY_MAX_TEMP = "today_max_temp"
+        private const val KEY_TODAY_RAIN_HOURS = "today_rain_hours"
+        private const val KEY_TODAY_SNOW_HOURS = "today_snow_hours"
         const val MAX_HISTORY_DAYS = 14
+
+        @Volatile private var sharedInstance: WeatherHistory? = null
+
+        /** Serializes all history recording for the process. */
+        val recordExecutor: ExecutorService = Executors.newSingleThreadExecutor { task ->
+            Thread(task, "WeatherHistory").apply { isDaemon = true }
+        }
+
+        /** One owner per process so scenes cannot overwrite each other's history. */
+        fun shared(context: Context): WeatherHistory {
+            val app = context.applicationContext
+            sharedInstance?.takeIf { it.context === app }?.let { return it }
+            return synchronized(this) {
+                sharedInstance?.takeIf { it.context === app }
+                    ?: WeatherHistory(app).also { sharedInstance = it }
+            }
+        }
 
         private const val HOUR_MS = 60L * 60L * 1000L
         private const val MAX_CATCH_UP_HOURS = MAX_HISTORY_DAYS * 24
@@ -103,7 +129,14 @@ class WeatherHistory(private val context: Context) {
 
     init {
         loadFromPrefs()
-        recalculateLevels()
+        // Levels include hourly and offline progress that day summaries cannot reproduce.
+        if (!historyPrefs.contains(KEY_SNOW_DEPTH)) recalculateLevels()
+        val today = dayIdFrom(Calendar.getInstance())
+        if (currentDayId != today) {
+            flushDay()
+            currentDayId = today
+            lastRecordHour = -1
+        }
         updateSnapshot()
     }
 
@@ -411,6 +444,13 @@ class WeatherHistory(private val context: Context) {
             putString(KEY_LAST_WEATHER_TYPE, lastKnownWeatherType.name)
             putFloat(KEY_LAST_TEMP_CELSIUS, lastKnownTempCelsius)
             putFloat(KEY_LAST_PRECIP_PROB, lastKnownPrecipProb)
+            putInt(KEY_TODAY_DAY_ID, currentDayId)
+            putFloat(KEY_TODAY_TEMP_SUM, todayTempSum)
+            putInt(KEY_TODAY_TEMP_COUNT, todayTempCount)
+            putFloat(KEY_TODAY_MIN_TEMP, todayMinTemp)
+            putFloat(KEY_TODAY_MAX_TEMP, todayMaxTemp)
+            putFloat(KEY_TODAY_RAIN_HOURS, todayRainHours)
+            putFloat(KEY_TODAY_SNOW_HOURS, todaySnowHours)
         }
     }
 
@@ -418,7 +458,13 @@ class WeatherHistory(private val context: Context) {
         snowDepth = historyPrefs.getFloat(KEY_SNOW_DEPTH, 0f)
         riverLevel = historyPrefs.getFloat(KEY_RIVER_LEVEL, 0f)
         lastRecordHour = historyPrefs.getInt(KEY_LAST_RECORD_HOUR, -1)
-        currentDayId = dayIdFrom(Calendar.getInstance())
+        currentDayId = historyPrefs.getInt(KEY_TODAY_DAY_ID, dayIdFrom(Calendar.getInstance()))
+        todayTempSum = historyPrefs.getFloat(KEY_TODAY_TEMP_SUM, 0f)
+        todayTempCount = historyPrefs.getInt(KEY_TODAY_TEMP_COUNT, 0)
+        todayMinTemp = historyPrefs.getFloat(KEY_TODAY_MIN_TEMP, Float.MAX_VALUE)
+        todayMaxTemp = historyPrefs.getFloat(KEY_TODAY_MAX_TEMP, Float.MIN_VALUE)
+        todayRainHours = historyPrefs.getFloat(KEY_TODAY_RAIN_HOURS, 0f)
+        todaySnowHours = historyPrefs.getFloat(KEY_TODAY_SNOW_HOURS, 0f)
         lastPhysicsUpdateMs = historyPrefs.getLong(KEY_LAST_PHYSICS_UPDATE_MS, System.currentTimeMillis())
         lastKnownWeatherType = runCatching {
             val name = historyPrefs.getString(KEY_LAST_WEATHER_TYPE, WeatherType.CLEAR.name)
