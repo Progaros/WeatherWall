@@ -65,9 +65,8 @@ data class SimulationSettings(
     /**
      * Get effective weather, resolving the manual condition override.
      *
-     * A single [weatherOverride] (parsed from `pref_weather_type`) applies whether or not
-     * simulation mode is on, so users can force rain/fog/snow without enabling debug
-     * settings. When real weather is disabled and no override is set, clear skies are used.
+     * [weatherOverride] is only set in simulation (debug) mode. When real weather is
+     * disabled and no override is set, clear skies are used.
      */
     fun getEffectiveWeather(realWeather: WeatherType): WeatherType {
         weatherOverride?.let { return it }
@@ -168,8 +167,9 @@ data class SimulationSettings(
             val manualTimeMinutes = snapInt("pref_manual_time", 720)
 
             val useRealWeather = snapBoolean("pref_use_breezy_weather", true)
-            // Single source of truth for the manual condition override (auto = null).
-            val weatherOverride = parseWeatherOverride(snapString("pref_weather_type", "auto"))
+            // Lives in the Simulation Overrides screen, so like its siblings it only applies in debug mode;
+            // otherwise a forgotten override keeps forcing rain over real clear skies.
+            val weatherOverride = if (debugEnabled) parseWeatherOverride(snapString("pref_weather_type", "auto")) else null
 
             val windStrength: Float
             val useWeatherWind: Boolean

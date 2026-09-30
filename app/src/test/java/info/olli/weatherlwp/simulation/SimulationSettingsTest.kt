@@ -90,10 +90,21 @@ class SimulationSettingsTest {
     // ============== Effective weather resolution ==============
 
     @Test
-    fun `manual weather override applies without simulation mode`() {
+    fun `leftover weather override is ignored outside simulation mode`() {
         val settings = SimulationSettings.fromSnapshot(
             mapOf(
                 "pref_debug_enabled" to false,
+                "pref_weather_type" to "rain"
+            )
+        )
+        assertEquals(WeatherType.CLEAR, settings.getEffectiveWeather(WeatherType.CLEAR))
+    }
+
+    @Test
+    fun `manual weather override applies in simulation mode`() {
+        val settings = SimulationSettings.fromSnapshot(
+            mapOf(
+                "pref_debug_enabled" to true,
                 "pref_weather_type" to "fog"
             )
         )
