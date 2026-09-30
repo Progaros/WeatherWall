@@ -13,6 +13,7 @@ import androidx.preference.PreferenceManager
  */
 object WeatherRepository {
     private const val TAG = "WeatherRepository"
+    private const val PREFS_NAME = "weather_data"
     
     private const val KEY_WEATHER_TYPE = "weather_current_type"
     private const val KEY_SUNRISE = "weather_sunrise"
@@ -66,7 +67,9 @@ object WeatherRepository {
             cached = null  // Force re-read on next access
         }
     }
-    @Volatile private var listenerRegistered = false
+
+    private class Binding(val app: Context, val prefs: SharedPreferences)
+    @Volatile private var binding: Binding? = null
     
     /**
      * Extended weather data from Breezy Weather.
@@ -95,9 +98,7 @@ object WeatherRepository {
         rawJson: String? = null,
         extendedData: ExtendedWeatherData? = null
     ) {
-        ensureListenerRegistered(context)
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        prefs.edit {
+        prefs(context).edit {
             putString(KEY_WEATHER_TYPE, type.name)
             putLong(KEY_SUNRISE, sunrise)
             putLong(KEY_SUNSET, sunset)
@@ -147,20 +148,40 @@ object WeatherRepository {
     }
     
     /**
-     * Ensure the cache invalidation listener is registered.
-     * Called lazily on first access to avoid lifecycle issues.
-     * Uses double-checked locking to prevent duplicate registration from concurrent threads.
+     * Weather data lives outside the default prefs so updates never look like settings changes.
+     * First access per application migrates legacy keys and registers the cache listener.
      */
-    private fun ensureListenerRegistered(context: Context) {
-        if (!listenerRegistered) {
-            synchronized(this) {
-                if (!listenerRegistered) {
-                    val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-                    prefs.registerOnSharedPreferenceChangeListener(cacheInvalidationListener)
-                    listenerRegistered = true
+    private fun prefs(context: Context): SharedPreferences {
+        val app = context.applicationContext ?: context
+        binding?.takeIf { it.app === app }?.let { return it.prefs }
+        synchronized(this) {
+            binding?.takeIf { it.app === app }?.let { return it.prefs }
+            val prefs = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            migrateLegacyKeys(PreferenceManager.getDefaultSharedPreferences(app), prefs)
+            binding?.prefs?.unregisterOnSharedPreferenceChangeListener(cacheInvalidationListener)
+            prefs.registerOnSharedPreferenceChangeListener(cacheInvalidationListener)
+            binding = Binding(app, prefs)
+            cached = null
+            return prefs
+        }
+    }
+
+    private fun migrateLegacyKeys(legacy: SharedPreferences, target: SharedPreferences) {
+        val old = legacy.all.filterKeys { it in WEATHER_KEYS || it == KEY_RAW_JSON }
+        if (old.isEmpty()) return
+        target.edit(commit = true) {
+            for ((key, value) in old) {
+                if (target.contains(key)) continue
+                when (value) {
+                    is String -> putString(key, value)
+                    is Int -> putInt(key, value)
+                    is Long -> putLong(key, value)
+                    is Float -> putFloat(key, value)
+                    is Boolean -> putBoolean(key, value)
                 }
             }
         }
+        legacy.edit { old.keys.forEach { remove(it) } }
     }
     
     /**
@@ -169,10 +190,9 @@ object WeatherRepository {
      */
     private fun ensureCachePopulated(context: Context) {
         if (cached != null) return
-        ensureListenerRegistered(context)
+        val prefs = prefs(context)
         synchronized(this) {
             if (cached != null) return
-            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
             
             val typeName = prefs.getString(KEY_WEATHER_TYPE, WeatherType.CLEAR.name) ?: WeatherType.CLEAR.name
             val weatherType = try { WeatherType.valueOf(typeName) } catch (_: Exception) { WeatherType.CLEAR }
@@ -266,10 +286,7 @@ object WeatherRepository {
      * Get raw JSON data from last Breezy Weather update.
      * Useful for debugging and checking available data fields.
      */
-    fun getRawJson(context: Context): String? {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        return prefs.getString(KEY_RAW_JSON, null)
-    }
+    fun getRawJson(context: Context): String? = prefs(context).getString(KEY_RAW_JSON, null)
     
     // ============== Extended Weather Data Getters ==============
     // These all read from the in-memory cache for zero-allocation per-frame access.

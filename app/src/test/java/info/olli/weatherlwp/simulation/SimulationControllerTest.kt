@@ -2,6 +2,8 @@ package info.olli.weatherlwp.simulation
 
 import android.content.Context
 import androidx.preference.PreferenceManager
+import info.olli.weatherlwp.weather.WeatherRepository
+import info.olli.weatherlwp.weather.WeatherType
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -77,6 +79,20 @@ class SimulationControllerTest {
         assertSame(stopped, controller.getState())
         verify(executor, never()).shutdown()
         verify(executor, times(1)).execute(any(Runnable::class.java))
+    }
+
+    @Test
+    fun `sunrise update reaches the clock without applySettings`() {
+        val sunrise = 1_718_424_000L
+        WeatherRepository.updateWeather(context, WeatherType.CLEAR, sunrise, sunrise + 14 * 3600)
+        controller.advance(0L)
+        val before = controller.getState().sunriseHours
+
+        WeatherRepository.updateWeather(context, WeatherType.CLEAR, sunrise + 3600, sunrise + 15 * 3600)
+        controller.advance(16L)
+
+        assertEquals((before + 1f) % 24f, controller.getState().sunriseHours, 0.01f)
+        controller.destroy()
     }
 
     @Test

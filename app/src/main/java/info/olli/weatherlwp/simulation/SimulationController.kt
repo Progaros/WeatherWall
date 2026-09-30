@@ -50,6 +50,8 @@ class SimulationController(
     // Frame delta tracking
     private var lastUpdateMs: Long? = null
     private var lastRecordAttemptMs: Long? = null
+    private var appliedSunrise = Long.MIN_VALUE
+    private var appliedSunset = Long.MIN_VALUE
 
     // Season blend is date-based (changes ~once/day) yet getEffectiveSeasonBlend allocates
     // Calendars; cache it and recompute only when the local day or a relevant setting changes.
@@ -74,10 +76,16 @@ class SimulationController(
         // Update clock with settings
         clock.setUseRealTime(newSettings.useRealTime)
         clock.setManualTime(newSettings.getEffectiveTimeMinutes())
+        syncSunTimes()
+    }
 
-        // Update clock with actual sunrise/sunset times from weather data
+    /** Weather updates no longer trigger settings reloads, so pick up new sun times here. */
+    private fun syncSunTimes() {
         val sunrise = WeatherRepository.getSunrise(context)
         val sunset = WeatherRepository.getSunset(context)
+        if (sunrise == appliedSunrise && sunset == appliedSunset) return
+        appliedSunrise = sunrise
+        appliedSunset = sunset
         clock.updateSunTimes(sunrise, sunset)
     }
 
@@ -145,6 +153,7 @@ class SimulationController(
     fun advance(frameTimeMs: Long = System.nanoTime() / 1_000_000L) {
         if (destroyed || lastUpdateMs == frameTimeMs) return
         val currentSettings = settings
+        syncSunTimes()
 
         // Get real weather from repository
         val realWeather = WeatherRepository.getWeatherType(context)
