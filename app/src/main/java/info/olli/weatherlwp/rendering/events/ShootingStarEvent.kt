@@ -43,11 +43,19 @@ class ShootingStarEvent(random: Random, override val spawnTimeMs: Long = System.
         strokeCap = Paint.Cap.ROUND
     }
 
-    // Unit-length (0,0)->(1,0) gradients; rebuilt only when their end alpha changes (fade-out)
-    private var glowShader: LinearGradient? = null
-    private var glowShaderAlpha = -1
-    private var coreShader: LinearGradient? = null
-    private var coreShaderAlpha = -1
+    // Unit-length (0,0)->(1,0) gradients at full strength; fade-out is applied via paint alpha
+    private val glowShader = LinearGradient(
+        0f, 0f, 1f, 0f,
+        Color.argb(0, 180, 200, 255),
+        Color.argb(90, 200, 215, 255),
+        Shader.TileMode.CLAMP
+    )
+    private val coreShader = LinearGradient(
+        0f, 0f, 1f, 0f,
+        Color.argb(0, 255, 255, 255),
+        Color.argb(255, 255, 255, 240),
+        Shader.TileMode.CLAMP
+    )
     private val trailMatrix = Matrix()
     private val trailMatrixValues = FloatArray(9)
 
@@ -123,26 +131,14 @@ class ShootingStarEvent(random: Random, override val spawnTimeMs: Long = System.
             trailMatrix.setValues(trailMatrixValues)
 
             // Faint wide glow under a thin bright core, both fading towards the tail
-            val glowAlpha90 = (90 * fadeAlpha).toInt()
-            val glow = glowShader?.takeIf { glowShaderAlpha == glowAlpha90 } ?: LinearGradient(
-                0f, 0f, 1f, 0f,
-                Color.argb(0, 180, 200, 255),
-                Color.argb(glowAlpha90, 200, 215, 255),
-                Shader.TileMode.CLAMP
-            ).also { glowShader = it; glowShaderAlpha = glowAlpha90 }
-            glow.setLocalMatrix(trailMatrix)
-            trailPaint.shader = glow
+            trailPaint.alpha = headAlpha
+            glowShader.setLocalMatrix(trailMatrix)
+            trailPaint.shader = glowShader
             trailPaint.strokeWidth = 1.6f * unit
             canvas.drawLine(tailX, tailY, headX, headY, trailPaint)
 
-            val core = coreShader?.takeIf { coreShaderAlpha == headAlpha } ?: LinearGradient(
-                0f, 0f, 1f, 0f,
-                Color.argb(0, 255, 255, 255),
-                Color.argb(headAlpha, 255, 255, 240),
-                Shader.TileMode.CLAMP
-            ).also { coreShader = it; coreShaderAlpha = headAlpha }
-            core.setLocalMatrix(trailMatrix)
-            trailPaint.shader = core
+            coreShader.setLocalMatrix(trailMatrix)
+            trailPaint.shader = coreShader
             trailPaint.strokeWidth = 0.45f * unit
             canvas.drawLine(tailX, tailY, headX, headY, trailPaint)
 
