@@ -11,6 +11,9 @@ import kotlin.random.Random
 // Java Random is used for nextGaussian() (normal distribution)
 private val gaussianRandom = java.util.Random()
 
+/** Summed particle life at which bursts light the landscape fully (~one large fresh explosion). */
+private const val FULL_GLOW_PARTICLES = 150f
+
 /**
  * New Year fireworks: pooled rockets/explosion particles, frequency-based auto-launch
  * and shake-triggered bursts.
@@ -218,6 +221,7 @@ internal class FireworksSystem {
         // Update and render explosion particles
         // Scale factor for particle sizes (min 50% to keep visible on very small screens)
         val particleScale = heightScale.coerceAtLeast(0.5f)
+        var brightness = 0f
 
         for (f in fireworks) {
             if (f.life > 0) {
@@ -234,6 +238,7 @@ internal class FireworksSystem {
 
                 val lifeRatio = f.life / f.maxLife.toFloat()
                 val alpha = (255 * lifeRatio).toInt().coerceIn(0, 255)
+                brightness += lifeRatio
 
                 // Scaled size for this particle
                 val scaledSize = f.size * particleScale
@@ -266,7 +271,12 @@ internal class FireworksSystem {
                 canvas.drawCircle(f.x, f.y, size * 0.4f, fireworkPaint)
             }
         }
+        glow = (brightness / FULL_GLOW_PARTICLES).coerceAtMost(1f)
     }
+
+    /** Light (0..1) the bursts drawn in the last [render] cast over the landscape. */
+    var glow = 0f
+        private set
 
     private fun launchRocket() {
         // Find an inactive rocket slot

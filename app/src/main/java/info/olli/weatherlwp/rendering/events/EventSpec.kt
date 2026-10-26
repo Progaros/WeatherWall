@@ -140,9 +140,9 @@ enum class EventSpec(
         { r, t, _ -> FrogEvent(r, t) },
         { c, _ -> !c.isWinter && !c.isAutumn && (c.isDusk || c.isNight) },
         EventPreviewSpec(1.25f, GROUND_PREVIEW_Y, 0.5f)),
-    // Burst when triggered manually; the annual shower (late July - August) spawns single
-    // Perseids by solar longitude in RandomEventLayer instead of through random selection.
-    PERSEIDS("perseids", "Perseids", 19,
+    // Burst of the current shower when triggered manually; the annual showers (Perseids,
+    // Geminids, Quadrantids) spawn single meteors by solar longitude in RandomEventLayer.
+    PERSEIDS("perseids", "Meteor Showers", 19,
         { r, t, _ -> MeteorShowerEvent(r, t) },
         { _, _ -> false },
         EventPreviewSpec(1.25f, SKY_PREVIEW_Y, 0.02f)),

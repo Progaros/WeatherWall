@@ -13,6 +13,7 @@ import androidx.core.graphics.withClip
 import androidx.core.graphics.withTranslation
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
+import info.olli.weatherlwp.simulation.Astronomy
 import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
 import info.olli.weatherlwp.util.ColorMath
@@ -132,6 +133,8 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         private const val SKY_SUN_EVENT_BUCKETS = 64
         private const val SKY_SHADE_BUCKETS = 32
         private const val METEOR_TRAIL_SEGMENTS = 5
+        /** How much a daytime moon fades against the bright sky. */
+        private const val DAY_MOON_FADE = 0.55f
     }
 
     init {
@@ -574,26 +577,20 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
 
     /**
      * Draw the moon as a pale circle with crescent effect.
-     * Visible at night, follows arc opposite to sun using dynamic sunset/sunrise times.
+     * Rises and sets according to its phase (a full moon is up all night, a first quarter
+     * moon from noon to midnight), so it can also appear faintly in the daytime sky.
      * Uses smoothedTimeOfDayHours for animated transitions when simulation time changes.
      */
     private fun drawMoon(canvas: Canvas, state: SimulationState, parallaxX: Float, parallaxY: Float) {
         // Use smoothed time for animated position transitions (matches sky gradient)
         val hour = state.smoothedTimeOfDayHours
-        
-        // Moon visible from sunset to sunrise (using dynamic times)
-        val sunriseHour = state.sunriseHours
-        val sunsetHour = state.sunsetHours
-        if (hour >= sunriseHour && hour <= sunsetHour) return
-        
-        // Calculate position along arc (normalize night hours)
-        // Night runs from sunset to midnight and midnight to sunrise
-        val nightDuration = (24f - sunsetHour) + sunriseHour
-        val nightProgress = if (hour >= sunsetHour) {
-            (hour - sunsetHour) / nightDuration
-        } else {
-            ((24f - sunsetHour) + hour) / nightDuration
-        }
+        val solarNoon = (state.sunriseHours + state.sunsetHours) / 2f
+        val nightProgress = Astronomy.moonArcProgress(hour, state.moonPhase, solarNoon) ?: return
+
+        // Washed out by daylight: pale disc, no dark earthshine side.
+        val lightLevel = state.getLightLevel()
+        val dayFactor = ((lightLevel - 0.15f) / 0.85f).coerceIn(0f, 1f)
+        val moonAlpha = 1f - DAY_MOON_FADE * dayFactor
         
         // X position: left to right across height-based field (uniform with Y scaling)
         val fieldWidth = SkyViewportMapper.fieldWidth(width, height)
@@ -645,11 +642,13 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
             )
         }
         moonPaint.shader = cachedMoonGradient
+        moonPaint.alpha = (255 * moonAlpha).toInt()
         canvas.drawCircle(moonX, moonY, glowRadius, moonPaint)
         moonPaint.shader = null
         
         // Draw the shadow/dark side (earthshine) - use pre-parsed color, no shader
         moonShadowPaint.color = moonShadowColor
+        moonShadowPaint.alpha = (255 * (1f - dayFactor)).toInt()
         canvas.drawCircle(moonX, moonY, radius, moonShadowPaint)
         
         // Now draw the lit portion using a path
@@ -694,11 +693,11 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
             moonPath.close()
             
             // Draw lit portion - simple solid color for performance
-            moonPaint.color = Color.argb(255, 245, 245, 240)  // Cream white
+            moonPaint.color = Color.argb((255 * moonAlpha).toInt(), 245, 245, 240)  // Cream white
             canvas.drawPath(moonPath, moonPaint)
             
             // Draw simple maria as low-alpha circles (no gradients for performance)
-            moonPaint.color = Color.argb(20, 100, 110, 130)
+            moonPaint.color = Color.argb((20 * moonAlpha).toInt(), 100, 110, 130)
             canvas.withClip(moonPath) {
                 canvas.drawCircle(moonX - radius * 0.25f, moonY - radius * 0.15f, radius * 0.4f, moonPaint)
                 canvas.drawCircle(moonX + radius * 0.15f, moonY + radius * 0.2f, radius * 0.3f, moonPaint)

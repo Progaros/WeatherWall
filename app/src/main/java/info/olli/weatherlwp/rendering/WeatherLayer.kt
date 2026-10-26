@@ -36,6 +36,9 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
         private const val SNOW_DEPTH_MEDIUM = 1
         private const val SNOW_DEPTH_LARGE = 2
 
+        /** Parallax depth of the nearest precipitation (0 = sky, 1 = foreground). */
+        private const val NEAR_PARALLAX_DEPTH = 0.9f
+
         /**
          * Precipitation floor. Weather providers frequently report 0% precipitation
          * probability while it is actually raining, which would otherwise leave the
@@ -186,6 +189,13 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
     private var screenWidth = 0
     private var screenHeight = 0
 
+    // Parallax per depth bucket (indexed like RAIN_DEPTH_*) and the overscan it needs
+    private val bucketOffsetX = FloatArray(3)
+    private val bucketOffsetY = FloatArray(3)
+    private var spawnMarginX = 0f
+    private var spawnMarginY = 0f
+    private var marginsDirty = true
+
     /**
      * Precipitation speeds are authored in px at [RenderConstants.REFERENCE_HEIGHT]. Scaling by the
      * screen height keeps the fall time across the screen identical on short and tall displays.
@@ -305,19 +315,19 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
         // Initialize rain particles
         for (p in rainParticles) {
             resetRainParticle(p)
-            p.y = random.nextFloat() * screenHeight // Spread across screen initially
+            p.y = spreadY() // Spread across screen initially
         }
 
         // Initialize snow particles
         for (p in snowParticles) {
             resetSnowParticle(p)
-            p.y = random.nextFloat() * screenHeight
+            p.y = spreadY()
         }
         
         // Initialize hail particles
         for (p in hailParticles) {
             resetHailParticle(p)
-            p.y = random.nextFloat() * screenHeight
+            p.y = spreadY()
         }
     }
 
@@ -326,8 +336,8 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
         p.layer = random.nextInt(weatherLayers.coerceAtLeast(1))
         val layerScale = getLayerScale(p.layer)
         
-        p.x = random.nextFloat() * screenWidth
-        p.y = -20f
+        p.x = spawnX()
+        p.y = -20f - spawnMarginY
         // Base speed scaled by layer (back layers are slower)
         p.speed = (15f + random.nextFloat() * 10f) * layerScale
         // Base size scaled by layer (back layers are smaller)
@@ -337,8 +347,8 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
     }
 
     private fun recycleRainParticle(p: Particle) {
-        p.x = random.nextFloat() * screenWidth
-        p.y = -20f
+        p.x = spawnX()
+        p.y = -20f - spawnMarginY
     }
 
     private fun resetSnowParticle(p: Particle) {
@@ -346,8 +356,8 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
         p.layer = random.nextInt(weatherLayers.coerceAtLeast(1))
         val layerScale = getLayerScale(p.layer)
         
-        p.x = random.nextFloat() * screenWidth
-        p.y = -10f
+        p.x = spawnX()
+        p.y = -10f - spawnMarginY
         // Base speed scaled by layer
         p.speed = (1.5f + random.nextFloat() * 2f) * layerScale
         // Size relative to screen height, also scaled by layer
@@ -358,8 +368,8 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
     }
 
     private fun recycleSnowParticle(p: Particle) {
-        p.x = random.nextFloat() * screenWidth
-        p.y = -10f
+        p.x = spawnX()
+        p.y = -10f - spawnMarginY
     }
     
     private fun resetHailParticle(p: Particle) {
@@ -367,8 +377,8 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
         p.layer = random.nextInt(weatherLayers.coerceAtLeast(1))
         val layerScale = getLayerScale(p.layer)
         
-        p.x = random.nextFloat() * screenWidth
-        p.y = -15f
+        p.x = spawnX()
+        p.y = -15f - spawnMarginY
         // Base speed scaled by layer
         p.speed = (18f + random.nextFloat() * 12f) * layerScale
         // Base size scaled by layer
@@ -378,9 +388,14 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
     }
 
     private fun recycleHailParticle(p: Particle) {
-        p.x = random.nextFloat() * screenWidth
-        p.y = -15f
+        p.x = spawnX()
+        p.y = -15f - spawnMarginY
     }
+
+    /** Particles spawn across the screen plus the parallax overscan so shifted layers never show gaps. */
+    private fun spawnX(): Float = -spawnMarginX + random.nextFloat() * (screenWidth + 2f * spawnMarginX)
+
+    private fun spreadY(): Float = -spawnMarginY + random.nextFloat() * (screenHeight + 2f * spawnMarginY)
 
     private fun configureSnowPointPaints() {
         val heightScale = RenderConstants.getHeightScale(screenHeight.toFloat(), screenWidth.toFloat()).coerceAtLeast(0.35f)
@@ -429,17 +444,11 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
     }
     
     /**
-     * Get parallax depth multiplier for a layer.
-     * Front layers move more with parallax (closer to camera).
+     * Parallax depth of a draw bucket (rain FAR/MEDIUM/NEAR, snow SMALL/MEDIUM/LARGE share indices):
+     * near drops sit in the foreground, each step back moves [layerDepthOffset] towards the sky.
      */
-    fun getLayerDepth(layer: Int): Float {
-        if (weatherLayers <= 1) return 0.5f
-        // Front layer (0) = higher depth (more movement), back = lower
-        val maxLayer = weatherLayers - 1
-        val normalizedLayer = layer.toFloat() / maxLayer  // 0 to 1
-        // Map to depth: front (0) = 0.3 (foreground), back (1) = 0.8 (background)
-        return 0.3f + normalizedLayer * layerDepthOffset * 2f
-    }
+    private fun bucketDepth(bucket: Int): Float =
+        (NEAR_PARALLAX_DEPTH - (RAIN_DEPTH_NEAR - bucket) * layerDepthOffset).coerceIn(0f, 1f)
 
     private fun renderRain(canvas: Canvas) {
         // Dim the world during rain (atmospheric effect)
@@ -454,26 +463,38 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
         rainPaintNear.alpha = (180 + intensity * 70f).toInt().coerceIn(130, 255)
 
         if (rainFarCoordCount > 0) {
-            canvas.drawLines(rainCoordsFar, 0, rainFarCoordCount, rainPaintFar)
+            withBucketParallax(canvas, RAIN_DEPTH_FAR) {
+                canvas.drawLines(rainCoordsFar, 0, rainFarCoordCount, rainPaintFar)
+            }
         }
         if (rainMediumCoordCount > 0) {
-            canvas.drawLines(rainCoordsMedium, 0, rainMediumCoordCount, rainPaintMedium)
+            withBucketParallax(canvas, RAIN_DEPTH_MEDIUM) {
+                canvas.drawLines(rainCoordsMedium, 0, rainMediumCoordCount, rainPaintMedium)
+            }
         }
         if (rainNearCoordCount > 0) {
-            canvas.drawLines(rainCoordsNear, 0, rainNearCoordCount, rainPaintNear)
+            withBucketParallax(canvas, RAIN_DEPTH_NEAR) {
+                canvas.drawLines(rainCoordsNear, 0, rainNearCoordCount, rainPaintNear)
+            }
         }
     }
 
     private fun renderSnow(canvas: Canvas) {
         // Draw pre-bucketed snow points with fixed paints (small/mid/large depth)
         if (snowSmallCoordCount > 0) {
-            canvas.drawPoints(snowCoordsSmall, 0, snowSmallCoordCount, snowPaintSmall)
+            withBucketParallax(canvas, SNOW_DEPTH_SMALL) {
+                canvas.drawPoints(snowCoordsSmall, 0, snowSmallCoordCount, snowPaintSmall)
+            }
         }
         if (snowMediumCoordCount > 0) {
-            canvas.drawPoints(snowCoordsMedium, 0, snowMediumCoordCount, snowPaintMedium)
+            withBucketParallax(canvas, SNOW_DEPTH_MEDIUM) {
+                canvas.drawPoints(snowCoordsMedium, 0, snowMediumCoordCount, snowPaintMedium)
+            }
         }
         if (snowLargeCoordCount > 0) {
-            canvas.drawPoints(snowCoordsLarge, 0, snowLargeCoordCount, snowPaintLarge)
+            withBucketParallax(canvas, SNOW_DEPTH_LARGE) {
+                canvas.drawPoints(snowCoordsLarge, 0, snowLargeCoordCount, snowPaintLarge)
+            }
         }
     }
     
@@ -496,19 +517,22 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
             val p = hailParticles[i]
             hailPaint.alpha = p.alpha
             val size = p.size * scale
+            val bucket = getRainDepthBucket(p.layer)
+            val px = p.x + bucketOffsetX[bucket]
+            val py = p.y + bucketOffsetY[bucket]
             
             // Draw hail as irregular oval (ice pellet)
             val ovalWidth = size * 0.8f
             val ovalHeight = size * 1.1f
             canvas.drawOval(
-                p.x - ovalWidth, p.y - ovalHeight,
-                p.x + ovalWidth, p.y + ovalHeight,
+                px - ovalWidth, py - ovalHeight,
+                px + ovalWidth, py + ovalHeight,
                 hailPaint
             )
             
             // Draw highlight for 3D effect
             hailPaint.alpha = (p.alpha * 0.5f).toInt()
-            canvas.drawCircle(p.x - size * 0.3f, p.y - size * 0.4f, size * 0.3f, hailPaint)
+            canvas.drawCircle(px - size * 0.3f, py - size * 0.4f, size * 0.3f, hailPaint)
             hailPaint.alpha = p.alpha
         }
     }
@@ -664,6 +688,7 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
         screenWidth = w.toInt()
         screenHeight = h.toInt()
         initialized = false
+        marginsDirty = true
         configureRainLinePaints()
         configureSnowPointPaints()
         // Invalidate cached fog gradients on resize
@@ -727,7 +752,7 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
             p.y += p.speed * speedMult * frameScale
             p.x -= (1f + windDrift) * speedMult * frameScale
 
-            if (p.y > screenHeight) {
+            if (p.y > screenHeight + spawnMarginY) {
                 recycleRainParticle(p)
             }
 
@@ -811,7 +836,7 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
             p.x += kotlin.math.sin((p.y / scale * swayPhase).toDouble()).toFloat() * (0.8f * swayMultiplier) * frameScale +
                 windDrift * windMultiplier * frameScale
 
-            if (p.y > screenHeight) {
+            if (p.y > screenHeight + spawnMarginY) {
                 recycleSnowParticle(p)
             }
 
@@ -850,7 +875,7 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
             val p = hailParticles[i]
             p.y += p.speed * speedMult * frameScale
             p.x += kotlin.math.sin((p.y / scale * 0.05f).toDouble()).toFloat() * 0.5f * frameScale + windDrift * 0.3f * frameScale
-            if (p.y > screenHeight) recycleHailParticle(p)
+            if (p.y > screenHeight + spawnMarginY) recycleHailParticle(p)
         }
     }
     
@@ -884,7 +909,31 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
     }
 
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
+        if (marginsDirty) {
+            val (maxX, maxY) = parallaxCalculator.getMaxOffsetForDepth(bucketDepth(RAIN_DEPTH_NEAR))
+            spawnMarginX = maxX
+            spawnMarginY = maxY
+            marginsDirty = false
+        }
+        for (bucket in RAIN_DEPTH_FAR..RAIN_DEPTH_NEAR) {
+            bucketOffsetX[bucket] = parallaxCalculator.getOffsetXForDepth(bucketDepth(bucket))
+            bucketOffsetY[bucket] = parallaxCalculator.getOffsetYForDepth(bucketDepth(bucket))
+        }
         render(canvas, state)
+    }
+
+    /** Draws one depth bucket shifted by its parallax offset. */
+    private inline fun withBucketParallax(canvas: Canvas, bucket: Int, block: () -> Unit) {
+        val dx = bucketOffsetX[bucket]
+        val dy = bucketOffsetY[bucket]
+        if (dx == 0f && dy == 0f) {
+            block()
+            return
+        }
+        canvas.save()
+        canvas.translate(dx, dy)
+        block()
+        canvas.restore()
     }
 
     /**
@@ -897,6 +946,8 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
         weatherLayers = layers.coerceIn(1, 5)
         layerSeparation = separation.coerceIn(0.1f, 0.5f)
         layerDepthOffset = depth.coerceIn(0.1f, 0.4f)
+        // Parallax strength may have changed with the same settings reload
+        marginsDirty = true
         // Reinitialize particles with new layer assignments
         initialized = false
     }

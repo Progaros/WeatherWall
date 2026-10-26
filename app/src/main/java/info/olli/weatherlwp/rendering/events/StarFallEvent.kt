@@ -138,6 +138,18 @@ class StarFallEvent(random: Random, override val spawnTimeMs: Long) : RandomEven
 
     private val previewOverlay by lazy { StarFieldOverlay() }
 
+    override fun skyGlow(absoluteTimeMs: Long): Float {
+        val elapsed = absoluteTimeMs - spawnTimeMs
+        var glow = 0f
+        for (fall in falls) {
+            val local = elapsed - fall.startMs
+            if (local < 0 || local >= fall.durationMs) continue
+            val p = local / fall.durationMs.toFloat()
+            glow = maxOf(glow, ShootingStarEvent.METEOR_GLOW * ((1f - p) / BURN_OUT_FRACTION).coerceIn(0f, 1f))
+        }
+        return glow
+    }
+
     override fun draw(canvas: Canvas, paint: Paint, strokePaint: Paint,
                       parallaxCalculator: ParallaxCalculator, width: Float, height: Float,
                       timeSeconds: Float, ambientColor: Int, extendedOffset: Float, absoluteTimeMs: Long,

@@ -87,6 +87,64 @@ class AstronomyTest {
     }
 
     @Test
+    fun `sunrise and sunset match published times for Berlin and Sydney`() {
+        // timeanddate.com: Berlin 2026-06-21 04:43/21:33 CEST, 2026-12-21 08:15/15:54 CET
+        val summer = Astronomy.sunriseSunset(LocalDate.of(2026, 6, 21).toEpochDay(), 52.52, 13.405)!!
+        assertEquals(utcMs(2026, 6, 21, 2, 43).toDouble(), summer.first.toDouble(), 120_000.0)
+        assertEquals(utcMs(2026, 6, 21, 19, 33).toDouble(), summer.second.toDouble(), 120_000.0)
+        val winter = Astronomy.sunriseSunset(LocalDate.of(2026, 12, 21).toEpochDay(), 52.52, 13.405)!!
+        assertEquals(utcMs(2026, 12, 21, 7, 15).toDouble(), winter.first.toDouble(), 120_000.0)
+        assertEquals(utcMs(2026, 12, 21, 14, 54).toDouble(), winter.second.toDouble(), 120_000.0)
+        // Sydney 2026-06-21 07:00/16:53 AEST: sunrise falls on the previous UTC day.
+        val sydney = Astronomy.sunriseSunset(LocalDate.of(2026, 6, 21).toEpochDay(), -33.87, 151.21)!!
+        assertEquals(utcMs(2026, 6, 20, 21, 0).toDouble(), sydney.first.toDouble(), 120_000.0)
+        assertEquals(utcMs(2026, 6, 21, 6, 53).toDouble(), sydney.second.toDouble(), 120_000.0)
+        // Midsummer above the Arctic Circle: no sunset.
+        assertEquals(null, Astronomy.sunriseSunset(LocalDate.of(2026, 6, 21).toEpochDay(), 78.2, 15.6))
+    }
+
+    @Test
+    fun `location is recovered from one day of sun times`() {
+        val (rise, set) = Astronomy.sunriseSunset(LocalDate.of(2026, 11, 10).toEpochDay(), -33.87, 151.21)!!
+        val (latitude, longitude) = Astronomy.locationFromSunTimes(rise, set)!!
+        assertEquals(-33.87, latitude!!, 0.2)
+        assertEquals(151.21, longitude, 0.2)
+        // Near the equinox day length says nothing about latitude.
+        val (eqRise, eqSet) = Astronomy.sunriseSunset(LocalDate.of(2026, 3, 20).toEpochDay(), 52.52, 13.405)!!
+        assertEquals(null, Astronomy.locationFromSunTimes(eqRise, eqSet)!!.first)
+    }
+
+    @Test
+    fun `moon rises with its phase`() {
+        // Full moon: up from sunset through midnight to sunrise.
+        assertEquals(0.5f, Astronomy.moonArcProgress(0f, 0.5f, 12f)!!, 0.01f)
+        assertEquals(null, Astronomy.moonArcProgress(12f, 0.5f, 12f))
+        // First quarter: highest at 18:00, set around midnight, visible in the afternoon.
+        assertEquals(0.5f, Astronomy.moonArcProgress(18f, 0.25f, 12f)!!, 0.01f)
+        assertTrue(Astronomy.moonArcProgress(14f, 0.25f, 12f) != null)
+        assertEquals(null, Astronomy.moonArcProgress(3f, 0.25f, 12f))
+    }
+
+    @Test
+    fun `sun times are projected when provider data is stale or missing`() {
+        val zone = java.util.TimeZone.getTimeZone("Europe/Berlin")
+        val now = utcMs(2026, 12, 21, 12, 0)
+        // Fresh provider data is used unchanged.
+        val freshRise = utcMs(2026, 12, 21, 7, 0) / 1000
+        assertEquals(Pair(freshRise, freshRise + 8 * 3600), SunTimes.resolve(freshRise, freshRise + 8 * 3600, now, zone, null))
+
+        // Midsummer data from Berlin, half a year old: today's short winter day is projected.
+        val (oldRise, oldSet) = Astronomy.sunriseSunset(LocalDate.of(2026, 6, 21).toEpochDay(), 52.52, 13.405)!!
+        val (rise, set) = SunTimes.resolve(oldRise / 1000, oldSet / 1000, now, zone, null)
+        assertEquals(utcMs(2026, 12, 21, 7, 15) / 1000.0, rise.toDouble(), 180.0)
+        assertEquals(utcMs(2026, 12, 21, 14, 54) / 1000.0, set.toDouble(), 180.0)
+
+        // No provider data at all: default latitude, longitude from the time zone (15°E).
+        val (defRise, defSet) = SunTimes.resolve(-1, -1, now, zone, null)
+        assertTrue(defSet - defRise in 7 * 3600L..9 * 3600L)
+    }
+
+    @Test
     fun `sun longitude marks equinox, solstice and perseid maximum`() {
         assertEquals(0.0, Astronomy.solarLongitude(utcMs(2026, 3, 20, 14, 46)).let { if (it > 180) it - 360 else it }, 0.02)
         assertEquals(90.0, Astronomy.solarLongitude(utcMs(2026, 6, 21, 8, 24)), 0.02)

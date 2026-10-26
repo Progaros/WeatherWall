@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.util.Log
 import androidx.core.content.edit
 import androidx.preference.PreferenceManager
+import info.olli.weatherlwp.simulation.Astronomy
 
 /**
  * Repository for weather data from Breezy Weather via Gadgetbridge intent.
@@ -35,6 +36,8 @@ object WeatherRepository {
     private const val KEY_TEMPERATURE = "weather_temperature"  // Celsius * 10 (for 0.1° precision)
     private const val KEY_TEMPERATURE_FEELS = "weather_temperature_feels"  // Celsius * 10
     private const val KEY_DEW_POINT = "weather_dew_point"  // Celsius * 10
+    // Latitude implied by provider sunrise/sunset; lets the sky project day length when data goes stale
+    private const val KEY_INFERRED_LATITUDE = "weather_inferred_latitude"
     
     // All weather-related keys for cache invalidation
     private val WEATHER_KEYS = setOf(
@@ -104,6 +107,11 @@ object WeatherRepository {
             putLong(KEY_SUNSET, sunset)
             putFloat(KEY_WIND_SPEED, windSpeed)
             putLong(KEY_LAST_UPDATE, System.currentTimeMillis())
+            if (sunrise > 0 && sunset > 0) {
+                Astronomy.locationFromSunTimes(sunrise * 1000L, sunset * 1000L)?.first?.let {
+                    putFloat(KEY_INFERRED_LATITUDE, it.toFloat())
+                }
+            }
 
             if (rawJson != null) {
                 putString(KEY_RAW_JSON, rawJson)
@@ -356,31 +364,12 @@ object WeatherRepository {
     }
     
     /**
-     * Get moon phase in degrees (0-360).
-     * 0 = new moon, 90 = first quarter, 180 = full moon, 270 = last quarter
+     * Latitude implied by the provider's last sunrise/sunset outside the equinox weeks, or null.
+     * Read rarely (sun times refresh hourly), so it bypasses the frame cache.
      */
-    fun getMoonPhase(context: Context): Int {
-        ensureCachePopulated(context)
-        val snapshot = cached ?: return 180
-        return snapshot.extended.moonPhase
-    }
-    
-    /**
-     * Get moon rise time (Unix timestamp in seconds).
-     */
-    fun getMoonRise(context: Context): Long {
-        ensureCachePopulated(context)
-        val snapshot = cached ?: return -1L
-        return snapshot.extended.moonRise
-    }
-    
-    /**
-     * Get moon set time (Unix timestamp in seconds).
-     */
-    fun getMoonSet(context: Context): Long {
-        ensureCachePopulated(context)
-        val snapshot = cached ?: return -1L
-        return snapshot.extended.moonSet
+    fun getInferredLatitude(context: Context): Double? {
+        val prefs = prefs(context)
+        return if (prefs.contains(KEY_INFERRED_LATITUDE)) prefs.getFloat(KEY_INFERRED_LATITUDE, 0f).toDouble() else null
     }
     
     /**

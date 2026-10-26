@@ -5,8 +5,14 @@ import info.olli.weatherlwp.rendering.StarFieldOverlay
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import kotlin.random.Random
 
+// Robolectric: shower meteors allocate their Paint/LinearGradient on construction.
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class ManualEventSpawnsTest {
 
     private fun entry(id: String, t: Long) = ManualEventSpawns.Entry(id, t)
@@ -94,5 +100,31 @@ class ManualEventSpawnsTest {
         assertTrue(MeteorShowers.perseidActivityAt(135.0) > MeteorShowers.perseidActivityAt(130.0))
         // Faster decline after the maximum.
         assertTrue(MeteorShowers.perseidActivityAt(142.0) < MeteorShowers.perseidActivityAt(138.0))
+    }
+
+    @Test
+    fun `winter showers peak mid-December and early January`() {
+        val geminids = java.time.LocalDateTime.of(2026, 12, 14, 12, 0).toInstant(java.time.ZoneOffset.UTC).toEpochMilli()
+        val quadrantids = java.time.LocalDateTime.of(2027, 1, 3, 20, 0).toInstant(java.time.ZoneOffset.UTC).toEpochMilli()
+        val october = java.time.LocalDateTime.of(2026, 10, 26, 0, 0).toInstant(java.time.ZoneOffset.UTC).toEpochMilli()
+        assertEquals(MeteorShowers.Shower.GEMINIDS, MeteorShowers.mostActive(geminids))
+        assertEquals(MeteorShowers.Shower.QUADRANTIDS, MeteorShowers.mostActive(quadrantids))
+        assertEquals(null, MeteorShowers.mostActive(october))
+    }
+
+    @Test
+    fun `shower meteors trail back to their radiant`() {
+        for (shower in MeteorShowers.Shower.entries) {
+            val meteor = ShootingStarEvent.showerMeteor(Random(3L), 0L, shower)
+            val x0 = meteor.getPreviewAnchorXRatio(0L)
+            val y0 = meteor.getPreviewAnchorYRatio(0L, null)
+            val x1 = meteor.getPreviewAnchorXRatio(1_000L)
+            val y1 = meteor.getPreviewAnchorYRatio(1_000L, null)
+            // Moving away from the radiant: the distance to it grows.
+            val d0 = (x0 - shower.radiantX) * (x0 - shower.radiantX) + (y0 - shower.radiantY) * (y0 - shower.radiantY)
+            val d1 = (x1 - shower.radiantX) * (x1 - shower.radiantX) + (y1 - shower.radiantY) * (y1 - shower.radiantY)
+            assertTrue("$shower", d1 > d0)
+            assertTrue("$shower glows while in flight", meteor.skyGlow(500L) > 0f)
+        }
     }
 }

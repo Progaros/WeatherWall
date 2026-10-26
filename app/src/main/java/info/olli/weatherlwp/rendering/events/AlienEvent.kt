@@ -55,6 +55,14 @@ class AlienEvent(random: Random, override val spawnTimeMs: Long = System.current
     )
     private val beamMatrix = android.graphics.Matrix()
 
+    override fun skyGlow(absoluteTimeMs: Long): Float {
+        val elapsedMs = absoluteTimeMs - spawnTimeMs
+        if (elapsedMs < 0L || elapsedMs >= durationMs) return 0f
+        // Same beam timing as draw(): lightPhase * 0.5
+        val beam = sin(elapsedMs * 0.004f)
+        return if (beam > 0.3f) (beam - 0.3f) / 0.7f * 0.5f else 0f
+    }
+
     override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         return startX + direction * speed * elapsedMs

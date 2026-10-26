@@ -6,9 +6,10 @@ import info.olli.weatherlwp.parallax.ParallaxCalculator
 import kotlin.random.Random
 
 /**
- * Perseid meteor shower burst: a rapid series of fast meteors whose trails all point back
- * to the radiant in Perseus. The annual shower itself spawns single Perseids at a rate that
- * follows the solar longitude (see [MeteorShowers]); this burst is the manually triggered form.
+ * Meteor shower burst: a rapid series of meteors whose trails all point back to one radiant.
+ * Uses the shower active at spawn time (Perseids outside the shower seasons). The annual showers
+ * themselves spawn single meteors at a rate following the solar longitude (see [MeteorShowers]);
+ * this burst is the manually triggered form.
  */
 class MeteorShowerEvent(random: Random, override val spawnTimeMs: Long) : RandomEvent {
     override val layer = EventLayer.FAR_SKY
@@ -16,17 +17,24 @@ class MeteorShowerEvent(random: Random, override val spawnTimeMs: Long) : Random
     private val meteors: List<ShootingStarEvent>
 
     init {
+        val shower = MeteorShowers.mostActive(spawnTimeMs) ?: MeteorShowers.Shower.PERSEIDS
         val list = ArrayList<ShootingStarEvent>()
         var startMs = spawnTimeMs + 300L
         // Overlapping starts keep at least one meteor in flight for the whole burst.
         while (startMs < spawnTimeMs + BURST_MS) {
-            list += ShootingStarEvent.perseid(random, startMs)
+            list += ShootingStarEvent.showerMeteor(random, startMs, shower)
             startMs += 350L + random.nextInt(450)
         }
         meteors = list
     }
 
     override val durationMs: Long = meteors.maxOf { it.spawnTimeMs + it.durationMs } - spawnTimeMs
+
+    override fun skyGlow(absoluteTimeMs: Long): Float {
+        var glow = 0f
+        for (meteor in meteors) glow = maxOf(glow, meteor.skyGlow(absoluteTimeMs))
+        return glow
+    }
 
     /** Meteor followed by the settings preview: the newest one in flight, else the next to start. */
     private fun previewMeteor(absoluteTimeMs: Long): ShootingStarEvent =

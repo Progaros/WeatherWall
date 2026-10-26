@@ -52,6 +52,7 @@ class SimulationController(
     private var lastRecordAttemptMs: Long? = null
     private var appliedSunrise = Long.MIN_VALUE
     private var appliedSunset = Long.MIN_VALUE
+    private var appliedSunHourBucket = Long.MIN_VALUE
 
     // Season blend is date-based (changes ~once/day) yet getEffectiveSeasonBlend allocates
     // Calendars; cache it and recompute only when the local day or a relevant setting changes.
@@ -79,14 +80,23 @@ class SimulationController(
         syncSunTimes()
     }
 
-    /** Weather updates no longer trigger settings reloads, so pick up new sun times here. */
+    /**
+     * Weather updates no longer trigger settings reloads, so pick up new sun times here.
+     * Re-resolved hourly so projected (stale or missing provider) times follow the date.
+     */
     private fun syncSunTimes() {
         val sunrise = WeatherRepository.getSunrise(context)
         val sunset = WeatherRepository.getSunset(context)
-        if (sunrise == appliedSunrise && sunset == appliedSunset) return
+        val nowMs = System.currentTimeMillis()
+        val hourBucket = nowMs / 3_600_000L
+        if (sunrise == appliedSunrise && sunset == appliedSunset && hourBucket == appliedSunHourBucket) return
         appliedSunrise = sunrise
         appliedSunset = sunset
-        clock.updateSunTimes(sunrise, sunset)
+        appliedSunHourBucket = hourBucket
+        val (rise, set) = SunTimes.resolve(
+            sunrise, sunset, nowMs, java.util.TimeZone.getDefault(), WeatherRepository.getInferredLatitude(context)
+        )
+        clock.updateSunTimes(rise, set)
     }
 
     /**
@@ -198,7 +208,6 @@ class SimulationController(
         } else {
             astronomicalMoonPhase(clock.getAbsoluteTimeMs())
         }
-        val moonIllumination = Astronomy.moonIllumination(moonPhase.toDouble()).toFloat()
         val rawWindDirection = extendedData.windDirection.toFloat()
         
         // Smooth wind values to prevent tree jumping on weather updates
@@ -220,6 +229,11 @@ class SimulationController(
         // Get dynamic sun times from clock (set from weather data or defaults)
         val sunriseHours = clock.getSunriseHour()
         val sunsetHours = clock.getSunsetHour()
+
+        // Moonlight only while the Moon is up, dimmer close to the horizon.
+        val moonArc = Astronomy.moonArcProgress(rawTime, moonPhase, (sunriseHours + sunsetHours) / 2f)
+        val moonAltitude = moonArc?.let { (kotlin.math.sin(Math.PI * it).toFloat() * 2f).coerceAtMost(1f) } ?: 0f
+        val moonIllumination = Astronomy.moonIllumination(moonPhase.toDouble()).toFloat() * moonAltitude
         
         // Calculate golden hour and blue hour flags
         val goldenHourDuration = 0.75f  // ~45 mins

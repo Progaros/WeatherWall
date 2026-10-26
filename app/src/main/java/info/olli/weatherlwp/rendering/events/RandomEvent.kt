@@ -105,6 +105,9 @@ interface RandomEvent {
     fun getProgress(absoluteTimeMs: Long): Float {
         return (absoluteTimeMs - spawnTimeMs) / durationMs.toFloat()
     }
+
+    /** Light (0..1) this event casts over the night landscape, e.g. glints of a meteor on water. */
+    fun skyGlow(absoluteTimeMs: Long): Float = 0f
     
     /**
      * Get the current Y position ratio of this event for Y-based draw ordering.

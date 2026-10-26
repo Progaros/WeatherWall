@@ -41,6 +41,9 @@ class LakeLayer(private val context: Context) : SceneLayer {
     /** When true, draw() is skipped; TerrainLayer calls drawAtDepthLayer() instead. */
     var drawViaCallback = false
 
+    /** Night light from meteors, UFO beams and fireworks (0..1), set by the scene each frame. */
+    var skyGlow = 0f
+
     // Pre-allocated drawing objects
     private val lakePaint = Paint().apply {
         style = Paint.Style.FILL
@@ -366,11 +369,12 @@ class LakeLayer(private val context: Context) : SceneLayer {
         centerX: Float, surfaceY: Float, lakeWidth: Float
     ) {
         val lightLevel = state.getLightLevel()
-        if (lightLevel < 0.15f && state.moonIllumination < 0.2f) return
+        if (lightLevel < 0.15f && state.moonIllumination < 0.2f && skyGlow < 0.05f) return
 
-        // Continuous blend: day sparkles from sun, night sparkles from moon
+        // Continuous blend: day sparkles from sun, night sparkles from moon and sky events
         val dayFactor = ((lightLevel - 0.15f) / 0.85f).coerceIn(0f, 1f)
-        val intensity = dayFactor * lightLevel * 0.8f + (1f - dayFactor) * state.moonIllumination * 0.5f
+        val intensity = dayFactor * lightLevel * 0.8f +
+            (1f - dayFactor) * (state.moonIllumination * 0.5f + skyGlow).coerceAtMost(1f)
 
         // Horizontal ripple lines
         val rippleAlpha = (intensity * 60 * opacity).toInt().coerceIn(10, 80)

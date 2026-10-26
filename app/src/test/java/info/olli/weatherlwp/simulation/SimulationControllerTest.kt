@@ -83,7 +83,8 @@ class SimulationControllerTest {
 
     @Test
     fun `sunrise update reaches the clock without applySettings`() {
-        val sunrise = 1_718_424_000L
+        // Fresh (today's) provider times are applied as-is; stale ones would be re-projected.
+        val sunrise = System.currentTimeMillis() / 3_600_000L * 3600L
         WeatherRepository.updateWeather(context, WeatherType.CLEAR, sunrise, sunrise + 14 * 3600)
         controller.advance(0L)
         val before = controller.getState().sunriseHours

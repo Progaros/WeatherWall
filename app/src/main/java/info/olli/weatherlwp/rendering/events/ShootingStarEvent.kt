@@ -8,7 +8,7 @@ import android.graphics.Paint
 import android.graphics.Shader
 import androidx.core.graphics.withTranslation
 import info.olli.weatherlwp.parallax.ParallaxCalculator
-import kotlin.math.PI
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
@@ -51,21 +51,25 @@ class ShootingStarEvent internal constructor(
     override val durationMs: Long = spawnDelayMs + (totalTravel / speed).toLong()
 
     companion object {
-        /** Perseid radiant (Perseus, low in the north-east) in event field coordinates. */
-        const val PERSEID_RADIANT_X = 0.82f
-        const val PERSEID_RADIANT_Y = -0.08f
+        /** Peak light a meteor casts onto water. */
+        const val METEOR_GLOW = 0.35f
 
         /** A fast, short Perseid whose trail points back to the radiant. */
-        fun perseid(random: Random, spawnTimeMs: Long): ShootingStarEvent {
-            // Direction away from the upper-right radiant: down-left, between ~95° and ~170°.
-            val angle = (PI / 2 + 0.1 + random.nextDouble() * (PI / 2 - 0.25)).toFloat()
+        fun perseid(random: Random, spawnTimeMs: Long): ShootingStarEvent =
+            showerMeteor(random, spawnTimeMs, MeteorShowers.Shower.PERSEIDS)
+
+        /** A shower meteor whose trail points back to the shower's radiant. */
+        fun showerMeteor(random: Random, spawnTimeMs: Long, shower: MeteorShowers.Shower): ShootingStarEvent {
+            // Away from the radiant, spread around the direction towards the sky's centre.
+            val towardsCenter = atan2(0.45 - shower.radiantY, 0.5 - shower.radiantX)
+            val angle = (towardsCenter + (random.nextDouble() - 0.5) * 1.2).toFloat()
             val offset = 0.05f + random.nextFloat() * 0.3f
             return ShootingStarEvent(
                 spawnTimeMs = spawnTimeMs,
-                startX = PERSEID_RADIANT_X + cos(angle) * offset,
-                startY = PERSEID_RADIANT_Y + sin(angle) * offset,
+                startX = shower.radiantX + cos(angle) * offset,
+                startY = shower.radiantY + sin(angle) * offset,
                 angle = angle,
-                speed = 0.00028f + random.nextFloat() * 0.00009f,  // ~59 km/s: much faster than sporadics
+                speed = (0.00028f + random.nextFloat() * 0.00009f) * shower.speedScale,
                 length = 0.05f + random.nextFloat() * 0.05f,
                 spawnDelayMs = 0L,
                 totalTravel = 0.45f + random.nextFloat() * 0.35f
@@ -93,6 +97,19 @@ class ShootingStarEvent internal constructor(
     )
     private val trailMatrix = Matrix()
     private val trailMatrixValues = FloatArray(9)
+
+    override fun skyGlow(absoluteTimeMs: Long): Float {
+        val activeElapsedMs = absoluteTimeMs - spawnTimeMs - spawnDelayMs
+        if (activeElapsedMs < 0L) return 0f
+        val progress = speed * activeElapsedMs
+        if (progress >= totalTravel) return 0f
+        val fade = if (progress >= fadeStartProgress) {
+            1f - (progress - fadeStartProgress) / (totalTravel - fadeStartProgress)
+        } else {
+            1f
+        }
+        return METEOR_GLOW * fade
+    }
 
     override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
         val elapsedMs = absoluteTimeMs - spawnTimeMs

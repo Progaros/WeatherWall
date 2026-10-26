@@ -26,11 +26,11 @@ No analytics. No internet permission.
 
 - Procedural low-poly terrain with layered hills and mountains
 - Dynamic sky with sun, moon, stars, and time-of-day lighting
-- Built-in ephemeris: moon phase, Chinese New Year and the Perseids follow the real sky (accurate to minutes through 2100)
+- Built-in ephemeris: moon phase and moonrise, sunrise/sunset fallback, Chinese New Year and meteor showers follow the real sky (accurate to minutes through 2100)
 - Weather effects: rain, snow, hail, lightning, clouds
 - Seasonal visuals: flowers, mushrooms, autumn leaves, snow, frost
 - Seasonal events: Christmas, New Year, Chinese New Year, St. Patrick's Day
-- Night-sky events: shooting stars, Perseid meteor shower, falling background stars
+- Night-sky events: shooting stars, Perseid/Geminid/Quadrantid meteor showers, falling background stars, glints on water
 - Trees, bushes, rivers/lakes, animals, and random wildlife events
 - Gyroscope-based parallax
 - Deterministic world generation from a stable seed

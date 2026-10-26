@@ -358,6 +358,11 @@ class ParallaxScene(
                         layer.draw(canvas, state, parallaxCalculator)
                         randomEventLayer.drawMidSkyEvents(canvas, state, parallaxCalculator)
                         seasonalEvents.drawBehindTerrain(canvas)
+                        // Water in the terrain below reflects this frame's meteors and fireworks.
+                        val skyGlow = (randomEventLayer.skyGlow(state.absoluteTimeMs) + seasonalEvents.skyGlow)
+                            .coerceAtMost(1f)
+                        lakeLayer.skyGlow = skyGlow
+                        riverLayer.skyGlow = skyGlow
                         continue  // Skip the layer.draw below since we already drew it
                     }
                     

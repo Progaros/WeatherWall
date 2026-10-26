@@ -1,11 +1,18 @@
 package info.olli.weatherlwp.simulation
 
 import java.time.LocalDate
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.acos
+import kotlin.math.asin
+import kotlin.math.atan2
 import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * Self-contained ephemeris so calendar-driven visuals never depend on stale provider data.
@@ -23,6 +30,12 @@ object Astronomy {
     /** JDE of the mean new moon of 2000-01-06 (lunation k = 0). */
     private const val NEW_MOON_EPOCH = 2451550.09766
     private const val CHINA_UTC_OFFSET_DAYS = 8.0 / 24.0
+    /** Standard sunrise altitude: refraction plus the Sun's semi-diameter. */
+    private const val SUNRISE_ALTITUDE_DEG = -0.833
+    /** Below this solar declination day length barely depends on latitude. */
+    private const val MIN_DECLINATION_FOR_LATITUDE = 4.0
+    /** Average time the Moon spends between rising and transit. */
+    private const val MOON_HALF_ARC_HOURS = 6.2f
 
     fun julianDay(epochMs: Long): Double = epochMs / MS_PER_DAY + JD_UNIX_EPOCH
 
@@ -47,6 +60,86 @@ object Astronomy {
 
     /** Apparent ecliptic longitude of the Sun in degrees (0 = March equinox). */
     fun solarLongitude(epochMs: Long): Double = sunLongitude(julianDay(epochMs))
+
+    /**
+     * Sunrise and sunset (epoch ms) on the UTC calendar day [epochDay] for an observer at
+     * [latitudeDeg]/[longitudeDeg] (east positive), or null during polar day or night.
+     */
+    fun sunriseSunset(epochDay: Long, latitudeDeg: Double, longitudeDeg: Double): Pair<Long, Long>? {
+        var noonMinutes = 720.0 - 4.0 * longitudeDeg
+        var sun = sunEquatorial(epochDay + JD_UNIX_EPOCH + noonMinutes / 1440.0)
+        noonMinutes = 720.0 - 4.0 * longitudeDeg - sun.equationOfTimeMinutes
+        sun = sunEquatorial(epochDay + JD_UNIX_EPOCH + noonMinutes / 1440.0)
+        noonMinutes = 720.0 - 4.0 * longitudeDeg - sun.equationOfTimeMinutes
+
+        val phi = rad(latitudeDeg)
+        val delta = rad(sun.declinationDeg)
+        val cosH0 = (sin(rad(SUNRISE_ALTITUDE_DEG)) - sin(phi) * sin(delta)) / (cos(phi) * cos(delta))
+        if (cosH0 < -1.0 || cosH0 > 1.0) return null
+        val halfDayMinutes = Math.toDegrees(acos(cosH0)) * 4.0
+        val dayStartMs = epochDay * 86_400_000L
+        return Pair(
+            dayStartMs + ((noonMinutes - halfDayMinutes) * 60_000.0).roundToLong(),
+            dayStartMs + ((noonMinutes + halfDayMinutes) * 60_000.0).roundToLong()
+        )
+    }
+
+    /**
+     * Observer position implied by one day's sunrise and sunset (epoch ms): longitude from solar
+     * noon, latitude from day length. Latitude is null near the equinoxes, when day length is
+     * about 12 h everywhere. Returns null for inconsistent input.
+     */
+    fun locationFromSunTimes(sunriseMs: Long, sunsetMs: Long): Pair<Double?, Double>? {
+        val dayMs = sunsetMs - sunriseMs
+        if (dayMs <= 0L || dayMs >= 86_400_000L) return null
+        val noonMs = sunriseMs + dayMs / 2
+        val sun = sunEquatorial(julianDay(noonMs))
+        val noonUtcMinutes = Math.floorMod(noonMs, 86_400_000L) / 60_000.0
+        val longitude = wrap180((720.0 - sun.equationOfTimeMinutes - noonUtcMinutes) / 4.0)
+
+        if (abs(sun.declinationDeg) < MIN_DECLINATION_FOR_LATITUDE) return Pair(null, longitude)
+        // sin(h0) = sinφ·sinδ + cosφ·cosδ·cosH0  →  a·sinφ + b·cosφ = c
+        val halfDay = rad(dayMs / 86_400_000.0 * 180.0)
+        val delta = rad(sun.declinationDeg)
+        val a = sin(delta)
+        val b = cos(delta) * cos(halfDay)
+        val c = sin(rad(SUNRISE_ALTITUDE_DEG))
+        val r = sqrt(a * a + b * b)
+        if (abs(c / r) > 1.0) return Pair(null, longitude)
+        val theta = atan2(b, a)
+        val base = asin(c / r)
+        val latitude = listOf(base - theta, PI - base - theta)
+            .map { Math.toDegrees(it).let { deg -> wrap180(deg) } }
+            .firstOrNull { it in -90.0..90.0 }
+        return Pair(latitude, longitude)
+    }
+
+    /**
+     * Position of the Moon along its path from rising (0) to setting (1) at local [hour], or null
+     * while it is below the horizon. It transits [phase] × 24 h after the Sun: a new moon travels
+     * with the Sun, a full moon is highest at midnight.
+     */
+    fun moonArcProgress(hour: Float, phase: Float, solarNoonHour: Float): Float? {
+        val rise = solarNoonHour + phase * 24f - MOON_HALF_ARC_HOURS
+        val sinceRise = ((hour - rise) % 24f + 24f) % 24f
+        return if (sinceRise <= 2f * MOON_HALF_ARC_HOURS) sinceRise / (2f * MOON_HALF_ARC_HOURS) else null
+    }
+
+    private class SunEquatorial(val declinationDeg: Double, val equationOfTimeMinutes: Double)
+
+    private fun sunEquatorial(jdUt: Double): SunEquatorial {
+        val jde = jdUt + deltaTSeconds(yearOf(jdUt)) / 86_400.0
+        val t = (jde - 2451545.0) / 36525.0
+        val l0 = norm360(280.46646 + 36000.76983 * t + 0.0003032 * t * t)
+        val omega = rad(125.04 - 1934.136 * t)
+        val lambda = rad(sunLongitude(jdUt))
+        val epsilon = rad(23.439291 - 0.0130042 * t + 0.00256 * cos(omega))
+        val alpha = norm360(Math.toDegrees(atan2(cos(epsilon) * sin(lambda), cos(lambda))))
+        val declination = Math.toDegrees(asin(sin(epsilon) * sin(lambda)))
+        // Meeus 28.1 with Δψ ≈ −0.00478°·sin Ω
+        val equationOfTime = wrap180(l0 - 0.0057183 - alpha - 0.00478 * sin(omega) * cos(epsilon))
+        return SunEquatorial(declination, equationOfTime * 4.0)
+    }
 
     /** Chinese New Year of Gregorian [year] as epoch day of its date in China Standard Time. */
     fun chineseNewYearEpochDay(year: Int): Long {

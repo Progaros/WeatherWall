@@ -45,6 +45,9 @@ class RiverLayer(private val context: Context) : SceneLayer {
     /** When true, draw() is skipped; TerrainLayer calls drawAtDepthLayer() instead for correct z-ordering. */
     var drawViaCallback = false
 
+    /** Night light from meteors, UFO beams and fireworks (0..1), set by the scene each frame. */
+    var skyGlow = 0f
+
     /** River visual style. */
     enum class RiverStyle {
         FLAT, WAVY, REFLECTIVE;
@@ -658,11 +661,12 @@ class RiverLayer(private val context: Context) : SceneLayer {
         left: Float, right: Float, top: Float, bottom: Float
     ) {
         val lightLevel = state.getLightLevel()
-        if (lightLevel < 0.2f && state.moonIllumination < 0.3f) return  // Too dark for sparkles
+        if (lightLevel < 0.2f && state.moonIllumination < 0.3f && skyGlow < 0.05f) return  // Too dark for sparkles
 
-        // Continuous blend: day sparkles from sun, night sparkles from moon
+        // Continuous blend: day sparkles from sun, night sparkles from moon and sky events
         val dayFactor = ((lightLevel - 0.15f) / 0.85f).coerceIn(0f, 1f)
-        val sparkleIntensity = dayFactor * lightLevel * 0.8f + (1f - dayFactor) * state.moonIllumination * 0.5f
+        val sparkleIntensity = dayFactor * lightLevel * 0.8f +
+            (1f - dayFactor) * (state.moonIllumination * 0.5f + skyGlow).coerceAtMost(1f)
 
         val sparkleAlpha = (sparkleIntensity * 180).toInt().coerceIn(0, 200)
         sparkPaint.color = Color.argb(sparkleAlpha, 255, 255, 240)

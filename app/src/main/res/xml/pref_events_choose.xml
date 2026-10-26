@@ -42,8 +42,8 @@
 
         <info.olli.weatherlwp.settings.SpawnSwitchPreference
             android:key="pref_event_perseids"
-            android:title="Perseids"
-            android:summary="Annual meteor shower from Perseus (mid-July to late August, peak around Aug 12)"
+            android:title="Meteor Showers"
+            android:summary="Perseids (Aug), Geminids (Dec) and Quadrantids (Jan) at their real activity; spawn shows the current shower"
             android:defaultValue="true" />
 
         <info.olli.weatherlwp.settings.SpawnSwitchPreference

@@ -42,7 +42,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     companion object {
         private const val TAG = "RandomEventLayer"
         private const val EVENT_ERROR_LOG_INTERVAL_MS = 5000L
-        private const val PERSEID_SEED_OFFSET = 7777L
+        private const val SHOWER_SEED_OFFSET = 7777L
     }
 
     // Use a fixed base seed - actual randomness comes from absoluteTimeMs
@@ -284,19 +284,24 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
                 needsListUpdate = true
             }
 
-            // Annual Perseids: extra meteors at a rate following the real activity profile.
-            if (perseidsEnabled && state.isNight && !isPrecipitating(state) &&
+            // Annual meteor showers: extra meteors at rates following the real activity profiles.
+            if (meteorShowersEnabled && state.isNight && !isPrecipitating(state) &&
                 (state.cloudDensity == CloudDensity.LIGHT || state.cloudDensity == CloudDensity.MEDIUM)
             ) {
-                val chance = perseidActivity(state.absoluteTimeMs) * (spawnChance * 1.5f).coerceAtMost(0.05f)
-                val showerRandom = Random(spawnSeed + PERSEID_SEED_OFFSET)
-                val count = currentEvents?.size ?: events.size
-                if (showerRandom.nextFloat() < chance && count < 8) {
-                    if (currentEvents == null) {
-                        currentEvents = events.toMutableList()
+                refreshShowerActivity(state.absoluteTimeMs)
+                val baseChance = (spawnChance * 1.5f).coerceAtMost(0.05f)
+                for (shower in MeteorShowers.Shower.entries) {
+                    val activity = showerActivity[shower.ordinal]
+                    if (activity <= 0f) continue
+                    val showerRandom = Random(spawnSeed + SHOWER_SEED_OFFSET + shower.ordinal * 101L)
+                    val count = currentEvents?.size ?: events.size
+                    if (showerRandom.nextFloat() < activity * shower.relativeRate * baseChance && count < 8) {
+                        if (currentEvents == null) {
+                            currentEvents = events.toMutableList()
+                        }
+                        currentEvents.add(ShootingStarEvent.showerMeteor(showerRandom, currentBucket * 500, shower))
+                        needsListUpdate = true
                     }
-                    currentEvents.add(ShootingStarEvent.perseid(showerRandom, currentBucket * 500))
-                    needsListUpdate = true
                 }
             }
         }
@@ -309,22 +314,31 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     
     private var lastSpawnBucket = 0L
 
-    private var perseidsEnabled = true
-    private var cachedPerseidActivity = 0f
-    private var cachedPerseidActivityMs = Long.MIN_VALUE / 2
+    private var meteorShowersEnabled = true
+    private val showerActivity = FloatArray(MeteorShowers.Shower.entries.size)
+    private var showerActivityMs = Long.MIN_VALUE / 2
 
     /** Shower activity changes over days; refresh once a minute. */
-    private fun perseidActivity(nowMs: Long): Float {
-        if (kotlin.math.abs(nowMs - cachedPerseidActivityMs) >= 60_000L) {
-            cachedPerseidActivity = MeteorShowers.perseidActivity(nowMs)
-            cachedPerseidActivityMs = nowMs
-        }
-        return cachedPerseidActivity
+    private fun refreshShowerActivity(nowMs: Long) {
+        if (kotlin.math.abs(nowMs - showerActivityMs) < 60_000L) return
+        val longitude = info.olli.weatherlwp.simulation.Astronomy.solarLongitude(nowMs)
+        for (shower in MeteorShowers.Shower.entries) showerActivity[shower.ordinal] = shower.activityAt(longitude)
+        showerActivityMs = nowMs
     }
 
     private fun isPrecipitating(state: SimulationState): Boolean =
         state.weather == WeatherType.RAIN || state.weather == WeatherType.THUNDERSTORM ||
             state.weather == WeatherType.SNOW || state.weather == WeatherType.HAIL
+
+    /** Combined light (0..1) active events cast over the night landscape, for water glints. */
+    fun skyGlow(absoluteTimeMs: Long): Float {
+        if (!eventsEnabled) return 0f
+        var glow = 0f
+        for (event in events) {
+            if (event.spawnTimeMs <= absoluteTimeMs) glow += event.skyGlow(absoluteTimeMs)
+        }
+        return glow.coerceAtMost(1f)
+    }
 
     /**
      * Lets active star-field events (falling stars) modify the sky's star field.
@@ -581,7 +595,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
                 enabledEvents.add(spec.id)
             }
         }
-        perseidsEnabled = EventSpec.PERSEIDS.id in enabledEvents
+        meteorShowersEnabled = EventSpec.PERSEIDS.id in enabledEvents
     }
     
     override fun destroy() {

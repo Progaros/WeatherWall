@@ -181,6 +181,7 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
      * Called from scene renderer after mountains but before terrain layer.
      */
     fun renderBehindTerrain(canvas: Canvas, enabled: Boolean) {
+        skyGlow = 0f
         // Shake fireworks should render independent of season/master switch
         val hasActiveFireworks = fireworks.hasActiveFireworks()
 
@@ -203,11 +204,17 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
                 }
                 // If not in season but we have active fireworks (e.g. from shake), render them without auto-launch
                 hasActiveFireworks -> fireworks.render(canvas, autoLaunch = false)
+                else -> return
             }
+            skyGlow = fireworks.glow
         } catch (e: Exception) {
             Log.e(TAG, "Error rendering behind-terrain seasonal events", e)
         }
     }
+
+    /** Light (0..1) this frame's fireworks cast over the landscape; valid after [drawBehindTerrain]. */
+    var skyGlow = 0f
+        private set
 
     private fun initParticles() {
         christmasStar.init(screenWidth, screenHeight, heightScale)
