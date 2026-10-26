@@ -111,7 +111,7 @@ class FrogEvent(random: Random, override val spawnTimeMs: Long = System.currentT
 
         // Throat pulsing (breathing animation when sitting)
         val isHopping = progress >= hopStartProgress && progress <= hopEndProgress
-        val throatPulse = if (!isHopping) abs(sin(absoluteTimeMs * 0.004f)) * 0.28f * s else 0f
+        val throatPulse = if (!isHopping) abs(sin((absoluteTimeMs - spawnTimeMs) * 0.004f)) * 0.28f * s else 0f
 
         // Body (dark green)
         val bodyColor = RenderConstants.blendWithAmbient(Color.rgb(50, 100, 40), ambientColor, 0.3f)

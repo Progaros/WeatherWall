@@ -10,6 +10,7 @@ import info.olli.weatherlwp.DebugTracer
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.parallax.ParallaxSensorManager
+import info.olli.weatherlwp.rendering.events.ManualEventSpawns
 import info.olli.weatherlwp.simulation.SimulationController
 import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
@@ -67,9 +68,6 @@ class ParallaxScene(
         }
     }
     
-    // Trigger key suffixes based on context (preview vs wallpaper)
-    private val triggerSuffix = if (isPreview) "_preview" else "_wallpaper"
-    
     // Simulation Controller - single source of truth
     private val simulationController = SimulationController(context)
     
@@ -120,9 +118,9 @@ class ParallaxScene(
     private var weatherEnabled = true
     private var seasonalEnabled = true
     
-    // Trigger dedupe to avoid respawning the same manual event each frame.
-    private var lastHandledSpawnTriggerTime = 0L
-    private var lastHandledSpecificTriggerTime = 0L
+    // Manual spawns pressed before this scene existed are not replayed.
+    private val manualSpawnReplayer = ManualEventSpawns.Replayer(System.currentTimeMillis())
+    private var lastManualSpawnsRaw: String? = null
     
     init {
         // Add layers in draw order (Background -> Foreground)
@@ -160,6 +158,9 @@ class ParallaxScene(
             }
         }
         
+        // Falling-star events modify the background star field drawn by the sky
+        skyLayer.starFieldEffects = randomEventLayer::applyStarFieldEffects
+
         // Set up terrain provider so ground events can follow the hill contour
         randomEventLayer.eventTerrainProvider = { eventX, depthFactor ->
             val worldX = terrainLayer.screenToWorldX(randomEventLayer.eventXToScreenX(eventX))
@@ -437,34 +438,14 @@ class ParallaxScene(
     }
 
     private fun processManualSpawnTriggers() {
-        val settings = currentSettings
-        val currentTimeMs = System.currentTimeMillis()
-
-        val spawnTriggerKey = "trigger_spawn_event_time$triggerSuffix"
-        val spawnTriggerTime = settings.getLong(spawnTriggerKey, 0L)
-        if (spawnTriggerTime > 0L && spawnTriggerTime != lastHandledSpawnTriggerTime) {
-            lastHandledSpawnTriggerTime = spawnTriggerTime
-            val timeSinceTrigger = currentTimeMs - spawnTriggerTime
-            if (timeSinceTrigger < 10000L) {
-                randomEventLayer.debugSpawnEvent(spawnTriggerTime)
-                Log.d(TAG, "Manual spawn trigger received [${if (isPreview) "preview" else "wallpaper"}] (delay: ${timeSinceTrigger}ms)")
-            }
-        }
-
-        val specificEventKey = "trigger_spawn_specific_event$triggerSuffix"
-        val specificEventTimeKey = "trigger_spawn_specific_event_time$triggerSuffix"
-        val specificEventTime = settings.getLong(specificEventTimeKey, 0L)
-        val specificEvent = settings.getNullableString(specificEventKey)
-        if (!specificEvent.isNullOrBlank() &&
-            specificEventTime > 0L &&
-            specificEventTime != lastHandledSpecificTriggerTime
-        ) {
-            lastHandledSpecificTriggerTime = specificEventTime
-            val timeSinceTrigger = currentTimeMs - specificEventTime
-            if (timeSinceTrigger < 10000L) {
-                randomEventLayer.spawnSpecificEvent(specificEvent, specificEventTime)
-                Log.d(TAG, "Specific spawn trigger received [${if (isPreview) "preview" else "wallpaper"}]: $specificEvent (delay: ${timeSinceTrigger}ms)")
-            }
+        val raw = currentSettings.getNullableString(ManualEventSpawns.PREF_KEY)
+        if (raw == lastManualSpawnsRaw) return
+        lastManualSpawnsRaw = raw
+        val started = manualSpawnReplayer.takeNew(ManualEventSpawns.parse(raw), System.currentTimeMillis())
+        for ((entry, spawnTimeMs) in started) {
+            randomEventLayer.spawnSpecificEvent(entry.eventId, seed = entry.triggerMs, spawnTimeMs = spawnTimeMs)
+            Log.d(TAG, "Manual spawn [${if (isPreview) "preview" else "wallpaper"}]: ${entry.eventId} " +
+                "(pressed ${System.currentTimeMillis() - entry.triggerMs}ms ago)")
         }
     }
     
@@ -622,6 +603,7 @@ class ParallaxScene(
         terrainLayer.lakeDrawer = null
         randomEventLayer.eventTerrainProvider = null
         randomEventLayer.hillInfoWorldProvider = null
+        skyLayer.starFieldEffects = null
         riverLayer.terrainYWorldProvider = null
         riverLayer.hillDepthProvider = null
         lakeLayer.terrainYWorldProvider = null
@@ -640,12 +622,5 @@ class ParallaxScene(
 
         // Release strong references held by the draw-order list.
         layers.clear()
-    }
-    
-    /**
-     * Debug method to spawn a random event immediately.
-     */
-    fun debugSpawnEvent() {
-        randomEventLayer.debugSpawnEvent()
     }
 }

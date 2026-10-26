@@ -8,7 +8,8 @@ import android.graphics.Path
 /** Chinese New Year dragon flying right-to-left across the sky. */
 internal class DragonRenderer {
 
-    private var dragonPhase = 0f
+    // Double: a Float stops advancing by 0.025 after ~8 days of frames.
+    private var dragonPhase = 0.0
     // Pre-allocated dragon segment positions to avoid per-frame Array+Pair allocations
     private val dragonSegmentX = FloatArray(12)
     private val dragonSegmentY = FloatArray(12)
@@ -40,7 +41,7 @@ internal class DragonRenderer {
 
     /** Advance the flight animation by one frame; called before the fireworks backdrop is drawn. */
     fun advance() {
-        dragonPhase += 0.025f
+        dragonPhase += 0.025
     }
 
     fun draw(canvas: Canvas, screenWidth: Int, screenHeight: Int, heightScale: Float) {
@@ -56,14 +57,14 @@ internal class DragonRenderer {
         // Wrap distance accounts for full body length + margins so dragon fully
         // exits left edge before re-entering from the right (fixes despawn-on-screen bug)
         val wrapDistance = screenWidth + totalBodyLength + margin * 2f + 200f * heightScale
-        val baseX = screenWidth + (margin + 100f) * heightScale - (dragonPhase * 40f * heightScale) % wrapDistance
+        val baseX = screenWidth + (margin + 100f) * heightScale - ((dragonPhase * 40.0 * heightScale) % wrapDistance).toFloat()
         val baseY = screenHeight * 0.18f
 
         for (i in 0 until segmentCount) {
             val t = i.toFloat()
             // Wave motion
-            val wave1 = kotlin.math.sin((dragonPhase * 3f - t * 0.5f).toDouble()).toFloat() * 25f * scale
-            val wave2 = kotlin.math.sin((dragonPhase * 5f - t * 0.8f).toDouble()).toFloat() * 8f * scale
+            val wave1 = kotlin.math.sin(dragonPhase * 3.0 - t * 0.5).toFloat() * 25f * scale
+            val wave2 = kotlin.math.sin(dragonPhase * 5.0 - t * 0.8).toFloat() * 8f * scale
             dragonSegmentX[i] = baseX + t * segmentSpacing
             dragonSegmentY[i] = baseY + wave1 + wave2
         }

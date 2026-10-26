@@ -91,13 +91,13 @@
         <SwitchPreferenceCompat
             android:key="pref_cn_newyear_enabled"
             android:title="Chinese New Year"
-            android:summary="Dragon + fireworks (around Feb 1)"
+            android:summary="Dragon + fireworks (second new moon after the winter solstice, Jan 21 - Feb 20)"
             android:defaultValue="false" />
 
         <SeekBarPreference
             android:key="pref_cn_newyear_interval"
             android:title="CN New Year Interval"
-            android:summary="±days around Feb 1 (0=only Feb 1, 20=Jan 12 - Feb 21)"
+            android:summary="±days around the computed Chinese New Year date (0 = that day only)"
             android:defaultValue="0"
             android:max="30"
             app:min="0"

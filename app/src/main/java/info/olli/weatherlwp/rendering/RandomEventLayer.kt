@@ -6,9 +6,11 @@ import android.graphics.Color
 import android.graphics.Paint
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.events.*
+import info.olli.weatherlwp.simulation.CloudDensity
 import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
 import info.olli.weatherlwp.util.SeasonHelper
+import info.olli.weatherlwp.weather.WeatherType
 import kotlin.math.pow
 import kotlin.random.Random
 
@@ -40,6 +42,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     companion object {
         private const val TAG = "RandomEventLayer"
         private const val EVENT_ERROR_LOG_INTERVAL_MS = 5000L
+        private const val PERSEID_SEED_OFFSET = 7777L
     }
 
     // Use a fixed base seed - actual randomness comes from absoluteTimeMs
@@ -280,6 +283,22 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
                 spawnRandomEvent(state, currentEvents, eventRandom, spawnTime)
                 needsListUpdate = true
             }
+
+            // Annual Perseids: extra meteors at a rate following the real activity profile.
+            if (perseidsEnabled && state.isNight && !isPrecipitating(state) &&
+                (state.cloudDensity == CloudDensity.LIGHT || state.cloudDensity == CloudDensity.MEDIUM)
+            ) {
+                val chance = perseidActivity(state.absoluteTimeMs) * (spawnChance * 1.5f).coerceAtMost(0.05f)
+                val showerRandom = Random(spawnSeed + PERSEID_SEED_OFFSET)
+                val count = currentEvents?.size ?: events.size
+                if (showerRandom.nextFloat() < chance && count < 8) {
+                    if (currentEvents == null) {
+                        currentEvents = events.toMutableList()
+                    }
+                    currentEvents.add(ShootingStarEvent.perseid(showerRandom, currentBucket * 500))
+                    needsListUpdate = true
+                }
+            }
         }
         
         // Only update the volatile reference if something changed
@@ -289,6 +308,41 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     }
     
     private var lastSpawnBucket = 0L
+
+    private var perseidsEnabled = true
+    private var cachedPerseidActivity = 0f
+    private var cachedPerseidActivityMs = Long.MIN_VALUE / 2
+
+    /** Shower activity changes over days; refresh once a minute. */
+    private fun perseidActivity(nowMs: Long): Float {
+        if (kotlin.math.abs(nowMs - cachedPerseidActivityMs) >= 60_000L) {
+            cachedPerseidActivity = MeteorShowers.perseidActivity(nowMs)
+            cachedPerseidActivityMs = nowMs
+        }
+        return cachedPerseidActivity
+    }
+
+    private fun isPrecipitating(state: SimulationState): Boolean =
+        state.weather == WeatherType.RAIN || state.weather == WeatherType.THUNDERSTORM ||
+            state.weather == WeatherType.SNOW || state.weather == WeatherType.HAIL
+
+    /**
+     * Lets active star-field events (falling stars) modify the sky's star field.
+     * Resets and fills [overlay]; returns false when no such event is running.
+     */
+    fun applyStarFieldEffects(overlay: StarFieldOverlay, absoluteTimeMs: Long): Boolean {
+        if (!eventsEnabled) return false
+        var any = false
+        for (event in events) {
+            if (event !is StarFieldEffect || event.spawnTimeMs > absoluteTimeMs) continue
+            if (!any) {
+                overlay.reset()
+                any = true
+            }
+            event.applyTo(overlay, absoluteTimeMs)
+        }
+        return any
+    }
     
     private fun spawnRandomEvent(state: SimulationState, currentEvents: MutableList<RandomEvent>, random: Random, spawnTime: Long) {
         val conditions = EventSpawnConditions(
@@ -400,7 +454,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         var resultCount = 0
         
         for (event in currentEvents) {
-            if (event.layer == EventLayer.GROUND) {
+            if (event.layer == EventLayer.GROUND && event.spawnTimeMs <= groundDrawAbsoluteTimeMs) {
                 // Snap event's depthFactor to the actual hill it visually sits on
                 val effectiveDepth = hillInfoWorldProvider?.invoke(0f, event.depthFactor)
                     ?: event.depthFactor
@@ -463,6 +517,10 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         val ambientColor = cachedAmbientColor
 
         for (event in currentEvents) {
+            // Replayed manual spawns can be queued to start later.
+            if (event.spawnTimeMs > state.absoluteTimeMs) continue
+            // Drawn by SkyLayer as part of the star field.
+            if (event is StarFieldEffect) continue
             if (predicate(event)) {
                 try {
                     // Events use screen-relative ratio-based positions and speeds.
@@ -486,37 +544,14 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     }
     
     /**
-     * Debug method to spawn a random event immediately.
-     * @param seed Optional seed for deterministic spawning (both preview and wallpaper get same event)
+     * Spawn a specific event type by id (manual trigger from settings).
+     * @param seed Seeds the event's randomness; the same seed gives the same event in preview and wallpaper.
+     * @param spawnTimeMs When the event starts (absolute time).
      */
-    fun debugSpawnEvent(seed: Long = System.currentTimeMillis()) {
-        val currentEvents = events.toMutableList()
-        val random = Random(seed)
-        
-        val specs = EventSpec.DEBUG_SPAWN_ORDER
-        val event = specs[random.nextInt(specs.size)].create(random, seed, viewportRatio)
-        currentEvents.add(event)
-        events = currentEvents.toList()
-        
-        android.util.Log.d("RandomEventLayer", "Debug spawned: ${event.javaClass.simpleName} (seed: $seed)")
-    }
-    
-    /**
-     * Spawn a specific event type by name.
-     * Used when toggling individual event switches in settings.
-     * @param seed Optional seed for deterministic spawning (both preview and wallpaper get same event)
-     */
-    fun spawnSpecificEvent(eventType: String, seed: Long = System.currentTimeMillis()) {
-        val currentEvents = events.toMutableList()
-        val random = Random(seed)
-        
-        val event: RandomEvent? = EventSpec.fromId(eventType)?.create(random, seed, viewportRatio)
-        
-        event?.let {
-            currentEvents.add(it)
-            events = currentEvents.toList()
-            android.util.Log.d("RandomEventLayer", "Spawned specific event: $eventType (seed: $seed)")
-        }
+    fun spawnSpecificEvent(eventType: String, seed: Long, spawnTimeMs: Long = seed) {
+        val event = EventSpec.fromId(eventType)?.create(Random(seed), spawnTimeMs, viewportRatio) ?: return
+        events = events + event
+        android.util.Log.d("RandomEventLayer", "Spawned specific event: $eventType (seed: $seed)")
     }
     
     override fun reloadSettings(settings: SimulationSettings) {
@@ -546,6 +581,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
                 enabledEvents.add(spec.id)
             }
         }
+        perseidsEnabled = EventSpec.PERSEIDS.id in enabledEvents
     }
     
     override fun destroy() {

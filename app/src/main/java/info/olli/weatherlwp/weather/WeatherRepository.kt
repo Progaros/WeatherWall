@@ -366,16 +366,6 @@ object WeatherRepository {
     }
     
     /**
-     * Get normalized moon illumination (0.0 = new moon, 1.0 = full moon).
-     */
-    fun getMoonIllumination(context: Context): Float {
-        val phase = getMoonPhase(context)
-        // Moon illumination peaks at 180 degrees (full moon)
-        // cos(phase) gives -1 at 180, we invert and normalize to 0-1
-        return ((1 - kotlin.math.cos(Math.toRadians(phase.toDouble()))) / 2f).toFloat()
-    }
-    
-    /**
      * Get moon rise time (Unix timestamp in seconds).
      */
     fun getMoonRise(context: Context): Long {

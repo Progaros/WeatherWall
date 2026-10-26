@@ -255,6 +255,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
         const val MAX_DRAW_PER_FRAME = 20            // Hard cap on draw calls per layer pass
         const val MAX_CLOUD_COUNT = 50               // Maximum cloud count from getCloudCount()
         const val DELTA_SMOOTHING_ALPHA = 0.15f      // EMA factor for frame-delta pacing
+        /** 2π / 0.05 rad/s: every drift frequency (0.3, 0.15, 0.25) completes whole cycles. */
+        const val ANIMATION_TIME_PERIOD_S = 125.66371f
     }
 
     /** When true, reduces bitmap sizes and group count for better preview performance. */
@@ -620,8 +622,9 @@ class CloudLayer(private val context: Context) : SceneLayer {
         }
         smoothedDeltaSec = deltaSec
         
-        // Accumulate animation time for per-cloud drift/oscillation in draw phase
-        animationTime += deltaSec
+        // Accumulate animation time for per-cloud drift/oscillation in draw phase.
+        // Wrapped at a common period of the 0.3/0.15/0.25 rad/s drifts so float precision never degrades.
+        animationTime = (animationTime + deltaSec) % ANIMATION_TIME_PERIOD_S
         
         // MINIMUM effective speed: even in dead calm, clouds drift slowly.
         // This guarantees visible movement at ANY wind speed > 0.

@@ -186,6 +186,13 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
     private var screenWidth = 0
     private var screenHeight = 0
 
+    /**
+     * Precipitation speeds are authored in px at [RenderConstants.REFERENCE_HEIGHT]. Scaling by the
+     * screen height keeps the fall time across the screen identical on short and tall displays.
+     */
+    private val motionScale: Float
+        get() = (screenHeight / RenderConstants.REFERENCE_HEIGHT).coerceAtLeast(0.1f)
+
     // Lightning timing (now ms-based instead of frame-based)
     private var lightningTimerMs = 0L
     private var lightningNextFlashMs = 0L  // Time until next flash
@@ -482,15 +489,17 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
         
         // Active particle count based on intensity (25% to 100% of pool)
         val activeCount = (hailParticles.size * (0.25f + intensity * 0.75f)).toInt()
+        val scale = motionScale
         
         // Draw only - physics moved to update()
         for (i in 0 until activeCount) {
             val p = hailParticles[i]
             hailPaint.alpha = p.alpha
+            val size = p.size * scale
             
             // Draw hail as irregular oval (ice pellet)
-            val ovalWidth = p.size * 0.8f
-            val ovalHeight = p.size * 1.1f
+            val ovalWidth = size * 0.8f
+            val ovalHeight = size * 1.1f
             canvas.drawOval(
                 p.x - ovalWidth, p.y - ovalHeight,
                 p.x + ovalWidth, p.y + ovalHeight,
@@ -499,7 +508,7 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
             
             // Draw highlight for 3D effect
             hailPaint.alpha = (p.alpha * 0.5f).toInt()
-            canvas.drawCircle(p.x - p.size * 0.3f, p.y - p.size * 0.4f, p.size * 0.3f, hailPaint)
+            canvas.drawCircle(p.x - size * 0.3f, p.y - size * 0.4f, size * 0.3f, hailPaint)
             hailPaint.alpha = p.alpha
         }
     }
@@ -703,10 +712,12 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
     
     private fun updateRainParticles(deltaSec: Float) {
         val activeCount = (rainParticles.size * (0.3f + intensity * 0.7f)).toInt()
+        val scale = motionScale
         val windDrift = cachedWindStrength * 3f
+        val streakDrift = windDrift * scale
         val speedMult = 0.7f + intensity * 0.6f
         // Scale to ~60fps equivalent (base speed assumed at 60fps)
-        val frameScale = deltaSec * 60f
+        val frameScale = deltaSec * 60f * scale
         var farCoordIndex = 0
         var mediumCoordIndex = 0
         var nearCoordIndex = 0
@@ -724,24 +735,24 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
                 RAIN_DEPTH_FAR -> {
                     rainCoordsFar[farCoordIndex] = p.x
                     rainCoordsFar[farCoordIndex + 1] = p.y
-                    rainCoordsFar[farCoordIndex + 2] = p.x - (1.3f + windDrift * 0.55f)
-                    rainCoordsFar[farCoordIndex + 3] = p.y + p.size * 0.72f
+                    rainCoordsFar[farCoordIndex + 2] = p.x - (1.3f * scale + streakDrift * 0.55f)
+                    rainCoordsFar[farCoordIndex + 3] = p.y + p.size * 0.72f * scale
                     farCoordIndex += 4
                 }
 
                 RAIN_DEPTH_MEDIUM -> {
                     rainCoordsMedium[mediumCoordIndex] = p.x
                     rainCoordsMedium[mediumCoordIndex + 1] = p.y
-                    rainCoordsMedium[mediumCoordIndex + 2] = p.x - (1.8f + windDrift * 0.8f)
-                    rainCoordsMedium[mediumCoordIndex + 3] = p.y + p.size * 0.95f
+                    rainCoordsMedium[mediumCoordIndex + 2] = p.x - (1.8f * scale + streakDrift * 0.8f)
+                    rainCoordsMedium[mediumCoordIndex + 3] = p.y + p.size * 0.95f * scale
                     mediumCoordIndex += 4
                 }
 
                 else -> {
                     rainCoordsNear[nearCoordIndex] = p.x
                     rainCoordsNear[nearCoordIndex + 1] = p.y
-                    rainCoordsNear[nearCoordIndex + 2] = p.x - (2.4f + windDrift)
-                    rainCoordsNear[nearCoordIndex + 3] = p.y + p.size * 1.15f
+                    rainCoordsNear[nearCoordIndex + 2] = p.x - (2.4f * scale + streakDrift)
+                    rainCoordsNear[nearCoordIndex + 3] = p.y + p.size * 1.15f * scale
                     nearCoordIndex += 4
                 }
             }
@@ -754,9 +765,10 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
     
     private fun updateSnowParticles(deltaSec: Float) {
         val activeCount = (snowParticles.size * (0.2f + intensity * 0.8f)).toInt()
+        val scale = motionScale
         val windDrift = cachedWindStrength * 2f
         val speedMult = 0.6f + intensity * 0.8f
-        val frameScale = deltaSec * 60f
+        val frameScale = deltaSec * 60f * scale
 
         var smallIndex = 0
         var mediumIndex = 0
@@ -796,7 +808,7 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
             }
 
             p.y += p.speed * speedMult * fallSpeedMultiplier * frameScale
-            p.x += kotlin.math.sin((p.y * swayPhase).toDouble()).toFloat() * (0.8f * swayMultiplier) * frameScale +
+            p.x += kotlin.math.sin((p.y / scale * swayPhase).toDouble()).toFloat() * (0.8f * swayMultiplier) * frameScale +
                 windDrift * windMultiplier * frameScale
 
             if (p.y > screenHeight) {
@@ -829,14 +841,15 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
     
     private fun updateHailParticles(deltaSec: Float) {
         val activeCount = (hailParticles.size * (0.25f + intensity * 0.75f)).toInt()
+        val scale = motionScale
         val windDrift = cachedWindStrength * 1.5f
         val speedMult = 0.8f + intensity * 0.4f
-        val frameScale = deltaSec * 60f
+        val frameScale = deltaSec * 60f * scale
         
         for (i in 0 until activeCount) {
             val p = hailParticles[i]
             p.y += p.speed * speedMult * frameScale
-            p.x += kotlin.math.sin((p.y * 0.05f).toDouble()).toFloat() * 0.5f * frameScale + windDrift * 0.3f * frameScale
+            p.x += kotlin.math.sin((p.y / scale * 0.05f).toDouble()).toFloat() * 0.5f * frameScale + windDrift * 0.3f * frameScale
             if (p.y > screenHeight) recycleHailParticle(p)
         }
     }

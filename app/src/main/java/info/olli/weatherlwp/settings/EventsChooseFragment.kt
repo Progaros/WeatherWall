@@ -2,11 +2,11 @@ package info.olli.weatherlwp.settings
 
 import android.os.Bundle
 import android.widget.Toast
-import androidx.core.content.edit
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.PreferenceManager
 import info.olli.weatherlwp.R
 import info.olli.weatherlwp.rendering.events.EventSpec
+import info.olli.weatherlwp.rendering.events.ManualEventSpawns
 
 /**
  * Sub-screen for choosing which event types are enabled.
@@ -30,14 +30,7 @@ class EventsChooseFragment : PreferenceFragmentCompat() {
     }
     
     private fun spawnEvent(eventType: String, eventName: String) {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
-        val triggerTime = System.currentTimeMillis()
-        prefs.edit {
-            putString("trigger_spawn_specific_event_preview", eventType)
-            putLong("trigger_spawn_specific_event_time_preview", triggerTime)
-            putString("trigger_spawn_specific_event_wallpaper", eventType)
-            putLong("trigger_spawn_specific_event_time_wallpaper", triggerTime)
-        }
+        ManualEventSpawns.enqueue(PreferenceManager.getDefaultSharedPreferences(requireContext()), eventType)
         
         Toast.makeText(context, getString(R.string.toast_spawning_event, eventName), Toast.LENGTH_SHORT).show()
     }

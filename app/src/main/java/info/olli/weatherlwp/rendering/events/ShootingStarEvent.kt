@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.graphics.Shader
 import androidx.core.graphics.withTranslation
 import info.olli.weatherlwp.parallax.ParallaxCalculator
+import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
@@ -17,26 +18,60 @@ import kotlin.random.Random
  * Uses absolute time for deterministic position across preview/wallpaper.
  * Spawns off-screen (top-left) and fades out near end (burning up effect).
  */
-class ShootingStarEvent(random: Random, override val spawnTimeMs: Long = System.currentTimeMillis()) : RandomEvent {
+class ShootingStarEvent internal constructor(
+    override val spawnTimeMs: Long,
+    private val startX: Float,
+    private val startY: Float,
+    private val angle: Float,
+    private val speed: Float,
+    private val length: Float,
+    /** Delay before the shooting star becomes visible. */
+    private val spawnDelayMs: Long,
+    /** Travel distance before fade-out completes. */
+    private val totalTravel: Float
+) : RandomEvent {
+
+    // Argument order is the order of random draws; keep it so seeded spawns stay unchanged.
+    constructor(random: Random, spawnTimeMs: Long = System.currentTimeMillis()) : this(
+        spawnTimeMs = spawnTimeMs,
+        startX = -0.15f + random.nextFloat() * 0.3f,      // mostly off-screen left
+        startY = -0.1f + random.nextFloat() * 0.1f,       // off-screen top
+        angle = 0.4f + random.nextFloat() * 0.3f,         // ~23-40 degrees down-right
+        speed = 0.00015f + random.nextFloat() * 0.0001f,  // graceful arc across sky
+        length = 0.10f + random.nextFloat() * 0.08f,
+        spawnDelayMs = 800L + (random.nextFloat() * 400).toLong(),
+        totalTravel = 1.0f + random.nextFloat() * 0.3f
+    )
+
     override val layer = EventLayer.FAR_SKY  // Draw behind mountains
-    
-    // Spawn off-screen to the upper-left area, will streak diagonally across
-    private val startX = -0.15f + random.nextFloat() * 0.3f  // -0.15 to 0.15 (mostly off-screen left)
-    private val startY = -0.1f + random.nextFloat() * 0.1f   // -0.1 to 0.0 (off-screen top)
-    private val angle = 0.4f + random.nextFloat() * 0.3f     // ~23-40 degrees down-right
-    private val speed = 0.00015f + random.nextFloat() * 0.0001f  // Graceful arc across sky
-    private val length = 0.10f + random.nextFloat() * 0.08f
-    
-    // Delay before the shooting star becomes visible (~1 second)
-    private val spawnDelayMs = 800L + (random.nextFloat() * 400).toLong()  // 0.8-1.2 sec
-    
-    // Total travel distance before fade-out completes (travel across 100-130% of screen width)
-    private val totalTravel = 1.0f + random.nextFloat() * 0.3f
     
     // Fade out during last 20% of journey
     private val fadeStartProgress = totalTravel * 0.8f
     
     override val durationMs: Long = spawnDelayMs + (totalTravel / speed).toLong()
+
+    companion object {
+        /** Perseid radiant (Perseus, low in the north-east) in event field coordinates. */
+        const val PERSEID_RADIANT_X = 0.82f
+        const val PERSEID_RADIANT_Y = -0.08f
+
+        /** A fast, short Perseid whose trail points back to the radiant. */
+        fun perseid(random: Random, spawnTimeMs: Long): ShootingStarEvent {
+            // Direction away from the upper-right radiant: down-left, between ~95° and ~170°.
+            val angle = (PI / 2 + 0.1 + random.nextDouble() * (PI / 2 - 0.25)).toFloat()
+            val offset = 0.05f + random.nextFloat() * 0.3f
+            return ShootingStarEvent(
+                spawnTimeMs = spawnTimeMs,
+                startX = PERSEID_RADIANT_X + cos(angle) * offset,
+                startY = PERSEID_RADIANT_Y + sin(angle) * offset,
+                angle = angle,
+                speed = 0.00028f + random.nextFloat() * 0.00009f,  // ~59 km/s: much faster than sporadics
+                length = 0.05f + random.nextFloat() * 0.05f,
+                spawnDelayMs = 0L,
+                totalTravel = 0.45f + random.nextFloat() * 0.35f
+            )
+        }
+    }
     
     private val trailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE

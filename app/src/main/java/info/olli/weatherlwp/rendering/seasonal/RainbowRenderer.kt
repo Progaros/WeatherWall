@@ -49,7 +49,7 @@ internal class RainbowRenderer {
         parallaxOffsetX: Float = 0f,
         parallaxOffsetY: Float = 0f
     ) {
-        rainbowPhase += 0.02f
+        rainbowPhase = (rainbowPhase + 0.02f) % (2f * kotlin.math.PI.toFloat())
 
         // Position and size based on settings
         val centerX = screenWidth * (rainbowPositionX / 100f) + parallaxOffsetX

@@ -150,6 +150,18 @@ class SimulationController(
 
     fun getState(): SimulationState = stateSnapshot
 
+    private var cachedMoonPhase = 0f
+    private var cachedMoonPhaseMs = Long.MIN_VALUE / 2
+
+    /** The phase moves ~0.0006 per hour, so recomputing once a minute is plenty. */
+    private fun astronomicalMoonPhase(nowMs: Long): Float {
+        if (kotlin.math.abs(nowMs - cachedMoonPhaseMs) >= 60_000L) {
+            cachedMoonPhase = Astronomy.moonPhase(nowMs).toFloat()
+            cachedMoonPhaseMs = nowMs
+        }
+        return cachedMoonPhase
+    }
+
     fun advance(frameTimeMs: Long = System.nanoTime() / 1_000_000L) {
         if (destroyed || lastUpdateMs == frameTimeMs) return
         val currentSettings = settings
@@ -181,13 +193,12 @@ class SimulationController(
         val cloudCover = extendedData.cloudCover / 100f
         val humidity = extendedData.humidity / 100f
         val visibility = WeatherRepository.getNormalizedVisibility(context)
-        val moonIllumination = WeatherRepository.getMoonIllumination(context)
-        // In debug/simulation mode, use manual moon phase; otherwise use weather data
         val moonPhase = if (currentSettings.debugEnabled) {
             currentSettings.moonPhase  // Already 0-1
         } else {
-            extendedData.moonPhase / 360f  // Normalize to 0-1
+            astronomicalMoonPhase(clock.getAbsoluteTimeMs())
         }
+        val moonIllumination = Astronomy.moonIllumination(moonPhase.toDouble()).toFloat()
         val rawWindDirection = extendedData.windDirection.toFloat()
         
         // Smooth wind values to prevent tree jumping on weather updates

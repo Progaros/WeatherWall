@@ -3,8 +3,12 @@ package info.olli.weatherlwp.rendering.seasonal
 import android.util.Log
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.rendering.SeasonalEvents.Season
+import info.olli.weatherlwp.simulation.Astronomy
 import info.olli.weatherlwp.simulation.SimulationSettings
+import java.time.LocalDate
 import java.util.Calendar
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.abs
 
 /**
  * Determines the active seasonal event from the date, per-event toggles/intervals
@@ -27,7 +31,7 @@ internal class HolidaySchedule(initialSettings: SimulationSettings) {
     // Per-event intervals (±days around the center holiday date)
     private var christmasInterval = 5   // ±days around Dec 25
     private var newyearInterval = 7     // ±days around Jan 1
-    private var cnNewyearInterval = 14  // ±days around Feb 1
+    private var cnNewyearInterval = 14  // ±days around the astronomical Chinese New Year
     private var stPatricksInterval = 2  // ±days around Mar 17
 
     fun applySettings(settings: SimulationSettings) {
@@ -92,7 +96,7 @@ internal class HolidaySchedule(initialSettings: SimulationSettings) {
 
     /**
      * Determine season from current date using circular day distance.
-     * Each event has a center date and ±interval days.
+     * Each event has a center date and ±interval days; Chinese New Year's center is astronomical.
      * Priority order: Christmas → New Year → CN New Year → St. Patrick's.
      */
     fun getSeasonByDate(
@@ -108,7 +112,7 @@ internal class HolidaySchedule(initialSettings: SimulationSettings) {
         if (newyearEnabled && circularDayDistance(currentDoy, dayOfYear(Calendar.JANUARY, 1, cal), daysInYear) <= newyearInterval) {
             return Season.NEW_YEAR
         }
-        if (cnNewyearEnabled && circularDayDistance(currentDoy, dayOfYear(Calendar.FEBRUARY, 1, cal), daysInYear) <= cnNewyearInterval) {
+        if (cnNewyearEnabled && daysFromChineseNewYear(cal) <= cnNewyearInterval) {
             return Season.CN_NEW_YEAR
         }
         if (stPatricksEnabled && circularDayDistance(currentDoy, dayOfYear(Calendar.MARCH, 17, cal), daysInYear) <= stPatricksInterval) {
@@ -120,6 +124,18 @@ internal class HolidaySchedule(initialSettings: SimulationSettings) {
 
     companion object {
         private const val SEASON_CACHE_TTL_MS = 10_000L  // Re-check season every 10 seconds
+
+        private val chineseNewYearDays = ConcurrentHashMap<Int, Long>()
+
+        /** Days between [cal]'s local date and the nearest Chinese New Year (this year's or next year's). */
+        fun daysFromChineseNewYear(cal: Calendar): Long {
+            val year = cal.get(Calendar.YEAR)
+            val today = LocalDate.of(year, cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH)).toEpochDay()
+            return minOf(abs(today - chineseNewYearDay(year)), abs(today - chineseNewYearDay(year + 1)))
+        }
+
+        private fun chineseNewYearDay(year: Int): Long =
+            chineseNewYearDays.getOrPut(year) { Astronomy.chineseNewYearEpochDay(year) }
 
         /**
          * Circular distance between two day-of-year values,

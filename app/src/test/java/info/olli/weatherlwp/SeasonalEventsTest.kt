@@ -1,6 +1,7 @@
 package info.olli.weatherlwp
 
 import info.olli.weatherlwp.rendering.SeasonalEvents
+import info.olli.weatherlwp.rendering.seasonal.HolidaySchedule
 import org.junit.Assert.*
 import org.junit.Test
 import java.util.Calendar
@@ -116,15 +117,22 @@ class SeasonalEventsTest {
     }
 
     @Test
-    fun `cn new year season - Feb 1 exact match with default interval`() {
-        // With interval=0, only exact match works
-        assertEquals("CN_NEW_YEAR", getSeasonByDateHelper(Calendar.FEBRUARY, 1))
+    fun `cn new year season - exact astronomical date with default interval`() {
+        // With interval=0, only the actual new-moon date matches (2026: Feb 17, 2027: Feb 6)
+        assertEquals("CN_NEW_YEAR", getSeasonByDateHelper(Calendar.FEBRUARY, 17, year = 2026))
+        assertEquals("CN_NEW_YEAR", getSeasonByDateHelper(Calendar.FEBRUARY, 6, year = 2027))
     }
 
     @Test
-    fun `cn new year season - Jan 31 outside default interval`() {
-        // With interval=0, even 1 day away is outside
-        assertNotEquals("CN_NEW_YEAR", getSeasonByDateHelper(Calendar.JANUARY, 31))
+    fun `cn new year season - neighbouring days outside default interval`() {
+        assertNotEquals("CN_NEW_YEAR", getSeasonByDateHelper(Calendar.FEBRUARY, 16, year = 2026))
+        assertNotEquals("CN_NEW_YEAR", getSeasonByDateHelper(Calendar.FEBRUARY, 1, year = 2026))
+    }
+
+    @Test
+    fun `cn new year interval reaches across the year boundary`() {
+        // 2028 CNY is Jan 26; Dec 30 2027 is 27 days earlier.
+        assertEquals(27L, HolidaySchedule.daysFromChineseNewYear(calFor(Calendar.DECEMBER, 30, 2027)))
     }
 
     @Test
@@ -238,9 +246,10 @@ class SeasonalEventsTest {
         christmasInterval: Int = PreferenceDefaults.CHRISTMAS_INTERVAL,
         newyearInterval: Int = PreferenceDefaults.NEWYEAR_INTERVAL,
         cnNewyearInterval: Int = PreferenceDefaults.CN_NEWYEAR_INTERVAL,
-        stPatricksInterval: Int = PreferenceDefaults.ST_PATRICKS_INTERVAL
+        stPatricksInterval: Int = PreferenceDefaults.ST_PATRICKS_INTERVAL,
+        year: Int? = null
     ): String {
-        val cal = calFor(month, day)
+        val cal = calFor(month, day, year)
         val currentDoy = cal.get(Calendar.DAY_OF_YEAR)
         val daysInYear = cal.getActualMaximum(Calendar.DAY_OF_YEAR)
 
@@ -254,10 +263,7 @@ class SeasonalEventsTest {
             ) <= newyearInterval
         ) return "NEW_YEAR"
 
-        if (cnNewyearEnabled && SeasonalEvents.circularDayDistance(
-                currentDoy, SeasonalEvents.dayOfYear(Calendar.FEBRUARY, 1, cal), daysInYear
-            ) <= cnNewyearInterval
-        ) return "CN_NEW_YEAR"
+        if (cnNewyearEnabled && HolidaySchedule.daysFromChineseNewYear(cal) <= cnNewyearInterval) return "CN_NEW_YEAR"
 
         if (stPatricksEnabled && SeasonalEvents.circularDayDistance(
                 currentDoy, SeasonalEvents.dayOfYear(Calendar.MARCH, 17, cal), daysInYear
@@ -289,8 +295,9 @@ class SeasonalEventsTest {
         }
     }
 
-    private fun calFor(month: Int, day: Int): Calendar {
+    private fun calFor(month: Int, day: Int, year: Int? = null): Calendar {
         return Calendar.getInstance().apply {
+            if (year != null) set(Calendar.YEAR, year)
             set(Calendar.MONTH, month)
             set(Calendar.DAY_OF_MONTH, day)
         }

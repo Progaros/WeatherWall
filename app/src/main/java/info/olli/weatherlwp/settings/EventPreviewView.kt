@@ -36,7 +36,8 @@ class EventPreviewView @JvmOverloads constructor(
         BUTTERFLY(EventSpec.BUTTERFLY), DRAGONFLY(EventSpec.DRAGONFLY), RABBIT(EventSpec.RABBIT),
         FOX(EventSpec.FOX), SQUIRREL(EventSpec.SQUIRREL), FIREFLIES(EventSpec.FIREFLIES),
         SNOWFLAKE(EventSpec.SNOWFLAKE), BAT(EventSpec.BAT), DEER(EventSpec.DEER),
-        FISH(EventSpec.FISH), DUCK(EventSpec.DUCK), FROG(EventSpec.FROG);
+        FISH(EventSpec.FISH), DUCK(EventSpec.DUCK), FROG(EventSpec.FROG),
+        PERSEIDS(EventSpec.PERSEIDS), STAR_FALL(EventSpec.STAR_FALL);
 
         companion object {
             fun fromSpec(spec: EventSpec): EventType = entries.first { it.spec == spec }

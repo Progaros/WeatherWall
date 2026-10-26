@@ -18,7 +18,6 @@ import info.olli.weatherlwp.simulation.SimulationState
 import info.olli.weatherlwp.util.ColorMath
 import kotlin.math.abs
 import kotlin.math.sin
-import kotlin.random.Random
 
 /**
  * Renders the sky background with gradient colors, stars, sun, moon, and vignette.
@@ -90,7 +89,19 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
     private var cachedMoonGlowRadius = 0f
     
     // Stars - generated once with fixed seed for consistency
-    private val stars = ArrayList<FloatArray>()
+    private val stars = StarField.stars
+
+    /**
+     * Lets events hide, flare, add and drop background stars. Fills the overlay and returns true
+     * when any star-field event is active.
+     */
+    var starFieldEffects: ((StarFieldOverlay, Long) -> Boolean)? = null
+    private val starOverlay = StarFieldOverlay()
+    private val meteorPaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+    }
     
     // Current 3-stop gradient colors (Top, Middle, Horizon)
     private var skyTop = Color.BLUE
@@ -120,23 +131,11 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         private const val SKY_TIME_BUCKETS = 256
         private const val SKY_SUN_EVENT_BUCKETS = 64
         private const val SKY_SHADE_BUCKETS = 32
+        private const val METEOR_TRAIL_SEGMENTS = 5
     }
 
     init {
-        generateStars()
         reloadSettings(SimulationSettings.fromSnapshot(emptyMap<String, Any?>()))
-    }
-
-    private fun generateStars() {
-        stars.clear()
-        val random = Random(42) // Fixed seed for consistency
-        for (i in 0 until RenderConstants.STAR_COUNT) {
-            stars.add(floatArrayOf(
-                random.nextFloat(), // x (0-1)
-                random.nextFloat() * 0.98f, // y (0-0.98, almost full visible sky)
-                random.nextFloat() * 3f + 1f // radius
-            ))
-        }
     }
 
     override fun resize(w: Float, h: Float) {
@@ -316,16 +315,25 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
             val (starPx, starPy) = parallaxCalculator.getOffsetForDepth(RenderConstants.PARALLAX_STARS)
             
             val radiusScale = SkyViewportMapper.starRadiusScale(width, height)
-            for (star in stars) {
-                val twinkle = sin((time * RenderConstants.STAR_TWINKLE_SPEED + star[0] * 10).toDouble())
-                val alpha = (starAlphaBase + 50 * twinkle).toInt().coerceIn(5, 220)
-                starPaint.alpha = alpha
+            val overlay = if (starFieldEffects?.invoke(starOverlay, time) == true) starOverlay else null
+            for (i in stars.indices) {
+                val star = stars[i]
+                val visibility = overlay?.starAlpha?.get(i) ?: 1f
+                if (visibility <= 0f) continue
+                // Double math: epoch ms in Float has ~2 min resolution, which froze the twinkle.
+                val twinkle = sin(time.toDouble() * RenderConstants.STAR_TWINKLE_SPEED + star[0] * 10.0)
+                val alpha = ((starAlphaBase + 50 * twinkle).toInt().coerceIn(5, 220) * visibility).toInt()
+                if (alpha <= 0) continue
+                starPaint.alpha = alpha.coerceAtMost(255)
 
                 // Map normalized coordinates using uniform field scaling.
                 val x = SkyViewportMapper.toScreenX(star[0], width, height, starPx)
                 val y = SkyViewportMapper.toScreenY(star[1], width, height, starPy)
 
                 canvas.drawCircle(x, y, star[2] * radiusScale, starPaint)
+            }
+            if (overlay != null) {
+                drawStarOverlay(canvas, overlay, starAlphaBase, time, starPx, starPy, radiusScale)
             }
         }
         
@@ -347,6 +355,55 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         val vignetteAlpha = computeNightAlpha(state, 80, 40, 30)
         if (vignetteAlpha > 3) {
             drawVignette(canvas, vignetteAlpha)
+        }
+    }
+
+    /** Extra stars and falling-star streaks from star-field events, in the same projection as the stars. */
+    private fun drawStarOverlay(
+        canvas: Canvas,
+        overlay: StarFieldOverlay,
+        starAlphaBase: Int,
+        time: Long,
+        starPx: Float,
+        starPy: Float,
+        radiusScale: Float
+    ) {
+        for (i in 0 until overlay.extraCount) {
+            val twinkle = sin(time.toDouble() * RenderConstants.STAR_TWINKLE_SPEED + overlay.extraX[i] * 10.0)
+            val alpha = ((starAlphaBase + 50 * twinkle).toInt().coerceIn(5, 220) * overlay.extraAlpha[i]).toInt()
+            if (alpha <= 0) continue
+            starPaint.alpha = alpha
+            canvas.drawCircle(
+                SkyViewportMapper.toScreenX(overlay.extraX[i], width, height, starPx),
+                SkyViewportMapper.toScreenY(overlay.extraY[i], width, height, starPy),
+                overlay.extraRadius[i] * radiusScale,
+                starPaint
+            )
+        }
+
+        // Burning stars outshine the field; brightness still follows the night-time star alpha.
+        val meteorBase = (starAlphaBase * 1.6f).coerceAtMost(255f)
+        for (i in 0 until overlay.meteorCount) {
+            val headX = SkyViewportMapper.toScreenX(overlay.meteorHeadX[i], width, height, starPx)
+            val headY = SkyViewportMapper.toScreenY(overlay.meteorHeadY[i], width, height, starPy)
+            val tailX = SkyViewportMapper.toScreenX(overlay.meteorTailX[i], width, height, starPx)
+            val tailY = SkyViewportMapper.toScreenY(overlay.meteorTailY[i], width, height, starPy)
+            val radius = overlay.meteorRadius[i] * radiusScale
+            val alpha = meteorBase * overlay.meteorAlpha[i]
+            meteorPaint.strokeWidth = radius * 1.2f
+            // Trail brightens towards the head; segments avoid allocating a gradient per frame.
+            for (s in 0 until METEOR_TRAIL_SEGMENTS) {
+                val t0 = s / METEOR_TRAIL_SEGMENTS.toFloat()
+                val t1 = (s + 1) / METEOR_TRAIL_SEGMENTS.toFloat()
+                meteorPaint.color = Color.argb((alpha * t1 * t1).toInt(), 235, 240, 255)
+                canvas.drawLine(
+                    tailX + (headX - tailX) * t0, tailY + (headY - tailY) * t0,
+                    tailX + (headX - tailX) * t1, tailY + (headY - tailY) * t1,
+                    meteorPaint
+                )
+            }
+            starPaint.alpha = alpha.toInt()
+            canvas.drawCircle(headX, headY, radius * 1.3f, starPaint)
         }
     }
     

@@ -18,17 +18,18 @@ class EventSpecTest {
             "airplane" to 0L, "birds" to 1L, "eagle" to 2L, "butterfly" to 3L, "dragonfly" to 11L,
             "balloon" to 4L, "rabbit" to 5L, "fox" to 6L, "squirrel" to 12L, "shootingstar" to 7L,
             "fireflies" to 8L, "owl" to 9L, "snowflake" to 13L, "bat" to 14L, "deer" to 15L,
-            "alien" to 10L, "fish" to 16L, "duck" to 17L, "frog" to 18L
+            "alien" to 10L, "fish" to 16L, "duck" to 17L, "frog" to 18L,
+            "perseids" to 19L, "starfall" to 20L
         )
         assertEquals(legacy, EventSpec.entries.map { it.id to it.spawnSeedOffset })
     }
 
     @Test
-    fun `debug spawn order matches the legacy list`() {
+    fun `random spawn order keeps legacy entries and appends new types`() {
         val legacy = listOf(
             "airplane", "birds", "eagle", "butterfly", "rabbit", "fox", "shootingstar", "fireflies",
             "owl", "balloon", "alien", "squirrel", "dragonfly", "snowflake", "bat", "deer", "fish",
-            "duck", "frog"
+            "duck", "frog", "perseids", "starfall"
         )
         assertEquals(legacy, EventSpec.DEBUG_SPAWN_ORDER.map { it.id })
     }

@@ -41,6 +41,18 @@
             android:defaultValue="true" />
 
         <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_perseids"
+            android:title="Perseids"
+            android:summary="Annual meteor shower from Perseus (mid-July to late August, peak around Aug 12)"
+            android:defaultValue="true" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_starfall"
+            android:title="Falling Stars"
+            android:summary="Background stars drop and burn out, new ones slowly appear (clear nights)"
+            android:defaultValue="true" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
             android:key="pref_event_alien"
             android:title="UFOs"
             android:summary="Very rare night sightings"

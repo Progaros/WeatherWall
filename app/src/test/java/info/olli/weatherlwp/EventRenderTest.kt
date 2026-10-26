@@ -487,4 +487,18 @@ class EventRenderTest {
         renderEvent("AlienEvent", event, bgColor = bg)
         renderFrames("AlienEvent", event, bgColor = bg)
     }
+
+    @Test fun renderPerseids() {
+        val bg = Color.rgb(15, 15, 35)
+        val event = MeteorShowerEvent(Random(42), spawnTimeMs = 1000000L)
+        renderEvent("MeteorShowerEvent", event, bgColor = bg)
+        renderFrames("MeteorShowerEvent", event, bgColor = bg)
+    }
+
+    @Test fun renderStarFall() {
+        val bg = Color.rgb(15, 15, 35)
+        val event = StarFallEvent(Random(42), spawnTimeMs = 1000000L)
+        renderEvent("StarFallEvent", event, bgColor = bg)
+        renderFrames("StarFallEvent", event, bgColor = bg)
+    }
 }

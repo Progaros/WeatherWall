@@ -41,6 +41,20 @@ class AlienEvent(random: Random, override val spawnTimeMs: Long = System.current
     // Parallax based on distance
     private val parallaxDepth = 0.1f + distance * 0.1f
 
+    // Unit-height (0,0)->(0,1) beam gradient; scaled to [beamStartY, beamEndY] via Matrix and faded via paint.alpha.
+    private val beamShader = android.graphics.LinearGradient(
+        0f, 0f,
+        0f, 1f,
+        intArrayOf(
+            Color.argb(255, 200, 255, 200),
+            Color.argb(128, 200, 255, 200),
+            Color.argb(0, 200, 255, 200)
+        ),
+        floatArrayOf(0f, 0.5f, 1f),
+        android.graphics.Shader.TileMode.CLAMP
+    )
+    private val beamMatrix = android.graphics.Matrix()
+
     override fun getPreviewAnchorXRatio(absoluteTimeMs: Long): Float {
         val elapsedMs = absoluteTimeMs - spawnTimeMs
         return startX + direction * speed * elapsedMs
@@ -149,23 +163,14 @@ class AlienEvent(random: Random, override val spawnTimeMs: Long = System.current
         // Bottom light beam (occasional) - with fade at bottom
         val beamIntensity = sin(lightPhase * 0.5f)
         if (beamIntensity > 0.3f) {
-            val beamAlpha = ((beamIntensity - 0.3f) / 0.7f * 80).toInt()
-            
-            // Create a vertical gradient that fades out at the bottom
+            val beamAlpha = ((beamIntensity - 0.3f) / 0.7f * 80).toInt().coerceIn(0, 255)
             val beamStartY = size * 0.4f
             val beamEndY = height * 0.5f
-            val beamGradient = android.graphics.LinearGradient(
-                0f, beamStartY,
-                0f, beamEndY,
-                intArrayOf(
-                    Color.argb(beamAlpha, 200, 255, 200),      // Full color at top
-                    Color.argb(beamAlpha / 2, 200, 255, 200),  // Half alpha in middle
-                    Color.argb(0, 200, 255, 200)               // Transparent at bottom
-                ),
-                floatArrayOf(0f, 0.5f, 1f),
-                android.graphics.Shader.TileMode.CLAMP
-            )
-            paint.shader = beamGradient
+            beamMatrix.setScale(1f, (beamEndY - beamStartY).coerceAtLeast(1f))
+            beamMatrix.postTranslate(0f, beamStartY)
+            beamShader.setLocalMatrix(beamMatrix)
+            paint.shader = beamShader
+            paint.alpha = beamAlpha
             
             path.reset()
             path.moveTo(-size * 0.3f, beamStartY)

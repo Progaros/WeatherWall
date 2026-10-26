@@ -139,7 +139,18 @@ enum class EventSpec(
     FROG("frog", "Frog", 18,
         { r, t, _ -> FrogEvent(r, t) },
         { c, _ -> !c.isWinter && !c.isAutumn && (c.isDusk || c.isNight) },
-        EventPreviewSpec(1.25f, GROUND_PREVIEW_Y, 0.5f));
+        EventPreviewSpec(1.25f, GROUND_PREVIEW_Y, 0.5f)),
+    // Burst when triggered manually; the annual shower (late July - August) spawns single
+    // Perseids by solar longitude in RandomEventLayer instead of through random selection.
+    PERSEIDS("perseids", "Perseids", 19,
+        { r, t, _ -> MeteorShowerEvent(r, t) },
+        { _, _ -> false },
+        EventPreviewSpec(1.25f, SKY_PREVIEW_Y, 0.02f)),
+    // Real background stars drop and burn out; new ones slowly appear elsewhere
+    STAR_FALL("starfall", "Falling Stars", 20,
+        { r, t, _ -> StarFallEvent(r, t) },
+        { c, random -> c.isNight && c.isClearEnough && random.nextFloat() < 0.25f },
+        EventPreviewSpec(0.4f, 0f, 0.02f));
 
     val prefKey: String get() = "pref_event_$id"
 
@@ -155,10 +166,11 @@ enum class EventSpec(
 
         fun fromPrefKey(key: String?): EventSpec? = entries.firstOrNull { it.prefKey == key }
 
-        /** Candidate order of the debug "spawn random event" trigger; kept so a given seed picks the same event. */
+        /** Candidate order of the "spawn random event" button; new types are appended. */
         val DEBUG_SPAWN_ORDER: List<EventSpec> = listOf(
             AIRPLANE, BIRDS, EAGLE, BUTTERFLY, RABBIT, FOX, SHOOTING_STAR, FIREFLIES, OWL,
-            BALLOON, ALIEN, SQUIRREL, DRAGONFLY, SNOWFLAKE, BAT, DEER, FISH, DUCK, FROG
+            BALLOON, ALIEN, SQUIRREL, DRAGONFLY, SNOWFLAKE, BAT, DEER, FISH, DUCK, FROG,
+            PERSEIDS, STAR_FALL
         )
     }
 }

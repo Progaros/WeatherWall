@@ -3,6 +3,7 @@ package info.olli.weatherlwp.settings
 import androidx.preference.PreferenceManager
 import android.content.Context
 import info.olli.weatherlwp.PreferenceDefaults
+import info.olli.weatherlwp.rendering.events.EventSpec
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -34,7 +35,9 @@ class SettingsDefaultsTest {
         assertEquals(PreferenceDefaults.WINTER_SNOW_COVERAGE, prefs.getInt("pref_winter_snow_coverage", -1))
         assertEquals(PreferenceDefaults.CELESTIAL_ARC_HEIGHT, prefs.getInt("pref_celestial_arc_height", -1))
         assertEquals(PreferenceDefaults.SHAKE_SENSITIVITY, prefs.getInt("pref_shake_sensitivity", -1))
-        assertTrue("custom SpawnSwitchPreference default", prefs.getBoolean("pref_event_airplane", false))
+        for (spec in EventSpec.entries) {
+            assertTrue("Missing XML default for ${spec.prefKey}", prefs.getBoolean(spec.prefKey, false))
+        }
     }
 
     @Test
