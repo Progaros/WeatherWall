@@ -49,79 +49,44 @@ class VegetationColorContinuityTest {
         return maxOf(dr, dg, db)
     }
 
-    /** Compute the timeMultiplier the same way TerrainLayer/BushRenderer now do. */
-    private fun continuousTimeMultiplier(state: SimulationState): Float {
-        val lightLevel = state.getLightLevel()
-        val dayFactor = ((lightLevel - 0.15f) / 0.85f).coerceIn(0f, 1f)
-        return 1.0f - dayFactor * 0.85f
-    }
+    /** Compute tree blend amount (same formula as TerrainLayer.draw band haze). */
+    private fun treeBlendAmount(state: SimulationState, nearness: Float = 0.5f): Float =
+        RenderConstants.bandHaze(nearness, state.getLightLevel())
 
-    /** Compute tree blend amount (same formula as TerrainLayer.drawTreeInPlace). */
-    private fun treeBlendAmount(state: SimulationState, yBasedDepth: Float = 0.5f): Float {
-        val ambientColor = RenderConstants.getAmbientColor(
-            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
-            state.nightShadeStrength, state.sunriseHours, state.sunsetHours
-        )
-        val baseColor = RenderConstants.TREE_BASE_COLOR
-        val tintAmount = RenderConstants.applyAmbientTint(baseColor, ambientColor, yBasedDepth)
-        return tintAmount * continuousTimeMultiplier(state)
-    }
-
-    // ============== timeMultiplier Continuity ==============
+    // ============== Band Haze ==============
 
     @Test
-    fun `timeMultiplier continuous across full 24h cycle`() {
-        // Step through every minute; no adjacent pair should jump more than 0.05
-        var prev = continuousTimeMultiplier(stateAt(0f))
-        for (minute in 1 until 1440) {
-            val hour = minute / 60f
-            val cur = continuousTimeMultiplier(stateAt(hour))
-            val delta = abs(cur - prev)
-            assertTrue(
-                "timeMultiplier jumped $delta at hour=${"%.2f".format(hour)} (prev=$prev, cur=$cur)",
-                delta < 0.05f
-            )
-            prev = cur
+    fun `band haze continuous across full 24h for near and far bands`() {
+        for (nearness in floatArrayOf(0f, 1f)) {
+            var prev = treeBlendAmount(stateAt(0f), nearness)
+            for (minute in 1 until 1440) {
+                val hour = minute / 60f
+                val cur = treeBlendAmount(stateAt(hour), nearness)
+                val delta = abs(cur - prev)
+                assertTrue(
+                    "Band haze (nearness=$nearness) jumped $delta at hour=${"%.2f".format(hour)}",
+                    delta < 0.03f
+                )
+                prev = cur
+            }
         }
     }
 
     @Test
-    fun `timeMultiplier is 0_15 during day and 1_0 at night`() {
-        // Well within daytime: multiplier should be near 0.15
-        val midday = continuousTimeMultiplier(stateAt(12f))
-        assertEquals("Midday timeMultiplier", 0.15f, midday, 0.01f)
-
-        // Deep night: multiplier should be near 1.0
-        val midnight = continuousTimeMultiplier(stateAt(1f))
-        assertEquals("Midnight timeMultiplier", 1.0f, midnight, 0.01f)
+    fun `far bands are hazier than near bands by day`() {
+        val midday = stateAt(12f)
+        val far = treeBlendAmount(midday, 0f)
+        val mid = treeBlendAmount(midday, 0.5f)
+        val near = treeBlendAmount(midday, 1f)
+        assertTrue("far ($far) > mid ($mid) > near ($near)", far > mid && mid > near)
+        assertTrue("Near band keeps its own colour by day ($near)", near < 0.1f)
     }
 
     @Test
-    fun `timeMultiplier no jump at old isDawn boundary`() {
-        // isDawn turns off at sunrise+1.5h. Old code jumped here.
-        val sunrise = 6f
-        val boundary = sunrise + 1.5f
-        val before = continuousTimeMultiplier(stateAt(boundary - 0.02f))
-        val after = continuousTimeMultiplier(stateAt(boundary + 0.02f))
-        val delta = abs(after - before)
-        assertTrue(
-            "timeMultiplier jumped $delta at dawn-end boundary ($before -> $after)",
-            delta < 0.02f
-        )
-    }
-
-    @Test
-    fun `timeMultiplier no jump at old isDusk boundary`() {
-        // isDusk turns on at sunset-3h. Old code jumped here.
-        val sunset = 20f
-        val boundary = sunset - 3f
-        val before = continuousTimeMultiplier(stateAt(boundary - 0.02f))
-        val after = continuousTimeMultiplier(stateAt(boundary + 0.02f))
-        val delta = abs(after - before)
-        assertTrue(
-            "timeMultiplier jumped $delta at dusk-start boundary ($before -> $after)",
-            delta < 0.02f
-        )
+    fun `night tints even the nearest band`() {
+        val midnight = treeBlendAmount(stateAt(1f), 1f)
+        val midday = treeBlendAmount(stateAt(12f), 1f)
+        assertTrue("Night haze ($midnight) well above day haze ($midday)", midnight > midday + 0.2f)
     }
 
     // ============== Ambient Color Continuity ==============
@@ -299,15 +264,12 @@ class VegetationColorContinuityTest {
 
     // ============== Private helpers that mirror production code ==============
 
-    private fun computeTreeColor(state: SimulationState, baseColor: Int, yBasedDepth: Float): Int {
+    private fun computeTreeColor(state: SimulationState, baseColor: Int, nearness: Float): Int {
         val ambientColor = RenderConstants.getAmbientColor(
             state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
             state.nightShadeStrength, state.sunriseHours, state.sunsetHours
         )
-        val tintAmount = RenderConstants.applyAmbientTint(baseColor, ambientColor, yBasedDepth)
-        val timeMultiplier = continuousTimeMultiplier(state)
-        val blendAmount = tintAmount * timeMultiplier
-        return RenderConstants.blendWithAmbient(baseColor, ambientColor, blendAmount)
+        return RenderConstants.blendWithAmbient(baseColor, ambientColor, treeBlendAmount(state, nearness))
     }
 
     private fun sparkleIntensity(state: SimulationState): Float {

@@ -85,6 +85,8 @@ class TreeRenderer {
     companion object {
         /** World-space cell size for tree placement. ~10 world units per cell. */
         const val TREE_CELL_SIZE = 10f
+        private const val TREE_GROVE_SIZE = 45f
+        private const val GROVE_BIAS = 0.8f
 
         /**
          * Minimum world-space distance between adjacent trees on the same hill.
@@ -263,6 +265,7 @@ class TreeRenderer {
             val depthFactor = hill.depthFactor
             val hillRandom = DeterministicLayout.random(randomSeed + 2000, section = 300, index = hillIndex)
             val minTreeSpacingWorld = minimumTreeSpacingWorld(treeDensity, treeSparsity)
+            val nearness = RenderConstants.bandNearness(hillIndex, hills.size)
             var lastPlacedWorldX = Float.NEGATIVE_INFINITY
 
             // Generate clearings (Lichtungen) for this hill layer
@@ -282,12 +285,15 @@ class TreeRenderer {
             for (cellIndex in indexRange) {
                 val treeRandom = DeterministicLayout.random(randomSeed + 2000 + hillIndex, section = 310, index = cellIndex)
 
-                // Density gating: deterministic skip based on density setting
-                if (treeRandom.nextFloat() > densityFraction) continue
+                val densityRoll = treeRandom.nextFloat()
 
                 // World-space position: cell center + jitter
                 val worldX = cellIndex * treeCellSize +
                     (treeRandom.nextFloat() - 0.5f) * treeCellSize * 0.8f
+
+                // Forests get denser, meadows keep only the odd solitary tree
+                val forest = VegetationUtil.forestMask(worldX, randomSeed, hillIndex)
+                if (densityRoll > densityFraction * (0.1f + 1.9f * forest)) continue
 
                 // Enforce minimum spacing to prevent visual clustering
                 if (worldX - lastPlacedWorldX < minTreeSpacingWorld) continue
@@ -302,17 +308,12 @@ class TreeRenderer {
                 // Get the hill surface Y at this world-space X position
                 val groundY = getHillY(worldX, hill)
 
-                // Tree spread controls vertical distribution DOWN from the hill line
-                val maxVerticalOffset = treeSpread * 0.15f
+                // Kept well below the band spacing so trees don't bleed into the next ridge
+                val maxVerticalOffset = treeSpread * 0.05f
                 val verticalOffset = treeRandom.nextFloat() * maxVerticalOffset
                 val yRatio = groundY + verticalOffset
 
-                // Normalize depth to 0-1 range for scale
-                val hillsRange = RenderConstants.PARALLAX_HILLS_MAX - RenderConstants.PARALLAX_HILLS_MIN
-                val normalizedDepth = ((depthFactor - RenderConstants.PARALLAX_HILLS_MIN) / hillsRange).coerceIn(0f, 1f)
-
-                // Tree scale: foreground trees are larger
-                val baseScale = RenderConstants.TREE_SCALE_MIN + normalizedDepth * RenderConstants.TREE_SCALE_RANGE
+                val baseScale = RenderConstants.TREE_SCALE_MIN + nearness * RenderConstants.TREE_SCALE_RANGE
                 val sizeVariation = 1f + (treeRandom.nextFloat() - 0.5f) * 2f * treeSizeRandomness
                 val scale = baseScale * sizeVariation.coerceIn(0.3f, 2.0f)
 
@@ -325,8 +326,12 @@ class TreeRenderer {
                     Color.blue(RenderConstants.TREE_BASE_COLOR)
                 )
 
-                // Determine tree type based on ratio setting
-                val isLeaf = (treeRandom.nextInt(100) < leafTreeRatio)
+                // Groves: neighbouring trees mostly share a type; overall ratio still matches the setting
+                val leafRatio = leafTreeRatio / 100f
+                val groveIndex = kotlin.math.floor(worldX / TREE_GROVE_SIZE).toInt()
+                val leafyGrove = DeterministicLayout.hashToFloat(randomSeed + 2100 + hillIndex, groveIndex, 0) < leafRatio
+                val leafChance = if (leafyGrove) leafRatio + (1f - leafRatio) * GROVE_BIAS else leafRatio * (1f - GROVE_BIAS)
+                val isLeaf = treeRandom.nextInt(100) < (leafChance * 100f).toInt()
                 val type = if (isLeaf) TreeType.LEAF else TreeType.NEEDLE
 
                 // Generate crown circles for leaf trees, branches for winter bare look

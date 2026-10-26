@@ -3,6 +3,7 @@ package info.olli.weatherlwp.rendering
 import android.graphics.Color
 import androidx.core.graphics.toColorInt
 import info.olli.weatherlwp.util.ColorMath
+import kotlin.math.sqrt
 
 /**
  * Centralized constants for rendering layers.
@@ -326,8 +327,8 @@ object RenderConstants {
     const val HILL_SMOOTHING_FACTOR = 0.15f  // Max change between adjacent points
     
     /** Tree generation */
-    const val TREE_SCALE_MIN = 0.7f
-    const val TREE_SCALE_RANGE = 0.3f
+    const val TREE_SCALE_MIN = 0.45f
+    const val TREE_SCALE_RANGE = 0.55f
     const val TREE_HEIGHT_FACTOR = 0.15f  // Tree height as fraction of screen
     const val TREE_GROUND_OFFSET = 0.01f  // Slight offset above hill surface
     
@@ -471,6 +472,27 @@ object RenderConstants {
         // Kept low to preserve foreground colors, especially tree greens during day
         return 0.05f + distance * 0.4f
     }
+
+    /** Rank of a hill band among [count] depth-sorted bands: 0 = farthest, 1 = nearest. */
+    fun bandNearness(index: Int, count: Int): Float =
+        if (count <= 1) 1f else (index.toFloat() / (count - 1)).coerceIn(0f, 1f)
+
+    /**
+     * Aerial-perspective blend toward the ambient colour for a hill band and everything on it.
+     * Far bands fade toward the sky, near bands keep their colour; at night every band
+     * gets at least [NIGHT_HAZE_FLOOR] so vegetation sinks into the night tint.
+     */
+    fun bandHaze(nearness: Float, lightLevel: Float): Float {
+        val distance = 1f - nearness.coerceIn(0f, 1f)
+        // Curved so mid bands keep their colour and only the farthest ones fade strongly
+        val haze = BAND_HAZE_NEAR + distance * sqrt(distance) * (BAND_HAZE_FAR - BAND_HAZE_NEAR)
+        val dayFactor = ((lightLevel - 0.15f) / 0.85f).coerceIn(0f, 1f)
+        return maxOf(haze, (1f - dayFactor) * NIGHT_HAZE_FLOOR)
+    }
+
+    private const val BAND_HAZE_NEAR = 0.04f
+    private const val BAND_HAZE_FAR = 0.4f
+    private const val NIGHT_HAZE_FLOOR = 0.35f
     
     /**
      * Blend a color with the ambient atmosphere color.

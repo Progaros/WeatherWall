@@ -101,6 +101,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         private const val DRAW_KIND_TREE = 0
         private const val DRAW_KIND_BUSH = 1
 
+        // Band nearness (0 = farthest, 1 = nearest) below which small ground detail is skipped
+        private const val FLOWER_MIN_NEARNESS = 0.6f
+        private const val GROUND_DECOR_MIN_NEARNESS = 0.4f
+
         /**
          * Left+right width fraction added to decoration bitmaps for parallax headroom.
          * Must be >= the maximum parallax X offset / screenWidth for any hill depth.
@@ -385,8 +389,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             // Noise seed for this hill (deterministic from hill index + randomSeed)
             val noiseSeed = i * 1337 + randomSeed
             
-            // Brightness based on depth
-            val brightness = 0.5f + depth * 0.5f
+            // Near bands slightly darker; distance lightening comes from bandHaze at draw time
+            val brightness = 1.1f - depth * 0.25f
             val dayColor = Color.rgb(
                 (Color.red(RenderConstants.HILL_BASE_COLOR) * brightness).toInt(),
                 (Color.green(RenderConstants.HILL_BASE_COLOR) * brightness).toInt(),
@@ -406,6 +410,12 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         generateSeasonalDecorations(newHills)
     }
     
+    private fun meadowFlowerWeight(worldX: Float, hillIndex: Int): Float =
+        0.15f + 1.6f * (1f - VegetationUtil.forestMask(worldX, randomSeed, hillIndex))
+
+    private fun forestMushroomWeight(worldX: Float, hillIndex: Int): Float =
+        0.1f + 1.6f * VegetationUtil.forestMask(worldX, randomSeed, hillIndex)
+
     private fun generateSeasonalDecorations(currentHills: List<HillData>) {
         // Always pre-generate all seasonal decorations.
         // Visibility/opacity is controlled at draw time using season blend factors,
@@ -423,12 +433,11 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // Generate spring flowers using cell-based placement (with optional clustering)
         if (springFlowersEnabled) {
             val flowerColors = intArrayOf(
-                Color.rgb(255, 182, 193),  // Light pink
-                Color.rgb(255, 255, 0),    // Yellow
-                Color.rgb(255, 165, 0),    // Orange
-                Color.rgb(148, 0, 211),    // Violet
-                Color.rgb(255, 0, 255),    // Magenta
-                Color.rgb(255, 255, 255)   // White
+                Color.rgb(250, 190, 200),  // Soft pink
+                Color.rgb(245, 225, 110),  // Buttercup yellow
+                Color.rgb(245, 245, 240),  // White
+                Color.rgb(190, 160, 225),  // Lavender
+                Color.rgb(240, 175, 110)   // Soft orange
             )
             val newFlowers = mutableMapOf<Int, List<FlowerData>>()
             val densityFraction = (springFlowerDensity / 500f).coerceIn(0.05f, 1f)
@@ -436,6 +445,12 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             
             for (hillIndex in currentHills.indices) {
                 val hillFlowers = mutableListOf<FlowerData>()
+                val nearness = RenderConstants.bandNearness(hillIndex, currentHills.size)
+                if (nearness < FLOWER_MIN_NEARNESS) {
+                    newFlowers[hillIndex] = hillFlowers
+                    continue
+                }
+                val depthSize = 0.6f + 0.4f * nearness
                 if (flowerClusterEnabled) {
                     // Cluster mode: pick cluster centers, scatter flowers with
                     // uniform-disk sampling, smoothstep falloff, and noise displacement.
@@ -444,13 +459,15 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                     for (cellIndex in indexRange) {
                         val cellSeed = randomSeed + 6000 + hillIndex
                         val h = DeterministicLayout.hashToFloat(cellSeed, cellIndex, 0)
-                        if (h > clusterDensity * densityFraction) continue
-                        
                         val centerWorldX = cellIndex * flowerCellSize +
                             (DeterministicLayout.hashToFloat(cellSeed, cellIndex, 1) - 0.5f) * flowerCellSize * 0.9f
+                        if (h > clusterDensity * densityFraction * meadowFlowerWeight(centerWorldX, hillIndex)) continue
+                        
                         val clusterRandom = DeterministicLayout.random(cellSeed, section = 610, index = cellIndex)
                         val count = flowerClusterMinCount + clusterRandom.nextInt(
                             (flowerClusterMaxCount - flowerClusterMinCount + 1).coerceAtLeast(1))
+                        // One colour per cluster reads as a patch instead of confetti
+                        val clusterColor = flowerColors[clusterRandom.nextInt(flowerColors.size)]
                         for (f in 0 until count) {
                             // Uniform-disk sampling: sqrt(u) * r gives uniform area distribution
                             val angle = clusterRandom.nextFloat() * 2f * kotlin.math.PI.toFloat()
@@ -471,14 +488,13 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                             
                             val worldX = centerWorldX +
                                 kotlin.math.cos(angle.toDouble()).toFloat() * rawDist + noiseOffset.first
-                            val maxVerticalOffset = springFlowerSpread * 0.12f
+                            val maxVerticalOffset = springFlowerSpread * 0.06f
                             val verticalOffset = clusterRandom.nextFloat() * maxVerticalOffset + noiseOffset.second * 0.02f
-                            val colorIdx = clusterRandom.nextInt(flowerColors.size)
-                            val baseSize = 0.002f + clusterRandom.nextFloat() * 0.003f
+                            val baseSize = (0.002f + clusterRandom.nextFloat() * 0.003f) * depthSize
                             hillFlowers.add(FlowerData(
                                 worldX = worldX,
                                 yOffset = verticalOffset,
-                                color = flowerColors[colorIdx],
+                                color = clusterColor,
                                 size = baseSize * falloffWeight.coerceAtLeast(0.3f)
                             ))
                         }
@@ -488,11 +504,11 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                     for (cellIndex in indexRange) {
                         val cellSeed = randomSeed + 6000 + hillIndex
                         val h = DeterministicLayout.hashToFloat(cellSeed, cellIndex, 0)
-                        if (h > densityFraction) continue
-                        
                         val worldX = cellIndex * flowerCellSize +
                             (DeterministicLayout.hashToFloat(cellSeed, cellIndex, 1) - 0.5f) * flowerCellSize * 0.9f
-                        val maxVerticalOffset = springFlowerSpread * 0.12f
+                        if (h > densityFraction * meadowFlowerWeight(worldX, hillIndex)) continue
+                        
+                        val maxVerticalOffset = springFlowerSpread * 0.06f
                         val verticalOffset = DeterministicLayout.hashToFloat(cellSeed, cellIndex, 2) * maxVerticalOffset
                         val colorIdx = (DeterministicLayout.hashToFloat(cellSeed, cellIndex, 3) * flowerColors.size).toInt()
                             .coerceIn(0, flowerColors.size - 1)
@@ -500,7 +516,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                             worldX = worldX,
                             yOffset = verticalOffset,
                             color = flowerColors[colorIdx],
-                            size = 0.002f + DeterministicLayout.hashToFloat(cellSeed, cellIndex, 4) * 0.003f
+                            size = (0.002f + DeterministicLayout.hashToFloat(cellSeed, cellIndex, 4) * 0.003f) * depthSize
                         ))
                     }
                 }
@@ -543,6 +559,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             
             for (hillIndex in currentHills.indices) {
                 val hillLeaves = mutableListOf<FallenLeafData>()
+                if (RenderConstants.bandNearness(hillIndex, currentHills.size) < GROUND_DECOR_MIN_NEARNESS) {
+                    newLeaves[hillIndex] = hillLeaves
+                    continue
+                }
                 val hillTrees = treesByHillIndex[hillIndex] ?: emptyList()
                 
                 // Tree-biased leaves: every tree with foliage produces leaves.
@@ -587,7 +607,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                             val colorIdx = treeRandom.nextInt(leafColors.size)
                             hillLeaves.add(FallenLeafData(
                                 worldX = worldX,
-                                yOffset = treeRandom.nextFloat() * 0.08f +
+                                yOffset = treeRandom.nextFloat() * 0.04f +
                                     windDirY * foliageWindScatterStrength * 0.02f,
                                 color = leafColors[colorIdx],
                                 size = (0.003f + treeRandom.nextFloat() * 0.004f) * sizeFalloff,
@@ -614,7 +634,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                         .coerceIn(0, leafColors.size - 1)
                     hillLeaves.add(FallenLeafData(
                         worldX = worldX,
-                        yOffset = DeterministicLayout.hashToFloat(cellSeed, cellIndex, 3) * 0.08f,
+                        yOffset = DeterministicLayout.hashToFloat(cellSeed, cellIndex, 3) * 0.04f,
                         color = leafColors[colorIdx],
                         size = 0.003f + DeterministicLayout.hashToFloat(cellSeed, cellIndex, 4) * 0.004f,
                         rotation = DeterministicLayout.hashToFloat(cellSeed, cellIndex, 5) * 360f
@@ -642,6 +662,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             
             for (hillIndex in currentHills.indices) {
                 val hillMushrooms = mutableListOf<MushroomData>()
+                if (RenderConstants.bandNearness(hillIndex, currentHills.size) < GROUND_DECOR_MIN_NEARNESS) {
+                    newMushrooms[hillIndex] = hillMushrooms
+                    continue
+                }
                 if (mushroomClusterEnabled) {
                     // Cluster mode: uniform-disk sampling with falloff and noise displacement
                     val clusterDensity = (mushroomClusterDensity / 100f).coerceIn(0.05f, 1f)
@@ -649,10 +673,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                     for (cellIndex in mushIndexRange) {
                         val cellSeed = randomSeed + 9000 + hillIndex
                         val h = DeterministicLayout.hashToFloat(cellSeed, cellIndex, 0)
-                        if (h > clusterDensity * densityFraction) continue
-                        
                         val centerWorldX = cellIndex * mushroomCellSize +
                             (DeterministicLayout.hashToFloat(cellSeed, cellIndex, 1) - 0.5f) * mushroomCellSize * 0.8f
+                        if (h > clusterDensity * densityFraction * forestMushroomWeight(centerWorldX, hillIndex)) continue
+                        
                         val clusterRandom = DeterministicLayout.random(cellSeed, section = 910, index = cellIndex)
                         val count = mushroomClusterMinCount + clusterRandom.nextInt(
                             (mushroomClusterMaxCount - mushroomClusterMinCount + 1).coerceAtLeast(1))
@@ -685,10 +709,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                     for (cellIndex in mushIndexRange) {
                         val cellSeed = randomSeed + 9000 + hillIndex
                         val h = DeterministicLayout.hashToFloat(cellSeed, cellIndex, 0)
-                        if (h > densityFraction) continue
-                        
                         val worldX = cellIndex * mushroomCellSize +
                             (DeterministicLayout.hashToFloat(cellSeed, cellIndex, 1) - 0.5f) * mushroomCellSize * 0.8f
+                        if (h > densityFraction * forestMushroomWeight(worldX, hillIndex)) continue
+                        
                         val colorIdx = (DeterministicLayout.hashToFloat(cellSeed, cellIndex, 2) * capColors.size).toInt()
                             .coerceIn(0, capColors.size - 1)
                         hillMushrooms.add(MushroomData(
@@ -937,7 +961,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         hillPx: Float,
         hillPy: Float,
         ambientColor: Int,
-        treeAutumnWeight: Float
+        treeAutumnWeight: Float,
+        haze: Float
     ) {
         canvas.withTranslation(hillPx, hillPy) {
             // Needle trees stay green year-round; only leaf trees get autumn colours
@@ -947,13 +972,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 tree.dayColor
             }
 
-            val yBasedDepth = ((tree.yRatio - 0.6f) / 0.35f).coerceIn(0f, 1f)
-            // Continuous ambient tint: full at night (1.0), minimal during day (0.15)
-            val lightLevel = state.getLightLevel()
-            val dayFactor = ((lightLevel - 0.15f) / 0.85f).coerceIn(0f, 1f)
-            val timeMultiplier = 1.0f - dayFactor * 0.85f
-            val treeBlendAmount = RenderConstants.applyAmbientTint(effectiveTreeColor, ambientColor, yBasedDepth) * timeMultiplier
-            val treeColor = RenderConstants.blendWithAmbient(effectiveTreeColor, ambientColor, treeBlendAmount)
+            val treeColor = RenderConstants.blendWithAmbient(effectiveTreeColor, ambientColor, haze)
             treeRenderer.drawTree(canvas, tree, state, tree.index, treeColor)
         }
     }
@@ -967,10 +986,11 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         state: SimulationState,
         hillPx: Float,
         hillPy: Float,
-        ambientColor: Int
+        ambientColor: Int,
+        haze: Float
     ) {
         canvas.withTranslation(hillPx, hillPy) {
-            bushRenderer.drawBush(canvas, bush, state, ambientColor)
+            bushRenderer.drawBush(canvas, bush, state, ambientColor, haze)
         }
     }
     
@@ -1069,6 +1089,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         // Pre-compute autumn foliage weight once per frame (shared by all trees)
         val treeAutumnWeight = getSeasonWeight("autumn")
+        val lightLevel = state.getLightLevel()
 
         // Draw Hills AND their Trees together, sorted by depth
         // This ensures trees on background hills are drawn before foreground hills
@@ -1093,9 +1114,11 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 }
             }
             
-            // Blend with ambient color based on depth (distant hills blend more)
-            val blendAmount = RenderConstants.applyAmbientTint(effectiveDayColor, ambientColor, hill.depthFactor)
-            val hillColor = RenderConstants.blendWithAmbient(effectiveDayColor, ambientColor, blendAmount)
+            // Same aerial-perspective haze for the hill and everything standing on it
+            val bandHaze = RenderConstants.bandHaze(
+                RenderConstants.bandNearness(index, currentHills.size), lightLevel
+            )
+            val hillColor = RenderConstants.blendWithAmbient(effectiveDayColor, ambientColor, bandHaze)
             drawHill(canvas, index, hillColor)
             
             canvas.restore()
@@ -1165,7 +1188,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                         px,
                         py,
                         ambientColor,
-                        treeAutumnWeight
+                        treeAutumnWeight,
+                        bandHaze
                     )
                     treeIdx++
                 }
@@ -1211,7 +1235,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                             px,
                             py,
                             ambientColor,
-                            treeAutumnWeight
+                            treeAutumnWeight,
+                            bandHaze
                         )
 
                         else -> drawBushInPlace(
@@ -1220,7 +1245,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                             state,
                             px,
                             py,
-                            ambientColor
+                            ambientColor,
+                            bandHaze
                         )
                     }
                     drawIdx++

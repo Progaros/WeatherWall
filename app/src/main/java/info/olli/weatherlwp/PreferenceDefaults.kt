@@ -52,7 +52,7 @@ object PreferenceDefaults {
     const val TREE_DENSITY = 45  // 0-200 (45 = moderate coverage, 100 = normal, 200 = dense)
     const val TREE_SPREAD = 75  // 0-100, horizontal spread/spacing of trees
     const val TREE_SPARSITY = 25  // 0-100, clearing frequency and gap size
-    const val TREE_SIZE_RANDOMNESS = 50  // 0-100 (natural variation)
+    const val TREE_SIZE_RANDOMNESS = 20  // 0-100 (kept below the depth scaling so size still reads as distance)
     const val TREE_COLOR_VARIATION = 50  // 0-100 (moderate diversity)
     const val TREE_SWAY_SPEED = 100  // 0-300
     const val HILL_AMPLITUDE = 354  // 0-1000 (tall rolling hills)

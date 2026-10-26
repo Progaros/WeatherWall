@@ -84,8 +84,15 @@ class ReadmeScreenshotTest {
             editor.commit()
 
             // Same path as a Breezy Weather broadcast, so clouds and precipitation follow the data.
+            // Fixed 06:00/20:00 sun times: without them the sky follows today's ephemeris and
+            // the dawn/dusk shots turn into night depending on the render date.
+            val today = java.time.LocalDate.now()
+            val zone = java.time.ZoneId.systemDefault()
             WeatherRepository.updateWeather(
-                context, shot.weather, sunrise = -1L, sunset = -1L, windSpeed = shot.windSpeed,
+                context, shot.weather,
+                sunrise = today.atTime(6, 0).atZone(zone).toEpochSecond(),
+                sunset = today.atTime(20, 0).atZone(zone).toEpochSecond(),
+                windSpeed = shot.windSpeed,
                 extendedData = WeatherRepository.ExtendedWeatherData(
                     precipProbability = shot.precip,
                     cloudCover = shot.cloudCover,

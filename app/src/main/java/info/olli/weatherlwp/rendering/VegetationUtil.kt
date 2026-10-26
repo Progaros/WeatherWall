@@ -34,6 +34,21 @@ object VegetationUtil {
     }
 
     /**
+     * Low-frequency forest (1) vs meadow (0) mask for one hill band. Trees, bushes, flowers
+     * and mushrooms all read the same mask so they agree on where groves and clearings are.
+     */
+    fun forestMask(worldX: Float, randomSeed: Int, hillIndex: Int): Float {
+        val seed = randomSeed * 31 + hillIndex * 977 + 4243
+        val n = noise(worldX / FOREST_PATCH_SIZE, seed) * 0.7f +
+            noise(worldX / (FOREST_PATCH_SIZE * 0.37f), seed + 59) * 0.3f
+        val t = ((n - 0.42f) / 0.16f).coerceIn(0f, 1f)
+        return t * t * (3f - 2f * t)
+    }
+
+    /** World units per forest/meadow noise cell (visible portrait width is ~1100). */
+    private const val FOREST_PATCH_SIZE = 280f
+
+    /**
      * Evaluate fractal Brownian motion (fBm) hill noise at a world-space X.
      *
      * The noise coordinate is derived from [worldX] normalised by

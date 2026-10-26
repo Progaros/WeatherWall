@@ -189,41 +189,41 @@ class BushRenderer {
         for (hillIndex in hills.indices) {
             val hill = hills[hillIndex]
             val depthFactor = hill.depthFactor
+            val nearness = RenderConstants.bandNearness(hillIndex, hills.size)
 
             for (cellIndex in indexRange) {
                 // Per-bush deterministic seed (stable per cell index)
                 val bushRandom = DeterministicLayout.random(randomSeed + 5000 + hillIndex, section = 500, index = cellIndex)
 
-                // Density gating: deterministic skip based on density setting
-                if (bushRandom.nextFloat() > densityFraction) continue
+                val densityRoll = bushRandom.nextFloat()
 
                 // World-space position: cell center + jitter
                 val worldX = cellIndex * bushCellSize +
                     (bushRandom.nextFloat() - 0.5f) * bushCellSize * 0.8f
 
+                // Mostly in and along forests, a few scattered across meadows
+                val forest = VegetationUtil.forestMask(worldX, randomSeed, hillIndex)
+                if (densityRoll > densityFraction * (0.3f + 1.2f * forest)) continue
+
                 // Get hill Y at world-space position using noise
                 val groundY = getHillY(worldX, hill)
 
                 // Bushes sit on or slightly below the hill line
-                val verticalOffset = bushRandom.nextFloat() * 0.06f
+                val verticalOffset = bushRandom.nextFloat() * 0.03f
                 val yRatio = groundY + verticalOffset
 
-                // Normalize depth for scale
-                val hillsRange = RenderConstants.PARALLAX_HILLS_MAX - RenderConstants.PARALLAX_HILLS_MIN
-                val normalizedDepth = ((depthFactor - RenderConstants.PARALLAX_HILLS_MIN) / hillsRange).coerceIn(0f, 1f)
-
                 // Bushes are smaller than trees, scale with depth
-                val baseScale = 0.4f + normalizedDepth * 0.6f
+                val baseScale = 0.35f + nearness * 0.65f
                 val sizeVariation = 0.7f + bushRandom.nextFloat() * 0.6f
                 val scale = baseScale * sizeVariation * bushSize
 
-                // Green/dark green color for bush
+                // Close to the tree green so bushes don't read as bright spots
                 val varR = bushRandom.nextInt(20) - 10
-                val varG = bushRandom.nextInt(30)
+                val varG = bushRandom.nextInt(20)
                 val dayColor = Color.rgb(
-                    (40 + varR).coerceIn(0, 255),
-                    (80 + varG).coerceIn(0, 255),
-                    30
+                    (32 + varR).coerceIn(0, 255),
+                    (68 + varG).coerceIn(0, 255),
+                    32
                 )
 
                 newBushes.add(BushData(worldX, yRatio, scale, depthFactor, dayColor,
@@ -320,8 +320,9 @@ class BushRenderer {
      * @param bush The bush data to render.
      * @param state Current simulation state (wind, time, etc.).
      * @param ambientColor Pre-computed ambient tint color for the current time of day.
+     * @param haze Band haze from [RenderConstants.bandHaze], shared with the hill and its trees.
      */
-    fun drawBush(canvas: Canvas, bush: BushData, state: SimulationState, ambientColor: Int) {
+    fun drawBush(canvas: Canvas, bush: BushData, state: SimulationState, ambientColor: Int, haze: Float) {
         // World-space to screen projection via cached transform
         val x = cachedTransform.worldToScreenX(bush.worldX)
         val groundY = bush.yRatio * height
@@ -338,13 +339,7 @@ class BushRenderer {
             bush.dayColor
         }
 
-        val yBasedDepth = ((bush.yRatio - 0.6f) / 0.35f).coerceIn(0f, 1f)
-        // Continuous ambient tint: full at night (1.0), minimal during day (0.15)
-        val lightLevel = state.getLightLevel()
-        val dayFactor = ((lightLevel - 0.15f) / 0.85f).coerceIn(0f, 1f)
-        val timeMultiplier = 1.0f - dayFactor * 0.85f
-        val blendAmount = RenderConstants.applyAmbientTint(effectiveColor, ambientColor, yBasedDepth) * timeMultiplier
-        val blendedColor = RenderConstants.blendWithAmbient(effectiveColor, ambientColor, blendAmount)
+        val blendedColor = RenderConstants.blendWithAmbient(effectiveColor, ambientColor, haze)
 
         // Slight wind sway (less than trees)
         val windStrength = state.windStrength.coerceIn(0f, 1f) * state.windMultiplier
