@@ -25,8 +25,6 @@ data class SimulationState(
     // Dynamic sun times from weather data
     val sunriseHours: Float = 6.0f,     // e.g., 7.05 (7:03 AM) - default 6:00
     val sunsetHours: Float = 20.0f,     // e.g., 15.58 (3:35 PM) - default 20:00
-    val isGoldenHour: Boolean = false,  // True during golden hour (sunrise/sunset ±45min)
-    val isBlueHour: Boolean = false,    // True during blue hour (pre-dawn/post-dusk ±30min)
     
     // Weather
     val weather: WeatherType,
@@ -297,29 +295,6 @@ data class SimulationState(
     }
     
     /**
-     * Get shadow offset for an entity based on light source position.
-     * Returns (dx, dy) offset to apply to shadow relative to object.
-     * Uses precalculated sin/cos values for efficiency (called per-tree).
-     * 
-     * @param objectHeight Relative height of the object (affects shadow length)
-     * @return Pair of (shadowOffsetX, shadowOffsetY) normalized -1 to 1
-     */
-    fun getShadowOffset(objectHeight: Float = 1f): Pair<Float, Float> {
-        if (!shadowsEnabled) return Pair(0f, 0f)
-        val shadowLength = shadowLengthFactor() * objectHeight
-        return Pair(shadowDirX * shadowLength, shadowLength * 0.4f)
-    }
-
-    /**
-     * Horizontal shadow offset only, allocation-free. Equivalent to `getShadowOffset(objectHeight).first`
-     * but avoids the per-tree [Pair] boxing. Tree rendering only consumes the horizontal (dx) component.
-     */
-    fun getShadowDx(objectHeight: Float = 1f): Float {
-        if (!shadowsEnabled) return 0f
-        return shadowDirX * shadowLengthFactor() * objectHeight
-    }
-    
-    /**
      * Get cloud count based on density setting.
      * Cloud counts map directly to number of cloud groups:
      * - NONE: 0 clouds
@@ -426,8 +401,6 @@ data class SimulationState(
             dayProgress = 0.5f,
             sunriseHours = 6.0f,
             sunsetHours = 20.0f,
-            isGoldenHour = false,
-            isBlueHour = false,
             weather = WeatherType.CLEAR,
             cloudDensity = CloudDensity.AUTO,
             precipProbability = 0f,

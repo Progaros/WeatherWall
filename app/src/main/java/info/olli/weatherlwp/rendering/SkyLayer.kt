@@ -16,6 +16,7 @@ import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.Astronomy
 import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
+import info.olli.weatherlwp.simulation.inHourWindow
 import info.olli.weatherlwp.util.ColorMath
 import kotlin.math.abs
 import kotlin.math.sin
@@ -380,8 +381,7 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         val hour = state.smoothedTimeOfDayHours
         val sunrise = state.sunriseHours
         val sunset = state.sunsetHours
-        val isDay = if (sunrise <= sunset) hour in sunrise..sunset else hour >= sunrise || hour <= sunset
-        if (isDay) return 0f
+        if (inHourWindow(hour, sunrise, sunset)) return 0f
         val sinceSunset = ((hour - sunset) % 24f + 24f) % 24f
         val untilSunrise = ((sunrise - hour) % 24f + 24f) % 24f
         val t = ((minOf(sinceSunset, untilSunrise) - STAR_FADE_START_H) / STAR_FADE_DURATION_H).coerceIn(0f, 1f)

@@ -481,35 +481,10 @@ object RenderConstants {
     }
     
     /**
-     * Apply night tint to a color (reduce RGB, add blue).
+     * Ambient blend amount for an object at [distance] (0 = foreground, 1 = background):
+     * 5% in front up to 45% far away, low enough to keep foreground greens.
      */
-    fun applyNightTint(color: Int, intensity: Float = 1.0f): Int {
-        val redMult = 0.6f + (1f - intensity) * 0.4f
-        val greenMult = 0.7f + (1f - intensity) * 0.3f
-        val blueAdd = (20 * intensity).toInt()
-        return Color.rgb(
-            (Color.red(color) * redMult).toInt().coerceIn(0, 255),
-            (Color.green(color) * greenMult).toInt().coerceIn(0, 255),
-            (Color.blue(color) + blueAdd).coerceIn(0, 255)
-        )
-    }
-    
-    /**
-     * Calculate ambient tint blend amount based on distance/depth.
-     * Objects further away blend more with the ambient light color (atmospheric perspective).
-     * 
-     * @param baseColor The object's base color (reserved for future per-color tint curves)
-     * @param ambientColor The ambient/sky color (reserved for future intensity-based scaling)
-     * @param distance 0.0 = foreground (less tint), 1.0 = background (more tint)
-     * @return Blend amount (0.05 foreground to 0.45 background) for use with [blendWithAmbient]
-     */
-    @Suppress("UNUSED_PARAMETER")
-    fun applyAmbientTint(baseColor: Int, ambientColor: Int, distance: Float): Float {
-        // More distant objects blend more with ambient (atmospheric perspective)
-        // Foreground: 5% ambient, Background: 45% ambient
-        // Kept low to preserve foreground colors, especially tree greens during day
-        return 0.05f + distance * 0.4f
-    }
+    fun depthHaze(distance: Float): Float = 0.05f + distance * 0.4f
 
     /** Rank of a hill band among [count] depth-sorted bands: 0 = farthest, 1 = nearest. */
     fun bandNearness(index: Int, count: Int): Float =
@@ -546,22 +521,6 @@ object RenderConstants {
         val g = (Color.green(baseColor) * (1 - amount) + Color.green(ambientColor) * amount).toInt()
         val b = (Color.blue(baseColor) * (1 - amount) + Color.blue(ambientColor) * amount).toInt()
         return Color.rgb(r.coerceIn(0, 255), g.coerceIn(0, 255), b.coerceIn(0, 255))
-    }
-    
-    /**
-     * Apply atmospheric perspective to a color based on depth/distance.
-     * Combines distance-based tint calculation with ambient blending.
-     * 
-     * Use this for objects at varying depths where atmospheric perspective matters.
-     * 
-     * @param baseColor The object's base color
-     * @param ambientColor The current ambient light color
-     * @param distance 0.0 = foreground (less tint), 1.0 = background (more tint)
-     * @return The tinted color with atmospheric perspective applied
-     */
-    fun applyAtmosphericPerspective(baseColor: Int, ambientColor: Int, distance: Float): Int {
-        val tintAmount = applyAmbientTint(baseColor, ambientColor, distance)
-        return blendWithAmbient(baseColor, ambientColor, tintAmount)
     }
     
     /**

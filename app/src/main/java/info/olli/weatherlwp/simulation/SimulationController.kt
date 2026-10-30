@@ -235,14 +235,6 @@ class SimulationController(
         val moonAltitude = moonArc?.let { (kotlin.math.sin(Math.PI * it).toFloat() * 2f).coerceAtMost(1f) } ?: 0f
         val moonIllumination = Astronomy.moonIllumination(moonPhase.toDouble()).toFloat() * moonAltitude
         
-        // Calculate golden hour and blue hour flags
-        val goldenHourDuration = 0.75f  // ~45 mins
-        val blueHourDuration = 0.5f     // ~30 mins
-        val isGoldenHour = inHourWindow(rawTime, sunriseHours, sunriseHours + goldenHourDuration) ||
-                           inHourWindow(rawTime, sunsetHours - goldenHourDuration, sunsetHours)
-        val isBlueHour = inHourWindow(rawTime, sunriseHours - blueHourDuration, sunriseHours) ||
-                         inHourWindow(rawTime, sunsetHours, sunsetHours + blueHourDuration)
-        
         recordWeatherIfDue(frameTimeMs, currentSettings, effectiveWeather)
         val historySnapshot = weatherHistory.getSnapshot()
         
@@ -268,8 +260,6 @@ class SimulationController(
             smoothedProgress = smoothedTime / 24f,
             sunriseHours = sunriseHours,
             sunsetHours = sunsetHours,
-            isGoldenHour = isGoldenHour,
-            isBlueHour = isBlueHour,
             weather = effectiveWeather,
             cloudDensity = currentSettings.cloudDensity,
             precipProbability = precipProbability.coerceIn(0f, 1f),

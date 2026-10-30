@@ -618,16 +618,6 @@ class SimulationStateTest {
     }
     
     @Test
-    fun `isGoldenHour and isBlueHour can be set`() {
-        val state = SimulationState.default().copy(
-            isGoldenHour = true,
-            isBlueHour = false
-        )
-        assertTrue(state.isGoldenHour)
-        assertFalse(state.isBlueHour)
-    }
-    
-    @Test
     fun `winter day with short daylight uses correct light levels`() {
         // Heimstetten January: sunrise 7:03, sunset 15:35
         val sunrise = 7.05f
@@ -684,58 +674,23 @@ class SimulationStateTest {
         assertEquals(kotlin.math.PI.toFloat() / 2f, state.getLightSourceAngle(), 0.01f)
     }
 
-    // ============== Shadow Offset Tests ==============
+    // ============== Shadow Direction Tests ==============
 
     @Test
-    fun `getShadowOffset at solar noon points down`() {
+    fun `shadow direction at solar noon is straight down`() {
         // Solar noon = (6+20)/2 = 13h for default sun times
-        val state = stateAt(13f).copy(
-            mountainShadowsEnabled = true,
-            treeShadowsEnabled = true,
-            shadowStrength = 1f
-        )
-        val (dx, dy) = state.getShadowOffset(1f)
-        // At solar noon, light is overhead (PI/2), cos(PI/2)≈0 so dx≈0
-        assertEquals(0f, dx, 0.1f)
-        // dy should be positive (shadow extends downward)
-        assertTrue("Shadow at noon should point down", dy > 0f)
+        assertEquals(0f, stateAt(13f).shadowDirX, 0.1f)
     }
 
     @Test
-    fun `getShadowOffset at morning points right`() {
-        val state = stateAt(7f).copy(
-            mountainShadowsEnabled = true,
-            treeShadowsEnabled = true,
-            shadowStrength = 1f
-        )
-        val (dx, _) = state.getShadowOffset(1f)
-        // At 7am, light from left (angle > PI/2), -cos(angle) > 0 -> shadow to right
-        assertTrue("Morning shadow should point right (dx>0)", dx > 0f)
+    fun `shadow direction at morning points right`() {
+        // At 7am, light from left -> shadow to the right
+        assertTrue("Morning shadow should point right", stateAt(7f).shadowDirX > 0f)
     }
 
     @Test
-    fun `getShadowOffset at evening points left`() {
-        val state = stateAt(17f).copy(
-            mountainShadowsEnabled = true,
-            treeShadowsEnabled = true,
-            shadowStrength = 1f
-        )
-        val (dx, _) = state.getShadowOffset(1f)
-        // At 5pm, light from right (angle < PI/2), -cos(angle) < 0 -> shadow to left
-        assertTrue("Evening shadow should point left (dx<0)", dx < 0f)
-    }
-
-    @Test
-    fun `getShadowOffset returns zero when shadows disabled`() {
-        val state = stateAt(12f).copy(
-            mountainShadowsEnabled = false,
-            treeShadowsEnabled = false,
-            shadowsEnabled = false,
-            shadowStrength = 1f
-        )
-        val (dx, dy) = state.getShadowOffset(1f)
-        assertEquals(0f, dx, 0.001f)
-        assertEquals(0f, dy, 0.001f)
+    fun `shadow direction at evening points left`() {
+        assertTrue("Evening shadow should point left", stateAt(17f).shadowDirX < 0f)
     }
 
     @Test

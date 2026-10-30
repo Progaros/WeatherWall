@@ -52,15 +52,6 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
         private const val SNOW_HALO_SCALE = 1.6f
     }
 
-    /**
-     * Effect type for weather rendering.
-     * @deprecated Use EffectType instead. This typealias is kept for backwards compatibility.
-     */
-    enum class WeatherType {
-        NONE, RAIN, SNOW, HAIL, LIGHTNING, FOG
-    }
-    
-    // Internal effect type
     enum class EffectType {
         NONE, RAIN, SNOW, HAIL, LIGHTNING, FOG
     }
@@ -247,22 +238,6 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
      */
     fun isActive(): Boolean {
         return currentEffect != EffectType.NONE
-    }
-    
-    /**
-     * Set weather for backwards compatibility.
-     * @deprecated Use SimulationState for weather instead
-     */
-    fun setWeather(type: WeatherType) {
-        val effect = when (type) {
-            WeatherType.RAIN -> EffectType.RAIN
-            WeatherType.SNOW -> EffectType.SNOW
-            WeatherType.HAIL -> EffectType.HAIL
-            WeatherType.LIGHTNING -> EffectType.LIGHTNING
-            WeatherType.FOG -> EffectType.FOG
-            WeatherType.NONE -> EffectType.NONE
-        }
-        setEffect(effect)
     }
     
     /**

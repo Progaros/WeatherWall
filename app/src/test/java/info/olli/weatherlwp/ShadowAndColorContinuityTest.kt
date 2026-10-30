@@ -101,21 +101,21 @@ class ShadowAndColorContinuityTest {
         }
     }
 
+    /** Horizontal ground-shadow length per unit object height, as GroundShadow projects it. */
+    private fun shadowDx(state: SimulationState) = state.shadowDirX * state.shadowLengthFactor()
+
     @Test
     fun `shadow offset opposite light direction`() {
         // At noon (light from above, angle=PI/2), shadow should be minimal horizontal offset
-        val noon = stateAt(12f)
-        val (dx, _) = noon.getShadowOffset(1f)
+        val dx = shadowDx(stateAt(12f))
         assertTrue("Noon shadow dx should be near zero, was $dx", abs(dx) < 0.5f)
 
         // At sunrise (light from left, angle=PI), shadow should point right (dx > 0)
-        val sunrise = stateAt(6.1f)
-        val (dxSunrise, _) = sunrise.getShadowOffset(1f)
+        val dxSunrise = shadowDx(stateAt(6.1f))
         assertTrue("Sunrise shadow should point right, dx=$dxSunrise", dxSunrise > 0)
 
         // At sunset (light from right, angle≈0), shadow should point left (dx < 0)
-        val sunset = stateAt(19.9f)
-        val (dxSunset, _) = sunset.getShadowOffset(1f)
+        val dxSunset = shadowDx(stateAt(19.9f))
         assertTrue("Sunset shadow should point left, dx=$dxSunset", dxSunset < 0)
     }
 
@@ -165,10 +165,10 @@ class ShadowAndColorContinuityTest {
 
     @Test
     fun `shadow length no discontinuity near horizon`() {
-        var prevDx = stateAt(0f).getShadowOffset(1f).first
+        var prevDx = shadowDx(stateAt(0f))
         for (minute in 1 until 1440) {
             val hour = minute / 60f
-            val dx = stateAt(hour).getShadowOffset(1f).first
+            val dx = shadowDx(stateAt(hour))
             val delta = abs(dx - prevDx)
             assertTrue(
                 "Shadow dx jumped $delta at minute $minute (hour=$hour)",
@@ -186,8 +186,6 @@ class ShadowAndColorContinuityTest {
             "Midday shadow strength should be > 0",
             midday.getEffectiveShadowStrength() > 0.5f
         )
-        val (_, dy) = midday.getShadowOffset(1f)
-        assertTrue("Midday shadow should have nonzero dy", dy > 0)
     }
 
     @Test

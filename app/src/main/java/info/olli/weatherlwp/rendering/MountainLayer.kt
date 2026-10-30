@@ -517,7 +517,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
         
         // Apply ambient tinting (global tint system)
         // Mountains blend with ambient color based on their depth
-        val blendAmount = RenderConstants.applyAmbientTint(mountain.dayColor, ambientColor, mountain.depthFactor)
+        val blendAmount = RenderConstants.depthHaze(mountain.depthFactor)
         val baseColor = RenderConstants.applyOvercastLight(
             RenderConstants.blendWithAmbient(mountain.dayColor, ambientColor, blendAmount), frameDullness
         )
