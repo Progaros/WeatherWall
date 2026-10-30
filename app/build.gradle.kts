@@ -13,8 +13,8 @@ android {
         applicationId = "info.olli.weatherlwp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 291
-        versionName = "1.36.0"
+        versionCode = 292
+        versionName = "1.37.0"
     }
 
     buildFeatures {
@@ -76,7 +76,8 @@ tasks.withType<Test>().configureEach {
         "https.proxyHost", "https.proxyPort",
         "http.nonProxyHosts",
         "readme.screenshots",
-        "render.artifacts"
+        "render.artifacts",
+        "scene.reference.update"
     ).forEach { key ->
         System.getProperty(key)?.let { systemProperty(key, it) }
     }
