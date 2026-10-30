@@ -11,6 +11,32 @@ import org.junit.Test
  */
 class RenderConstantsTest {
 
+    private fun stage(hour: Float): Int = RenderConstants.twilightColor(
+        hour, 6f, 20f, night = 0, dawn = 600, day = 1200, dusk = 900
+    ) { from, to, t -> (from + (to - from) * t).toInt() }
+
+    @Test
+    fun `twilight timeline is symmetric around sunrise and sunset`() {
+        assertEquals(0, stage(4.9f))
+        assertEquals(600, stage(6f))
+        assertEquals(1200, stage(7f))
+        assertEquals(1200, stage(18.99f))
+        assertEquals(900, stage(20f))
+        assertEquals(0, stage(21f))
+        assertEquals(1050, stage(19.5f))
+        assertEquals(900, stage(6.5f))
+    }
+
+    @Test
+    fun `twilight timeline is continuous`() {
+        var prev = stage(0f)
+        for (minute in 1 until 1440) {
+            val value = stage(minute / 60f)
+            assertTrue("jump at minute $minute: $prev -> $value", kotlin.math.abs(value - prev) <= 20)
+            prev = value
+        }
+    }
+
     @Test
     fun `getHeightScale at reference height returns 1`() {
         assertEquals(1.0f, RenderConstants.getHeightScale(1920f), 0.001f)

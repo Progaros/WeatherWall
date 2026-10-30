@@ -27,8 +27,8 @@ No analytics. No internet permission.
 - Procedural low-poly terrain with layered hills and mountains
 - Dynamic sky with sun, moon, stars, and time-of-day lighting
 - Built-in ephemeris: moon phase and moonrise, sunrise/sunset fallback, Chinese New Year and meteor showers follow the real sky (accurate to minutes through 2100)
-- Weather effects: rain, snow, hail, lightning, clouds
-- Seasonal visuals: flowers, mushrooms, autumn leaves, snow, frost
+- Weather effects: rain, snow, hail, lightning, clouds; overcast skies close into a grey deck that flattens light and shadows while sunsets still glow at the horizon
+- Seasonal visuals: flowers, mushrooms, autumn leaves, snow, frost; real snow depth whitens ground, bushes, bare branches and mountains
 - Seasonal events: Christmas, New Year, Chinese New Year, St. Patrick's Day
 - Night-sky events: shooting stars, Perseid/Geminid/Quadrantid meteor showers, falling background stars, glints on water
 - Trees, bushes, rivers/lakes, animals, and random wildlife events

@@ -68,6 +68,7 @@ class BushRenderer {
     /** Ground snow (0-1) and its ambient-tinted colour, set by TerrainLayer per frame / hill band. */
     var snowCover: Float = 0f
     var snowColor: Int = Color.WHITE
+    var dullness: Float = 0f
 
     // ---- Settings (loaded from SharedPreferences) ----
 
@@ -345,7 +346,9 @@ class BushRenderer {
             bush.dayColor
         }
 
-        val blendedColor = RenderConstants.blendWithAmbient(effectiveColor, ambientColor, haze).let {
+        val blendedColor = RenderConstants.applyOvercastLight(
+            RenderConstants.blendWithAmbient(effectiveColor, ambientColor, haze), dullness
+        ).let {
             // Snow dusted into the foliage
             if (snowCover > 0f) RenderConstants.lerpColor(it, snowColor, snowCover * 0.3f) else it
         }
@@ -370,7 +373,7 @@ class BushRenderer {
         }
 
         // Draw precalculated circles for organic bush shape
-        val capSweep = if (snowCover > 0.02f) 70f + 120f * snowCover.coerceAtMost(1f) else 0f
+        val capSweep = if (snowCover > 0.02f) 60f + 80f * snowCover.coerceAtMost(1f) else 0f
         snowPaint.color = snowColor
         for (circle in bush.circles) {
             val cx = x + circle.xOffset * bushWidth + sway

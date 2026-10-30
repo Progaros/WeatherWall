@@ -81,6 +81,15 @@ data class SimulationState(
     private val windDirRad: Double = Math.toRadians(windDirection.toDouble())
     private val windCosVal: Float = kotlin.math.cos(windDirRad).toFloat()
     private val windSinVal: Float = kotlin.math.sin(windDirRad).toFloat()
+
+    // Read by several layers per frame and by the cached shadow strength below.
+    private val cachedOvercast: Float = run {
+        val t = ((skyCoverFraction() - 0.45f) / 0.5f).coerceIn(0f, 1f)
+        t * t * (3f - 2f * t)
+    }
+
+    /** Diffuse light under clouds: direct-light shadows fade out as the deck closes. */
+    private val cloudShadowFactor: Float = 1f - 0.85f * cachedOvercast
     
     /**
      * Get wind direction X component (cos of wind angle, -1 to 1).
@@ -201,7 +210,7 @@ data class SimulationState(
         val dayFactor = ((light - 0.15f) / 0.85f).coerceIn(0f, 1f)
         // Smoothly blend: day shadows scale with sunlight, night shadows with moonlight
         val lightFactor = dayFactor * light + (1f - dayFactor) * moonIllumination * 0.4f
-        shadowStrength * lightFactor
+        shadowStrength * lightFactor * cloudShadowFactor
     }
     
     /**
@@ -284,7 +293,7 @@ data class SimulationState(
      */
     fun groundShadowAlpha(): Int {
         val elevationSoftening = 0.55f + 0.45f * lightElevation01
-        return (16f + 100f * cachedEffectiveShadowStrength * elevationSoftening).toInt().coerceIn(0, 120)
+        return (16f * cloudShadowFactor + 100f * cachedEffectiveShadowStrength * elevationSoftening).toInt().coerceIn(0, 120)
     }
     
     /**
@@ -376,9 +385,15 @@ data class SimulationState(
      * Strength (0-1) of the closed grey cloud deck: none below ~45% cover, full at overcast.
      * Individual cloud groups only fill the upper sky band, so this dims the whole sky.
      */
-    fun overcastFactor(): Float {
-        val t = ((skyCoverFraction() - 0.45f) / 0.5f).coerceIn(0f, 1f)
-        return t * t * (3f - 2f * t)
+    fun overcastFactor(): Float = cachedOvercast
+
+    /**
+     * How flat and grey the landscape light is (0-1): the overcast deck, strongest while it
+     * rains or snows.
+     */
+    fun weatherDullness(): Float = when (weather) {
+        WeatherType.RAIN, WeatherType.HAIL, WeatherType.THUNDERSTORM, WeatherType.SNOW -> cachedOvercast
+        else -> cachedOvercast * 0.7f
     }
     
     /**

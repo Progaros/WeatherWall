@@ -112,6 +112,9 @@ class TreeRenderer {
     private val crownPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val pineconePaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val treeSnowPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true; color = Color.WHITE }
+    private val treeSnowStrokePaint = Paint().apply {
+        style = Paint.Style.STROKE; isAntiAlias = true; strokeCap = Paint.Cap.ROUND
+    }
     private val treeSnowPath = Path()
 
     // ---- Settings (loaded from SharedPreferences) ----
@@ -641,23 +644,9 @@ class TreeRenderer {
                 canvas.drawPath(treePath, treePaint)
 
                 // Draw snow on tree if snow is present (weather-driven or calendar)
-                // When useWeatherSnow is true, use ONLY weather snow level to avoid
-                // falling back to calendar-based snow (which causes sudden jumps)
-                val treeSnowActive = if (useWeatherSnow) {
-                    dynamicSnowLevel > 0.005f
-                } else {
-                    (winterSnowEnabled && cachedSeason == "winter") ||
-                    (cachedPrevSeason == "winter" && cachedSeasonBlend < 1f)
-                }
-                if (treeSnowActive) {
-                    val treeSnowAmount = if (useWeatherSnow) {
-                        dynamicSnowLevel
-                    } else if (cachedSeason == "winter") {
-                        (winterSnowCoverage / 100f) * (if (cachedPrevSeason != "winter") cachedSeasonBlend else 1f)
-                    } else {
-                        (winterSnowCoverage / 100f) * (1f - cachedSeasonBlend)
-                    }
-                    val snowCoverage = treeSnowAmount.coerceIn(0.01f, 0.8f)
+                val needleSnow = treeSnowAmount()
+                if (needleSnow > 0f) {
+                    val snowCoverage = needleSnow.coerceIn(0.01f, 0.8f)
                     val segmentSnowFactor = (1f - baseHeightRatio) * 0.3f + 0.5f
                     val snowHeight = segmentHeight * snowCoverage * segmentSnowFactor
                     val snowTipY = segTipY
@@ -801,6 +790,28 @@ class TreeRenderer {
                 }
                 trunkPaint.alpha = 255
                 trunkPaint.strokeCap = Paint.Cap.BUTT
+
+                // Snow lying on the branches, thicker on flat ones than on steep ones
+                val snowAmount = treeSnowAmount()
+                if (snowAmount > 0f) {
+                    treeSnowStrokePaint.color = snowColor
+                    treeSnowStrokePaint.alpha = branchAlpha
+                    for (branch in tree.branches) {
+                        val bStartX = x + branch.startXOffset * crownRadius
+                        val bStartY = groundY - totalHeight * (0.20f + branch.startYRatio * 0.62f)
+                        val bEndX = x + branch.endXOffset * crownRadius * 1.8f
+                        val bEndY = groundY - totalHeight * (0.20f + branch.endYRatio * 0.62f)
+                        val dx = bEndX - bStartX
+                        val dy = bEndY - bStartY
+                        val len = kotlin.math.sqrt(dx * dx + dy * dy).coerceAtLeast(0.001f)
+                        val flatness = kotlin.math.abs(dx) / len
+                        val branchWidth = trunkWidth * (if (branch.startXOffset != 0f) 0.25f else 0.42f)
+                        val snowWidth = branchWidth * (0.3f + 0.7f * snowAmount.coerceAtMost(0.8f)) * (0.3f + 0.7f * flatness)
+                        val lift = (branchWidth + snowWidth) * 0.4f
+                        treeSnowStrokePaint.strokeWidth = snowWidth
+                        canvas.drawLine(bStartX, bStartY - lift, bEndX, bEndY - lift, treeSnowStrokePaint)
+                    }
+                }
             }
 
             // Draw crown circles: scaled by crownScale (shrinks into winter, grows in spring)
@@ -822,22 +833,9 @@ class TreeRenderer {
                 crownPaint.alpha = 255
 
                 // Snow on crown
-                // When useWeatherSnow is true, use ONLY weather snow level (no calendar fallback)
-                val treeSnowActive = if (useWeatherSnow) {
-                    dynamicSnowLevel > 0.005f
-                } else {
-                    (winterSnowEnabled && cachedSeason == "winter") ||
-                    (cachedPrevSeason == "winter" && cachedSeasonBlend < 1f)
-                }
-                if (treeSnowActive && crownScale > 0.3f) {
-                    val treeSnowAmount = if (useWeatherSnow) {
-                        dynamicSnowLevel
-                    } else if (cachedSeason == "winter") {
-                        (winterSnowCoverage / 100f) * (if (cachedPrevSeason != "winter") cachedSeasonBlend else 1f)
-                    } else {
-                        (winterSnowCoverage / 100f) * (1f - cachedSeasonBlend)
-                    }
-                    val snowR = crownRadius * crownScale * treeSnowAmount.coerceIn(0.01f, 0.5f)
+                val crownSnow = treeSnowAmount()
+                if (crownSnow > 0f && crownScale > 0.3f) {
+                    val snowR = crownRadius * crownScale * crownSnow.coerceIn(0.01f, 0.5f)
                     canvas.drawOval(
                         x - snowR, crownCenterY - crownRadius * crownScale * 0.6f,
                         x + snowR, crownCenterY - crownRadius * crownScale * 0.3f,
@@ -846,6 +844,16 @@ class TreeRenderer {
                 }
             }
         }
+    }
+
+    /** Snow on trees (0 = none). Weather-driven when enabled, otherwise calendar winter coverage. */
+    private fun treeSnowAmount(): Float = when {
+        useWeatherSnow -> if (dynamicSnowLevel > 0.005f) dynamicSnowLevel else 0f
+        winterSnowEnabled && cachedSeason == "winter" ->
+            (winterSnowCoverage / 100f) * (if (cachedPrevSeason != "winter") cachedSeasonBlend else 1f)
+        cachedPrevSeason == "winter" && cachedSeasonBlend < 1f ->
+            (winterSnowCoverage / 100f) * (1f - cachedSeasonBlend)
+        else -> 0f
     }
 
     // ========================================================================

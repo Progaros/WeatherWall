@@ -205,60 +205,23 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         val hour = bucket.hour
         val sunrise = bucket.sunrise
         val sunset = bucket.sunset
-        val dawnStart = (sunrise - 1.0f).coerceAtLeast(3.0f)   // 1h before sunrise
-        val dawnEnd = sunrise + 0.5f                            // 30min after sunrise
-        val duskStart = sunset - 1.5f                           // 1.5h before sunset (gradual warm-up)
-        val duskEnd = (sunset + 1.0f).coerceAtMost(23.0f)      // 1h after sunset
         
         // 3-stop gradient: Top, Middle (40% down), Horizon
-        val (newTop, newMid, newHorizon) = when {
-            hour < dawnStart -> {
-                Triple(RenderConstants.SKY_NIGHT_TOP, RenderConstants.SKY_NIGHT_MID, RenderConstants.SKY_NIGHT_BOTTOM)
-            }
-            hour < dawnStart + 1f -> {
-                // Transition from night to dawn - use eased transitions
-                val t = hour - dawnStart
-                Triple(
-                    RenderConstants.easeSkyColorTransition(RenderConstants.SKY_NIGHT_TOP, RenderConstants.SKY_DAWN_TOP, t),
-                    RenderConstants.easeSkyColorTransition(RenderConstants.SKY_NIGHT_MID, RenderConstants.SKY_DAWN_MID, t),
-                    RenderConstants.easeSkyColorTransition(RenderConstants.SKY_NIGHT_BOTTOM, RenderConstants.SKY_DAWN_BOTTOM, t)
-                )
-            }
-            hour < dawnEnd -> {
-                // Dawn to day - use eased transitions
-                val dawnToDay = dawnEnd - (dawnStart + 1f)
-                val t = ((hour - (dawnStart + 1f)) / dawnToDay.coerceAtLeast(0.5f)).coerceIn(0f, 1f)
-                Triple(
-                    RenderConstants.easeSkyColorTransition(RenderConstants.SKY_DAWN_TOP, RenderConstants.SKY_DAY_TOP, t),
-                    RenderConstants.easeSkyColorTransition(RenderConstants.SKY_DAWN_MID, RenderConstants.SKY_DAY_MID, t),
-                    RenderConstants.easeSkyColorTransition(RenderConstants.SKY_DAWN_BOTTOM, RenderConstants.SKY_DAY_BOTTOM, t)
-                )
-            }
-            hour < duskStart -> {
-                Triple(RenderConstants.SKY_DAY_TOP, RenderConstants.SKY_DAY_MID, RenderConstants.SKY_DAY_BOTTOM)
-            }
-            hour < sunset -> {
-                // Day to dusk - use eased transitions
-                val dayToDusk = sunset - duskStart
-                val t = ((hour - duskStart) / dayToDusk.coerceAtLeast(0.5f)).coerceIn(0f, 1f)
-                Triple(
-                    RenderConstants.easeSkyColorTransition(RenderConstants.SKY_DAY_TOP, RenderConstants.SKY_DUSK_TOP, t),
-                    RenderConstants.easeSkyColorTransition(RenderConstants.SKY_DAY_MID, RenderConstants.SKY_DUSK_MID, t),
-                    RenderConstants.easeSkyColorTransition(RenderConstants.SKY_DAY_BOTTOM, RenderConstants.SKY_DUSK_BOTTOM, t)
-                )
-            }
-            hour < duskEnd -> {
-                // Dusk to night - use eased transitions
-                val duskToNight = duskEnd - sunset
-                val t = ((hour - sunset) / duskToNight.coerceAtLeast(0.5f)).coerceIn(0f, 1f)
-                Triple(
-                    RenderConstants.easeSkyColorTransition(RenderConstants.SKY_DUSK_TOP, RenderConstants.SKY_NIGHT_TOP, t),
-                    RenderConstants.easeSkyColorTransition(RenderConstants.SKY_DUSK_MID, RenderConstants.SKY_NIGHT_MID, t),
-                    RenderConstants.easeSkyColorTransition(RenderConstants.SKY_DUSK_BOTTOM, RenderConstants.SKY_NIGHT_BOTTOM, t)
-                )
-            }
-            else -> Triple(RenderConstants.SKY_NIGHT_TOP, RenderConstants.SKY_NIGHT_MID, RenderConstants.SKY_NIGHT_BOTTOM)
-        }
+        val newTop = RenderConstants.twilightColor(
+            hour, sunrise, sunset,
+            RenderConstants.SKY_NIGHT_TOP, RenderConstants.SKY_DAWN_TOP, RenderConstants.SKY_DAY_TOP, RenderConstants.SKY_DUSK_TOP,
+            RenderConstants::easeSkyColorTransition
+        )
+        val newMid = RenderConstants.twilightColor(
+            hour, sunrise, sunset,
+            RenderConstants.SKY_NIGHT_MID, RenderConstants.SKY_DAWN_MID, RenderConstants.SKY_DAY_MID, RenderConstants.SKY_DUSK_MID,
+            RenderConstants::easeSkyColorTransition
+        )
+        val newHorizon = RenderConstants.twilightColor(
+            hour, sunrise, sunset,
+            RenderConstants.SKY_NIGHT_BOTTOM, RenderConstants.SKY_DAWN_BOTTOM, RenderConstants.SKY_DAY_BOTTOM, RenderConstants.SKY_DUSK_BOTTOM,
+            RenderConstants::easeSkyColorTransition
+        )
         
         // Apply night shade darkening if at night
         val (shadedTop, shadedMid, shadedHorizon) = if (bucket.nightShade > 0f) {
@@ -443,37 +406,11 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
      * @param dawnVal Alpha at dawn peak
      * @return Smoothly interpolated alpha value (0 during full day)
      */
-    private fun computeNightAlpha(state: SimulationState, nightVal: Int, duskVal: Int, dawnVal: Int): Int {
-        val hour = state.smoothedTimeOfDayHours
-        val sunrise = state.sunriseHours
-        val sunset = state.sunsetHours
-        
-        // Pre-dawn: Night→Dawn (1h before sunrise to sunrise)
-        val dawnStart = sunrise - 1.0f
-        if (hour >= dawnStart && hour < sunrise) {
-            val t = (hour - dawnStart) / (sunrise - dawnStart)
-            return (nightVal + (dawnVal - nightVal) * t).toInt()
-        }
-        // Dawn→Day: (sunrise to sunrise+0.5h)
-        if (hour >= sunrise && hour < sunrise + 0.5f) {
-            val t = (hour - sunrise) / 0.5f
-            return (dawnVal * (1f - t)).toInt()
-        }
-        // Day→Dusk: (sunset-1.5h to sunset)
-        if (hour >= sunset - 1.5f && hour < sunset) {
-            val t = (hour - (sunset - 1.5f)) / 1.5f
-            return (duskVal * t).toInt()
-        }
-        // Dusk→Night: (sunset to sunset+1h)
-        if (hour >= sunset && hour < sunset + 1.0f) {
-            val t = (hour - sunset) / 1.0f
-            return (duskVal + (nightVal - duskVal) * t).toInt()
-        }
-        // Full day
-        if (hour >= sunrise + 0.5f && hour < sunset - 1.5f) return 0
-        // Full night
-        return nightVal
-    }
+    private fun computeNightAlpha(state: SimulationState, nightVal: Int, duskVal: Int, dawnVal: Int): Int =
+        RenderConstants.twilightColor(
+            state.smoothedTimeOfDayHours, state.sunriseHours, state.sunsetHours,
+            nightVal, dawnVal, 0, duskVal
+        ) { from, to, t -> (from + (to - from) * t).toInt() }
     
     /**
      * Draw a radial vignette (darker corners) for atmospheric effect.
@@ -591,11 +528,14 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         }
         
         sunPaint.shader = cachedSunGradient
+        // Hidden behind a closed deck, but still glowing through low near the horizon
+        val sunAlpha = 1f - state.overcastFactor() * (0.5f + 0.45f * elevationFactor)
+        sunPaint.alpha = (255 * sunAlpha).toInt()
         canvas.drawCircle(sunX + parallaxX, sunY + parallaxY, glowRadius, sunPaint)
         
         // Solid sun core
         sunPaint.shader = null
-        sunPaint.color = Color.argb(255, 255, 255, 220)
+        sunPaint.color = Color.argb((255 * sunAlpha).toInt(), 255, 255, 220)
         canvas.drawCircle(sunX + parallaxX, sunY + parallaxY, radius, sunPaint)
     }
 
@@ -614,7 +554,8 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         // Washed out by daylight: pale disc, no dark earthshine side.
         val lightLevel = state.getLightLevel()
         val dayFactor = ((lightLevel - 0.15f) / 0.85f).coerceIn(0f, 1f)
-        val moonAlpha = 1f - DAY_MOON_FADE * dayFactor
+        val cloudVisibility = 1f - 0.6f * state.overcastFactor()
+        val moonAlpha = (1f - DAY_MOON_FADE * dayFactor) * cloudVisibility
         
         // X position: left to right across height-based field (uniform with Y scaling)
         val fieldWidth = SkyViewportMapper.fieldWidth(width, height)
@@ -672,7 +613,7 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         
         // Draw the shadow/dark side (earthshine) - use pre-parsed color, no shader
         moonShadowPaint.color = moonShadowColor
-        moonShadowPaint.alpha = (255 * (1f - dayFactor)).toInt()
+        moonShadowPaint.alpha = (255 * (1f - dayFactor) * cloudVisibility).toInt()
         canvas.drawCircle(moonX, moonY, radius, moonShadowPaint)
         
         // Now draw the lit portion using a path

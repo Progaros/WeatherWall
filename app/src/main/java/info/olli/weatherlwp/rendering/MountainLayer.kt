@@ -13,7 +13,6 @@ import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
 import info.olli.weatherlwp.util.ColorMath
-import info.olli.weatherlwp.util.SeasonHelper
 import kotlin.random.Random
 
 /**
@@ -132,20 +131,34 @@ class MountainLayer(private val context: Context) : SceneLayer {
     private var lastGenerationKey: GenerationKey? = null
     
     // Seasonal settings (read from terrain settings)
-    private var terrainSeasonOverride = "auto"
     private var winterSnowEnabled = true
     private var winterSnowCoverage = PreferenceDefaults.WINTER_SNOW_COVERAGE   // 0-100 how much of mountain tops are covered
+    private var useWeatherSnow = PreferenceDefaults.WEATHER_SNOW_ENABLED
 
-    // Frame-constant terrain season, resolved once per draw() instead of per mountain
-    // (getCurrentTerrainSeason() allocates a Calendar via SeasonHelper).
-    private var frameSeason: String = "summer"
+    // Frame-constant values resolved once per draw() instead of per mountain
+    private var frameSnowDepth = 0f  // Fraction of the slope under snow, 0 = no cap
+    private var frameDullness = 0f
     
     init {
         reloadSettings(SimulationSettings.fromSnapshot(emptyMap<String, Any?>()))
     }
-    
-    private fun getCurrentTerrainSeason(): String =
-        SeasonHelper.getEffectiveTerrainSeasonKey(true, terrainSeasonOverride)
+
+    /**
+     * Peaks keep a seasonal cap in winter; real snow on the ground means the mountains
+     * are snowed in further down.
+     */
+    private fun computeSnowDepth(state: SimulationState): Float {
+        val winter = VegetationUtil.getSeasonWeight(
+            "winter", state.currentSeason, state.previousSeason, state.seasonTransitionProgress
+        )
+        val seasonal = if (winterSnowEnabled && winter > 0.01f) {
+            (winterSnowCoverage / 100f).coerceIn(0.15f, 0.5f) * winter
+        } else {
+            0f
+        }
+        val weather = if (useWeatherSnow && state.snowLevel > 0.005f) 0.2f + 0.45f * state.snowLevel.coerceAtMost(1f) else 0f
+        return maxOf(seasonal, weather)
+    }
 
     private fun ambientColorBucket(color: Int): Int = ColorMath.ambientColorBucket(color)
 
@@ -343,16 +356,16 @@ class MountainLayer(private val context: Context) : SceneLayer {
         // for gradient cache keys.
         val currentMountains = mountains
 
-        // Season is frame-constant; resolve once here (skips a per-mountain Calendar alloc,
-        // and avoids the season lookup entirely when winter snow is disabled).
-        frameSeason = if (winterSnowEnabled) getCurrentTerrainSeason() else "summer"
+        frameSnowDepth = computeSnowDepth(state)
+        frameDullness = state.weatherDullness()
         
         // Get ambient color for atmospheric blending
         val ambientColor = RenderConstants.getAmbientColor(
             state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
             state.nightShadeStrength, state.sunriseHours, state.sunsetHours
         )
-        val ambientBucket = ambientColorBucket(ambientColor)
+        val ambientBucket = ambientColorBucket(ambientColor) or
+            ((frameDullness * 20f).toInt() shl 16) or ((frameSnowDepth * 40f).toInt() shl 21)
         val bucketedAmbientColor = quantizeAmbientColor(ambientColor)
         
         // Invalidate cached gradients when lighting changes significantly
@@ -497,7 +510,9 @@ class MountainLayer(private val context: Context) : SceneLayer {
         // Apply ambient tinting (global tint system)
         // Mountains blend with ambient color based on their depth
         val blendAmount = RenderConstants.applyAmbientTint(mountain.dayColor, ambientColor, mountain.depthFactor)
-        val baseColor = RenderConstants.blendWithAmbient(mountain.dayColor, ambientColor, blendAmount)
+        val baseColor = RenderConstants.applyOvercastLight(
+            RenderConstants.blendWithAmbient(mountain.dayColor, ambientColor, blendAmount), frameDullness
+        )
         
         // Create atmospheric gradient: lighter/bluer at base (fog effect)
         // Peaks are darker/more distinct, base fades into atmospheric haze
@@ -604,10 +619,9 @@ class MountainLayer(private val context: Context) : SceneLayer {
         // Reset shader
         paint.shader = null
         
-        // Draw snow cap if winter and snow enabled
-        val season = frameSeason
-        if (winterSnowEnabled && season == "winter") {
-            val snowDepth = (winterSnowCoverage / 100f).coerceIn(0.15f, 0.5f)
+        // Draw snow cap (seasonal and/or weather-driven)
+        if (frameSnowDepth > 0.01f) {
+            val snowDepth = frameSnowDepth
             val snowSegmentCount = (segments * snowDepth).toInt().coerceIn(1, segments)
             
             snowCapPath.reset()
@@ -654,14 +668,18 @@ class MountainLayer(private val context: Context) : SceneLayer {
             val snowTopY = peakY + shape.ridgeYs[0] * mountainH
             val snowBottomY = lastLeftY + height * 0.01f
             val snowGradient = cachedSnowGradients.getOrPut(mountainIdx) {
+                // Same distance haze and weather light as the rock, so snow isn't glowing at night
+                val snow = RenderConstants.applyOvercastLight(
+                    RenderConstants.blendWithAmbient(Color.WHITE, ambientColor, blendAmount), frameDullness
+                ) and 0x00FFFFFF
                 LinearGradient(
                     actualPeakX, snowTopY,
                     actualPeakX, snowBottomY,
                     intArrayOf(
-                        Color.WHITE,
-                        Color.WHITE,
-                        Color.argb(180, 255, 255, 255),
-                        Color.argb(40, 255, 255, 255)
+                        snow or (255 shl 24),
+                        snow or (255 shl 24),
+                        snow or (180 shl 24),
+                        snow or (40 shl 24)
                     ),
                     floatArrayOf(0f, 0.4f, 0.75f, 1f),
                     Shader.TileMode.CLAMP
@@ -702,15 +720,9 @@ class MountainLayer(private val context: Context) : SceneLayer {
         mountainBottomOffset = bottomOffsetVal / 100f
         
         // Seasonal settings (same preferences as TerrainLayer for consistency)
-        // Only use terrain season override when debug/simulation mode is enabled
-        val debugEnabled = settings.getBoolean("pref_debug_enabled", PreferenceDefaults.DEBUG_ENABLED)
-        terrainSeasonOverride = if (debugEnabled) {
-            settings.getString("pref_terrain_season", PreferenceDefaults.TERRAIN_SEASON)
-        } else {
-            "auto"  // Always use real season when not in debug mode
-        }
         winterSnowEnabled = settings.getBoolean("pref_winter_snow_hills", PreferenceDefaults.WINTER_SNOW_HILLS_ENABLED)
         winterSnowCoverage = settings.getInt("pref_winter_snow_coverage", PreferenceDefaults.WINTER_SNOW_COVERAGE)
+        useWeatherSnow = settings.getBoolean("pref_weather_snow_enabled", PreferenceDefaults.WEATHER_SNOW_ENABLED)
         
         // Bottom offset, season and snow are draw-time only; regenerate just for geometry inputs.
         val key = GenerationKey(

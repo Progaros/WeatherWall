@@ -895,6 +895,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     @Volatile private var cachedPrevSeason: String = "summer"
     private var dynamicSnowLevel: Float = 0f  // Snow from weather history (0-1)
     private var snowCover: Float = 0f  // Effective ground snow this frame (0-1)
+    private var decorSnowVisibility: Float = 1f  // Flowers, leaves and mushrooms fade under snow
+    private var dullness: Float = 0f  // Overcast light flattening (0-1), see SimulationState.weatherDullness
     
     /**
      * Compute smooth weight (0-1) for a given season based on current transition state.
@@ -981,7 +983,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 tree.dayColor
             }
 
-            val treeColor = RenderConstants.blendWithAmbient(effectiveTreeColor, ambientColor, haze)
+            val treeColor = RenderConstants.applyOvercastLight(
+                RenderConstants.blendWithAmbient(effectiveTreeColor, ambientColor, haze), dullness
+            )
             treeRenderer.drawTree(canvas, tree, state, tree.index, treeColor)
         }
     }
@@ -1038,6 +1042,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         treeRenderer.dynamicSnowLevel = dynamicSnowLevel
         snowCover = computeSnowCover()
         bushRenderer.snowCover = snowCover
+        // Ground decorations disappear under a few centimetres of snow
+        decorSnowVisibility = (1f - snowCover / 0.35f).coerceIn(0f, 1f)
+        dullness = state.weatherDullness()
+        bushRenderer.dullness = dullness
         
         // Get ambient color for current time of day (global tint system)
         val ambientColor = RenderConstants.getAmbientColor(
@@ -1050,7 +1058,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // Lazily rebake static decoration bitmaps when any relevant state changes.
         // This avoids per-frame individual drawing of flowers, mushrooms, and foliage.
         val ambientBkt = decorationAmbientBucket(ambientColor)
-        val seasonBkt = currentSeasonBucket()
+        val dullBucket = (dullness * 20f).toInt()
+        val seasonBkt = currentSeasonBucket() or ((decorSnowVisibility * 20f).toInt() shl 20) or (dullBucket shl 25)
         // Mushroom shadows are baked in, so the bake must also refresh as the sun/moon moves.
         // Coarse buckets keep this from rebaking every frame while the light angle drifts.
         decorShadowDirX = state.shadowDirX
@@ -1070,7 +1079,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         // Invalidate cached hill gradients only when bucketed ambient, snow or light angle changes.
         // This avoids rebuilding gradients on tiny per-frame color deltas.
-        val ambientBucket = ambientColorBucket(ambientColor)
+        val ambientBucket = ambientColorBucket(ambientColor) or (dullBucket shl 16)
         val snowBucket = (snowCover * 20).toInt()  // ~5% granularity
         hillLightBiasX = computeHillLightBias(state)
         val lightBucket = (hillLightBiasX * 40f).toInt()  // ~2.5% granularity
@@ -1134,8 +1143,12 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             val bandHaze = RenderConstants.bandHaze(
                 RenderConstants.bandNearness(index, currentHills.size), lightLevel
             )
-            val hillColor = RenderConstants.blendWithAmbient(effectiveDayColor, ambientColor, bandHaze)
-            val snowColor = RenderConstants.blendWithAmbient(SNOW_COLOR, ambientColor, bandHaze)
+            val hillColor = RenderConstants.applyOvercastLight(
+                RenderConstants.blendWithAmbient(effectiveDayColor, ambientColor, bandHaze), dullness
+            )
+            val snowColor = RenderConstants.applyOvercastLight(
+                RenderConstants.blendWithAmbient(SNOW_COLOR, ambientColor, bandHaze), dullness
+            )
             treeRenderer.snowColor = snowColor
             bushRenderer.snowColor = snowColor
             drawHill(canvas, index, hillColor, snowColor)
@@ -1530,7 +1543,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val autumnWeight = getSeasonWeight("autumn")
         
         // Flowers: visible in spring + summer, fade out in autumn
-        val flowerAlpha = (springWeight + summerWeight).coerceIn(0f, 1f)
+        val flowerAlpha = (springWeight + summerWeight).coerceIn(0f, 1f) * decorSnowVisibility
         if (flowerAlpha > 0.01f) {
             flowersByHill[hillIndex]?.let { flowers ->
             flowerPaint.alpha = (255 * flowerAlpha).toInt()
@@ -1543,7 +1556,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 val y = yRatio * height + flower.yOffset * height
                 
                 // Blend flower color with ambient for time-of-day consistency
-                val blendedColor = RenderConstants.blendWithAmbient(flower.color, ambientColor, 0.15f)
+                val blendedColor = RenderConstants.applyOvercastLight(
+                    RenderConstants.blendWithAmbient(flower.color, ambientColor, 0.15f), dullness
+                )
                 flowerPaint.color = blendedColor
                 flowerPaint.alpha = (Color.alpha(blendedColor) * flowerAlpha).toInt()
                 // Scale flower size by height for consistent proportions
@@ -1555,7 +1570,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         }
         
         // Fallen leaves: autumn only; the season blend fades them out as winter arrives
-        val leafAlpha = autumnWeight.coerceIn(0f, 1f)
+        val leafAlpha = autumnWeight.coerceIn(0f, 1f) * decorSnowVisibility
         if (leafAlpha > 0.01f) {
         fallenLeavesByHill[hillIndex]?.let { leaves ->
             leafPaint.alpha = (255 * leafAlpha).toInt()
@@ -1566,7 +1581,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 val yRatio = getHillY(leaf.worldX, hill)
                 val y = yRatio * height + leaf.yOffset * height
                 
-                val blendedColor = RenderConstants.blendWithAmbient(leaf.color, ambientColor, 0.15f)
+                val blendedColor = RenderConstants.applyOvercastLight(
+                    RenderConstants.blendWithAmbient(leaf.color, ambientColor, 0.15f), dullness
+                )
                 leafPaint.color = blendedColor
                 leafPaint.alpha = (Color.alpha(blendedColor) * leafAlpha).toInt()
                 val leafSize = leaf.size * height
@@ -1581,7 +1598,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         }
         
         // Mushrooms: visible in summer + autumn
-        val mushroomAlpha = (summerWeight + autumnWeight).coerceIn(0f, 1f)
+        val mushroomAlpha = (summerWeight + autumnWeight).coerceIn(0f, 1f) * decorSnowVisibility
         if (mushroomAlpha > 0.01f) {
         mushroomsByHill[hillIndex]?.let { mushrooms ->
             for (mushroom in mushrooms) {
@@ -1605,13 +1622,17 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 }
                 
                 // Stem (light beige)
-                val stemColor = RenderConstants.blendWithAmbient(Color.rgb(230, 210, 180), ambientColor, 0.2f)
+                val stemColor = RenderConstants.applyOvercastLight(
+                    RenderConstants.blendWithAmbient(Color.rgb(230, 210, 180), ambientColor, 0.2f), dullness
+                )
                 mushroomPaint.color = stemColor
                 mushroomPaint.alpha = (Color.alpha(stemColor) * mushroomAlpha).toInt()
                 canvas.drawRect(x - size * 0.2f, y - size * 0.8f, x + size * 0.2f, y, mushroomPaint)
                 
                 // Cap (colored dome)
-                val capColor = RenderConstants.blendWithAmbient(mushroom.capColor, ambientColor, 0.15f)
+                val capColor = RenderConstants.applyOvercastLight(
+                    RenderConstants.blendWithAmbient(mushroom.capColor, ambientColor, 0.15f), dullness
+                )
                 mushroomCapPaint.color = capColor
                 mushroomCapPaint.alpha = (Color.alpha(capColor) * mushroomAlpha).toInt()
                 canvas.drawOval(x - size * 0.6f, y - size * 1.3f, x + size * 0.6f, y - size * 0.5f, mushroomCapPaint)

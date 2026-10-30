@@ -259,7 +259,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         const val COVERAGE_SCALE_MAX = 1.6f         // Cloud draw-size scale at overcast
         const val CULL_MARGIN_FRACTION = 0.25f      // Screen-space culling margin
         const val MAX_SCREEN_WIDTH_FRACTION = 0.60f  // Max cloud width as fraction of screen width
-        const val MAX_DRAW_PER_FRAME = 20            // Hard cap on draw calls per layer pass
+        const val MAX_DRAW_PER_FRAME = 32            // Hard cap on draw calls per layer pass; above all usual counts so clouds don't pop
         const val MAX_CLOUD_COUNT = 50               // Maximum cloud count from getCloudCount()
         const val DELTA_SMOOTHING_ALPHA = 0.15f      // EMA factor for frame-delta pacing
         /** 2π / 0.05 rad/s: every drift frequency (0.3, 0.15, 0.25) completes whole cycles. */
@@ -681,13 +681,13 @@ class CloudLayer(private val context: Context) : SceneLayer {
      * around sunrise/sunset so the coloured twilight band still shows below the clouds.
      */
     private fun drawOvercastVeil(canvas: Canvas, state: SimulationState, overcast: Float) {
-        val hour = state.timeOfDayHours
+        val hour = state.smoothedTimeOfDayHours
         val golden = maxOf(
             1f - kotlin.math.abs(hour - state.sunriseHours) / GOLDEN_WINDOW_H,
             1f - kotlin.math.abs(hour - state.sunsetHours) / GOLDEN_WINDOW_H
         ).coerceIn(0f, 1f)
         val dayFactor = ((state.getLightLevel() - 0.15f) / 0.85f).coerceIn(0f, 1f)
-        val color = ColorMath.darkenColor(currentCloudColor, 0.5f + 0.42f * dayFactor) and 0x00FFFFFF
+        val color = ColorMath.darkenColor(currentCloudColor, 0.75f + 0.17f * dayFactor) and 0x00FFFFFF
         val topAlpha = (255f * 0.88f * overcast).toInt()
         val midAlpha = (255f * 0.8f * overcast).toInt()
         val horizonAlpha = (255f * (0.6f - 0.42f * golden) * overcast).toInt()
@@ -903,47 +903,20 @@ class CloudLayer(private val context: Context) : SceneLayer {
     }
 
     private fun calculateCloudColor(state: SimulationState, overcast: Float): Int {
-        val hour = state.timeOfDayHours
-        val sunrise = state.sunriseHours
-        val sunset = state.sunsetHours
-
-        val nightColor = Color.rgb(150, 155, 180)
+        // Unlit night clouds stay dark; moonlight brightens them
+        val nightColor = RenderConstants.lerpColor(
+            Color.rgb(55, 58, 75), Color.rgb(125, 130, 155), state.moonIllumination.coerceIn(0f, 1f)
+        )
         val dawnColor = Color.rgb(255, 200, 180)
         val dayColor = Color.rgb(250, 250, 255)
         val duskColor = Color.rgb(255, 220, 200)
 
-        // Smooth time-based interpolation using actual sunrise/sunset
-        val dawnStart = sunrise - 1.0f
-        val dawnEnd = sunrise + 0.5f
-        val duskStart = sunset - 0.5f
-        val duskEnd = sunset + 1.0f
-
-        val baseColor = when {
-            // Pre-dawn: Night → Dawn
-            hour >= dawnStart && hour < sunrise -> {
-                val t = ((hour - dawnStart) / (sunrise - dawnStart)).coerceIn(0f, 1f)
-                RenderConstants.lerpColor(nightColor, dawnColor, t)
-            }
-            // Dawn → Day
-            hour >= sunrise && hour < dawnEnd -> {
-                val t = ((hour - sunrise) / (dawnEnd - sunrise)).coerceIn(0f, 1f)
-                RenderConstants.lerpColor(dawnColor, dayColor, t)
-            }
-            // Day
-            hour >= dawnEnd && hour < duskStart -> dayColor
-            // Day → Dusk
-            hour >= duskStart && hour < sunset -> {
-                val t = ((hour - duskStart) / (sunset - duskStart)).coerceIn(0f, 1f)
-                RenderConstants.lerpColor(dayColor, duskColor, t)
-            }
-            // Dusk → Night
-            hour >= sunset && hour < duskEnd -> {
-                val t = ((hour - sunset) / (duskEnd - sunset)).coerceIn(0f, 1f)
-                RenderConstants.lerpColor(duskColor, nightColor, t)
-            }
-            // Night
-            else -> nightColor
-        }
+        // Smoothed time, so clouds ease along with the sky gradient when the time jumps
+        val baseColor = RenderConstants.twilightColor(
+            state.smoothedTimeOfDayHours, state.sunriseHours, state.sunsetHours,
+            nightColor, dawnColor, dayColor, duskColor,
+            RenderConstants::lerpColor
+        )
         
         // Thick cloud decks are grey, rain and storm clouds darker still
         val precipitating = when (state.weather) {
@@ -954,12 +927,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
         }
         val weatherColor = ColorMath.darkenColor(baseColor, 1f - overcast * (if (precipitating) 0.38f else 0.22f))
 
-        // Apply night shade darkening smoothly based on light level
-        return if (state.nightShadeStrength > 0f && state.getLightLevel() < 0.5f) {
-            ColorMath.shadeRgb(weatherColor, state.nightShadeStrength)
-        } else {
-            weatherColor
-        }
+        val dayFactor = ((state.getLightLevel() - 0.15f) / 0.85f).coerceIn(0f, 1f)
+        return ColorMath.shadeRgb(weatherColor, state.nightShadeStrength * (1f - dayFactor))
     }
     
     // Expose for testing

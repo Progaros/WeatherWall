@@ -883,6 +883,17 @@ class SimulationStateTest {
     }
 
     @Test
+    fun `closed cloud deck flattens shadows and dulls rainy light most`() {
+        val clear = SimulationState.default().copy(shadowStrength = 1f)
+        val overcast = clear.copy(weather = WeatherType.OVERCAST, cloudCover = 1f)
+        val rain = clear.copy(weather = WeatherType.RAIN, cloudCover = 1f)
+        assertTrue(overcast.getEffectiveShadowStrength() < clear.getEffectiveShadowStrength() * 0.2f)
+        assertTrue(overcast.groundShadowAlpha() < clear.groundShadowAlpha() / 3)
+        assertEquals(0f, clear.weatherDullness(), 0.001f)
+        assertTrue(rain.weatherDullness() > overcast.weatherDullness())
+    }
+
+    @Test
     fun `CLOUDY with zero cloudCover still shows significant clouds`() {
         val state = SimulationState.default().copy(
             cloudDensity = CloudDensity.AUTO,

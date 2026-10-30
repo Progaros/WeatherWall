@@ -410,6 +410,47 @@ object RenderConstants {
         val b = ((Color.blue(start) + ratio * (Color.blue(end) - Color.blue(start))).toInt()).coerceIn(0, 255)
         return Color.rgb(r, g, b)
     }
+
+    /** Diffuse light under a closed cloud deck: colours lose saturation and get a little darker. */
+    fun applyOvercastLight(color: Int, dullness: Float): Int {
+        if (dullness <= 0.001f) return color
+        val r = Color.red(color)
+        val g = Color.green(color)
+        val b = Color.blue(color)
+        val lum = 0.3f * r + 0.59f * g + 0.11f * b
+        val desat = 0.45f * dullness
+        val dark = 1f - 0.2f * dullness
+        return Color.rgb(
+            ((r + (lum - r) * desat) * dark).toInt().coerceIn(0, 255),
+            ((g + (lum - g) * desat) * dark).toInt().coerceIn(0, 255),
+            ((b + (lum - b) * desat) * dark).toInt().coerceIn(0, 255)
+        )
+    }
+
+    /** Morning and evening golden window, shared by sky, ambient light and clouds. */
+    const val TWILIGHT_WINDOW_H = 1.0f
+
+    /**
+     * Shared time-of-day colour timeline: night until 1h before sunrise, dawn at sunrise,
+     * day from 1h after sunrise to 1h before sunset, dusk at sunset, night 1h after it.
+     * [mix] blends two stage colours with a linear 0-1 progress (callers apply their own easing).
+     */
+    inline fun twilightColor(
+        hour: Float, sunrise: Float, sunset: Float,
+        night: Int, dawn: Int, day: Int, dusk: Int,
+        mix: (Int, Int, Float) -> Int
+    ): Int {
+        val w = TWILIGHT_WINDOW_H
+        return when {
+            hour < sunrise - w -> night
+            hour < sunrise -> mix(night, dawn, (hour - (sunrise - w)) / w)
+            hour < sunrise + w -> mix(dawn, day, (hour - sunrise) / w)
+            hour < sunset - w -> day
+            hour < sunset -> mix(day, dusk, (hour - (sunset - w)) / w)
+            hour < sunset + w -> mix(dusk, night, (hour - sunset) / w)
+            else -> night
+        }
+    }
     
     /**
      * Interpolate between two colors in HSV space for smoother sky transitions.
@@ -525,15 +566,7 @@ object RenderConstants {
     
     /**
      * Get the ambient color for a given time of day.
-     * Uses smooth interpolation when sunriseHours/sunsetHours are provided (non-zero).
-     * 
-     * Timeline (e.g. sunrise=6, sunset=20):
-     * - Night: after dusk transition, before dawn transition
-     * - Pre-dawn: sunrise-1h .. sunrise  → lerp(NIGHT, DAWN)
-     * - Dawn→Day: sunrise .. sunrise+1h   → lerp(DAWN, DAY)
-     * - Day: sunrise+0.5h .. sunset-1.5h
-     * - Day→Dusk: sunset-1.5h .. sunset  → lerp(DAY, DUSK)
-     * - Post-dusk: sunset .. sunset+1h    → lerp(DUSK, NIGHT)
+     * Uses the shared [twilightColor] timeline when sunriseHours/sunsetHours are provided (non-zero).
      */
     fun getAmbientColor(
         timeOfDayHours: Float,
@@ -545,41 +578,10 @@ object RenderConstants {
         sunsetHours: Float = 0f
     ): Int {
         val base = if (sunriseHours > 0f && sunsetHours > 0f) {
-            // Smooth time-based interpolation
-            val hour = timeOfDayHours
-            val dawnTransStart = sunriseHours - 1.0f        // Night→Dawn starts
-            val dawnTransEnd = sunriseHours                  // Night→Dawn ends (= Dawn peak)
-            val dawnToDayEnd = sunriseHours + 1.0f           // Dawn→Day ends
-            val dayToDuskStart = sunsetHours - 1.5f          // Day→Dusk starts
-            val duskTransStart = sunsetHours                 // Dusk peak
-            val duskTransEnd = sunsetHours + 1.0f            // Dusk→Night ends
-
-            when {
-                // Pre-dawn: Night → Dawn
-                hour >= dawnTransStart && hour < dawnTransEnd -> {
-                    val t = easeInOutCubic(((hour - dawnTransStart) / (dawnTransEnd - dawnTransStart)).coerceIn(0f, 1f))
-                    lerpColorRGB(AMBIENT_NIGHT, AMBIENT_DAWN, t)
-                }
-                // Dawn → Day
-                hour >= dawnTransEnd && hour < dawnToDayEnd -> {
-                    val t = easeInOutCubic(((hour - dawnTransEnd) / (dawnToDayEnd - dawnTransEnd)).coerceIn(0f, 1f))
-                    lerpColorRGB(AMBIENT_DAWN, AMBIENT_DAY, t)
-                }
-                // Day
-                hour >= dawnToDayEnd && hour < dayToDuskStart -> AMBIENT_DAY
-                // Day → Dusk
-                hour >= dayToDuskStart && hour < duskTransStart -> {
-                    val t = easeInOutCubic(((hour - dayToDuskStart) / (duskTransStart - dayToDuskStart)).coerceIn(0f, 1f))
-                    lerpColorRGB(AMBIENT_DAY, AMBIENT_DUSK, t)
-                }
-                // Post-dusk: Dusk → Night
-                hour >= duskTransStart && hour < duskTransEnd -> {
-                    val t = easeInOutCubic(((hour - duskTransStart) / (duskTransEnd - duskTransStart)).coerceIn(0f, 1f))
-                    lerpColorRGB(AMBIENT_DUSK, AMBIENT_NIGHT, t)
-                }
-                // Night
-                else -> AMBIENT_NIGHT
-            }
+            twilightColor(
+                timeOfDayHours, sunriseHours, sunsetHours,
+                AMBIENT_NIGHT, AMBIENT_DAWN, AMBIENT_DAY, AMBIENT_DUSK
+            ) { from, to, t -> lerpColorRGB(from, to, easeInOutCubic(t)) }
         } else {
             // Fallback when sunrise/sunset are unknown: boolean-based
             when {
