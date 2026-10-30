@@ -11,7 +11,7 @@ import java.io.File
 internal object GifWriter {
 
     private val BAYER = intArrayOf(0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5)
-    private const val DITHER_SPREAD = 14
+    private const val DITHER_SPREAD = 22
 
     fun write(file: File, width: Int, height: Int, frames: List<IntArray>, delayCs: Int) {
         val palette = buildPalette(frames)
@@ -35,7 +35,7 @@ internal object GifWriter {
                 val r = ((p shr 16 and 0xFF) + d).coerceIn(0, 255)
                 val g = ((p shr 8 and 0xFF) + d).coerceIn(0, 255)
                 val b = ((p and 0xFF) + d).coerceIn(0, 255)
-                indices[i] = lookup[(r shr 3 shl 10) or (g shr 3 shl 5) or (b shr 3)]
+                indices[i] = lookup[(r shr 2 shl 12) or (g shr 2 shl 6) or (b shr 2)]
             }
             out.write(8)
             writeSubBlocks(out, lzw(indices))
@@ -81,8 +81,9 @@ internal object GifWriter {
         }
     }
 
-    private fun buildLookup(palette: IntArray): ByteArray = ByteArray(32768) { k ->
-        val r = (k shr 10 and 31) * 8 + 4; val g = (k shr 5 and 31) * 8 + 4; val b = (k and 31) * 8 + 4
+    /** Nearest palette entry for every 6-bit-per-channel colour (finer than the 5-bit palette boxes). */
+    private fun buildLookup(palette: IntArray): ByteArray = ByteArray(262144) { k ->
+        val r = (k shr 12 and 63) * 4 + 2; val g = (k shr 6 and 63) * 4 + 2; val b = (k and 63) * 4 + 2
         var best = 0; var bestDist = Int.MAX_VALUE
         for (i in palette.indices) {
             val c = palette[i]

@@ -38,13 +38,15 @@ class TreeRenderer {
     )
 
     /**
-     * Pre-calculated bare branch line for winter deciduous trees.
+     * Pre-calculated bare branch line for winter deciduous trees. Coordinates are fractions of
+     * the tree height: x from the trunk (+ = right), y above the ground.
      */
     data class BranchLine(
-        val startXOffset: Float,
-        val startYRatio: Float,  // 0=trunk top, 1=trunk bottom
-        val endXOffset: Float,
-        val endYRatio: Float
+        val startX: Float,
+        val startY: Float,
+        val endX: Float,
+        val endY: Float,
+        val thickness: Float  // fraction of the trunk width
     )
 
     data class TreeData(
@@ -87,6 +89,9 @@ class TreeRenderer {
         const val TREE_CELL_SIZE = 10f
         private const val TREE_GROVE_SIZE = 45f
         private const val GROVE_BIAS = 0.8f
+        /** Max blend of the lit side of foliage toward warm sunlight. */
+        private const val CROWN_HIGHLIGHT = 0.28f
+        private const val SUNLIT_FOLIAGE = 0xFFFFF2C8.toInt()
 
         /**
          * Minimum world-space distance between adjacent trees on the same hill.
@@ -428,64 +433,47 @@ class TreeRenderer {
     }
 
     /**
-     * Generate 6-10 bare branches forming a rounded crown silhouette for winter.
-     * Includes primary branches evenly distributed with sub-branches and twigs.
+     * Bare winter crown: 3-5 limbs leave the upper trunk at an upward angle and fork twice
+     * into branches and twigs, so the outline reads as a rounded deciduous crown.
      */
     private fun generateBranches(random: Random): List<BranchLine> {
-        val count = 6 + random.nextInt(5)  // 6-10 main branches
-        val branches = ArrayList<BranchLine>(count * 3)
-
-        for (i in 0 until count) {
-            // Distribute evenly along the upper trunk with some jitter
-            val baseRatio = i.toFloat() / (count - 1).coerceAtLeast(1)
-            val startY = 0.10f + baseRatio * 0.65f + (random.nextFloat() - 0.5f) * 0.06f
-
-            // Alternate sides so branches balance left/right
-            val side = if (i % 2 == 0) 1f else -1f
-            val sideStrength = 0.85f + random.nextFloat() * 0.30f
-
-            // Upper branches spread wider (crown shape); lower ones tighter
-            val heightFactor = 1f - baseRatio  // 1 at top, 0 at bottom
-            val spread = 0.20f + random.nextFloat() * 0.30f + heightFactor * 0.20f
-            val endX = side * sideStrength * spread
-
-            // Upper branches barely droop or angle upward; lower branches droop more
-            val droop = 0.04f + random.nextFloat() * 0.10f - heightFactor * 0.08f
-            val endY = startY - droop
-            branches.add(BranchLine(0f, startY, endX, endY))
-
-            // Sub-branch 1 (main fork, 75% chance)
-            if (random.nextFloat() < 0.75f) {
-                val forkT = 0.45f + random.nextFloat() * 0.30f
-                val forkX = endX * forkT
-                val forkY = startY + (endY - startY) * forkT
-                val subEndX = forkX + side * sideStrength * (0.08f + random.nextFloat() * 0.18f)
-                val subEndY = forkY - 0.03f - random.nextFloat() * 0.08f
-                branches.add(BranchLine(forkX, forkY, subEndX, subEndY))
-
-                // Twig off sub-branch (30%)
-                if (random.nextFloat() < 0.30f) {
-                    val twigT = 0.5f + random.nextFloat() * 0.3f
-                    val twigX = forkX + (subEndX - forkX) * twigT
-                    val twigY = forkY + (subEndY - forkY) * twigT
-                    val twigDir = if (random.nextBoolean()) 1f else -1f
-                    branches.add(BranchLine(twigX, twigY,
-                        twigX + twigDir * (0.04f + random.nextFloat() * 0.08f),
-                        twigY - 0.02f - random.nextFloat() * 0.04f))
-                }
-            }
-
-            // Sub-branch 2 (opposite fork, 40% chance)
-            if (random.nextFloat() < 0.40f) {
-                val forkT = 0.30f + random.nextFloat() * 0.25f
-                val forkX = endX * forkT
-                val forkY = startY + (endY - startY) * forkT
-                val subEndX = forkX - side * 0.5f * (0.08f + random.nextFloat() * 0.12f)
-                val subEndY = forkY - 0.02f - random.nextFloat() * 0.06f
-                branches.add(BranchLine(forkX, forkY, subEndX, subEndY))
-            }
+        val branches = ArrayList<BranchLine>(32)
+        val limbs = 3 + random.nextInt(3)
+        val firstSide = if (random.nextBoolean()) 1f else -1f
+        for (i in 0 until limbs) {
+            val t = i.toFloat() / (limbs - 1)  // 0 = lowest limb, 1 = highest
+            val startY = 0.45f + t * 0.33f + (random.nextFloat() - 0.5f) * 0.04f
+            val side = if (i % 2 == 0) firstSide else -firstSide
+            // Low limbs spread wide, high ones rise steeply (radians from vertical)
+            val angle = side * (1.0f - 0.55f * t + (random.nextFloat() - 0.5f) * 0.25f)
+            val length = 0.17f + random.nextFloat() * 0.07f - t * 0.04f
+            addBranch(branches, random, 0f, startY, angle, length, 0.55f, depth = 0)
         }
+        // Leader continuing the trunk
+        addBranch(branches, random, 0f, 0.8f, (random.nextFloat() - 0.5f) * 0.3f, 0.12f, 0.4f, depth = 1)
         return branches
+    }
+
+    private fun addBranch(
+        out: MutableList<BranchLine>, random: Random,
+        x0: Float, y0: Float, angle: Float, length: Float, thickness: Float, depth: Int
+    ) {
+        val x1 = x0 + kotlin.math.sin(angle) * length
+        val y1 = y0 + kotlin.math.cos(angle) * length
+        out.add(BranchLine(x0, y0, x1, y1, thickness))
+        if (depth >= 2) return
+        val sign = if (angle >= 0f) 1f else -1f
+        // One child keeps the direction, one splays outward; twigs are sparser
+        val children = if (depth == 0) 2 else if (random.nextFloat() < 0.7f) 2 else 1
+        for (c in 0 until children) {
+            val forkAt = 0.55f + random.nextFloat() * 0.25f
+            val fx = x0 + (x1 - x0) * forkAt
+            val fy = y0 + (y1 - y0) * forkAt
+            val turn = if (c == 0) (random.nextFloat() - 0.5f) * 0.4f else sign * (0.35f + random.nextFloat() * 0.3f)
+            val childAngle = (angle - sign * 0.15f + turn).coerceIn(-1.4f, 1.4f)
+            val childLength = length * (0.55f + random.nextFloat() * 0.2f)
+            addBranch(out, random, fx, fy, childAngle, childLength, thickness * 0.6f, depth + 1)
+        }
     }
 
     // ========================================================================
@@ -643,6 +631,20 @@ class TreeRenderer {
 
                 canvas.drawPath(treePath, treePaint)
 
+                // Sunlit flank: the half of the cone facing the light is a shade brighter
+                val flankLight = sunlitHighlight(state) * kotlin.math.abs(state.lightDirX)
+                if (flankLight > 0.01f) {
+                    val side = if (state.lightDirX >= 0f) 1f else -1f
+                    treePath.reset()
+                    treePath.moveTo(x + localTipSway, segTipY)
+                    treePath.lineTo(x + side * segWidth + localBaseSway, segBaseY)
+                    treePath.lineTo(x + localBaseSway, segBaseY)
+                    treePath.close()
+                    crownPaint.color = RenderConstants.lerpColor(treePaint.color, SUNLIT_FOLIAGE, flankLight)
+                    crownPaint.alpha = 255
+                    canvas.drawPath(treePath, crownPaint)
+                }
+
                 // Draw snow on tree if snow is present (weather-driven or calendar)
                 val needleSnow = treeSnowAmount()
                 if (needleSnow > 0f) {
@@ -778,15 +780,13 @@ class TreeRenderer {
                 val branchAlpha = ((1f - crownScale) * 255).toInt().coerceIn(0, 255)
                 trunkPaint.strokeCap = Paint.Cap.ROUND
                 for (branch in tree.branches) {
-                    val bStartX = x + branch.startXOffset * crownRadius
-                    val bStartY = groundY - totalHeight * (0.20f + branch.startYRatio * 0.62f)
-                    val bEndX = x + branch.endXOffset * crownRadius * 1.8f
-                    val bEndY = groundY - totalHeight * (0.20f + branch.endYRatio * 0.62f)
-                    // Main branches thicker (startXOffset==0), sub-branches thinner
-                    val isSub = branch.startXOffset != 0f
-                    trunkPaint.strokeWidth = trunkWidth * (if (isSub) 0.25f else 0.42f)
+                    trunkPaint.strokeWidth = trunkWidth * branch.thickness
                     trunkPaint.alpha = branchAlpha
-                    canvas.drawLine(bStartX, bStartY, bEndX, bEndY, trunkPaint)
+                    canvas.drawLine(
+                        x + branch.startX * totalHeight, groundY - branch.startY * totalHeight,
+                        x + branch.endX * totalHeight, groundY - branch.endY * totalHeight,
+                        trunkPaint
+                    )
                 }
                 trunkPaint.alpha = 255
                 trunkPaint.strokeCap = Paint.Cap.BUTT
@@ -797,19 +797,19 @@ class TreeRenderer {
                     treeSnowStrokePaint.color = snowColor
                     treeSnowStrokePaint.alpha = branchAlpha
                     for (branch in tree.branches) {
-                        val bStartX = x + branch.startXOffset * crownRadius
-                        val bStartY = groundY - totalHeight * (0.20f + branch.startYRatio * 0.62f)
-                        val bEndX = x + branch.endXOffset * crownRadius * 1.8f
-                        val bEndY = groundY - totalHeight * (0.20f + branch.endYRatio * 0.62f)
-                        val dx = bEndX - bStartX
-                        val dy = bEndY - bStartY
-                        val len = kotlin.math.sqrt(dx * dx + dy * dy).coerceAtLeast(0.001f)
+                        val dx = branch.endX - branch.startX
+                        val dy = branch.endY - branch.startY
+                        val len = kotlin.math.sqrt(dx * dx + dy * dy).coerceAtLeast(0.0001f)
                         val flatness = kotlin.math.abs(dx) / len
-                        val branchWidth = trunkWidth * (if (branch.startXOffset != 0f) 0.25f else 0.42f)
+                        val branchWidth = trunkWidth * branch.thickness
                         val snowWidth = branchWidth * (0.3f + 0.7f * snowAmount.coerceAtMost(0.8f)) * (0.3f + 0.7f * flatness)
                         val lift = (branchWidth + snowWidth) * 0.4f
                         treeSnowStrokePaint.strokeWidth = snowWidth
-                        canvas.drawLine(bStartX, bStartY - lift, bEndX, bEndY - lift, treeSnowStrokePaint)
+                        canvas.drawLine(
+                            x + branch.startX * totalHeight, groundY - branch.startY * totalHeight - lift,
+                            x + branch.endX * totalHeight, groundY - branch.endY * totalHeight - lift,
+                            treeSnowStrokePaint
+                        )
                     }
                 }
             }
@@ -821,6 +821,10 @@ class TreeRenderer {
                 val crownAlpha = if (crownScale < 0.4f)
                     ((crownScale - 0.15f) / 0.25f * 255f).toInt().coerceIn(0, 255)
                 else 255
+                // Sunlit side of each puff gives the crown volume; fades out in diffuse light
+                val highlight = sunlitHighlight(state)
+                val lightOffX = state.lightDirX * 0.18f
+                val lightOffY = -0.1f - 0.1f * state.lightElevation01
                 for (circle in tree.crownCircles) {
                     val cx = x + circle.xOffset * crownRadius * crownScale
                     val cy = crownCenterY + circle.yOffset * crownRadius * crownScale
@@ -829,6 +833,19 @@ class TreeRenderer {
                     crownPaint.color = darkenColor(treePaint.color, circle.darkenFactor)
                     crownPaint.alpha = crownAlpha
                     canvas.drawCircle(cx, cy, r, crownPaint)
+                }
+                // Highlights after all puffs: one lit mass, shade only along the crown's far rim
+                if (highlight > 0.01f) {
+                    for (circle in tree.crownCircles) {
+                        val cx = x + circle.xOffset * crownRadius * crownScale
+                        val cy = crownCenterY + circle.yOffset * crownRadius * crownScale
+                        val r = crownRadius * circle.radiusScale * crownScale
+                        crownPaint.color = RenderConstants.lerpColor(
+                            darkenColor(treePaint.color, circle.darkenFactor), SUNLIT_FOLIAGE, highlight
+                        )
+                        crownPaint.alpha = crownAlpha
+                        canvas.drawCircle(cx + lightOffX * r, cy + lightOffY * r, r * 0.72f, crownPaint)
+                    }
                 }
                 crownPaint.alpha = 255
 
@@ -844,6 +861,12 @@ class TreeRenderer {
                 }
             }
         }
+    }
+
+    /** Blend of sunlit foliage toward warm light: direct sun only, none by moonlight or under clouds. */
+    private fun sunlitHighlight(state: SimulationState): Float {
+        val dayFactor = ((state.getLightLevel() - 0.15f) / 0.85f).coerceIn(0f, 1f)
+        return state.getEffectiveShadowStrength() * CROWN_HIGHLIGHT * dayFactor
     }
 
     /** Snow on trees (0 = none). Weather-driven when enabled, otherwise calendar winter coverage. */

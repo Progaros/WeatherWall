@@ -7,6 +7,7 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Shader
+import androidx.core.graphics.withClip
 import androidx.core.graphics.withTranslation
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
@@ -52,6 +53,8 @@ class MountainLayer(private val context: Context) : SceneLayer {
     private val pathLeft = Path()
     private val pathRight = Path()
     private val snowCapPath = Path()
+    private val snowShadePaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
+    private var cachedSnowShadeGradients = HashMap<Int, LinearGradient>()
     
     private var width = 0f
     private var height = 0f
@@ -173,6 +176,9 @@ class MountainLayer(private val context: Context) : SceneLayer {
 
         /** Golden ratio for low-discrepancy depth scatter. */
         const val PHI = 0.618033988749895f
+
+        /** Cool shade of snow in the lee of the light. */
+        private const val SNOW_SHADE = 0xFF5A6A8C.toInt()
     }
 
     /**
@@ -325,6 +331,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
         cachedLeftGradients.clear()
         cachedRightGradients.clear()
         cachedSnowGradients.clear()
+        cachedSnowShadeGradients.clear()
         cachedMtnAmbient = 0
         cachedMtnLightAngleBucket = -1
         cachedHazeAmbient = 0
@@ -379,6 +386,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
             cachedLeftGradients.clear()
             cachedRightGradients.clear()
             cachedSnowGradients.clear()
+            cachedSnowShadeGradients.clear()
         }
         
         // Build transform for world-to-screen projection with height-based zoom
@@ -688,6 +696,27 @@ class MountainLayer(private val context: Context) : SceneLayer {
             snowCapPaint.shader = snowGradient
             canvas.drawPath(snowCapPath, snowCapPaint)
             snowCapPaint.shader = null
+
+            // The flank turned away from the light stays shaded under the snow, so peaks keep their form
+            val leftSnowShade = leftShadow * 0.6f + 0.18f * (-lightBias * 3f).coerceIn(0f, 1f)
+            val rightSnowShade = rightShadow * 0.6f + 0.18f * (lightBias * 3f).coerceIn(0f, 1f)
+            if (leftSnowShade > 0.01f || rightSnowShade > 0.01f) {
+                snowShadePaint.shader = cachedSnowShadeGradients.getOrPut(mountainIdx) {
+                    LinearGradient(
+                        actualPeakX, snowTopY, actualPeakX, snowBottomY,
+                        intArrayOf(SNOW_SHADE, SNOW_SHADE, SNOW_SHADE and 0xB4FFFFFF.toInt(), SNOW_SHADE and 0x28FFFFFF),
+                        floatArrayOf(0f, 0.4f, 0.75f, 1f),
+                        Shader.TileMode.CLAMP
+                    )
+                }
+                canvas.withClip(snowCapPath) {
+                    snowShadePaint.alpha = (255 * leftSnowShade).toInt().coerceIn(0, 255)
+                    canvas.drawPath(pathLeft, snowShadePaint)
+                    snowShadePaint.alpha = (255 * rightSnowShade).toInt().coerceIn(0, 255)
+                    canvas.drawPath(pathRight, snowShadePaint)
+                }
+                snowShadePaint.shader = null
+            }
         }
     }
 

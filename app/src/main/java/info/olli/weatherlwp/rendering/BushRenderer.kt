@@ -350,7 +350,7 @@ class BushRenderer {
             RenderConstants.blendWithAmbient(effectiveColor, ambientColor, haze), dullness
         ).let {
             // Snow dusted into the foliage
-            if (snowCover > 0f) RenderConstants.lerpColor(it, snowColor, snowCover * 0.3f) else it
+            if (snowCover > 0f) RenderConstants.lerpColor(it, snowColor, snowCover * 0.5f) else it
         }
 
         // Slight wind sway (less than trees)
@@ -373,7 +373,7 @@ class BushRenderer {
         }
 
         // Draw precalculated circles for organic bush shape
-        val capSweep = if (snowCover > 0.02f) 60f + 80f * snowCover.coerceAtMost(1f) else 0f
+        val capSweep = if (snowCover > 0.02f) 70f + 140f * snowCover.coerceAtMost(1f) else 0f
         snowPaint.color = snowColor
         for (circle in bush.circles) {
             val cx = x + circle.xOffset * bushWidth + sway
@@ -391,6 +391,15 @@ class BushRenderer {
             }
         }
 
+        // Deep snow buries the base so the bush sits in the snow instead of floating on it
+        if (snowCover > 0.25f) {
+            val mound = ((snowCover - 0.25f) / 0.5f).coerceIn(0f, 1f)
+            val rx = bushWidth * (1f + 0.3f * mound)
+            val ry = bushHeight * 0.3f * mound
+            snowPaint.color = ColorMath.darkenColor(snowColor, 0.97f)
+            canvas.drawOval(x + sway * 0.3f - rx, groundY - ry, x + sway * 0.3f + rx, groundY + ry * 0.6f, snowPaint)
+        }
+
         // Draw berries on bush (summer season)
         val berryAlpha = getSeasonWeight("summer")
         if (berryAlpha > 0.01f) {
@@ -400,7 +409,13 @@ class BushRenderer {
                     val berryY = centerY + (berry.yRatio - 0.5f) * bushHeight
                     val berrySize = berry.size * height * (0.5f + berryAlpha * 0.5f)
 
-                    val berryColor = RenderConstants.blendWithAmbient(berry.color, ambientColor, 0.15f)
+                    val nightDim = 0.45f + 0.55f * ((state.getLightLevel() - 0.15f) / 0.85f).coerceIn(0f, 1f)
+                    val berryColor = ColorMath.darkenColor(
+                        RenderConstants.applyOvercastLight(
+                            RenderConstants.blendWithAmbient(berry.color, ambientColor, maxOf(0.15f, haze)), dullness
+                        ),
+                        nightDim
+                    )
                     berryPaint.color = berryColor
                     berryPaint.alpha = (Color.alpha(berryColor) * berryAlpha).toInt()
                     canvas.drawCircle(berryX, berryY, berrySize, berryPaint)

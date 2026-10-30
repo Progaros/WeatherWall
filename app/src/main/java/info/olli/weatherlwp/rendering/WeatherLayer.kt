@@ -48,6 +48,8 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
 
         /** Fog floor so a FOG condition is always clearly visible. */
         private const val MIN_FOG_INTENSITY = 0.4f
+
+        private const val SNOW_HALO_SCALE = 1.6f
     }
 
     /**
@@ -141,6 +143,17 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
         color = Color.argb(220, 255, 255, 255)
         strokeCap = Paint.Cap.ROUND
         strokeWidth = 3.0f
+        isAntiAlias = true
+    }
+
+    // Faint grey rim behind each flake: white flakes vanish against a pale overcast sky otherwise
+    private val snowHaloSmall = snowHaloPaint(30)
+    private val snowHaloMedium = snowHaloPaint(38)
+    private val snowHaloLarge = snowHaloPaint(45)
+
+    private fun snowHaloPaint(alpha: Int) = Paint().apply {
+        color = Color.argb(alpha, 70, 80, 100)
+        strokeCap = Paint.Cap.ROUND
         isAntiAlias = true
     }
     
@@ -399,9 +412,12 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
 
     private fun configureSnowPointPaints() {
         val heightScale = RenderConstants.getHeightScale(screenHeight.toFloat(), screenWidth.toFloat()).coerceAtLeast(0.35f)
-        snowPaintSmall.strokeWidth = (1.2f * heightScale).coerceAtLeast(0.8f)
-        snowPaintMedium.strokeWidth = (1.8f * heightScale).coerceAtLeast(1.1f)
-        snowPaintLarge.strokeWidth = (2.5f * heightScale).coerceAtLeast(1.5f)
+        snowPaintSmall.strokeWidth = (2.0f * heightScale).coerceAtLeast(1.2f)
+        snowPaintMedium.strokeWidth = (3.0f * heightScale).coerceAtLeast(1.8f)
+        snowPaintLarge.strokeWidth = (4.2f * heightScale).coerceAtLeast(2.5f)
+        snowHaloSmall.strokeWidth = snowPaintSmall.strokeWidth * SNOW_HALO_SCALE
+        snowHaloMedium.strokeWidth = snowPaintMedium.strokeWidth * SNOW_HALO_SCALE
+        snowHaloLarge.strokeWidth = snowPaintLarge.strokeWidth * SNOW_HALO_SCALE
     }
 
     private fun configureRainLinePaints() {
@@ -483,16 +499,19 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
         // Draw pre-bucketed snow points with fixed paints (small/mid/large depth)
         if (snowSmallCoordCount > 0) {
             withBucketParallax(canvas, SNOW_DEPTH_SMALL) {
+                canvas.drawPoints(snowCoordsSmall, 0, snowSmallCoordCount, snowHaloSmall)
                 canvas.drawPoints(snowCoordsSmall, 0, snowSmallCoordCount, snowPaintSmall)
             }
         }
         if (snowMediumCoordCount > 0) {
             withBucketParallax(canvas, SNOW_DEPTH_MEDIUM) {
+                canvas.drawPoints(snowCoordsMedium, 0, snowMediumCoordCount, snowHaloMedium)
                 canvas.drawPoints(snowCoordsMedium, 0, snowMediumCoordCount, snowPaintMedium)
             }
         }
         if (snowLargeCoordCount > 0) {
             withBucketParallax(canvas, SNOW_DEPTH_LARGE) {
+                canvas.drawPoints(snowCoordsLarge, 0, snowLargeCoordCount, snowHaloLarge)
                 canvas.drawPoints(snowCoordsLarge, 0, snowLargeCoordCount, snowPaintLarge)
             }
         }

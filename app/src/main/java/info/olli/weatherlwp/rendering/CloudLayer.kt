@@ -50,6 +50,11 @@ class CloudLayer(private val context: Context) : SceneLayer {
         isAntiAlias = true
         maskFilter = BlurMaskFilter(10f, BlurMaskFilter.Blur.NORMAL)
     }
+
+    // Only used on the bitmap executor thread, like bitmapPaint
+    private val shadePaint = Paint().apply {
+        xfermode = android.graphics.PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP)
+    }
     
     // Paint for drawing cached bitmaps to screen (no blur - already baked)
     private val drawPaint = Paint().apply {
@@ -477,13 +482,16 @@ class CloudLayer(private val context: Context) : SceneLayer {
         val fadeMarginX = bitmapWidth * 0.35f  // Increased margin for softer edges
         val fadeMarginY = bitmapHeight * 0.35f
         
+        // Cumulus shape: puffs sit on a shared flat base and pile up highest in the middle,
+        // so clouds read as clouds instead of round blobs
+        val baseY = centerY + bitmapHeight * 0.2f
         for (i in 0 until numPuffs) {
-            // Distribute puffs across the group (within original content area)
-            val offsetX = (random.nextFloat() - 0.5f) * bitmapWidth * 0.7f
-            val offsetY = (random.nextFloat() - 0.5f) * bitmapHeight * 0.5f
-            
+            val offsetX = (random.nextFloat() - 0.5f) * bitmapWidth * 0.75f
+            val middle = 1f - kotlin.math.abs(offsetX) / (bitmapWidth * 0.375f) * 0.5f
+            val radiusY = bitmapHeight * (0.2f + random.nextFloat() * 0.22f) * middle
+            val radiusX = bitmapWidth * (0.14f + random.nextFloat() * 0.16f) * cloudStretch * 0.35f * (0.8f + 0.4f * middle)
             val puffCenterX = centerX + offsetX
-            val puffCenterY = centerY + offsetY
+            val puffCenterY = baseY - radiusY * (0.75f + random.nextFloat() * 0.2f)
             
             // Calculate edge proximity relative to original content bounds (not padded bounds)
             val contentLeft = paddingX.toFloat()
@@ -505,16 +513,28 @@ class CloudLayer(private val context: Context) : SceneLayer {
             val puffAlpha = (group.alpha * edgeFade).toInt().coerceIn(0, 255)
             bitmapPaint.alpha = puffAlpha
             
-            // Larger, more visible cloud puffs
-            val radiusX = bitmapWidth * (0.18f + random.nextFloat() * 0.22f) * cloudStretch * 0.35f
-            val radiusY = bitmapHeight * (0.25f + random.nextFloat() * 0.30f)
-            
             canvas.drawOval(
                 puffCenterX - radiusX, puffCenterY - radiusY,
                 puffCenterX + radiusX, puffCenterY + radiusY,
                 bitmapPaint
             )
         }
+        // Flat, wide base layer closing the gaps between the puffs
+        bitmapPaint.alpha = (group.alpha * 0.8f).toInt()
+        val baseHalfW = bitmapWidth * 0.32f
+        canvas.drawOval(
+            centerX - baseHalfW, baseY - bitmapHeight * 0.16f,
+            centerX + baseHalfW, baseY + bitmapHeight * 0.02f,
+            bitmapPaint
+        )
+
+        // Sunlit tops, shaded undersides; the tint filter at draw time multiplies this
+        shadePaint.shader = android.graphics.LinearGradient(
+            0f, baseY - bitmapHeight * 0.6f, 0f, baseY + bitmapHeight * 0.05f,
+            Color.WHITE, Color.rgb(192, 197, 210), android.graphics.Shader.TileMode.CLAMP
+        )
+        canvas.drawRect(0f, 0f, paddedWidth.toFloat(), paddedHeight.toFloat(), shadePaint)
+        shadePaint.shader = null
         
         synchronized(bitmapPublicationLock) {
             if (destroyed) {
@@ -682,12 +702,22 @@ class CloudLayer(private val context: Context) : SceneLayer {
      */
     private fun drawOvercastVeil(canvas: Canvas, state: SimulationState, overcast: Float) {
         val hour = state.smoothedTimeOfDayHours
+        // Rain curtains hide most of the twilight band; dry overcast lets it glow through
+        val precipitating = when (state.weather) {
+            info.olli.weatherlwp.weather.WeatherType.RAIN, info.olli.weatherlwp.weather.WeatherType.HAIL,
+            info.olli.weatherlwp.weather.WeatherType.THUNDERSTORM, info.olli.weatherlwp.weather.WeatherType.SNOW -> true
+            else -> false
+        }
+        val openness = if (precipitating) 1f - 0.75f * state.precipIntensity.coerceIn(0.35f, 1f) else 1f
         val golden = maxOf(
             1f - kotlin.math.abs(hour - state.sunriseHours) / GOLDEN_WINDOW_H,
             1f - kotlin.math.abs(hour - state.sunsetHours) / GOLDEN_WINDOW_H
-        ).coerceIn(0f, 1f)
+        ).coerceIn(0f, 1f) * openness
         val dayFactor = ((state.getLightLevel() - 0.15f) / 0.85f).coerceIn(0f, 1f)
-        val color = ColorMath.darkenColor(currentCloudColor, 0.75f + 0.17f * dayFactor) and 0x00FFFFFF
+        val tinted = ColorMath.darkenColor(currentCloudColor, 0.75f + 0.17f * dayFactor)
+        // Mostly neutral grey: the warm dawn/dusk cloud tint turns a whole-sky deck muddy
+        val lum = (0.3f * Color.red(tinted) + 0.59f * Color.green(tinted) + 0.11f * Color.blue(tinted)).toInt()
+        val color = RenderConstants.lerpColor(tinted, Color.rgb(lum, lum, (lum + 4).coerceAtMost(255)), 0.55f) and 0x00FFFFFF
         val topAlpha = (255f * 0.88f * overcast).toInt()
         val midAlpha = (255f * 0.8f * overcast).toInt()
         val horizonAlpha = (255f * (0.6f - 0.42f * golden) * overcast).toInt()
