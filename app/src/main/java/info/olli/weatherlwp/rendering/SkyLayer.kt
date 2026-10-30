@@ -133,6 +133,9 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         private const val SKY_SUN_EVENT_BUCKETS = 64
         private const val SKY_SHADE_BUCKETS = 32
         private const val METEOR_TRAIL_SEGMENTS = 5
+        private const val STAR_PEAK_ALPHA = 235f
+        private const val STAR_FADE_START_H = 0.4f
+        private const val STAR_FADE_DURATION_H = 0.7f
         /** How much a daytime moon fades against the bright sky. */
         private const val DAY_MOON_FADE = 0.55f
     }
@@ -308,11 +311,10 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
             canvas.drawRect(safeRect, skyPaint)
         }
 
-        // Stars visible at night, dusk, and dawn (fading as sunrise approaches)
-        // Per atmospheric science: stars remain visible until civil twilight
-        // Smooth star alpha based on time of day to avoid abrupt transitions
-        val starAlphaBase = computeNightAlpha(state, 150, 80, 60)
-        if (starAlphaBase > 5) {
+        // Stars only once the sky is really dark (after civil twilight); clouds hide them.
+        val starVisibility = starVisibility(state) * (1f - 0.95f * state.overcastFactor())
+        val starAlphaBase = (STAR_PEAK_ALPHA * starVisibility).toInt()
+        if (starAlphaBase > 3) {
             val time = state.absoluteTimeMs
             
             val (starPx, starPy) = parallaxCalculator.getOffsetForDepth(RenderConstants.PARALLAX_STARS)
@@ -323,9 +325,8 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
                 val star = stars[i]
                 val visibility = overlay?.starAlpha?.get(i) ?: 1f
                 if (visibility <= 0f) continue
-                // Double math: epoch ms in Float has ~2 min resolution, which froze the twinkle.
-                val twinkle = sin(time.toDouble() * RenderConstants.STAR_TWINKLE_SPEED + star[0] * 10.0)
-                val alpha = ((starAlphaBase + 50 * twinkle).toInt().coerceIn(5, 220) * visibility).toInt()
+                val brightness = star[StarField.BRIGHTNESS] * flicker(time, star[StarField.FLICKER])
+                val alpha = (starAlphaBase * brightness * visibility).toInt()
                 if (alpha <= 0) continue
                 starPaint.alpha = alpha.coerceAtMost(255)
 
@@ -336,7 +337,7 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
                 canvas.drawCircle(x, y, star[2] * radiusScale, starPaint)
             }
             if (overlay != null) {
-                drawStarOverlay(canvas, overlay, starAlphaBase, time, starPx, starPy, radiusScale)
+                drawStarOverlay(canvas, overlay, starAlphaBase, starPx, starPy, radiusScale)
             }
         }
         
@@ -366,16 +367,14 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         canvas: Canvas,
         overlay: StarFieldOverlay,
         starAlphaBase: Int,
-        time: Long,
         starPx: Float,
         starPy: Float,
         radiusScale: Float
     ) {
         for (i in 0 until overlay.extraCount) {
-            val twinkle = sin(time.toDouble() * RenderConstants.STAR_TWINKLE_SPEED + overlay.extraX[i] * 10.0)
-            val alpha = ((starAlphaBase + 50 * twinkle).toInt().coerceIn(5, 220) * overlay.extraAlpha[i]).toInt()
+            val alpha = (starAlphaBase * 0.8f * overlay.extraAlpha[i]).toInt()
             if (alpha <= 0) continue
-            starPaint.alpha = alpha
+            starPaint.alpha = alpha.coerceAtMost(255)
             canvas.drawCircle(
                 SkyViewportMapper.toScreenX(overlay.extraX[i], width, height, starPx),
                 SkyViewportMapper.toScreenY(overlay.extraY[i], width, height, starPy),
@@ -410,6 +409,31 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         }
     }
     
+    /**
+     * 0 by day and through early twilight, rising to 1 between ~25 and ~65 min after sunset
+     * (mirrored before sunrise), so no stars ever show against a bright sky.
+     */
+    private fun starVisibility(state: SimulationState): Float {
+        val hour = state.smoothedTimeOfDayHours
+        val sunrise = state.sunriseHours
+        val sunset = state.sunsetHours
+        val isDay = if (sunrise <= sunset) hour in sunrise..sunset else hour >= sunrise || hour <= sunset
+        if (isDay) return 0f
+        val sinceSunset = ((hour - sunset) % 24f + 24f) % 24f
+        val untilSunrise = ((sunrise - hour) % 24f + 24f) % 24f
+        val t = ((minOf(sinceSunset, untilSunrise) - STAR_FADE_START_H) / STAR_FADE_DURATION_H).coerceIn(0f, 1f)
+        return t * t * (3f - 2f * t)
+    }
+
+    /** Brightness factor for the few flickering stars (phase > 0); steady stars return 1. */
+    private fun flicker(timeMs: Long, phase: Float): Float {
+        if (phase <= 0f) return 1f
+        // Double math: epoch ms in Float has ~2 min resolution.
+        val t = timeMs.toDouble()
+        val wave = 0.5 * sin(t * 0.0047 + phase) + 0.5 * sin(t * 0.0113 + phase * 1.7)
+        return (0.75 + 0.25 * wave).toFloat()
+    }
+
     /**
      * Compute a smooth alpha value for night/dusk/dawn effects based on time of day.
      * Uses continuous interpolation instead of hard boolean checks.

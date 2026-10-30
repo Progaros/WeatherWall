@@ -62,6 +62,12 @@ class BushRenderer {
     private val bushPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val shadowPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val berryPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
+    private val snowPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
+    private val snowRect = android.graphics.RectF()
+
+    /** Ground snow (0-1) and its ambient-tinted colour, set by TerrainLayer per frame / hill band. */
+    var snowCover: Float = 0f
+    var snowColor: Int = Color.WHITE
 
     // ---- Settings (loaded from SharedPreferences) ----
 
@@ -339,7 +345,10 @@ class BushRenderer {
             bush.dayColor
         }
 
-        val blendedColor = RenderConstants.blendWithAmbient(effectiveColor, ambientColor, haze)
+        val blendedColor = RenderConstants.blendWithAmbient(effectiveColor, ambientColor, haze).let {
+            // Snow dusted into the foliage
+            if (snowCover > 0f) RenderConstants.lerpColor(it, snowColor, snowCover * 0.3f) else it
+        }
 
         // Slight wind sway (less than trees)
         val windStrength = state.windStrength.coerceIn(0f, 1f) * state.windMultiplier
@@ -361,6 +370,8 @@ class BushRenderer {
         }
 
         // Draw precalculated circles for organic bush shape
+        val capSweep = if (snowCover > 0.02f) 70f + 120f * snowCover.coerceAtMost(1f) else 0f
+        snowPaint.color = snowColor
         for (circle in bush.circles) {
             val cx = x + circle.xOffset * bushWidth + sway
             val cy = centerY + circle.yOffset * bushHeight
@@ -369,6 +380,12 @@ class BushRenderer {
 
             bushPaint.color = darkenColor(blendedColor, circle.darkenFactor)
             canvas.drawOval(cx - rx, cy - ry, cx + rx, cy + ry, bushPaint)
+
+            // Snow cap: the upper segment of each puff, so it hugs the outline without clipping
+            if (capSweep > 0f) {
+                snowRect.set(cx - rx, cy - ry, cx + rx, cy + ry)
+                canvas.drawArc(snowRect, 270f - capSweep / 2f, capSweep, false, snowPaint)
+            }
         }
 
         // Draw berries on bush (summer season)

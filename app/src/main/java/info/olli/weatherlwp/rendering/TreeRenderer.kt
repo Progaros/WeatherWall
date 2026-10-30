@@ -177,6 +177,13 @@ class TreeRenderer {
     @Volatile var cachedPrevSeason: String = "summer"
     var dynamicSnowLevel: Float = 0f  // Snow from weather history (0-1)
 
+    /** Snow tint for the hill band being drawn (ambient-blended so it darkens at night). */
+    var snowColor: Int = Color.WHITE
+        set(value) {
+            field = value
+            treeSnowPaint.color = value
+        }
+
     // Frame-global ambient (time-of-day) tint, set once per frame by TerrainLayer.
     // Avoids recomputing RenderConstants.getAmbientColor() for every drawn tree.
     @Volatile var cachedAmbientColor: Int = 0

@@ -306,9 +306,6 @@ object RenderConstants {
     /** Gust effect multiplier for tree lean */
     const val GUST_LEAN_FACTOR = 0.25f
     
-    /** Star twinkle animation */
-    const val STAR_TWINKLE_SPEED = 0.001f
-    
     /** Cloud movement speed multiplier (base delta-time scale) */
     const val CLOUD_MOVEMENT_SCALE = 0.06f
     

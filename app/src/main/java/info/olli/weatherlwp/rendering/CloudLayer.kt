@@ -106,6 +106,13 @@ class CloudLayer(private val context: Context) : SceneLayer {
     private var fluffinessMultiplier = 1.0f  // Controls puffs per cloud (density of each cloud)
     private var coverageSizeMult = 1.0f      // Coverage-based draw size multiplier (fewer groups, each drawn larger)
     
+    private val veilPaint = Paint().apply { isDither = true }
+    private var veilShader: android.graphics.LinearGradient? = null
+    private var veilColor = 0
+    private var veilTopAlpha = -1
+    private var veilHorizonAlpha = -1
+    private var veilHeight = 0f
+
     // Reused color filter: only recreated when cloud tint actually changes
     private var cachedMultiplyFilterColor = Int.MIN_VALUE
     private var cachedMultiplyFilter: PorterDuffColorFilter? = null
@@ -257,6 +264,8 @@ class CloudLayer(private val context: Context) : SceneLayer {
         const val DELTA_SMOOTHING_ALPHA = 0.15f      // EMA factor for frame-delta pacing
         /** 2π / 0.05 rad/s: every drift frequency (0.3, 0.15, 0.25) completes whole cycles. */
         const val ANIMATION_TIME_PERIOD_S = 125.66371f
+        /** Hours around sunrise/sunset in which the overcast deck opens up at the horizon. */
+        const val GOLDEN_WINDOW_H = 1.25f
     }
 
     /** When true, reduces bitmap sizes and group count for better preview performance. */
@@ -660,10 +669,49 @@ class CloudLayer(private val context: Context) : SceneLayer {
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
         if (width <= 0 || height <= 0 || !cloudsEnabled) return
         
-        // Calculate cloud color for this frame
-        currentCloudColor = calculateCloudColor(state)
+        val overcast = state.overcastFactor()
+        currentCloudColor = calculateCloudColor(state, overcast)
+        if (overcast > 0.01f) drawOvercastVeil(canvas, state, overcast)
         
         drawCachedMode(canvas, state, parallaxCalculator)
+    }
+
+    /**
+     * Closed grey cloud deck over the whole sky. Thinner toward the horizon, and much thinner
+     * around sunrise/sunset so the coloured twilight band still shows below the clouds.
+     */
+    private fun drawOvercastVeil(canvas: Canvas, state: SimulationState, overcast: Float) {
+        val hour = state.timeOfDayHours
+        val golden = maxOf(
+            1f - kotlin.math.abs(hour - state.sunriseHours) / GOLDEN_WINDOW_H,
+            1f - kotlin.math.abs(hour - state.sunsetHours) / GOLDEN_WINDOW_H
+        ).coerceIn(0f, 1f)
+        val dayFactor = ((state.getLightLevel() - 0.15f) / 0.85f).coerceIn(0f, 1f)
+        val color = ColorMath.darkenColor(currentCloudColor, 0.5f + 0.42f * dayFactor) and 0x00FFFFFF
+        val topAlpha = (255f * 0.88f * overcast).toInt()
+        val midAlpha = (255f * 0.8f * overcast).toInt()
+        val horizonAlpha = (255f * (0.6f - 0.42f * golden) * overcast).toInt()
+
+        if (veilShader == null || color != veilColor || topAlpha != veilTopAlpha ||
+            horizonAlpha != veilHorizonAlpha || height != veilHeight) {
+            veilShader = android.graphics.LinearGradient(
+                0f, 0f, 0f, height,
+                intArrayOf(
+                    (topAlpha shl 24) or color,
+                    (midAlpha shl 24) or color,
+                    (horizonAlpha shl 24) or color,
+                    (horizonAlpha shl 24) or color
+                ),
+                floatArrayOf(0f, 0.35f, 0.62f, 1f),
+                android.graphics.Shader.TileMode.CLAMP
+            )
+            veilColor = color
+            veilTopAlpha = topAlpha
+            veilHorizonAlpha = horizonAlpha
+            veilHeight = height
+        }
+        veilPaint.shader = veilShader
+        canvas.drawRect(0f, 0f, width, height, veilPaint)
     }
 
     /**
@@ -854,7 +902,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         }
     }
 
-    private fun calculateCloudColor(state: SimulationState): Int {
+    private fun calculateCloudColor(state: SimulationState, overcast: Float): Int {
         val hour = state.timeOfDayHours
         val sunrise = state.sunriseHours
         val sunset = state.sunsetHours
@@ -897,11 +945,20 @@ class CloudLayer(private val context: Context) : SceneLayer {
             else -> nightColor
         }
         
+        // Thick cloud decks are grey, rain and storm clouds darker still
+        val precipitating = when (state.weather) {
+            info.olli.weatherlwp.weather.WeatherType.RAIN,
+            info.olli.weatherlwp.weather.WeatherType.HAIL,
+            info.olli.weatherlwp.weather.WeatherType.THUNDERSTORM -> true
+            else -> false
+        }
+        val weatherColor = ColorMath.darkenColor(baseColor, 1f - overcast * (if (precipitating) 0.38f else 0.22f))
+
         // Apply night shade darkening smoothly based on light level
         return if (state.nightShadeStrength > 0f && state.getLightLevel() < 0.5f) {
-            ColorMath.shadeRgb(baseColor, state.nightShadeStrength)
+            ColorMath.shadeRgb(weatherColor, state.nightShadeStrength)
         } else {
-            baseColor
+            weatherColor
         }
     }
     

@@ -873,6 +873,16 @@ class SimulationStateTest {
     }
 
     @Test
+    fun `overcastFactor closes the sky only for heavy cover`() {
+        val base = SimulationState.default()
+        assertEquals(0f, base.copy(weather = WeatherType.PARTLY_CLOUDY, cloudCover = 0.3f).overcastFactor(), 0.001f)
+        assertEquals(1f, base.copy(weather = WeatherType.OVERCAST, cloudCover = 1f).overcastFactor(), 0.001f)
+        assertEquals(1f, base.copy(cloudDensity = CloudDensity.OVERCAST).overcastFactor(), 0.001f)
+        val cloudy = base.copy(weather = WeatherType.CLOUDY, cloudCover = 0.7f).overcastFactor()
+        assertTrue("Cloudy sky should be partly greyed: $cloudy", cloudy in 0.3f..0.8f)
+    }
+
+    @Test
     fun `CLOUDY with zero cloudCover still shows significant clouds`() {
         val state = SimulationState.default().copy(
             cloudDensity = CloudDensity.AUTO,

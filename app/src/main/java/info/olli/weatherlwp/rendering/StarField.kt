@@ -7,14 +7,27 @@ import kotlin.random.Random
  * Shared by [SkyLayer] and events that make real background stars fall.
  */
 object StarField {
-    /** Per star: x, y (0..1) and radius at the reference height. Fixed seed, so identical everywhere. */
-    val stars: Array<FloatArray> = Random(42).let { random ->
+    const val BRIGHTNESS = 3
+    /** Flicker phase for the few twinkling stars, 0 for steady ones. */
+    const val FLICKER = 4
+
+    /**
+     * Per star: x, y (0..1), radius at the reference height, brightness (0..1) and flicker phase.
+     * Fixed seeds, so identical everywhere; positions keep the original seed-42 sequence.
+     */
+    val stars: Array<FloatArray> = run {
+        val random = Random(42)
+        val traits = Random(4242)
         Array(RenderConstants.STAR_COUNT) {
-            floatArrayOf(
-                random.nextFloat(),
-                random.nextFloat() * 0.98f, // almost full visible sky
-                random.nextFloat() * 3f + 1f
-            )
+            val x = random.nextFloat()
+            val y = random.nextFloat() * 0.98f // almost full visible sky
+            val size = random.nextFloat()
+            // Most stars are faint pinpricks; only a handful are big and bright.
+            val standout = traits.nextFloat() < 0.05f
+            val radius = if (standout) 1.6f + size * 0.4f else 0.6f + size * size * size * 0.9f
+            val brightness = if (standout) 1f else 0.35f + 0.5f * size * size + traits.nextFloat() * 0.1f
+            val flicker = if (traits.nextFloat() < 0.07f) 1f + traits.nextFloat() * 100f else 0f
+            floatArrayOf(x, y, radius, brightness.coerceAtMost(1f), flicker)
         }
     }
 }

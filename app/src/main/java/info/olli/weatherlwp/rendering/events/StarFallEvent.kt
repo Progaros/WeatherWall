@@ -82,7 +82,7 @@ class StarFallEvent(random: Random, override val spawnTimeMs: Long) : RandomEven
             val appearance = Appearance(
                 x = spotX + (random.nextFloat() - 0.5f) * 0.1f,
                 y = spotY + (random.nextFloat() - 0.5f) * 0.08f,
-                radius = 1f + random.nextFloat() * 2.5f,
+                radius = 0.7f + random.nextFloat() * 1.1f,
                 startMs = appearMs,
                 fadeMs = 5000L + random.nextInt(4000)
             )

@@ -104,6 +104,11 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // Band nearness (0 = farthest, 1 = nearest) below which small ground detail is skipped
         private const val FLOWER_MIN_NEARNESS = 0.6f
         private const val GROUND_DECOR_MIN_NEARNESS = 0.4f
+        private const val SNOW_COLOR = 0xFFF6F9FF.toInt()
+        private const val SNOW_GROUND_COLOR = 0xFFE8EDF5.toInt()
+        /** Fallen leaf half-length range (screen-height fraction) on the nearest hill. */
+        private const val LEAF_SIZE_MIN = 0.0016f
+        private const val LEAF_SIZE_RANGE = 0.002f
 
         /**
          * Left+right width fraction added to decoration bitmaps for parallax headroom.
@@ -559,10 +564,13 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             
             for (hillIndex in currentHills.indices) {
                 val hillLeaves = mutableListOf<FallenLeafData>()
-                if (RenderConstants.bandNearness(hillIndex, currentHills.size) < GROUND_DECOR_MIN_NEARNESS) {
+                val nearness = RenderConstants.bandNearness(hillIndex, currentHills.size)
+                if (nearness < GROUND_DECOR_MIN_NEARNESS) {
                     newLeaves[hillIndex] = hillLeaves
                     continue
                 }
+                // Same depth scaling as bushes, so leaves stay small next to them
+                val leafDepthScale = 0.35f + 0.65f * nearness
                 val hillTrees = treesByHillIndex[hillIndex] ?: emptyList()
                 
                 // Tree-biased leaves: every tree with foliage produces leaves.
@@ -610,7 +618,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                                 yOffset = treeRandom.nextFloat() * 0.04f +
                                     windDirY * foliageWindScatterStrength * 0.02f,
                                 color = leafColors[colorIdx],
-                                size = (0.003f + treeRandom.nextFloat() * 0.004f) * sizeFalloff,
+                                size = (LEAF_SIZE_MIN + treeRandom.nextFloat() * LEAF_SIZE_RANGE) * sizeFalloff * leafDepthScale,
                                 rotation = treeRandom.nextFloat() * 360f
                             ))
                         }
@@ -636,7 +644,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                         worldX = worldX,
                         yOffset = DeterministicLayout.hashToFloat(cellSeed, cellIndex, 3) * 0.04f,
                         color = leafColors[colorIdx],
-                        size = 0.003f + DeterministicLayout.hashToFloat(cellSeed, cellIndex, 4) * 0.004f,
+                        size = (LEAF_SIZE_MIN + DeterministicLayout.hashToFloat(cellSeed, cellIndex, 4) * LEAF_SIZE_RANGE) * leafDepthScale,
                         rotation = DeterministicLayout.hashToFloat(cellSeed, cellIndex, 5) * 360f
                     ))
                 }
@@ -886,6 +894,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     @Volatile private var cachedSeasonBlend: Float = 1f  // 1 = fully in cached season
     @Volatile private var cachedPrevSeason: String = "summer"
     private var dynamicSnowLevel: Float = 0f  // Snow from weather history (0-1)
+    private var snowCover: Float = 0f  // Effective ground snow this frame (0-1)
     
     /**
      * Compute smooth weight (0-1) for a given season based on current transition state.
@@ -1027,6 +1036,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             0f
         }
         treeRenderer.dynamicSnowLevel = dynamicSnowLevel
+        snowCover = computeSnowCover()
+        bushRenderer.snowCover = snowCover
         
         // Get ambient color for current time of day (global tint system)
         val ambientColor = RenderConstants.getAmbientColor(
@@ -1060,7 +1071,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // Invalidate cached hill gradients only when bucketed ambient, snow or light angle changes.
         // This avoids rebuilding gradients on tiny per-frame color deltas.
         val ambientBucket = ambientColorBucket(ambientColor)
-        val snowBucket = (dynamicSnowLevel * 20).toInt()  // ~5% granularity
+        val snowBucket = (snowCover * 20).toInt()  // ~5% granularity
         hillLightBiasX = computeHillLightBias(state)
         val lightBucket = (hillLightBiasX * 40f).toInt()  // ~2.5% granularity
         if (ambientBucket != cachedHillGradientAmbientBucket || snowBucket != cachedHillGradientSnow ||
@@ -1113,13 +1124,21 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                     effectiveDayColor = autumnColor(effectiveDayColor, autumnIntensity)
                 }
             }
+            // A closed snow layer hides the grass almost completely
+            if (snowCover > 0f) {
+                val groundSnow = (snowCover * 1.6f).coerceAtMost(1f) * 0.85f
+                effectiveDayColor = RenderConstants.lerpColor(effectiveDayColor, SNOW_GROUND_COLOR, groundSnow)
+            }
             
             // Same aerial-perspective haze for the hill and everything standing on it
             val bandHaze = RenderConstants.bandHaze(
                 RenderConstants.bandNearness(index, currentHills.size), lightLevel
             )
             val hillColor = RenderConstants.blendWithAmbient(effectiveDayColor, ambientColor, bandHaze)
-            drawHill(canvas, index, hillColor)
+            val snowColor = RenderConstants.blendWithAmbient(SNOW_COLOR, ambientColor, bandHaze)
+            treeRenderer.snowColor = snowColor
+            bushRenderer.snowColor = snowColor
+            drawHill(canvas, index, hillColor, snowColor)
             
             canvas.restore()
             
@@ -1414,40 +1433,28 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         return state.lightDirX * (1f - state.lightElevation01) * state.getEffectiveShadowStrength()
     }
 
-    private fun drawHill(canvas: Canvas, hillIndex: Int, hillColor: Int) {
+    /**
+     * Snow lying on the ground (0-1): weather history when enabled, otherwise the calendar
+     * winter coverage blended with the season transition.
+     */
+    private fun computeSnowCover(): Float {
+        if (useWeatherSnow) return if (dynamicSnowLevel > 0.005f) dynamicSnowLevel.coerceIn(0f, 1f) else 0f
+        if (!winterSnowEnabled) return 0f
+        val seasonWeight = when {
+            cachedSeason == "winter" && cachedPrevSeason != "winter" -> cachedSeasonBlend
+            cachedSeason == "winter" -> 1f
+            cachedPrevSeason == "winter" && cachedSeasonBlend < 1f -> 1f - cachedSeasonBlend
+            else -> 0f
+        }
+        return (winterSnowCoverage / 100f * seasonWeight).coerceIn(0f, 1f)
+    }
+
+    private fun drawHill(canvas: Canvas, hillIndex: Int, hillColor: Int, snowColor: Int) {
         val path = hillPaths.getOrNull(hillIndex) ?: return
         val bottomY = height + height * 0.3f
         val minY = hillMinYs.getOrElse(hillIndex) { bottomY }
         
-        // Check if we should apply snow cap effect
-        // When useWeatherSnow is true, use ONLY weather snow level to avoid
-        // falling back to calendar-based snow (which causes visible jumps at thresholds)
-        val effectiveSnowCoverage = if (useWeatherSnow) {
-            // Weather-driven snow: smooth linear scale from snow level
-            if (dynamicSnowLevel > 0.005f) {
-                (dynamicSnowLevel * 100).toInt().coerceIn(1, 100)
-            } else {
-                0
-            }
-        } else if (winterSnowEnabled && cachedSeason == "winter") {
-            // Calendar-based winter snow with transition blending
-            val seasonWeight = if (cachedPrevSeason != "winter" && cachedSeason == "winter") {
-                cachedSeasonBlend  // Blending INTO winter
-            } else if (cachedSeason != "winter" && cachedPrevSeason == "winter") {
-                1f - cachedSeasonBlend  // Blending OUT of winter
-            } else if (cachedSeason == "winter") {
-                1f
-            } else {
-                0f
-            }
-            (winterSnowCoverage * seasonWeight).toInt()
-        } else if (!useWeatherSnow && cachedPrevSeason == "winter" && cachedSeason != "winter" && cachedSeasonBlend < 1f) {
-            // Transitioning OUT of winter - fade snow (only when not using weather snow)
-            (winterSnowCoverage * (1f - cachedSeasonBlend)).toInt()
-        } else {
-            0
-        }
-        val applySnow = effectiveSnowCoverage > 0
+        val applySnow = snowCover > 0f
         
         // Apply linear gradient from top to bottom (cached to avoid per-frame allocation)
         // The axis leans toward the light, so the lit flank faces the sun/moon.
@@ -1455,14 +1462,12 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         val gradientKey = hillIndex * 2 + (if (applySnow) 1 else 0)
         val gradient = cachedHillGradients.getOrPut(gradientKey) {
             if (applySnow) {
-                // Snow coverage: use effectiveSnowCoverage for dynamic depth
-                // Allow very thin snow at low levels (0.01) for gradual appearance
-                val snowDepth = (effectiveSnowCoverage / 100f).coerceIn(0.01f, 0.6f)
-                val snowColor = Color.rgb(255, 255, 255)
+                // Snow cap reaches further down the slope as the snow gets deeper
+                val snowDepth = (0.02f + snowCover * 0.88f).coerceAtMost(0.9f)
                 val snowTransition = Color.rgb(
-                    (Color.red(hillColor) + 255) / 2,
-                    (Color.green(hillColor) + 255) / 2, 
-                    (Color.blue(hillColor) + 255) / 2
+                    (Color.red(hillColor) + Color.red(snowColor)) / 2,
+                    (Color.green(hillColor) + Color.green(snowColor)) / 2, 
+                    (Color.blue(hillColor) + Color.blue(snowColor)) / 2
                 )
                 
                 LinearGradient(

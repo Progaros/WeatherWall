@@ -358,6 +358,28 @@ data class SimulationState(
             else -> cover
         }
     }
+
+    /** Fraction of the sky covered by clouds (0-1) for the current cloud setting. */
+    fun skyCoverFraction(): Float = when (cloudDensity) {
+        CloudDensity.NONE -> 0f
+        CloudDensity.LIGHT -> 0.15f
+        CloudDensity.MEDIUM -> 0.4f
+        CloudDensity.HEAVY -> 0.75f
+        CloudDensity.OVERCAST -> 1f
+        CloudDensity.AUTO -> when (weather) {
+            WeatherType.THUNDERSTORM, WeatherType.FOG -> 1f
+            else -> effectiveAutoCloudCover(weather, cloudCover)
+        }
+    }
+
+    /**
+     * Strength (0-1) of the closed grey cloud deck: none below ~45% cover, full at overcast.
+     * Individual cloud groups only fill the upper sky band, so this dims the whole sky.
+     */
+    fun overcastFactor(): Float {
+        val t = ((skyCoverFraction() - 0.45f) / 0.5f).coerceIn(0f, 1f)
+        return t * t * (3f - 2f * t)
+    }
     
     /**
      * Convert cloudCover percentage (0-1) to cloud count.
