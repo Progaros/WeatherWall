@@ -1,8 +1,6 @@
 # WeatherWall
 
-[![Build Status](https://ci.olli.info/api/badges/4/status.svg)](https://ci.olli.info/repos/4)
-
-📥 **https://git.olli.info/Oliver/WeatherWall/releases/latest**
+📥 **[Latest Release](../../releases/latest)**
 
 Android live wallpaper with a low-poly procedural landscape, weather effects, seasonal details, and gyroscope-driven parallax.
 
@@ -43,18 +41,18 @@ Requirements:
 
 - Android 8.0+ / API 26+
 - JDK 17
-- Gradle 8.13+
+- Gradle 8.14+
 
 OR
 
 - Docker
 
 ```bash
-git clone https://git.olli.info/Oliver/WeatherWall.git
+git clone <REPOSITORY_URL>
 cd WeatherWall
 ./gradlew assembleDebug
 adb install app/build/outputs/apk/debug/app-debug.apk
-````
+```
 
 ## Development
 
