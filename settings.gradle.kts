@@ -14,6 +14,9 @@ pluginManagement {
                 includeGroup("com.google.testing.platform")
             }
         }
+        // Central's CDN rate-limits (429) the CI runner's shared VPN exit IP; Google's GCS
+        // mirror has no rate limit, and mavenCentral() stays as fallback.
+        maven { url = uri("https://maven-central.storage-download.googleapis.com/maven2") }
         mavenCentral()
         gradlePluginPortal()
     }
@@ -32,6 +35,7 @@ dependencyResolutionManagement {
                 includeGroup("com.google.testing.platform")
             }
         }
+        maven { url = uri("https://maven-central.storage-download.googleapis.com/maven2") }
         mavenCentral()
     }
 }

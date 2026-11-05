@@ -69,6 +69,10 @@ tasks.withType<Test>().configureEach {
     maxParallelForks = (Runtime.getRuntime().availableProcessors() / 2).coerceIn(1, 6)
     maxHeapSize = "1536m"
 
+    // Robolectric fetches android-all-instrumented from Central on a fresh runner; use the
+    // GCS mirror so the CI runner's rate-limited IP doesn't get a 429.
+    systemProperty("robolectric.dependency.repo.url", "https://maven-central.storage-download.googleapis.com/maven2")
+
     // Robolectric downloads its android-all artifacts from the forked test JVM,
     // which does not inherit the Gradle JVM's proxy configuration.
     listOf(
