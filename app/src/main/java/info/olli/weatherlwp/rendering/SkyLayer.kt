@@ -8,7 +8,6 @@ import android.graphics.Paint
 import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
-import androidx.core.graphics.toColorInt
 import androidx.core.graphics.withClip
 import androidx.core.graphics.withTranslation
 import info.olli.weatherlwp.PreferenceDefaults
@@ -18,6 +17,7 @@ import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
 import info.olli.weatherlwp.simulation.inHourWindow
 import info.olli.weatherlwp.util.ColorMath
+import info.olli.weatherlwp.weather.WeatherType
 import kotlin.math.abs
 import kotlin.math.sin
 
@@ -63,12 +63,11 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
     private val moonShadowPaint = Paint().apply {
         isAntiAlias = true
         style = Paint.Style.FILL
-        color = "#1A1A24".toColorInt()  // Earthshine/shadow color
     }
     private val moonPath = android.graphics.Path()  // Reusable path for moon phase
     private val moonRect = RectF()  // Reusable rect for moon disc
     private val termRect = RectF()  // Reusable rect for terminator ellipse
-    private val moonShadowColor = "#1A1A24".toColorInt()  // Pre-parsed shadow color
+    private val earthshineColor = Color.rgb(70, 76, 96)
     
     private var width = 0f
     private var height = 0f
@@ -126,17 +125,22 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         val hour: Float,
         val sunrise: Float,
         val sunset: Float,
-        val nightShade: Float
+        val nightShade: Float,
+        val precipDull: Float
     )
 
     private companion object {
         private const val SKY_TIME_BUCKETS = 256
         private const val SKY_SUN_EVENT_BUCKETS = 64
         private const val SKY_SHADE_BUCKETS = 32
+        private const val SKY_DULL_BUCKETS = 16
         private const val METEOR_TRAIL_SEGMENTS = 5
         private const val STAR_PEAK_ALPHA = 235f
         private const val STAR_FADE_START_H = 0.4f
         private const val STAR_FADE_DURATION_H = 0.7f
+        /** Screen-height fraction where horizon extinction starts, and over which it reaches full. */
+        private const val HORIZON_FADE_START = 0.35f
+        private const val HORIZON_FADE_SPAN = 0.33f
         /** How much a daytime moon fades against the bright sky. */
         private const val DAY_MOON_FADE = 0.55f
     }
@@ -182,19 +186,29 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         val sunriseBucket = toBucket(state.sunriseHours, 0f, 24f, SKY_SUN_EVENT_BUCKETS)
         val sunsetBucket = toBucket(state.sunsetHours, 0f, 24f, SKY_SUN_EVENT_BUCKETS)
         val shadeBucket = toBucket(nightShadeStrength, 0f, 1f, SKY_SHADE_BUCKETS)
+        val dullBucket = toBucket(precipDullness(state), 0f, 1f, SKY_DULL_BUCKETS)
 
         val id = hourBucket or
             (sunriseBucket shl 8) or
             (sunsetBucket shl 14) or
-            (shadeBucket shl 20)
+            (shadeBucket shl 20) or
+            (dullBucket shl 25)
 
         return SkyGradientBucket(
             id = id,
             hour = fromBucket(hourBucket, 0f, 24f, SKY_TIME_BUCKETS),
             sunrise = fromBucket(sunriseBucket, 0f, 24f, SKY_SUN_EVENT_BUCKETS),
             sunset = fromBucket(sunsetBucket, 0f, 24f, SKY_SUN_EVENT_BUCKETS),
-            nightShade = fromBucket(shadeBucket, 0f, 1f, SKY_SHADE_BUCKETS)
+            nightShade = fromBucket(shadeBucket, 0f, 1f, SKY_SHADE_BUCKETS),
+            precipDull = fromBucket(dullBucket, 0f, 1f, SKY_DULL_BUCKETS)
         )
+    }
+
+    /** Rain and snow curtains wash the colour out of the sky, most of all the twilight glow. */
+    private fun precipDullness(state: SimulationState): Float = when (state.weather) {
+        WeatherType.RAIN, WeatherType.HAIL, WeatherType.THUNDERSTORM, WeatherType.SNOW ->
+            state.overcastFactor() * (0.4f + 0.6f * state.precipIntensity.coerceIn(0f, 1f))
+        else -> 0f
     }
 
     private fun updateColorsForTime(state: SimulationState) {
@@ -235,10 +249,17 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
             Triple(newTop, newMid, newHorizon)
         }
 
-        skyTop = shadedTop
-        skyMid = shadedMid
-        skyHorizon = shadedHorizon
+        skyTop = RenderConstants.applyOvercastLight(shadedTop, bucket.precipDull)
+        skyMid = RenderConstants.applyOvercastLight(shadedMid, bucket.precipDull)
+        skyHorizon = RenderConstants.applyOvercastLight(shadedHorizon, bucket.precipDull)
         updateGradient()
+    }
+
+    /** Sky gradient colour at screen [y] (before parallax), matching the gradient stops. */
+    private fun skyColorAt(y: Float): Int {
+        val t = if (height > 0f) (y / height).coerceIn(0f, 1f) else 0f
+        return if (t < 0.4f) RenderConstants.lerpColor(skyTop, skyMid, t / 0.4f)
+        else RenderConstants.lerpColor(skyMid, skyHorizon, (t - 0.4f) / 0.6f)
     }
 
     private fun updateGradient() {
@@ -290,13 +311,17 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
                 val visibility = overlay?.starAlpha?.get(i) ?: 1f
                 if (visibility <= 0f) continue
                 val brightness = star[StarField.BRIGHTNESS] * flicker(time, star[StarField.FLICKER])
-                val alpha = (starAlphaBase * brightness * visibility).toInt()
-                if (alpha <= 0) continue
-                starPaint.alpha = alpha.coerceAtMost(255)
 
                 // Map normalized coordinates using uniform field scaling.
                 val x = SkyViewportMapper.toScreenX(star[0], width, height, starPx)
                 val y = SkyViewportMapper.toScreenY(star[1], width, height, starPy)
+
+                // Thicker air near the horizon dims the stars
+                val h = ((y / height - HORIZON_FADE_START) / HORIZON_FADE_SPAN).coerceIn(0f, 1f)
+                val extinction = 1f - 0.75f * h * h * (3f - 2f * h)
+                val alpha = (starAlphaBase * brightness * visibility * extinction).toInt()
+                if (alpha <= 0) continue
+                starPaint.alpha = alpha.coerceAtMost(255)
 
                 canvas.drawCircle(x, y, star[2] * radiusScale, starPaint)
             }
@@ -611,8 +636,8 @@ class SkyLayer(private val context: Context? = null) : SceneLayer {
         canvas.drawCircle(moonX, moonY, glowRadius, moonPaint)
         moonPaint.shader = null
         
-        // Draw the shadow/dark side (earthshine) - use pre-parsed color, no shader
-        moonShadowPaint.color = moonShadowColor
+        // Dark side: the sky colour behind it plus faint earthshine, so it hides stars without a dark rim
+        moonShadowPaint.color = RenderConstants.lerpColor(skyColorAt(moonY - parallaxY), earthshineColor, 0.1f)
         moonShadowPaint.alpha = (255 * (1f - dayFactor) * cloudVisibility).toInt()
         canvas.drawCircle(moonX, moonY, radius, moonShadowPaint)
         

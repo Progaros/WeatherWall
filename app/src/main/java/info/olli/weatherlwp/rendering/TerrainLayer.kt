@@ -936,6 +936,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     private var decorSnowVisibility: Float = 1f  // Flowers, leaves and mushrooms fade under snow
     private var dullness: Float = 0f  // Overcast light flattening (0-1), see SimulationState.weatherDullness
     private var decorLightLevel: Float = 1f
+    private var night: Float = 0f  // RenderConstants.nightFactor of the current frame
     
     /**
      * Compute smooth weight (0-1) for a given season based on current transition state.
@@ -1022,10 +1023,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 tree.dayColor
             }
 
-            val treeColor = RenderConstants.applyOvercastLight(
-                RenderConstants.blendWithAmbient(effectiveTreeColor, ambientColor, haze), dullness
-            )
-            treeRenderer.drawTree(canvas, tree, state, tree.index, treeColor)
+            val treeColor = RenderConstants.sceneLight(effectiveTreeColor, ambientColor, haze, dullness, night)
+            treeRenderer.drawTree(canvas, tree, state, tree.index, treeColor, haze)
         }
     }
 
@@ -1085,7 +1084,11 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         decorSnowVisibility = (1f - snowCover / 0.35f).coerceIn(0f, 1f)
         dullness = state.weatherDullness()
         bushRenderer.dullness = dullness
+        treeRenderer.dullness = dullness
         decorLightLevel = state.getLightLevel()
+        night = RenderConstants.nightFactor(decorLightLevel)
+        bushRenderer.night = night
+        treeRenderer.night = night
         
         // Get ambient color for current time of day (global tint system)
         val ambientColor = RenderConstants.getAmbientColor(
@@ -1119,7 +1122,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         // Invalidate cached hill gradients only when bucketed ambient, snow or light angle changes.
         // This avoids rebuilding gradients on tiny per-frame color deltas.
-        val ambientBucket = ambientColorBucket(ambientColor) or (dullBucket shl 16)
+        val ambientBucket = ambientColorBucket(ambientColor) or (dullBucket shl 16) or ((night * 10f).toInt() shl 21)
         val snowBucket = (snowCover * 20).toInt()  // ~5% granularity
         hillLightBiasX = computeHillLightBias(state)
         val lightBucket = (hillLightBiasX * 40f).toInt()  // ~2.5% granularity
@@ -1183,12 +1186,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             val bandHaze = RenderConstants.bandHaze(
                 RenderConstants.bandNearness(index, currentHills.size), lightLevel
             )
-            val hillColor = RenderConstants.applyOvercastLight(
-                RenderConstants.blendWithAmbient(effectiveDayColor, ambientColor, bandHaze), dullness
-            )
-            val snowColor = RenderConstants.applyOvercastLight(
-                RenderConstants.blendWithAmbient(SNOW_COLOR, ambientColor, bandHaze), dullness
-            )
+            val hillColor = RenderConstants.sceneLight(effectiveDayColor, ambientColor, bandHaze, dullness, night)
+            val snowColor = RenderConstants.sceneLight(SNOW_COLOR, ambientColor, bandHaze, dullness, night)
             treeRenderer.snowColor = snowColor
             bushRenderer.snowColor = snowColor
             drawHill(canvas, index, hillColor, snowColor)
@@ -1607,9 +1606,9 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         )
         // Small saturated details need extra darkening at night or they glow against the dark hills
         val nightDim = 0.45f + 0.55f * ((decorLightLevel - 0.15f) / 0.85f).coerceIn(0f, 1f)
+        val decorNight = RenderConstants.nightFactor(decorLightLevel)
         fun decorColor(base: Int, haze: Float): Int = ColorMath.darkenColor(
-            RenderConstants.applyOvercastLight(RenderConstants.blendWithAmbient(base, ambientColor, haze), dullness),
-            nightDim
+            RenderConstants.sceneLight(base, ambientColor, haze, dullness, decorNight), nightDim
         )
         
         // Flowers: visible in spring + summer, fade out in autumn

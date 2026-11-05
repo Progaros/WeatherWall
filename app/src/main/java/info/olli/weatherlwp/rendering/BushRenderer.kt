@@ -63,12 +63,12 @@ class BushRenderer {
     private val shadowPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val berryPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
     private val snowPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
-    private val snowRect = android.graphics.RectF()
 
     /** Ground snow (0-1) and its ambient-tinted colour, set by TerrainLayer per frame / hill band. */
     var snowCover: Float = 0f
     var snowColor: Int = Color.WHITE
     var dullness: Float = 0f
+    var night: Float = 0f
 
     // ---- Settings (loaded from SharedPreferences) ----
 
@@ -346,11 +346,9 @@ class BushRenderer {
             bush.dayColor
         }
 
-        val blendedColor = RenderConstants.applyOvercastLight(
-            RenderConstants.blendWithAmbient(effectiveColor, ambientColor, haze), dullness
-        ).let {
+        val blendedColor = RenderConstants.sceneLight(effectiveColor, ambientColor, haze, dullness, night).let {
             // Snow dusted into the foliage
-            if (snowCover > 0f) RenderConstants.lerpColor(it, snowColor, snowCover * 0.5f) else it
+            if (snowCover > 0f) RenderConstants.lerpColor(it, snowColor, snowCover * 0.45f) else it
         }
 
         // Slight wind sway (less than trees)
@@ -372,9 +370,21 @@ class BushRenderer {
             )
         }
 
+        // Snow blanket: every puff in snow, raised by the snow depth, then the foliage on top,
+        // so one continuous layer follows the bush's upper outline
+        val snowLift = if (snowCover > 0.02f) bushHeight * (0.08f + 0.45f * snowCover.coerceAtMost(1f)) else 0f
+        if (snowLift > 0f) {
+            snowPaint.color = snowColor
+            for (circle in bush.circles) {
+                val cx = x + circle.xOffset * bushWidth + sway
+                val cy = centerY + circle.yOffset * bushHeight - snowLift
+                val rx = bushWidth * circle.radiusScale
+                val ry = bushHeight * circle.radiusScale * 0.8f
+                canvas.drawOval(cx - rx, cy - ry, cx + rx, cy + ry, snowPaint)
+            }
+        }
+
         // Draw precalculated circles for organic bush shape
-        val capSweep = if (snowCover > 0.02f) 70f + 140f * snowCover.coerceAtMost(1f) else 0f
-        snowPaint.color = snowColor
         for (circle in bush.circles) {
             val cx = x + circle.xOffset * bushWidth + sway
             val cy = centerY + circle.yOffset * bushHeight
@@ -383,12 +393,6 @@ class BushRenderer {
 
             bushPaint.color = darkenColor(blendedColor, circle.darkenFactor)
             canvas.drawOval(cx - rx, cy - ry, cx + rx, cy + ry, bushPaint)
-
-            // Snow cap: the upper segment of each puff, so it hugs the outline without clipping
-            if (capSweep > 0f) {
-                snowRect.set(cx - rx, cy - ry, cx + rx, cy + ry)
-                canvas.drawArc(snowRect, 270f - capSweep / 2f, capSweep, false, snowPaint)
-            }
         }
 
         // Deep snow buries the base so the bush sits in the snow instead of floating on it
@@ -411,9 +415,7 @@ class BushRenderer {
 
                     val nightDim = 0.45f + 0.55f * ((state.getLightLevel() - 0.15f) / 0.85f).coerceIn(0f, 1f)
                     val berryColor = ColorMath.darkenColor(
-                        RenderConstants.applyOvercastLight(
-                            RenderConstants.blendWithAmbient(berry.color, ambientColor, maxOf(0.15f, haze)), dullness
-                        ),
+                        RenderConstants.sceneLight(berry.color, ambientColor, maxOf(0.15f, haze), dullness, night),
                         nightDim
                     )
                     berryPaint.color = berryColor

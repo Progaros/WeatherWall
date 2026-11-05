@@ -141,6 +141,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
     // Frame-constant values resolved once per draw() instead of per mountain
     private var frameSnowDepth = 0f  // Fraction of the slope under snow, 0 = no cap
     private var frameDullness = 0f
+    private var frameNight = 0f
     
     init {
         reloadSettings(SimulationSettings.fromSnapshot(emptyMap<String, Any?>()))
@@ -298,9 +299,9 @@ class MountainLayer(private val context: Context) : SceneLayer {
             // Width: Random variation
             val w = (RenderConstants.MOUNTAIN_WIDTH_MIN + itemRandom.nextFloat() * RenderConstants.MOUNTAIN_WIDTH_RANGE) * mountainWidthScale
 
-            // Color: Darker/bluer for far mountains (atmospheric perspective)
-            val baseGray = RenderConstants.MOUNTAIN_GRAY_MIN +
-                (depth * (RenderConstants.MOUNTAIN_GRAY_MAX - RenderConstants.MOUNTAIN_GRAY_MIN)).toInt()
+            // Color: lighter for far mountains (depth 0 = far, 1 = near)
+            val baseGray = RenderConstants.MOUNTAIN_GRAY_FAR +
+                (depth * (RenderConstants.MOUNTAIN_GRAY_NEAR - RenderConstants.MOUNTAIN_GRAY_FAR)).toInt()
             val dayColor = Color.rgb(baseGray, baseGray + 5, baseGray + 15)
 
             val shapeSeed = DeterministicLayout.mix(randomSeed, section = 101, index = index)
@@ -365,6 +366,7 @@ class MountainLayer(private val context: Context) : SceneLayer {
 
         frameSnowDepth = computeSnowDepth(state)
         frameDullness = state.weatherDullness()
+        frameNight = RenderConstants.nightFactor(state.getLightLevel())
         
         // Get ambient color for atmospheric blending
         val ambientColor = RenderConstants.getAmbientColor(
@@ -372,7 +374,8 @@ class MountainLayer(private val context: Context) : SceneLayer {
             state.nightShadeStrength, state.sunriseHours, state.sunsetHours
         )
         val ambientBucket = ambientColorBucket(ambientColor) or
-            ((frameDullness * 20f).toInt() shl 16) or ((frameSnowDepth * 40f).toInt() shl 21)
+            ((frameDullness * 20f).toInt() shl 16) or ((frameSnowDepth * 40f).toInt() shl 21) or
+            ((frameNight * 10f).toInt() shl 27)
         val bucketedAmbientColor = quantizeAmbientColor(ambientColor)
         
         // Invalidate cached gradients when lighting changes significantly
@@ -517,9 +520,11 @@ class MountainLayer(private val context: Context) : SceneLayer {
         
         // Apply ambient tinting (global tint system)
         // Mountains blend with ambient color based on their depth
-        val blendAmount = RenderConstants.depthHaze(mountain.depthFactor)
-        val baseColor = RenderConstants.applyOvercastLight(
-            RenderConstants.blendWithAmbient(mountain.dayColor, ambientColor, blendAmount), frameDullness
+        val distance = 1f - (mountain.depthFactor - RenderConstants.PARALLAX_MOUNTAIN_MIN) /
+            (RenderConstants.PARALLAX_MOUNTAIN_MAX - RenderConstants.PARALLAX_MOUNTAIN_MIN)
+        val blendAmount = RenderConstants.depthHaze(distance.coerceIn(0f, 1f))
+        val baseColor = RenderConstants.sceneLight(
+            mountain.dayColor, ambientColor, blendAmount, frameDullness, frameNight
         )
         
         // Create atmospheric gradient: lighter/bluer at base (fog effect)
@@ -677,8 +682,8 @@ class MountainLayer(private val context: Context) : SceneLayer {
             val snowBottomY = lastLeftY + height * 0.01f
             val snowGradient = cachedSnowGradients.getOrPut(mountainIdx) {
                 // Same distance haze and weather light as the rock, so snow isn't glowing at night
-                val snow = RenderConstants.applyOvercastLight(
-                    RenderConstants.blendWithAmbient(Color.WHITE, ambientColor, blendAmount), frameDullness
+                val snow = RenderConstants.sceneLight(
+                    Color.WHITE, ambientColor, blendAmount, frameDullness, frameNight
                 ) and 0x00FFFFFF
                 LinearGradient(
                     actualPeakX, snowTopY,

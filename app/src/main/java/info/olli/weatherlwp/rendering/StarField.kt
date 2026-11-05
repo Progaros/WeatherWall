@@ -18,10 +18,14 @@ object StarField {
     val stars: Array<FloatArray> = run {
         val random = Random(42)
         val traits = Random(4242)
-        Array(RenderConstants.STAR_COUNT) {
+        Array(RenderConstants.STAR_COUNT) { index ->
             val x = random.nextFloat()
             val y = random.nextFloat() * 0.98f // almost full visible sky
             val size = random.nextFloat()
+            if (index >= BRIGHT_STAR_COUNT) {
+                // Background dust: tiny, dim, steady
+                return@Array floatArrayOf(x, y, 0.5f + size * 0.3f, 0.2f + size * 0.2f, 0f)
+            }
             // Most stars are faint pinpricks; only a handful are big and bright.
             val standout = traits.nextFloat() < 0.05f
             val radius = if (standout) 1.6f + size * 0.4f else 0.6f + size * size * size * 0.9f
@@ -30,6 +34,9 @@ object StarField {
             floatArrayOf(x, y, radius, brightness.coerceAtMost(1f), flicker)
         }
     }
+
+    /** The original field; stars after it are faint background dust. */
+    const val BRIGHT_STAR_COUNT = 200
 }
 
 /**

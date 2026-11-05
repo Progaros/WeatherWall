@@ -42,12 +42,13 @@ class StarFallEvent(random: Random, override val spawnTimeMs: Long) : RandomEven
     override val durationMs: Long
 
     init {
-        val candidates = stars.indices.filter { stars[it][0] in REGION_X && stars[it][1] in REGION_Y }
-            .ifEmpty { stars.indices.toList() }
+        val bright = 0 until StarField.BRIGHT_STAR_COUNT
+        val candidates = bright.filter { stars[it][0] in REGION_X && stars[it][1] in REGION_Y }
+            .ifEmpty { bright.toList() }
         val center = candidates[random.nextInt(candidates.size)]
         centerX = stars[center][0]
         centerY = stars[center][1]
-        val byDistance = stars.indices.sortedBy { distance(it, centerX, centerY) }
+        val byDistance = bright.sortedBy { distance(it, centerX, centerY) }
 
         val count = 3 + random.nextInt(3)
         var startMs = 600L

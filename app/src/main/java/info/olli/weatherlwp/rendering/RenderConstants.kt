@@ -253,9 +253,9 @@ object RenderConstants {
     
     // ============== Mountain Colors ==============
     
-    /** Base mountain gray (RGB values) - far mountains are darker/bluer */
-    const val MOUNTAIN_GRAY_MIN = 40
-    const val MOUNTAIN_GRAY_MAX = 100
+    /** Base mountain gray (RGB values) - far mountains are lighter (aerial perspective) */
+    const val MOUNTAIN_GRAY_NEAR = 85
+    const val MOUNTAIN_GRAY_FAR = 105
     
     // ============== Terrain Colors ==============
     // NOTE: Lazy initialization prevents unit test failures when only math functions are used
@@ -291,7 +291,7 @@ object RenderConstants {
     const val RAIN_PARTICLE_POOL_SIZE = 300
     const val SNOW_PARTICLE_POOL_SIZE = 200
     const val FIREWORK_PARTICLE_POOL_SIZE = 200
-    const val STAR_COUNT = 200  // Isotropic star field overflows all edges; more stars keep on-screen density
+    const val STAR_COUNT = 380  // Isotropic star field overflows all edges; more stars keep on-screen density
     
     // ============== Animation Speeds ==============
     
@@ -426,6 +426,32 @@ object RenderConstants {
             ((b + (lum - b) * desat) * dark).toInt().coerceIn(0, 255)
         )
     }
+
+    /** 0 by day and through the first half of twilight, 1 in full night. */
+    fun nightFactor(lightLevel: Float): Float {
+        val t = (1f - (lightLevel - 0.15f) / 0.35f).coerceIn(0f, 1f)
+        return t * t * (3f - 2f * t)
+    }
+
+    /** Scotopic (rod) vision: colours fade toward a cool blue-grey as night falls. */
+    fun applyNightLight(color: Int, night: Float): Int {
+        if (night <= 0.001f) return color
+        val r = Color.red(color)
+        val g = Color.green(color)
+        val b = Color.blue(color)
+        val lum = 0.3f * r + 0.59f * g + 0.11f * b
+        val desat = 0.6f * night
+        val shift = 0.15f * night
+        return Color.rgb(
+            ((r + (lum - r) * desat) * (1f - shift)).toInt().coerceIn(0, 255),
+            ((g + (lum - g) * desat) * (1f - shift * 0.4f)).toInt().coerceIn(0, 255),
+            (b + (lum - b) * desat + lum * shift).toInt().coerceIn(0, 255)
+        )
+    }
+
+    /** Landscape colour under the current light: aerial haze, overcast flattening, night vision. */
+    fun sceneLight(base: Int, ambientColor: Int, haze: Float, dullness: Float, night: Float): Int =
+        applyNightLight(applyOvercastLight(blendWithAmbient(base, ambientColor, haze), dullness), night)
 
     /** Morning and evening golden window, shared by sky, ambient light and clouds. */
     const val TWILIGHT_WINDOW_H = 1.0f

@@ -58,7 +58,10 @@ class TreeRenderer {
         val index: Int = -1,   // Global index for decoration lookup
         val treeType: TreeType = TreeType.NEEDLE,
         val crownCircles: List<CrownCircle> = emptyList(),  // For LEAF trees
-        val branches: List<BranchLine> = emptyList()         // Winter bare branches for LEAF trees
+        val branches: List<BranchLine> = emptyList(),        // Winter bare branches for LEAF trees
+        val crownAspectX: Float = 1f,  // crown width multiplier (LEAF)
+        val crownAspectY: Float = 1f,  // crown height multiplier (LEAF)
+        val crownLean: Float = 0f      // crown offset from the trunk, fraction of crown radius (LEAF)
     )
 
     // Pre-generated pinecone positions (per tree index)
@@ -92,6 +95,8 @@ class TreeRenderer {
         /** Max blend of the lit side of foliage toward warm sunlight. */
         private const val CROWN_HIGHLIGHT = 0.28f
         private const val SUNLIT_FOLIAGE = 0xFFFFF2C8.toInt()
+        private const val BARK_COLOR = 0xFF5A4128.toInt()      // rgb(90, 65, 40)
+        private const val PINECONE_COLOR = 0xFF78501E.toInt()  // rgb(120, 80, 30)
 
         /**
          * Minimum world-space distance between adjacent trees on the same hill.
@@ -195,6 +200,16 @@ class TreeRenderer {
     // Frame-global ambient (time-of-day) tint, set once per frame by TerrainLayer.
     // Avoids recomputing RenderConstants.getAmbientColor() for every drawn tree.
     @Volatile var cachedAmbientColor: Int = 0
+
+    /** Overcast flattening and night factor of the current frame, set by TerrainLayer. */
+    var dullness: Float = 0f
+    var night: Float = 0f
+
+    /** Band haze of the tree being drawn, for bark and cones. */
+    private var barkHaze = 0.2f
+
+    private fun barkColor(base: Int): Int =
+        RenderConstants.sceneLight(base, cachedAmbientColor, maxOf(0.15f, barkHaze), dullness, night)
 
     // ========================================================================
     // Public helpers
@@ -353,11 +368,21 @@ class TreeRenderer {
                 val crown = if (isLeaf) generateCrownCircles(treeRandom) else emptyList()
                 val branches = if (isLeaf) generateBranches(treeRandom) else emptyList()
 
+                // Crown silhouette from its own stream so placement and branches stay unchanged
+                val shapeRandom = DeterministicLayout.random(randomSeed + 2000 + hillIndex, section = 311, index = cellIndex)
+                val shapeRoll = shapeRandom.nextFloat()
+                val (aspectX, aspectY) = when {
+                    shapeRoll < 0.45f -> 1f to 1f                                              // round
+                    shapeRoll < 0.75f -> (1.15f + shapeRandom.nextFloat() * 0.2f) to 0.85f    // broad
+                    else -> 0.82f to (1.15f + shapeRandom.nextFloat() * 0.2f)                 // tall
+                }
+                val lean = (shapeRandom.nextFloat() - 0.5f) * 0.3f
+
                 // Stable identity: derived from hill and cell, not list position
                 val stableId = hillIndex * 100003 + cellIndex
 
                 newTrees.add(TreeData(worldX, yRatio, scale, depthFactor, dayColor, stableId,
-                    type, crown, branches))
+                    type, crown, branches, aspectX, aspectY, lean))
                 lastPlacedWorldX = worldX
             }
         }
@@ -418,7 +443,7 @@ class TreeRenderer {
         val circles = ArrayList<CrownCircle>(count)
 
         // Main central crown circle
-        circles.add(CrownCircle(0f, 0f, 0.8f + random.nextFloat() * 0.2f, 1.0f))
+        circles.add(CrownCircle(0f, 0f, 0.8f + random.nextFloat() * 0.2f, 0.92f))
 
         for (i in 1 until count) {
             val angle = random.nextFloat() * 2f * kotlin.math.PI.toFloat()
@@ -426,7 +451,9 @@ class TreeRenderer {
             val xOff = kotlin.math.cos(angle.toDouble()).toFloat() * dist
             val yOff = kotlin.math.sin(angle.toDouble()).toFloat() * dist * 0.7f
             val radius = 0.4f + random.nextFloat() * 0.45f
-            val darken = 0.85f + random.nextFloat() * 0.15f
+            // Lower puffs sit in the crown's own shade, upper ones catch the sky light
+            val lowness = (yOff / 0.385f + 1f) * 0.5f
+            val darken = (0.9f + random.nextFloat() * 0.1f) * (1f - 0.2f * lowness)
             circles.add(CrownCircle(xOff, yOff, radius, darken))
         }
         return circles.sortedByDescending { it.yOffset }
@@ -491,9 +518,11 @@ class TreeRenderer {
      * @param state Current simulation state (wind, time, shadows, etc.).
      * @param treeIndex Global tree index for decoration lookup.
      * @param treeColor Pre-computed tree color (with ambient tint already blended).
+     * @param haze Band haze shared with the hill, applied to bark and cones.
      */
-    fun drawTree(canvas: Canvas, tree: TreeData, state: SimulationState, treeIndex: Int, treeColor: Int) {
+    fun drawTree(canvas: Canvas, tree: TreeData, state: SimulationState, treeIndex: Int, treeColor: Int, haze: Float) {
         treePaint.color = treeColor
+        barkHaze = haze
 
         if (tree.treeType == TreeType.LEAF) {
             drawLeafTree(canvas, tree, state)
@@ -645,31 +674,47 @@ class TreeRenderer {
                     canvas.drawPath(treePath, crownPaint)
                 }
 
-                // Draw snow on tree if snow is present (weather-driven or calendar)
+                // Snow on the tip and along the bough tiers, so green needles show between the layers
                 val needleSnow = treeSnowAmount()
                 if (needleSnow > 0f) {
-                    val snowCoverage = needleSnow.coerceIn(0.01f, 0.8f)
-                    val segmentSnowFactor = (1f - baseHeightRatio) * 0.3f + 0.5f
-                    val snowHeight = segmentHeight * snowCoverage * segmentSnowFactor
-                    val snowTipY = segTipY
-                    val snowBaseY = segTipY + snowHeight
-                    val snowBaseWidth = segWidth * (snowHeight / segmentHeight).coerceIn(0.2f, 0.6f)
+                    val snow = needleSnow.coerceIn(0.01f, 0.8f)
+                    val swayDelta = localBaseSway - localTipSway
 
+                    // Tip cap with a drooping lower rim
+                    val capF = 0.15f + 0.3f * snow
+                    val capY = segTipY + segmentHeight * capF
+                    val capX = x + localTipSway + swayDelta * capF
+                    val capHalf = segWidth * capF * 1.05f
                     treeSnowPath.reset()
-                    treeSnowPath.moveTo(x + localTipSway, snowTipY)
-                    treeSnowPath.lineTo(x - snowBaseWidth + localTipSway * 0.7f, snowBaseY)
-                    treeSnowPath.lineTo(x + snowBaseWidth + localTipSway * 0.7f, snowBaseY)
+                    treeSnowPath.moveTo(x + localTipSway, segTipY)
+                    treeSnowPath.lineTo(capX - capHalf, capY)
+                    treeSnowPath.quadTo(capX, capY + segmentHeight * 0.08f * snow, capX + capHalf, capY)
                     treeSnowPath.close()
-
                     canvas.drawPath(treeSnowPath, treeSnowPaint)
+
+                    // Shelves on the boughs below: arched on top, sagging underneath
+                    val shelfThickness = segmentHeight * (0.02f + 0.05f * snow)
+                    for (tier in 1..3) {
+                        val f = capF + (0.92f - capF) * tier / 3f
+                        val shelfY = segTipY + segmentHeight * f
+                        val shelfX = x + localTipSway + swayDelta * f
+                        val half = segWidth * f * 0.97f
+                        treeSnowPath.reset()
+                        treeSnowPath.moveTo(shelfX - half, shelfY)
+                        treeSnowPath.quadTo(shelfX, shelfY - shelfThickness * 1.4f, shelfX + half, shelfY)
+                        treeSnowPath.quadTo(shelfX, shelfY + shelfThickness * 1.2f, shelfX - half, shelfY)
+                        treeSnowPath.close()
+                        canvas.drawPath(treeSnowPath, treeSnowPaint)
+                    }
                 }
             }
 
-            // Draw pinecones hanging from branches: visible in autumn + winter
-            val pineconeAlpha = (getSeasonWeight("autumn") + getSeasonWeight("winter")).coerceIn(0f, 1f)
+            // Draw pinecones hanging from branches: visible in autumn + winter, hidden under heavy snow
+            val pineconeAlpha = (getSeasonWeight("autumn") + getSeasonWeight("winter")).coerceIn(0f, 1f) *
+                (1f - treeSnowAmount() * 1.2f).coerceIn(0f, 1f)
             if (pineconeAlpha > 0.01f) {
                 pineconesByTree[treeIndex]?.let { cones ->
-                    val ambientColor = cachedAmbientColor
+                    val coneColor = barkColor(PINECONE_COLOR)
                     for (cone in cones) {
                         val segIndex = (cone.yRatio * treeSegments).toInt().coerceIn(0, treeSegments - 1)
                         val segBaseY = groundY - segIndex * segmentHeight * 0.7f
@@ -682,10 +727,8 @@ class TreeRenderer {
                         val coneSize = cone.size * this@TreeRenderer.height * (0.5f + pineconeAlpha * 0.5f)
 
                         // Brown pinecone
-                        val coneColor = RenderConstants.blendWithAmbient(
-                            Color.rgb(120, 80, 30), ambientColor, 0.2f)
                         pineconePaint.color = coneColor
-                        pineconePaint.alpha = (Color.alpha(coneColor) * pineconeAlpha).toInt()
+                        pineconePaint.alpha = (255 * pineconeAlpha).toInt()
                         // Teardrop shape: oval body
                         canvas.drawOval(
                             coneX - coneSize * 0.4f, coneY - coneSize,
@@ -764,10 +807,8 @@ class TreeRenderer {
             // Crown visibility: full in summer/autumn, fades in late autumn -> winter, regrows spring
             val crownScale = (1f - winterWeight * 0.95f).coerceIn(0.05f, 1f)
 
-            // Trunk color (brown)
-            val trunkColor = Color.rgb(90, 65, 40)
-            val ambientColor = cachedAmbientColor
-            trunkPaint.color = RenderConstants.blendWithAmbient(trunkColor, ambientColor, 0.2f)
+            // Bark follows the same haze, overcast and night light as the foliage
+            trunkPaint.color = barkColor(BARK_COLOR)
             trunkPaint.strokeWidth = trunkWidth
             trunkPaint.style = Paint.Style.STROKE
 
@@ -825,26 +866,32 @@ class TreeRenderer {
                 val highlight = sunlitHighlight(state)
                 val lightOffX = state.lightDirX * 0.18f
                 val lightOffY = -0.1f - 0.1f * state.lightElevation01
+                val radiusX = crownRadius * crownScale * tree.crownAspectX
+                val radiusY = crownRadius * crownScale * tree.crownAspectY
+                val crownX = x + tree.crownLean * crownRadius * crownScale
+                val crownY = crownCenterY - crownRadius * crownScale * (tree.crownAspectY - 1f) * 0.5f
                 for (circle in tree.crownCircles) {
-                    val cx = x + circle.xOffset * crownRadius * crownScale
-                    val cy = crownCenterY + circle.yOffset * crownRadius * crownScale
-                    val r = crownRadius * circle.radiusScale * crownScale
+                    val cx = crownX + circle.xOffset * radiusX
+                    val cy = crownY + circle.yOffset * radiusY
+                    val rx = radiusX * circle.radiusScale
+                    val ry = radiusY * circle.radiusScale
 
                     crownPaint.color = darkenColor(treePaint.color, circle.darkenFactor)
                     crownPaint.alpha = crownAlpha
-                    canvas.drawCircle(cx, cy, r, crownPaint)
+                    canvas.drawOval(cx - rx, cy - ry, cx + rx, cy + ry, crownPaint)
                 }
                 // Highlights after all puffs: one lit mass, shade only along the crown's far rim
                 if (highlight > 0.01f) {
                     for (circle in tree.crownCircles) {
-                        val cx = x + circle.xOffset * crownRadius * crownScale
-                        val cy = crownCenterY + circle.yOffset * crownRadius * crownScale
-                        val r = crownRadius * circle.radiusScale * crownScale
+                        val cx = crownX + circle.xOffset * radiusX + lightOffX * radiusX * circle.radiusScale
+                        val cy = crownY + circle.yOffset * radiusY + lightOffY * radiusY * circle.radiusScale
+                        val rx = radiusX * circle.radiusScale * 0.72f
+                        val ry = radiusY * circle.radiusScale * 0.72f
                         crownPaint.color = RenderConstants.lerpColor(
                             darkenColor(treePaint.color, circle.darkenFactor), SUNLIT_FOLIAGE, highlight
                         )
                         crownPaint.alpha = crownAlpha
-                        canvas.drawCircle(cx + lightOffX * r, cy + lightOffY * r, r * 0.72f, crownPaint)
+                        canvas.drawOval(cx - rx, cy - ry, cx + rx, cy + ry, crownPaint)
                     }
                 }
                 crownPaint.alpha = 255
@@ -852,10 +899,10 @@ class TreeRenderer {
                 // Snow on crown
                 val crownSnow = treeSnowAmount()
                 if (crownSnow > 0f && crownScale > 0.3f) {
-                    val snowR = crownRadius * crownScale * crownSnow.coerceIn(0.01f, 0.5f)
+                    val snowR = radiusX * crownSnow.coerceIn(0.01f, 0.5f)
                     canvas.drawOval(
-                        x - snowR, crownCenterY - crownRadius * crownScale * 0.6f,
-                        x + snowR, crownCenterY - crownRadius * crownScale * 0.3f,
+                        crownX - snowR, crownY - radiusY * 0.6f,
+                        crownX + snowR, crownY - radiusY * 0.3f,
                         treeSnowPaint
                     )
                 }

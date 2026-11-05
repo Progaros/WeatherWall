@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
@@ -121,6 +122,12 @@ class CloudLayer(private val context: Context) : SceneLayer {
     // Reused color filter: only recreated when cloud tint actually changes
     private var cachedMultiplyFilterColor = Int.MIN_VALUE
     private var cachedMultiplyFilter: PorterDuffColorFilter? = null
+
+    // Underside colour while a low sun lights the clouds from below (null = plain tint)
+    private var currentUndersideColor: Int? = null
+    private var cachedRimFilterKey = Long.MIN_VALUE
+    private var cachedRimFilter: ColorMatrixColorFilter? = null
+    private val rimMatrix = FloatArray(20)
     private var cloudsEnabled = true
     private var randomSeed = 42
 
@@ -271,6 +278,14 @@ class CloudLayer(private val context: Context) : SceneLayer {
         const val ANIMATION_TIME_PERIOD_S = 125.66371f
         /** Hours around sunrise/sunset in which the overcast deck opens up at the horizon. */
         const val GOLDEN_WINDOW_H = 1.25f
+
+        /** Baked underside grey (192, 197, 210) and its per-channel fraction of white. */
+        private const val UNDERSIDE_SHADE_COLOR = 0xFFC0C5D2.toInt()
+        private val UNDERSIDE_SHADE = floatArrayOf(192f / 255f, 197f / 255f, 210f / 255f)
+        private const val DAWN_RIM = 0xFFFFAA8C.toInt()
+        private const val DUSK_RIM = 0xFFFF875A.toInt()
+        /** Max blend of cloud undersides toward the low-sun glow. */
+        private const val RIM_STRENGTH = 0.75f
     }
 
     /** When true, reduces bitmap sizes and group count for better preview performance. */
@@ -528,10 +543,10 @@ class CloudLayer(private val context: Context) : SceneLayer {
             bitmapPaint
         )
 
-        // Sunlit tops, shaded undersides; the tint filter at draw time multiplies this
+        // Sunlit tops, shaded undersides; the tint filter at draw time maps this to colours
         shadePaint.shader = android.graphics.LinearGradient(
             0f, baseY - bitmapHeight * 0.6f, 0f, baseY + bitmapHeight * 0.05f,
-            Color.WHITE, Color.rgb(192, 197, 210), android.graphics.Shader.TileMode.CLAMP
+            Color.WHITE, UNDERSIDE_SHADE_COLOR, android.graphics.Shader.TileMode.CLAMP
         )
         canvas.drawRect(0f, 0f, paddedWidth.toFloat(), paddedHeight.toFloat(), shadePaint)
         shadePaint.shader = null
@@ -691,6 +706,7 @@ class CloudLayer(private val context: Context) : SceneLayer {
         
         val overcast = state.overcastFactor()
         currentCloudColor = calculateCloudColor(state, overcast)
+        currentUndersideColor = calculateUndersideColor(state, overcast, currentCloudColor)
         if (overcast > 0.01f) drawOvercastVeil(canvas, state, overcast)
         
         drawCachedMode(canvas, state, parallaxCalculator)
@@ -786,7 +802,12 @@ class CloudLayer(private val context: Context) : SceneLayer {
         if (currentGroups.isEmpty()) return
         
         // Apply color tint to all clouds
-        drawPaint.colorFilter = getMultiplyFilter(currentCloudColor)
+        val underside = currentUndersideColor
+        drawPaint.colorFilter = if (underside == null) {
+            getMultiplyFilter(currentCloudColor)
+        } else {
+            getRimFilter(currentCloudColor, underside)
+        }
         
         // Draw all groups sorted by depth layer then size
         drawGroupsBitmap(canvas, currentGroups, parallaxCalculator)
@@ -930,6 +951,52 @@ class CloudLayer(private val context: Context) : SceneLayer {
                 canvas.drawBitmap(bitmap, null, dstRect, drawPaint)
             }
         }
+    }
+
+    /**
+     * Maps the baked white-top / grey-underside shading to [top] and [underside] colours.
+     * With underside = top * shade this equals the plain MULTIPLY tint.
+     */
+    private fun getRimFilter(top: Int, underside: Int): ColorMatrixColorFilter {
+        val key = (top.toLong() shl 32) or (underside.toLong() and 0xFFFFFFFFL)
+        cachedRimFilter?.let { if (cachedRimFilterKey == key) return it }
+        rimMatrix.fill(0f)
+        for (c in 0..2) {
+            val shift = 16 - 8 * c
+            val topN = ((top shr shift) and 0xFF) / 255f
+            val underN = ((underside shr shift) and 0xFF) / 255f
+            val lo = UNDERSIDE_SHADE[c]
+            val scale = (topN - underN) / (1f - lo)
+            rimMatrix[c * 5 + c] = scale
+            rimMatrix[c * 5 + 4] = 255f * (underN - scale * lo)
+        }
+        rimMatrix[18] = 1f
+        val filter = ColorMatrixColorFilter(rimMatrix)
+        cachedRimFilter = filter
+        cachedRimFilterKey = key
+        return filter
+    }
+
+    /**
+     * Low sun lights the cloud bases from below: warm undersides around sunrise and sunset,
+     * fading with cloud cover and as the afterglow darkens. Null when there is no such light.
+     */
+    private fun calculateUndersideColor(state: SimulationState, overcast: Float, top: Int): Int? {
+        val hour = state.smoothedTimeOfDayHours
+        val fromSunrise = 1f - kotlin.math.abs(hour - state.sunriseHours) / GOLDEN_WINDOW_H
+        val fromSunset = 1f - kotlin.math.abs(hour - state.sunsetHours) / GOLDEN_WINDOW_H
+        val rim = maxOf(fromSunrise, fromSunset).coerceIn(0f, 1f) * (1f - 0.85f * overcast) * RIM_STRENGTH
+        if (rim < 0.02f) return null
+        val dayFactor = ((state.getLightLevel() - 0.15f) / 0.85f).coerceIn(0f, 1f)
+        val glow = ColorMath.darkenColor(
+            if (fromSunrise > fromSunset) DAWN_RIM else DUSK_RIM, 0.4f + 0.6f * dayFactor
+        )
+        val plain = Color.rgb(
+            (Color.red(top) * UNDERSIDE_SHADE[0]).toInt(),
+            (Color.green(top) * UNDERSIDE_SHADE[1]).toInt(),
+            (Color.blue(top) * UNDERSIDE_SHADE[2]).toInt()
+        )
+        return RenderConstants.lerpColor(plain, glow, rim)
     }
 
     private fun calculateCloudColor(state: SimulationState, overcast: Float): Int {
