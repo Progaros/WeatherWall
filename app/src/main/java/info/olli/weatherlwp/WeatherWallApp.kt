@@ -8,6 +8,7 @@ import android.content.Context
 import android.os.Build
 import android.os.PersistableBundle
 import android.util.Log
+import com.google.android.material.color.DynamicColors
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -77,6 +78,8 @@ class WeatherWallApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        // Apply Material You dynamic colors on Android 12+ (falls back to our sky/slate M3 palette on older APIs)
+        DynamicColors.applyToActivitiesIfAvailable(this)
         
         // Load any crash log from previous session
         lastCrashLog = loadCrashLogFromFile(this)

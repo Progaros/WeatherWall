@@ -28,4 +28,6 @@
     <string name="reset_settings_confirm">Reset</string>
     <string name="toast_crash_log_copied">Crash log copied to clipboard</string>
     <string name="toast_no_crash_log">No crash log recorded</string>
+    <string name="randomize_seed">Randomize landscape</string>
+    <string name="toast_new_seed">Landscape seed: %1$d</string>
 </resources>

@@ -19,7 +19,7 @@ import info.olli.weatherlwp.weather.WeatherRepository
  * Sub-screen for About & Debug settings.
  * Includes click handlers for version, debug logging, weather data, etc.
  */
-class SystemAboutFragment : PreferenceFragmentCompat() {
+class SystemAboutFragment : StyledPreferenceFragment() {
     
     // Easter egg: rapid version clicks
     private var versionClickCount = 0

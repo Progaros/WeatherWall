@@ -34,9 +34,8 @@ import info.olli.weatherlwp.rendering.ParallaxScene
 import info.olli.weatherlwp.wallpaper.WeatherWallpaper
 import info.olli.weatherlwp.weather.WeatherRepository
 import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
-import com.google.android.material.tabs.TabLayout
-import com.google.android.material.tabs.TabLayoutMediator
 import info.olli.weatherlwp.parallax.ParallaxSensorManager
 import info.olli.weatherlwp.settings.SceneSettingsFragment
 import info.olli.weatherlwp.settings.EffectsSettingsFragment
@@ -45,10 +44,13 @@ import info.olli.weatherlwp.settings.SystemSettingsFragment
 import android.os.Handler
 import android.os.Looper
 import android.widget.FrameLayout
+import android.widget.ImageButton
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.fragment.app.FragmentTransaction
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
+import kotlin.random.Random
 
 class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceStartFragmentCallback {
     companion object {
@@ -102,7 +104,7 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
     // Sub-settings navigation
     private lateinit var settingsDetailContainer: FrameLayout
     private lateinit var viewPager: ViewPager2
-    private lateinit var tabLayout: TabLayout
+    private lateinit var bottomNav: BottomNavigationView
     
     // Preference change listener for live preview updates
     private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -145,24 +147,27 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
         setSupportActionBar(toolbar)
 
-        // Android 15 (targetSdk 35) enforces edge-to-edge: pad toolbar, bottom tabs, and FAB for system bars.
+        // Android 15 (targetSdk 35) enforces edge-to-edge: pad toolbar, bottom nav, and FAB for system bars.
         val rootView = findViewById<View>(android.R.id.content)
-        tabLayout = findViewById(R.id.tab_layout)
+        bottomNav = findViewById(R.id.bottom_nav)
         val fabView = findViewById<ExtendedFloatingActionButton>(R.id.fab_apply).also { fabApply = it }
-        val baseTabHeight = tabLayout.layoutParams.height
-        val baseTabPaddingBottom = tabLayout.paddingBottom
         val baseFabBottomMargin = (fabView.layoutParams as? android.view.ViewGroup.MarginLayoutParams)?.bottomMargin ?: 0
         ViewCompat.setOnApplyWindowInsetsListener(rootView) { _, windowInsets ->
             val bars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
             toolbar.updatePadding(top = bars.top)
-            tabLayout.updatePadding(bottom = baseTabPaddingBottom + bars.bottom)
-            if (baseTabHeight > 0) {
-                tabLayout.updateLayoutParams { height = baseTabHeight + bars.bottom }
-            }
+            bottomNav.updatePadding(bottom = bars.bottom)
             fabView.updateLayoutParams<android.view.ViewGroup.MarginLayoutParams> {
                 bottomMargin = baseFabBottomMargin + bars.bottom
             }
             windowInsets
+        }
+
+        findViewById<ImageButton>(R.id.btn_shuffle_seed)?.setOnClickListener {
+            val newSeed = Random.nextInt(1, 1000)
+            PreferenceManager.getDefaultSharedPreferences(this).edit {
+                putInt("pref_random_seed", newSeed)
+            }
+            Toast.makeText(this, getString(R.string.toast_new_seed, newSeed), Toast.LENGTH_SHORT).show()
         }
         
         // Initialize density and screen dimensions for dp to px conversions
@@ -233,16 +238,34 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
         settingsDetailContainer = findViewById(R.id.settings_detail_container)
         
         viewPager.adapter = SettingsPagerAdapter(this)
-        
-        TabLayoutMediator(tabLayout, viewPager) { tab, position ->
-            tab.text = when (position) {
-                0 -> getString(R.string.tab_scene)
-                1 -> getString(R.string.tab_effects)
-                2 -> getString(R.string.tab_events)
-                3 -> getString(R.string.tab_system)
-                else -> null
+
+        bottomNav.setOnItemSelectedListener { item ->
+            val page = when (item.itemId) {
+                R.id.nav_scene -> 0
+                R.id.nav_effects -> 1
+                R.id.nav_events -> 2
+                R.id.nav_system -> 3
+                else -> return@setOnItemSelectedListener false
             }
-        }.attach()
+            if (viewPager.currentItem != page) {
+                viewPager.setCurrentItem(page, true)
+            }
+            true
+        }
+        viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+            override fun onPageSelected(position: Int) {
+                val itemId = when (position) {
+                    0 -> R.id.nav_scene
+                    1 -> R.id.nav_effects
+                    2 -> R.id.nav_events
+                    3 -> R.id.nav_system
+                    else -> return
+                }
+                if (bottomNav.selectedItemId != itemId) {
+                    bottomNav.selectedItemId = itemId
+                }
+            }
+        })
         
         // Setup FAB for applying wallpaper
         fabApply?.setOnClickListener {
@@ -312,10 +335,11 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
     
     private fun showDetailFragment(fragment: Fragment, title: String) {
         viewPager.visibility = View.GONE
-        tabLayout.visibility = View.GONE
+        bottomNav.visibility = View.GONE
         settingsDetailContainer.visibility = View.VISIBLE
         
         supportFragmentManager.beginTransaction()
+            .setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE)
             .replace(R.id.settings_detail_container, fragment)
             .addToBackStack(title)
             .commit()
@@ -327,7 +351,7 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
     private fun showMainSettings() {
         settingsDetailContainer.visibility = View.GONE
         viewPager.visibility = View.VISIBLE
-        tabLayout.visibility = View.VISIBLE
+        bottomNav.visibility = View.VISIBLE
         
         supportActionBar?.title = getString(R.string.app_name)
         supportActionBar?.setDisplayHomeAsUpEnabled(false)
@@ -466,7 +490,7 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
                     // Use live container/window height and actual toolbar + tab bar heights
                     val currentScreenHeight = window.decorView.height.takeIf { it > 0 } ?: screenHeightPx
                     val toolbarHeight = findViewById<View>(R.id.toolbar)?.height?.takeIf { it > 0 } ?: (56 * density).toInt()
-                    val tabsHeight = tabLayout.height.takeIf { it > 0 } ?: (72 * density).toInt()
+                    val tabsHeight = bottomNav.height.takeIf { it > 0 } ?: (80 * density).toInt()
                     val maxPx = ((currentScreenHeight - toolbarHeight - tabsHeight) * PREVIEW_HEIGHT_MAX_PERCENT)
                         .toInt().coerceAtLeast(minPx)
                     previewHeightPx = newHeight.coerceIn(minPx, maxPx)

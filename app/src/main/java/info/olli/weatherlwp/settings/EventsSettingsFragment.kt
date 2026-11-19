@@ -12,7 +12,7 @@ import info.olli.weatherlwp.rendering.events.ManualEventSpawns
  * Events settings fragment - Essential toggles and navigation to sub-screens.
  * Individual event toggles are in EventsChooseFragment.
  */
-class EventsSettingsFragment : PreferenceFragmentCompat() {
+class EventsSettingsFragment : StyledPreferenceFragment() {
     
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         setPreferencesFromResource(R.xml.pref_events, rootKey)

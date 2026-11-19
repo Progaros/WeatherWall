@@ -1,17 +1,16 @@
 package info.olli.weatherlwp.settings
 
 import android.os.Bundle
-import androidx.appcompat.app.AlertDialog
 import androidx.core.content.edit
 import androidx.preference.Preference
-import androidx.preference.PreferenceFragmentCompat
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import info.olli.weatherlwp.R
 
 /**
  * System settings fragment - Essential toggles and navigation to sub-screens.
  * Detailed settings (simulation, about/debug) are in separate sub-fragments.
  */
-class SystemSettingsFragment : PreferenceFragmentCompat() {
+class SystemSettingsFragment : StyledPreferenceFragment() {
     
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         // Run migrations before loading preferences
@@ -26,7 +25,7 @@ class SystemSettingsFragment : PreferenceFragmentCompat() {
     }
 
     private fun showResetConfirmationDialog() {
-        AlertDialog.Builder(requireContext())
+        MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.reset_settings_title)
             .setMessage(R.string.reset_settings_message)
             .setPositiveButton(R.string.reset_settings_confirm) { _, _ ->

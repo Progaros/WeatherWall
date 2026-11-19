@@ -12,100 +12,104 @@
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
-            android:layout_height="?attr/actionBarSize"
-            android:background="?attr/colorPrimary"
+            android:layout_height="wrap_content"
+            android:minHeight="?attr/actionBarSize"
+            android:background="?attr/colorSurface"
             app:title="@string/app_name"
-            app:titleTextColor="@android:color/white"
-            app:navigationIcon="@null" />
+            app:titleTextColor="?attr/colorOnSurface"
+            app:navigationIconTint="?attr/colorOnSurface"
+            app:navigationIcon="@null">
 
-        <!-- Preview container with resize handle - wrapped in outer container for handle visibility -->
+            <ImageButton
+                android:id="@+id/btn_shuffle_seed"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_gravity="end|center_vertical"
+                android:layout_marginEnd="8dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/randomize_seed"
+                android:padding="8dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_dice"
+                app:tint="?attr/colorOnSurfaceVariant" />
+        </com.google.android.material.appbar.MaterialToolbar>
+
+        <!-- Live wallpaper preview container -->
         <FrameLayout
+            android:id="@+id/preview_container"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
-            
-            <FrameLayout
-                android:id="@+id/preview_container"
+            android:layout_height="190dp">
+
+            <SurfaceView
+                android:id="@+id/preview_surface"
                 android:layout_width="match_parent"
-                android:layout_height="180dp">
-                
-                <!-- Live Preview Strip -->
-                <SurfaceView
-                    android:id="@+id/preview_surface"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent" />
-                
-                <!-- Transparent draggable resize handle at bottom of preview -->
-                <View
-                    android:id="@+id/resize_handle"
-                    android:layout_width="match_parent"
-                    android:layout_height="32dp"
-                    android:layout_gravity="bottom"
-                    android:background="@android:color/transparent"
-                    android:clickable="true"
-                    android:focusable="true" />
-            </FrameLayout>
-            
-            <!-- Handle visual indicator OUTSIDE preview_container so it's not covered by SurfaceView -->
-            <View
-                android:id="@+id/handle_indicator"
-                android:layout_width="64dp"
-                android:layout_height="6dp"
-                android:layout_gravity="bottom|center_horizontal"
-                android:layout_marginBottom="6dp"
-                android:background="@drawable/handle_indicator"
-                android:elevation="8dp" />
+                android:layout_height="match_parent" />
         </FrameLayout>
 
-        <!-- ViewPager2 for tabbed settings (fills remaining space) -->
-        <androidx.viewpager2.widget.ViewPager2
-            android:id="@+id/view_pager"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1" />
-
-        <!-- Detail fragment container for sub-settings (hidden by default) -->
+        <!-- Rounded Material 3 settings sheet overlapping the bottom edge of the preview -->
         <FrameLayout
-            android:id="@+id/settings_detail_container"
+            android:id="@+id/settings_sheet"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:visibility="gone" />
+            android:layout_marginTop="-16dp"
+            android:background="@drawable/bg_settings_sheet"
+            android:elevation="6dp">
 
-        <!-- Tab Layout at bottom -->
-        <com.google.android.material.tabs.TabLayout
-            android:id="@+id/tab_layout"
+            <!-- Tactile drag handle bar for resizing the live preview -->
+            <FrameLayout
+                android:id="@+id/resize_handle"
+                android:layout_width="match_parent"
+                android:layout_height="28dp"
+                android:layout_gravity="top"
+                android:clickable="true"
+                android:focusable="true">
+
+                <View
+                    android:id="@+id/handle_indicator"
+                    android:layout_width="40dp"
+                    android:layout_height="4dp"
+                    android:layout_gravity="center"
+                    android:alpha="0.4"
+                    android:background="@drawable/handle_indicator" />
+            </FrameLayout>
+
+            <!-- ViewPager2 for tabbed settings (fills remaining space below handle) -->
+            <androidx.viewpager2.widget.ViewPager2
+                android:id="@+id/view_pager"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_marginTop="28dp" />
+
+            <!-- Detail fragment container for sub-settings (hidden by default) -->
+            <FrameLayout
+                android:id="@+id/settings_detail_container"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_marginTop="28dp"
+                android:visibility="gone" />
+        </FrameLayout>
+
+        <!-- Material 3 Bottom Navigation Bar -->
+        <com.google.android.material.bottomnavigation.BottomNavigationView
+            android:id="@+id/bottom_nav"
             android:layout_width="match_parent"
-            android:layout_height="72dp"
-            android:minHeight="72dp"
-            android:background="?attr/colorPrimary"
-            app:tabTextColor="@android:color/white"
-            app:tabSelectedTextColor="@android:color/white"
-            app:tabIndicatorColor="@android:color/white"
-            app:tabMode="fixed"
-            app:tabGravity="fill"
-            app:tabMinWidth="0dp"
-            app:tabPaddingTop="16dp"
-            app:tabPaddingBottom="16dp" />
+            android:layout_height="wrap_content"
+            app:menu="@menu/bottom_nav_menu"
+            app:labelVisibilityMode="labeled" />
 
     </LinearLayout>
 
     <!-- Extended FAB to apply wallpaper - shown only when not applied -->
-    <!-- Positioned above tab bar: 72dp (tab height) + 16dp margin = 88dp from bottom -->
     <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
         android:id="@+id/fab_apply"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="88dp"
+        android:layout_marginBottom="92dp"
         android:text="@string/set_wallpaper"
-        android:textAllCaps="true"
         android:contentDescription="@string/apply_wallpaper"
         android:visibility="gone"
-        app:icon="@android:drawable/ic_menu_set_as"
-        app:backgroundTint="?attr/colorPrimary"
-        android:textColor="@android:color/white"
-        app:iconTint="@android:color/white" />
-    
-        
+        app:icon="@drawable/ic_wallpaper" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

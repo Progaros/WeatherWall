@@ -9,7 +9,7 @@ import info.olli.weatherlwp.R
 /**
  * Effects settings fragment - Wind, Parallax, Clouds
  */
-class EffectsSettingsFragment : PreferenceFragmentCompat() {
+class EffectsSettingsFragment : StyledPreferenceFragment() {
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         setPreferencesFromResource(R.xml.pref_effects, rootKey)
         migrateParallaxStrengthPreference()

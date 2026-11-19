@@ -1,14 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- App Theme based on MaterialComponents -->
-    <style name="Theme.WeatherWall" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="colorPrimary">#1976D2</item>
-        <item name="colorPrimaryDark">#1565C0</item>
-        <item name="colorPrimaryVariant">#1565C0</item>
-        <item name="colorOnPrimary">#FFFFFF</item>
-        <item name="colorSecondary">#4fc3f7</item>
-        <item name="colorSecondaryVariant">#03A9F4</item>
-        <item name="colorOnSecondary">#000000</item>
-        <item name="android:statusBarColor">?attr/colorPrimaryDark</item>
+    <!-- Material 3 DayNight Theme with dynamic color support on Android 12+ -->
+    <style name="Theme.WeatherWall" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/md_primary</item>
+        <item name="colorOnPrimary">@color/md_on_primary</item>
+        <item name="colorPrimaryContainer">@color/md_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/md_on_primary_container</item>
+        <item name="colorSecondary">@color/md_secondary</item>
+        <item name="colorOnSecondary">@color/md_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/md_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/md_on_secondary_container</item>
+        <item name="colorSurface">@color/md_surface</item>
+        <item name="colorSurfaceContainerLow">@color/md_surface_container_low</item>
+        <item name="colorSurfaceContainer">@color/md_surface_container</item>
+        <item name="colorSurfaceContainerHigh">@color/md_surface_container_high</item>
+        <item name="colorOnSurface">@color/md_on_surface</item>
+        <item name="colorOnSurfaceVariant">@color/md_on_surface_variant</item>
+        <item name="colorOutlineVariant">@color/md_outline_variant</item>
+        <item name="android:colorBackground">@color/md_surface</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="preferenceTheme">@style/ThemeOverlay.WeatherWall.Preference</item>
+    </style>
+
+    <style name="ThemeOverlay.WeatherWall.Preference" parent="PreferenceThemeOverlay">
+        <item name="switchPreferenceCompatStyle">@style/Widget.WeatherWall.SwitchPreferenceCompat</item>
+        <item name="preferenceCategoryTitleTextColor">?attr/colorPrimary</item>
+    </style>
+
+    <style name="Widget.WeatherWall.SwitchPreferenceCompat" parent="Preference.SwitchPreferenceCompat.Material">
+        <item name="android:widgetLayout">@layout/pref_widget_material_switch</item>
     </style>
 </resources>

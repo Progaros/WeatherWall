@@ -12,7 +12,7 @@ import info.olli.weatherlwp.rendering.events.ManualEventSpawns
  * Sub-screen for choosing which event types are enabled.
  * Includes spawn button handlers for each SpawnSwitchPreference.
  */
-class EventsChooseFragment : PreferenceFragmentCompat() {
+class EventsChooseFragment : StyledPreferenceFragment() {
     
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         setPreferencesFromResource(R.xml.pref_events_choose, rootKey)

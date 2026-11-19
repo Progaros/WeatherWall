@@ -7,7 +7,7 @@ import info.olli.weatherlwp.R
 /**
  * Scene settings fragment - Mountains, Hills, Trees
  */
-class SceneSettingsFragment : PreferenceFragmentCompat() {
+class SceneSettingsFragment : StyledPreferenceFragment() {
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         setPreferencesFromResource(R.xml.pref_scene, rootKey)
     }

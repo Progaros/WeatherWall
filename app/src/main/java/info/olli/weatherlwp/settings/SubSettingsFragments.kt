@@ -12,7 +12,7 @@ import java.util.Locale
  * MainActivity.onPreferenceStartFragment forwards `pref.extras` as fragment arguments.
  * Fragments with custom logic (simulation, events choose, system about) are separate classes.
  */
-class XmlPreferenceFragment : PreferenceFragmentCompat() {
+class XmlPreferenceFragment : StyledPreferenceFragment() {
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         val name = arguments?.getString(ARG_XML)
         val resId = XML_BY_NAME[name]
@@ -43,7 +43,7 @@ class XmlPreferenceFragment : PreferenceFragmentCompat() {
     }
 }
 
-class SystemSimulationFragment : PreferenceFragmentCompat() {
+class SystemSimulationFragment : StyledPreferenceFragment() {
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         setPreferencesFromResource(R.xml.pref_system_simulation, rootKey)
         updateWeatherDataDisplay()
