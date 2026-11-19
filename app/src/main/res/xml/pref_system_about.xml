@@ -2,60 +2,60 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <PreferenceCategory android:title="Version">
+    <PreferenceCategory android:title="@string/pref_system_about_cat_2_title">
         <Preference
             android:key="pref_version"
-            android:title="Version"
+            android:title="@string/pref_system_about_cat_2_title"
             android:selectable="true" />
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="Weather Data">
+    <PreferenceCategory android:title="@string/pref_system_about_cat_3_title">
         <Preference
             android:key="pref_check_breezy"
-            android:title="Check Connection"
-            android:summary="Test Breezy Weather connection" />
+            android:title="@string/pref_check_breezy_title"
+            android:summary="@string/pref_check_breezy_summary" />
 
         <Preference
             android:key="pref_copy_weather_data"
-            android:title="Copy Weather Data"
-            android:summary="Copy raw JSON to clipboard for debugging" />
+            android:title="@string/pref_copy_weather_data_title"
+            android:summary="@string/pref_copy_weather_data_summary" />
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="Debug">
+    <PreferenceCategory android:title="@string/pref_system_about_cat_4_title">
         <SwitchPreferenceCompat
             android:key="pref_debug_logging"
-            android:title="Debug Logging"
-            android:summary="Enable tracing (copies log when disabled)"
+            android:title="@string/pref_debug_logging_title"
+            android:summary="@string/pref_debug_logging_summary"
             android:defaultValue="false" />
 
         <SwitchPreferenceCompat
             android:key="pref_debug_frame_timing"
-            android:title="Frame Timing"
-            android:summary="Log slow frames (&gt;16ms) for performance analysis"
+            android:title="@string/pref_debug_frame_timing_title"
+            android:summary="@string/pref_debug_frame_timing_summary"
             android:defaultValue="false" />
 
         <info.olli.weatherlwp.settings.DebugOverlayPreference
             android:key="pref_debug_overlay_enabled"
-            android:title="🐞 Debug Overlay"
-            android:summary="Show FPS, frame time, and debug info on screen"
+            android:title="@string/pref_debug_overlay_enabled_title"
+            android:summary="@string/pref_debug_overlay_enabled_summary"
             android:defaultValue="false" />
 
         <Preference
             android:key="pref_copy_crash_log"
-            android:title="Copy Last Crash Log"
-            android:summary="Copy the most recent crash report to clipboard" />
+            android:title="@string/pref_copy_crash_log_title"
+            android:summary="@string/pref_copy_crash_log_summary" />
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="Actions">
+    <PreferenceCategory android:title="@string/pref_system_about_cat_5_title">
         <Preference
             android:key="pref_copy_settings"
-            android:title="Copy All Settings"
-            android:summary="Copy every preference value to clipboard" />
+            android:title="@string/pref_copy_settings_title"
+            android:summary="@string/pref_copy_settings_summary" />
 
         <Preference
             android:key="pref_preview"
-            android:title="Preview Wallpaper"
-            android:summary="Open wallpaper preview" />
+            android:title="@string/pref_preview_title"
+            android:summary="@string/pref_preview_summary" />
     </PreferenceCategory>
 
 </PreferenceScreen>

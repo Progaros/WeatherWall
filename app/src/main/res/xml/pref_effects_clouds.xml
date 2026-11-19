@@ -2,11 +2,11 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <PreferenceCategory android:title="Cloud Appearance">
+    <PreferenceCategory android:title="@string/pref_effects_clouds_cat_2_title">
         <SeekBarPreference
             android:key="pref_cloud_density"
-            android:title="Cloud Fluffiness"
-            android:summary="Density per cloud (50=thin, 100=normal, 300=fluffy)"
+            android:title="@string/pref_cloud_density_title"
+            android:summary="@string/pref_cloud_density_summary"
             android:defaultValue="120"
             android:max="300"
             app:min="50"
@@ -15,8 +15,8 @@
 
         <SeekBarPreference
             android:key="pref_cloud_stretch"
-            android:title="Cloud Shape"
-            android:summary="Horizontal stretch (100=round, 400=wispy)"
+            android:title="@string/pref_cloud_stretch_title"
+            android:summary="@string/pref_cloud_stretch_summary"
             android:defaultValue="300"
             android:max="500"
             app:min="50"
@@ -25,8 +25,8 @@
 
         <SeekBarPreference
             android:key="pref_cloud_opacity"
-            android:title="Cloud Opacity"
-            android:summary="Transparency (10=faint, 40=normal, 100=solid)"
+            android:title="@string/pref_cloud_opacity_title"
+            android:summary="@string/pref_cloud_opacity_summary"
             android:defaultValue="68"
             android:max="100"
             app:min="10"
@@ -35,8 +35,8 @@
 
         <SeekBarPreference
             android:key="pref_cloud_speed"
-            android:title="Cloud Speed"
-            android:summary="Movement speed (0=frozen, 50=normal, 100=fast)"
+            android:title="@string/pref_cloud_speed_title"
+            android:summary="@string/pref_cloud_speed_summary"
             android:defaultValue="45"
             android:max="100"
             app:min="0"

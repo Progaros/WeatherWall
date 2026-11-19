@@ -2,11 +2,11 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <PreferenceCategory android:title="Tree Types">
+    <PreferenceCategory android:title="@string/pref_scene_trees_cat_2_title">
         <SeekBarPreference
             android:key="pref_leaf_tree_ratio"
-            android:title="Leaf / Needle Ratio"
-            android:summary="Percentage of deciduous (leaf) vs conifer trees (0=all needle, 100=all leaf)"
+            android:title="@string/pref_leaf_tree_ratio_title"
+            android:summary="@string/pref_leaf_tree_ratio_summary"
             android:defaultValue="50"
             android:max="100"
             app:min="0"
@@ -14,11 +14,11 @@
             app:updatesContinuously="true" />
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="Tree Placement">
+    <PreferenceCategory android:title="@string/pref_scene_trees_cat_3_title">
         <SeekBarPreference
             android:key="pref_tree_spread"
-            android:title="Tree Spread"
-            android:summary="Placement range (0=peaks, 100=full hills)"
+            android:title="@string/pref_tree_spread_title"
+            android:summary="@string/pref_tree_spread_summary"
             android:defaultValue="75"
             android:max="100"
             app:min="0"
@@ -27,8 +27,8 @@
 
         <SeekBarPreference
             android:key="pref_tree_sparsity"
-            android:title="Tree Gaps"
-            android:summary="Gap size (0=uniform, 25=natural, 80=sparse)"
+            android:title="@string/pref_tree_sparsity_title"
+            android:summary="@string/pref_tree_sparsity_summary"
             android:defaultValue="25"
             android:max="100"
             app:min="0"
@@ -36,11 +36,11 @@
             app:updatesContinuously="true" />
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="Tree Appearance">
+    <PreferenceCategory android:title="@string/pref_scene_trees_cat_4_title">
         <SeekBarPreference
             android:key="pref_tree_size_randomness"
-            android:title="Size Variation"
-            android:summary="Tree size variety (0=uniform, 100=varied)"
+            android:title="@string/pref_tree_size_randomness_title"
+            android:summary="@string/pref_tree_size_randomness_summary"
             android:defaultValue="20"
             android:max="100"
             app:min="0"
@@ -49,8 +49,8 @@
 
         <SeekBarPreference
             android:key="pref_tree_size"
-            android:title="Tree Size"
-            android:summary="Overall scale (50=small, 100=normal, 200=tall)"
+            android:title="@string/pref_tree_size_title"
+            android:summary="@string/pref_tree_size_summary"
             android:defaultValue="100"
             android:max="200"
             app:min="25"
@@ -59,8 +59,8 @@
 
         <SeekBarPreference
             android:key="pref_tree_width"
-            android:title="Tree Width"
-            android:summary="Width ratio (50=thin, 100=normal, 200=wide)"
+            android:title="@string/pref_tree_width_title"
+            android:summary="@string/pref_tree_width_summary"
             android:defaultValue="100"
             android:max="200"
             app:min="20"
@@ -69,8 +69,8 @@
 
         <SeekBarPreference
             android:key="pref_tree_segments"
-            android:title="Tree Segments"
-            android:summary="Tiers per tree (1=simple, 5=detailed)"
+            android:title="@string/pref_tree_segments_title"
+            android:summary="@string/pref_tree_segments_summary"
             android:defaultValue="1"
             android:max="5"
             app:min="1"
@@ -79,8 +79,8 @@
 
         <SeekBarPreference
             android:key="pref_tree_color_variation"
-            android:title="Color Variation"
-            android:summary="Color diversity (0=uniform, 100=varied)"
+            android:title="@string/pref_tree_color_variation_title"
+            android:summary="@string/pref_tree_color_variation_summary"
             android:defaultValue="50"
             android:max="100"
             app:min="0"

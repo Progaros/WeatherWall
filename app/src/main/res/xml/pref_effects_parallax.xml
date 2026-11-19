@@ -2,19 +2,19 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <PreferenceCategory android:title="Sensor &amp; Input">
+    <PreferenceCategory android:title="@string/pref_effects_parallax_cat_2_title">
         <ListPreference
             android:key="pref_parallax_sensor_mode"
-            android:title="Sensor Mode"
-            android:summary="rotation_vector=robust (default), gyroscope=smooth"
+            android:title="@string/pref_parallax_sensor_mode_title"
+            android:summary="@string/pref_parallax_sensor_mode_summary"
             android:defaultValue="gyroscope"
             android:entries="@array/parallax_sensor_mode_entries"
             android:entryValues="@array/parallax_sensor_mode_values" />
 
         <SeekBarPreference
             android:key="pref_parallax_strength"
-            android:title="Tilt Sensitivity"
-            android:summary="Response to phone tilt (1%=subtle, 100%=high)"
+            android:title="@string/pref_parallax_strength_title"
+            android:summary="@string/pref_parallax_strength_summary"
             android:defaultValue="16"
             android:max="100"
             app:min="1"
@@ -23,8 +23,8 @@
 
         <SeekBarPreference
             android:key="pref_parallax_max_offset"
-            android:title="Max Movement"
-            android:summary="Scene shift as % of screen height (2-40%)"
+            android:title="@string/pref_parallax_max_offset_title"
+            android:summary="@string/pref_parallax_max_offset_summary"
             android:defaultValue="30"
             android:max="40"
             app:min="2"
@@ -33,8 +33,8 @@
 
         <SeekBarPreference
             android:key="pref_parallax_aspect_ratio"
-            android:title="H/V Ratio"
-            android:summary="Horizontal vs vertical movement (50=less H, 100=equal, 150=more H)"
+            android:title="@string/pref_parallax_aspect_ratio_title"
+            android:summary="@string/pref_parallax_aspect_ratio_summary"
             android:defaultValue="100"
             android:max="150"
             app:min="50"
@@ -43,22 +43,22 @@
 
         <SwitchPreferenceCompat
             android:key="pref_parallax_invert_x"
-            android:title="Invert Horizontal"
-            android:summary="Reverse left/right parallax direction"
+            android:title="@string/pref_parallax_invert_x_title"
+            android:summary="@string/pref_parallax_invert_x_summary"
             android:defaultValue="false" />
 
         <SwitchPreferenceCompat
             android:key="pref_parallax_invert_y"
-            android:title="Invert Vertical"
-            android:summary="Reverse up/down parallax direction"
+            android:title="@string/pref_parallax_invert_y_title"
+            android:summary="@string/pref_parallax_invert_y_summary"
             android:defaultValue="true" />
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="Movement Feel">
+    <PreferenceCategory android:title="@string/pref_effects_parallax_cat_3_title">
         <SeekBarPreference
             android:key="pref_parallax_return_speed"
-            android:title="Return Speed"
-            android:summary="Recenter speed (0=stay, 50=~0.3s, 100=instant)"
+            android:title="@string/pref_parallax_return_speed_title"
+            android:summary="@string/pref_parallax_return_speed_summary"
             android:defaultValue="47"
             android:max="100"
             app:min="0"
@@ -67,8 +67,8 @@
 
         <SeekBarPreference
             android:key="pref_parallax_smoothing"
-            android:title="Smoothing"
-            android:summary="Movement smoothness (0=instant, 1=responsive, 100=floaty)"
+            android:title="@string/pref_parallax_smoothing_title"
+            android:summary="@string/pref_parallax_smoothing_summary"
             android:defaultValue="1"
             android:max="100"
             app:min="0"
@@ -77,8 +77,8 @@
 
         <SeekBarPreference
             android:key="pref_parallax_edge_easing"
-            android:title="Edge Easing"
-            android:summary="Slowdown near edges (0=linear, 50=soft, 100=center-only)"
+            android:title="@string/pref_parallax_edge_easing_title"
+            android:summary="@string/pref_parallax_edge_easing_summary"
             android:defaultValue="10"
             android:max="100"
             app:min="0"
@@ -87,16 +87,16 @@
 
         <SwitchPreferenceCompat
             android:key="pref_parallax_return_unlocked"
-            android:title="Fast Return"
-            android:summary="Return to center ignores edge easing (always fast)"
+            android:title="@string/pref_parallax_return_unlocked_title"
+            android:summary="@string/pref_parallax_return_unlocked_summary"
             android:defaultValue="true" />
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="Depth">
+    <PreferenceCategory android:title="@string/pref_effects_parallax_cat_4_title">
         <SeekBarPreference
             android:key="pref_parallax_depth"
-            android:title="Depth Effect"
-            android:summary="Layer separation (0=flat, 50=normal, 100=max 3D)"
+            android:title="@string/pref_parallax_depth_title"
+            android:summary="@string/pref_parallax_depth_summary"
             android:defaultValue="70"
             android:max="100"
             app:min="0"
@@ -105,8 +105,8 @@
 
         <SeekBarPreference
             android:key="pref_parallax_perspective"
-            android:title="Perspective"
-            android:summary="0=foreground moves (head tilts), 100=background moves (window shifts)"
+            android:title="@string/pref_parallax_perspective_title"
+            android:summary="@string/pref_parallax_perspective_summary"
             android:defaultValue="100"
             android:max="100"
             app:min="0"

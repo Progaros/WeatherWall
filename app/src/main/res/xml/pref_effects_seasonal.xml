@@ -2,17 +2,17 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <PreferenceCategory android:title="Season Transitions">
+    <PreferenceCategory android:title="@string/pref_effects_seasonal_cat_2_title">
         <SwitchPreferenceCompat
             android:key="pref_weather_snow_enabled"
-            android:title="Weather-Driven Snow"
-            android:summary="Snow accumulates based on actual weather history"
+            android:title="@string/pref_weather_snow_enabled_title"
+            android:summary="@string/pref_weather_snow_enabled_summary"
             android:defaultValue="true" />
 
         <SeekBarPreference
             android:key="pref_season_transition_days"
-            android:title="Transition Duration"
-            android:summary="Days for gradual season change (0=instant, 30=slow)"
+            android:title="@string/pref_season_transition_days_title"
+            android:summary="@string/pref_season_transition_days_summary"
             android:defaultValue="14"
             android:max="30"
             app:min="0"
@@ -20,17 +20,17 @@
             app:updatesContinuously="true" />
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="Spring">
+    <PreferenceCategory android:title="@string/pref_effects_seasonal_cat_3_title">
         <SwitchPreferenceCompat
             android:key="pref_spring_flowers"
-            android:title="Spring Flowers"
-            android:summary="Colorful flower dots on hills in spring"
+            android:title="@string/pref_spring_flowers_title"
+            android:summary="@string/pref_spring_flowers_summary"
             android:defaultValue="true" />
 
         <SeekBarPreference
             android:key="pref_spring_flower_density"
-            android:title="Flower Density"
-            android:summary="Total flowers across all hills (0=few, 1000=many)"
+            android:title="@string/pref_spring_flower_density_title"
+            android:summary="@string/pref_spring_flower_density_summary"
             android:defaultValue="500"
             android:max="1000"
             app:min="0"
@@ -40,8 +40,8 @@
 
         <SeekBarPreference
             android:key="pref_spring_flower_spread"
-            android:title="Flower Spread"
-            android:summary="How far down hills flowers spread (0=on line, 100=full)"
+            android:title="@string/pref_spring_flower_spread_title"
+            android:summary="@string/pref_spring_flower_spread_summary"
             android:defaultValue="50"
             android:max="100"
             app:min="0"
@@ -50,17 +50,17 @@
             android:dependency="pref_spring_flowers" />
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="Bushes">
+    <PreferenceCategory android:title="@string/pref_effects_seasonal_cat_4_title">
         <SwitchPreferenceCompat
             android:key="pref_bushes_enabled"
-            android:title="Bushes"
-            android:summary="Small round bushes scattered on hills"
+            android:title="@string/pref_effects_seasonal_cat_4_title"
+            android:summary="@string/pref_bushes_enabled_summary"
             android:defaultValue="true" />
 
         <SeekBarPreference
             android:key="pref_bush_density"
-            android:title="Bush Density"
-            android:summary="How many bushes (0=few, 100=many)"
+            android:title="@string/pref_bush_density_title"
+            android:summary="@string/pref_bush_density_summary"
             android:defaultValue="30"
             android:max="100"
             app:min="0"
@@ -70,8 +70,8 @@
 
         <SeekBarPreference
             android:key="pref_bush_size"
-            android:title="Bush Size"
-            android:summary="Size scale for bushes (50=small, 200=large)"
+            android:title="@string/pref_bush_size_title"
+            android:summary="@string/pref_bush_size_summary"
             android:defaultValue="100"
             android:max="200"
             app:min="50"
@@ -81,15 +81,15 @@
 
         <SwitchPreferenceCompat
             android:key="pref_berries_enabled"
-            android:title="Berries on Bushes"
-            android:summary="Small berry clusters on bushes (summer)"
+            android:title="@string/pref_berries_enabled_title"
+            android:summary="@string/pref_berries_enabled_summary"
             android:defaultValue="true"
             android:dependency="pref_bushes_enabled" />
 
         <SeekBarPreference
             android:key="pref_berry_density"
-            android:title="Berry Density"
-            android:summary="Probability of berries per bush (0=rare, 100=many)"
+            android:title="@string/pref_berry_density_title"
+            android:summary="@string/pref_berry_density_summary"
             android:defaultValue="30"
             android:max="100"
             app:min="0"
@@ -98,17 +98,17 @@
             android:dependency="pref_berries_enabled" />
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="Autumn">
+    <PreferenceCategory android:title="@string/pref_effects_seasonal_cat_5_title">
         <SwitchPreferenceCompat
             android:key="pref_autumn_grass"
-            android:title="Autumn Grass Color"
-            android:summary="Browner grass color in autumn"
+            android:title="@string/pref_autumn_grass_title"
+            android:summary="@string/pref_autumn_grass_summary"
             android:defaultValue="true" />
 
         <SeekBarPreference
             android:key="pref_autumn_grass_intensity"
-            android:title="Autumn Intensity"
-            android:summary="How brown the grass becomes (0=subtle, 100=very brown)"
+            android:title="@string/pref_autumn_grass_intensity_title"
+            android:summary="@string/pref_autumn_grass_intensity_summary"
             android:defaultValue="50"
             android:max="100"
             app:min="0"
@@ -118,14 +118,14 @@
 
         <SwitchPreferenceCompat
             android:key="pref_fallen_leaves_enabled"
-            android:title="Fallen Leaves"
-            android:summary="Colorful fallen leaves scattered on hills"
+            android:title="@string/pref_fallen_leaves_enabled_title"
+            android:summary="@string/pref_fallen_leaves_enabled_summary"
             android:defaultValue="true" />
 
         <SeekBarPreference
             android:key="pref_fallen_leaves_density"
-            android:title="Leaf Density"
-            android:summary="How many fallen leaves (0=few, 100=many)"
+            android:title="@string/pref_fallen_leaves_density_title"
+            android:summary="@string/pref_fallen_leaves_density_summary"
             android:defaultValue="50"
             android:max="100"
             app:min="0"
@@ -135,14 +135,14 @@
 
         <SwitchPreferenceCompat
             android:key="pref_mushrooms_enabled"
-            android:title="Mushrooms"
-            android:summary="Small mushrooms on hills (summer + autumn)"
+            android:title="@string/pref_mushrooms_enabled_title"
+            android:summary="@string/pref_mushrooms_enabled_summary"
             android:defaultValue="true" />
 
         <SeekBarPreference
             android:key="pref_mushroom_density"
-            android:title="Mushroom Density"
-            android:summary="How many mushrooms appear (0=few, 100=many)"
+            android:title="@string/pref_mushroom_density_title"
+            android:summary="@string/pref_mushroom_density_summary"
             android:defaultValue="12"
             android:max="100"
             app:min="0"
@@ -152,14 +152,14 @@
 
         <SwitchPreferenceCompat
             android:key="pref_pinecones_enabled"
-            android:title="Pinecones"
-            android:summary="Pinecones hanging from trees (autumn + winter)"
+            android:title="@string/pref_pinecones_enabled_title"
+            android:summary="@string/pref_pinecones_enabled_summary"
             android:defaultValue="true" />
 
         <SeekBarPreference
             android:key="pref_pinecone_density"
-            android:title="Pinecone Density"
-            android:summary="Probability of pinecones per tree (0=rare, 100=many)"
+            android:title="@string/pref_pinecone_density_title"
+            android:summary="@string/pref_pinecone_density_summary"
             android:defaultValue="30"
             android:max="100"
             app:min="0"
@@ -168,17 +168,17 @@
             android:dependency="pref_pinecones_enabled" />
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="Winter">
+    <PreferenceCategory android:title="@string/pref_effects_seasonal_cat_6_title">
         <SwitchPreferenceCompat
             android:key="pref_winter_snow_hills"
-            android:title="Winter Snow Patches"
-            android:summary="Snow patches on hill tops in winter"
+            android:title="@string/pref_winter_snow_hills_title"
+            android:summary="@string/pref_winter_snow_hills_summary"
             android:defaultValue="true" />
 
         <SeekBarPreference
             android:key="pref_winter_snow_coverage"
-            android:title="Snow Coverage"
-            android:summary="How much of hill tops are covered (0=light, 100=heavy)"
+            android:title="@string/pref_winter_snow_coverage_title"
+            android:summary="@string/pref_winter_snow_coverage_summary"
             android:defaultValue="25"
             android:max="100"
             app:min="0"
@@ -188,8 +188,8 @@
 
         <SwitchPreferenceCompat
             android:key="pref_frost_enabled"
-            android:title="Frost Effect"
-            android:summary="Subtle frost shimmer along hill edges"
+            android:title="@string/pref_frost_enabled_title"
+            android:summary="@string/pref_frost_enabled_summary"
             android:defaultValue="true" />
     </PreferenceCategory>
 

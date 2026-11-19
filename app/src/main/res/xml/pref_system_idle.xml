@@ -2,11 +2,11 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <PreferenceCategory android:title="Idle Mode">
+    <PreferenceCategory android:title="@string/pref_idle_mode_enabled_title">
         <SeekBarPreference
             android:key="pref_idle_fps"
-            android:title="Idle FPS"
-            android:summary="Frame rate when idle (5-20)"
+            android:title="@string/pref_idle_fps_title"
+            android:summary="@string/pref_idle_fps_summary"
             android:defaultValue="20"
             android:max="20"
             app:min="5"
@@ -15,8 +15,8 @@
 
         <ListPreference
             android:key="pref_idle_timeout"
-            android:title="Idle Timeout"
-            android:summary="Time before entering idle mode"
+            android:title="@string/pref_idle_timeout_title"
+            android:summary="@string/pref_idle_timeout_summary"
             android:defaultValue="5"
             android:entries="@array/idle_timeout_entries"
             android:entryValues="@array/idle_timeout_values" />

@@ -229,6 +229,14 @@ class SeasonalEventsTest {
         assertEquals("NEW_YEAR", getSeasonByDateHelper(Calendar.JANUARY, 2))
     }
 
+    @Test
+    fun `valleyMistFactor is zero in normal air and rises with low visibility or high humidity`() {
+        assertEquals(0f, info.olli.weatherlwp.rendering.MountainLayer.valleyMistFactor(1.0f, 0.5f), 0.001f)
+        assertEquals(0f, info.olli.weatherlwp.rendering.MountainLayer.valleyMistFactor(0.75f, 0.75f), 0.001f)
+        assertTrue(info.olli.weatherlwp.rendering.MountainLayer.valleyMistFactor(0.2f, 0.5f) > 0.6f)
+        assertTrue(info.olli.weatherlwp.rendering.MountainLayer.valleyMistFactor(1.0f, 0.95f) > 0.3f)
+    }
+
     // Helper functions - replicate getSeasonByDate() logic using companion methods
     // to avoid instantiating SeasonalEvents (requires Android context)
 

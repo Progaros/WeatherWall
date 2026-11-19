@@ -3,134 +3,134 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <!-- Sky Events -->
-    <PreferenceCategory android:title="Sky Events">
+    <PreferenceCategory android:title="@string/pref_events_choose_cat_2_title">
         <info.olli.weatherlwp.settings.SpawnSwitchPreference
             android:key="pref_event_airplane"
-            android:title="Airplanes"
-            android:summary="Planes with contrails"
+            android:title="@string/pref_event_airplane_title"
+            android:summary="@string/pref_event_airplane_summary"
             android:defaultValue="true" />
 
         <info.olli.weatherlwp.settings.SpawnSwitchPreference
             android:key="pref_event_birds"
-            android:title="Bird Flocks"
-            android:summary="V-formation flocks"
+            android:title="@string/pref_event_birds_title"
+            android:summary="@string/pref_event_birds_summary"
             android:defaultValue="true" />
 
         <info.olli.weatherlwp.settings.SpawnSwitchPreference
             android:key="pref_event_eagle"
-            android:title="Eagles"
-            android:summary="Soaring silhouettes"
+            android:title="@string/pref_event_eagle_title"
+            android:summary="@string/pref_event_eagle_summary"
             android:defaultValue="true" />
 
         <info.olli.weatherlwp.settings.SpawnSwitchPreference
             android:key="pref_event_owl"
-            android:title="Owls"
-            android:summary="Night-only silhouettes"
+            android:title="@string/pref_event_owl_title"
+            android:summary="@string/pref_event_owl_summary"
             android:defaultValue="true" />
 
         <info.olli.weatherlwp.settings.SpawnSwitchPreference
             android:key="pref_event_balloon"
-            android:title="Hot Air Balloons"
-            android:summary="Drifting in good weather"
+            android:title="@string/pref_event_balloon_title"
+            android:summary="@string/pref_event_balloon_summary"
             android:defaultValue="true" />
 
         <info.olli.weatherlwp.settings.SpawnSwitchPreference
             android:key="pref_event_shootingstar"
-            android:title="Shooting Stars"
-            android:summary="Clear night skies"
+            android:title="@string/pref_event_shootingstar_title"
+            android:summary="@string/pref_event_shootingstar_summary"
             android:defaultValue="true" />
 
         <info.olli.weatherlwp.settings.SpawnSwitchPreference
             android:key="pref_event_perseids"
-            android:title="Meteor Showers"
-            android:summary="Perseids (Aug), Geminids (Dec) and Quadrantids (Jan) at their real activity; spawn shows the current shower"
+            android:title="@string/pref_event_perseids_title"
+            android:summary="@string/pref_event_perseids_summary"
             android:defaultValue="true" />
 
         <info.olli.weatherlwp.settings.SpawnSwitchPreference
             android:key="pref_event_starfall"
-            android:title="Falling Stars"
-            android:summary="Background stars drop and burn out, new ones slowly appear (clear nights)"
+            android:title="@string/pref_event_starfall_title"
+            android:summary="@string/pref_event_starfall_summary"
             android:defaultValue="true" />
 
         <info.olli.weatherlwp.settings.SpawnSwitchPreference
             android:key="pref_event_alien"
-            android:title="UFOs"
-            android:summary="Very rare night sightings"
+            android:title="@string/pref_event_alien_title"
+            android:summary="@string/pref_event_alien_summary"
             android:defaultValue="true" />
     </PreferenceCategory>
 
     <!-- Ground Events -->
-    <PreferenceCategory android:title="Ground Events">
+    <PreferenceCategory android:title="@string/pref_events_choose_cat_3_title">
         <info.olli.weatherlwp.settings.SpawnSwitchPreference
             android:key="pref_event_butterfly"
-            android:title="Butterflies"
-            android:summary="Spring &amp; Summer only"
+            android:title="@string/pref_event_butterfly_title"
+            android:summary="@string/pref_event_butterfly_summary"
             android:defaultValue="true" />
 
         <info.olli.weatherlwp.settings.SpawnSwitchPreference
             android:key="pref_event_dragonfly"
-            android:title="Dragonflies"
-            android:summary="Summer only - hovering insects"
+            android:title="@string/pref_event_dragonfly_title"
+            android:summary="@string/pref_event_dragonfly_summary"
             android:defaultValue="true" />
 
         <info.olli.weatherlwp.settings.SpawnSwitchPreference
             android:key="pref_event_rabbit"
-            android:title="Rabbits"
-            android:summary="Hopping across terrain"
+            android:title="@string/pref_event_rabbit_title"
+            android:summary="@string/pref_event_rabbit_summary"
             android:defaultValue="true" />
 
         <info.olli.weatherlwp.settings.SpawnSwitchPreference
             android:key="pref_event_fox"
-            android:title="Foxes"
-            android:summary="Walking through hills"
+            android:title="@string/pref_event_fox_title"
+            android:summary="@string/pref_event_fox_summary"
             android:defaultValue="true" />
 
         <info.olli.weatherlwp.settings.SpawnSwitchPreference
             android:key="pref_event_squirrel"
-            android:title="Squirrels"
-            android:summary="Autumn mostly - gathering nuts"
+            android:title="@string/pref_event_squirrel_title"
+            android:summary="@string/pref_event_squirrel_summary"
             android:defaultValue="true" />
 
         <info.olli.weatherlwp.settings.SpawnSwitchPreference
             android:key="pref_event_fireflies"
-            android:title="Fireflies"
-            android:summary="Summer nights only"
+            android:title="@string/pref_event_fireflies_title"
+            android:summary="@string/pref_event_fireflies_summary"
             android:defaultValue="true" />
 
         <info.olli.weatherlwp.settings.SpawnSwitchPreference
             android:key="pref_event_snowflake"
-            android:title="Snowflakes"
-            android:summary="Winter decorative flakes (non-weather)"
+            android:title="@string/pref_event_snowflake_title"
+            android:summary="@string/pref_event_snowflake_summary"
             android:defaultValue="true" />
 
         <info.olli.weatherlwp.settings.SpawnSwitchPreference
             android:key="pref_event_bat"
-            android:title="Bats"
-            android:summary="Night flyers - chaotic movement"
+            android:title="@string/pref_event_bat_title"
+            android:summary="@string/pref_event_bat_summary"
             android:defaultValue="true" />
 
         <info.olli.weatherlwp.settings.SpawnSwitchPreference
             android:key="pref_event_deer"
-            android:title="Deer"
-            android:summary="Autumn/Winter - grazing and walking"
+            android:title="@string/pref_event_deer_title"
+            android:summary="@string/pref_event_deer_summary"
             android:defaultValue="true" />
 
         <info.olli.weatherlwp.settings.SpawnSwitchPreference
             android:key="pref_event_fish"
-            android:title="Fish"
-            android:summary="Fish jumping out of water"
+            android:title="@string/pref_event_fish_title"
+            android:summary="@string/pref_event_fish_summary"
             android:defaultValue="true" />
 
         <info.olli.weatherlwp.settings.SpawnSwitchPreference
             android:key="pref_event_duck"
-            android:title="Ducks"
-            android:summary="Ducks waddling across terrain"
+            android:title="@string/pref_event_duck_title"
+            android:summary="@string/pref_event_duck_summary"
             android:defaultValue="true" />
 
         <info.olli.weatherlwp.settings.SpawnSwitchPreference
             android:key="pref_event_frog"
-            android:title="Frogs"
-            android:summary="Spring/Summer - sitting and hopping at dusk"
+            android:title="@string/pref_event_frog_title"
+            android:summary="@string/pref_event_frog_summary"
             android:defaultValue="true" />
     </PreferenceCategory>
 

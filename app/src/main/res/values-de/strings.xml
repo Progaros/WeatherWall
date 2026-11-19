@@ -1,0 +1,432 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">WeatherWall</string>
+    <string name="wallpaper_description">Wetterreaktives Live-Hintergrundbild</string>
+    <string name="apply_wallpaper">Hintergrund anwenden</string>
+    <string name="set_wallpaper">Als Hintergrund</string>
+
+    <string name="spawn_event">Ereignis auslösen</string>
+    <string name="toast_spawning_event">%1$s wird ausgelöst…</string>
+    <string name="toast_spawning_random_event">Zufälliges Ereignis wird ausgelöst…</string>
+    <string name="toast_version_copied">Version kopiert</string>
+    <string name="toast_debug_tracing_enabled">Debug-Aufzeichnung aktiviert</string>
+    <string name="toast_debug_log_copied">Debug-Protokoll in die Zwischenablage kopiert</string>
+    <string name="toast_copy_failed">Kopieren fehlgeschlagen: %1$s</string>
+    <string name="toast_breezy_connected">✓ Verbunden!\nWetter: %1$s\nWind: %2$d%%</string>
+    <string name="toast_breezy_no_data">✗ Keine Daten. Öffne Breezy Weather zum Aktualisieren.</string>
+    <string name="toast_weather_data_copied">Wetterdaten in die Zwischenablage kopiert</string>
+    <string name="toast_no_weather_data">Keine Wetterdaten verfügbar. Öffne zuerst Breezy Weather.</string>
+    <string name="toast_settings_copied">Alle Einstellungen in die Zwischenablage kopiert</string>
+    <string name="toast_preview_failed">Vorschau konnte nicht geöffnet werden</string>
+    <string name="tab_scene">Szene</string>
+    <string name="tab_effects">Effekte</string>
+    <string name="tab_events">Ereignisse</string>
+    <string name="tab_system">System</string>
+    <string name="toast_debug_overlay_enabled">Debug-Overlay aktiviert</string>
+    <string name="toast_debug_overlay_disabled">Debug-Overlay deaktiviert</string>
+    <string name="reset_settings_title">Alle Einstellungen zurücksetzen</string>
+    <string name="reset_settings_message">Alle Einstellungen werden auf ihre Standardwerte zurückgesetzt. Dies kann nicht rückgängig gemacht werden.</string>
+    <string name="reset_settings_confirm">Zurücksetzen</string>
+    <string name="toast_crash_log_copied">Absturzbericht in die Zwischenablage kopiert</string>
+    <string name="toast_no_crash_log">Kein Absturzbericht vorhanden</string>
+    <string name="randomize_seed">Landschaft zufällig wählen</string>
+    <string name="toast_new_seed">Landschafts-Seed: %1$d</string>
+
+    <!-- Übersetzte Einstellungstitel und -beschreibungen -->
+    <string name="pref_effects_cat_2_title">Schnelleinstellungen</string>
+    <string name="pref_night_shade_strength_title">Nachtabdunklung</string>
+    <string name="pref_night_shade_strength_summary">Wie dunkel Nächte wirken (0=hell, 35=Standard, 100=sehr dunkel)</string>
+    <string name="pref_effects_cat_3_title">Anpassen</string>
+    <string name="pref_nav_sky_title">Himmel &amp; Wind</string>
+    <string name="pref_nav_sky_summary">Sonne, Mond, Himmelskörpergröße, Baumbewegung</string>
+    <string name="pref_parallax_enabled_title">3D-Parallaxe</string>
+    <string name="pref_parallax_enabled_summary">Sensor, Empfindlichkeit, Tiefe, Glättung</string>
+    <string name="pref_clouds_enabled_title">Wolken</string>
+    <string name="pref_clouds_enabled_summary">Fülle, Form, Deckkraft, Geschwindigkeit</string>
+    <string name="pref_weather_enabled_title">Wetter &amp; Schatten</string>
+    <string name="pref_weather_enabled_summary">Regen-/Schneepartikel, Schatteneinstellungen</string>
+    <string name="pref_seasonal_enabled_title">Jahreszeitliche Landschaft</string>
+    <string name="pref_seasonal_enabled_summary">Blumen, Laub, Pilze, Tannenzapfen, Frost, Schnee</string>
+    <string name="pref_river_enabled_title">Fluss</string>
+    <string name="pref_river_enabled_summary">Optionaler Fluss mit wetterabhängigem Wasserstand</string>
+    <string name="pref_lake_enabled_title">See</string>
+    <string name="pref_lake_enabled_summary">Stillgewässer, reagiert auf das Wetter</string>
+    <string name="pref_vignette_enabled_title">Randvignette</string>
+    <string name="pref_vignette_enabled_summary">Abdunklung der Bildschirmränder (unten, oben, seitlich)</string>
+    <string name="pref_effects_clouds_cat_2_title">Wolken-Aussehen</string>
+    <string name="pref_cloud_density_title">Wolkenfülle</string>
+    <string name="pref_cloud_density_summary">Dichte pro Wolke (50=dünn, 100=normal, 300=dicht)</string>
+    <string name="pref_cloud_stretch_title">Wolkenform</string>
+    <string name="pref_cloud_stretch_summary">Horizontale Streckung (100=rund, 400=schleierartig)</string>
+    <string name="pref_cloud_opacity_title">Wolkendeckkraft</string>
+    <string name="pref_cloud_opacity_summary">Transparenz (10=zart, 40=normal, 100=deckend)</string>
+    <string name="pref_cloud_speed_title">Wolkengeschwindigkeit</string>
+    <string name="pref_cloud_speed_summary">Bewegungstempo (0=still, 50=normal, 100=schnell)</string>
+    <string name="pref_lake_enabled_title_2">See aktivieren</string>
+    <string name="pref_lake_enabled_summary_2">Einen See in der Landschaft anzeigen</string>
+    <string name="pref_lake_position_title">Seeposition</string>
+    <string name="pref_lake_position_summary">Horizontale Platzierung (0=links, 100=rechts)</string>
+    <string name="pref_lake_size_title">Seegröße</string>
+    <string name="pref_lake_size_summary">Breite der Seefläche</string>
+    <string name="pref_lake_depth_title">Tiefenebene des Sees</string>
+    <string name="pref_lake_depth_summary">Geländeebene (0=Vordergrund, 100=Hintergrund)</string>
+    <string name="pref_lake_opacity_title">Wasserdeckkraft</string>
+    <string name="pref_effects_parallax_cat_2_title">Sensor &amp; Eingabe</string>
+    <string name="pref_parallax_sensor_mode_title">Sensormodus</string>
+    <string name="pref_parallax_sensor_mode_summary">Rotationsvektor=robust, Gyroskop=flüssig</string>
+    <string name="pref_parallax_strength_title">Neigungsempfindlichkeit</string>
+    <string name="pref_parallax_strength_summary">Reaktion auf Geräteneigung (1%%=dezent, 100%%=stark)</string>
+    <string name="pref_parallax_max_offset_title">Maximale Bewegung</string>
+    <string name="pref_parallax_max_offset_summary">Verschiebung in %% der Bildschirmhöhe (2–40%%)</string>
+    <string name="pref_parallax_aspect_ratio_title">H/V-Verhältnis</string>
+    <string name="pref_parallax_aspect_ratio_summary">Horizontal vs. vertikal (50=weniger H, 100=gleich, 150=mehr H)</string>
+    <string name="pref_parallax_invert_x_title">Horizontal umkehren</string>
+    <string name="pref_parallax_invert_x_summary">Links-/Rechts-Parallaxe umkehren</string>
+    <string name="pref_parallax_invert_y_title">Vertikal umkehren</string>
+    <string name="pref_parallax_invert_y_summary">Auf-/Ab-Parallaxe umkehren</string>
+    <string name="pref_effects_parallax_cat_3_title">Bewegungsgefühl</string>
+    <string name="pref_parallax_return_speed_title">Rückstellgeschwindigkeit</string>
+    <string name="pref_parallax_return_speed_summary">Zentrierungstempo (0=bleibt, 50=~0,3s, 100=sofort)</string>
+    <string name="pref_parallax_smoothing_title">Glättung</string>
+    <string name="pref_parallax_smoothing_summary">Bewegungsglättung (0=direkt, 1=reaktiv, 100=weich)</string>
+    <string name="pref_parallax_edge_easing_title">Randdämpfung</string>
+    <string name="pref_parallax_edge_easing_summary">Abbremsen an Rändern (0=linear, 50=sanft, 100=nur Mitte)</string>
+    <string name="pref_parallax_return_unlocked_title">Schnelle Rückkehr</string>
+    <string name="pref_parallax_return_unlocked_summary">Rückkehr zur Mitte ignoriert Randdämpfung (immer schnell)</string>
+    <string name="pref_effects_parallax_cat_4_title">Tiefe</string>
+    <string name="pref_parallax_depth_title">Tiefeneffekt</string>
+    <string name="pref_parallax_depth_summary">Ebenentrennung (0=flach, 50=normal, 100=max. 3D)</string>
+    <string name="pref_parallax_perspective_title">Perspektive</string>
+    <string name="pref_parallax_perspective_summary">0=Vordergrund bewegt sich, 100=Hintergrund bewegt sich (Fenstereffekt)</string>
+    <string name="pref_river_enabled_title_2">Fluss aktivieren</string>
+    <string name="pref_river_enabled_summary_2">Einen Fluss im Vordergrund anzeigen</string>
+    <string name="pref_river_style_title">Flussstil</string>
+    <string name="pref_river_style_summary">Darstellungsart des Wassers</string>
+    <string name="pref_river_width_title">Flussbreite</string>
+    <string name="pref_river_width_summary">Breite des Flusses (10=schmal, 100=breit)</string>
+    <string name="pref_river_opacity_summary">Transparenz des Wassers (0=klar, 100=deckend)</string>
+    <string name="pref_river_speed_title">Fließgeschwindigkeit</string>
+    <string name="pref_river_speed_summary">Wie schnell das Wasser fließt (0=still, 100=schnell)</string>
+    <string name="pref_effects_seasonal_cat_2_title">Jahreszeitenwechsel</string>
+    <string name="pref_weather_snow_enabled_title">Wetterabhängiger Schnee</string>
+    <string name="pref_weather_snow_enabled_summary">Schnee sammelt sich anhand der echten Wetterhistorie an</string>
+    <string name="pref_season_transition_days_title">Übergangsdauer</string>
+    <string name="pref_season_transition_days_summary">Tage für sanften Jahreszeitenwechsel (0=sofort, 30=langsam)</string>
+    <string name="pref_effects_seasonal_cat_3_title">Frühling</string>
+    <string name="pref_spring_flowers_title">Frühlingsblumen</string>
+    <string name="pref_spring_flowers_summary">Bunte Blumen auf den Hügeln im Frühling</string>
+    <string name="pref_spring_flower_density_title">Blumendichte</string>
+    <string name="pref_spring_flower_density_summary">Anzahl Blumen auf allen Hügeln (0=wenige, 1000=viele)</string>
+    <string name="pref_spring_flower_spread_title">Blumenverteilung</string>
+    <string name="pref_spring_flower_spread_summary">Wie weit Blumen die Hügel hinab wachsen (0=Kamm, 100=voll)</string>
+    <string name="pref_effects_seasonal_cat_4_title">Büsche</string>
+    <string name="pref_bushes_enabled_summary">Kleine runde Büsche auf den Hügeln</string>
+    <string name="pref_bush_density_title">Buschdichte</string>
+    <string name="pref_bush_density_summary">Anzahl der Büsche (0=wenige, 100=viele)</string>
+    <string name="pref_bush_size_title">Buschgröße</string>
+    <string name="pref_bush_size_summary">Größenskalierung für Büsche (50=klein, 200=groß)</string>
+    <string name="pref_berries_enabled_title">Beeren an Büschen</string>
+    <string name="pref_berries_enabled_summary">Kleine Beeren an Büschen (Sommer)</string>
+    <string name="pref_berry_density_title">Beerendichte</string>
+    <string name="pref_berry_density_summary">Wahrscheinlichkeit für Beeren pro Busch (0=selten, 100=viele)</string>
+    <string name="pref_effects_seasonal_cat_5_title">Herbst</string>
+    <string name="pref_autumn_grass_title">Herbstgrasfarbe</string>
+    <string name="pref_autumn_grass_summary">Bräunlichere Grasfarbe im Herbst</string>
+    <string name="pref_autumn_grass_intensity_title">Herbstintensität</string>
+    <string name="pref_autumn_grass_intensity_summary">Wie braun das Gras wird (0=dezent, 100=sehr braun)</string>
+    <string name="pref_fallen_leaves_enabled_title">Herbstlaub</string>
+    <string name="pref_fallen_leaves_enabled_summary">Buntes gefallenes Laub auf den Hügeln</string>
+    <string name="pref_fallen_leaves_density_title">Laubdichte</string>
+    <string name="pref_fallen_leaves_density_summary">Menge an gefallenen Blättern (0=wenig, 100=viel)</string>
+    <string name="pref_mushrooms_enabled_title">Pilze</string>
+    <string name="pref_mushrooms_enabled_summary">Kleine Pilze auf Hügeln (Sommer + Herbst)</string>
+    <string name="pref_mushroom_density_title">Pilzdichte</string>
+    <string name="pref_mushroom_density_summary">Wie viele Pilze erscheinen (0=wenige, 100=viele)</string>
+    <string name="pref_pinecones_enabled_title">Tannenzapfen</string>
+    <string name="pref_pinecones_enabled_summary">Tannenzapfen an Bäumen (Herbst + Winter)</string>
+    <string name="pref_pinecone_density_title">Zapfendichte</string>
+    <string name="pref_pinecone_density_summary">Wahrscheinlichkeit pro Baum (0=selten, 100=viele)</string>
+    <string name="pref_effects_seasonal_cat_6_title">Winter</string>
+    <string name="pref_winter_snow_hills_title">Winterschneefelder</string>
+    <string name="pref_winter_snow_hills_summary">Schneefelder auf Hügelkuppen im Winter</string>
+    <string name="pref_winter_snow_coverage_title">Schneebedeckung</string>
+    <string name="pref_winter_snow_coverage_summary">Anteil schneebedeckter Kuppen (0=leicht, 100=stark)</string>
+    <string name="pref_frost_enabled_title">Frosteffekt</string>
+    <string name="pref_frost_enabled_summary">Feiner Frostschimmer entlang der Hügelkanten</string>
+    <string name="pref_effects_sky_cat_2_title">Himmelskörper</string>
+    <string name="pref_sun_enabled_title">Sonne anzeigen</string>
+    <string name="pref_sun_enabled_summary">Sonne am Taghimmel darstellen</string>
+    <string name="pref_moon_enabled_title">Mond anzeigen</string>
+    <string name="pref_moon_enabled_summary">Mond am Nachthimmel darstellen</string>
+    <string name="pref_celestial_size_title">Sonnen-/Mondgröße</string>
+    <string name="pref_celestial_size_summary">Größe der Himmelskörper (50=klein, 100=normal, 200=groß)</string>
+    <string name="pref_celestial_arc_height_title">Bahnhöhe</string>
+    <string name="pref_celestial_arc_height_summary">Wie hoch Sonne/Mond ziehen (100=hoch, 50=Mitte, 0=Horizont)</string>
+    <string name="pref_effects_sky_cat_3_title">Windanimation</string>
+    <string name="pref_wind_multiplier_title">Baumflexibilität</string>
+    <string name="pref_wind_multiplier_summary">Wie stark sich Bäume im Wind biegen (0=starr, 100=normal, 300=sehr flexibel)</string>
+    <string name="pref_tree_sway_speed_title">Wiegegeschwindigkeit</string>
+    <string name="pref_tree_sway_speed_summary">Tempo der Baumbewegung (0=still, 100=normal, 200=schnell)</string>
+    <string name="pref_effects_vignette_cat_2_title">Unterer Rand</string>
+    <string name="pref_vignette_bottom_distance_title">Abstand unten</string>
+    <string name="pref_vignette_bottom_distance_summary">Wie weit die Vignette hineinreicht (0=aus, 50=halb)</string>
+    <string name="pref_vignette_bottom_fade_title">Verlauf unten</string>
+    <string name="pref_vignette_bottom_fade_summary">Breite der Übergangszone (5=scharf, 50=weich)</string>
+    <string name="pref_vignette_bottom_alpha_title">Deckkraft unten</string>
+    <string name="pref_vignette_bottom_alpha_summary">Wie dunkel der Rand ist (0=transparent, 100=schwarz)</string>
+    <string name="pref_effects_vignette_cat_3_title">Oberer Rand</string>
+    <string name="pref_vignette_top_distance_title">Abstand oben</string>
+    <string name="pref_vignette_top_distance_summary">Wie weit die Vignette hineinreicht (0=aus)</string>
+    <string name="pref_vignette_top_fade_title">Verlauf oben</string>
+    <string name="pref_vignette_top_alpha_title">Deckkraft oben</string>
+    <string name="pref_effects_vignette_cat_4_title">Linker Rand</string>
+    <string name="pref_vignette_left_distance_title">Abstand links</string>
+    <string name="pref_vignette_left_fade_title">Verlauf links</string>
+    <string name="pref_vignette_left_alpha_title">Deckkraft links</string>
+    <string name="pref_effects_vignette_cat_5_title">Rechter Rand</string>
+    <string name="pref_vignette_right_distance_title">Abstand rechts</string>
+    <string name="pref_vignette_right_fade_title">Verlauf rechts</string>
+    <string name="pref_vignette_right_alpha_title">Deckkraft rechts</string>
+    <string name="pref_effects_weather_shadows_cat_2_title">Wetterpartikel</string>
+    <string name="pref_weather_layers_title">Tiefenebenen</string>
+    <string name="pref_weather_layers_summary">Anzahl der Partikelebenen (1=flach, 3=Standard, 5=tief)</string>
+    <string name="pref_weather_layer_separation_title">Ebenenabstand</string>
+    <string name="pref_weather_layer_separation_summary">Größenunterschied zwischen Ebenen (10=dezent, 30=Standard, 50=stark)</string>
+    <string name="pref_weather_layer_depth_title">Parallaxe-Tiefe</string>
+    <string name="pref_weather_layer_depth_summary">Wie stark hintere Ebenen mitschwingen (10=dezent, 20=Standard, 40=stark)</string>
+    <string name="pref_effects_weather_shadows_cat_3_title">Schatten &amp; Licht</string>
+    <string name="pref_mountain_shadows_enabled_title">Geländeschatten</string>
+    <string name="pref_mountain_shadows_enabled_summary">Bergflanken und Hügelkämme werfen Schatten je nach Sonnenstand</string>
+    <string name="pref_tree_shadows_enabled_title">Baumschatten</string>
+    <string name="pref_tree_shadows_enabled_summary">Bäume werfen Schatten auf den Boden</string>
+    <string name="pref_shadow_strength_title">Schattenstärke</string>
+    <string name="pref_shadow_strength_summary">Dunkelheit der Schatten (0=dezent, 50=normal, 100=stark)</string>
+    <string name="pref_events_cat_2_title">Zufallsereignisse</string>
+    <string name="pref_events_enabled_summary">Vögel, Flugzeuge, Tiere und mehr</string>
+    <string name="pref_event_frequency_title">Ereignishäufigkeit</string>
+    <string name="pref_event_frequency_summary">Häufigkeit (0=selten, 50=normal, 100=häufig)</string>
+    <string name="pref_spawn_event_title">Zufallsereignis auslösen</string>
+    <string name="pref_spawn_event_summary">Ein aktiviertes Ereignis manuell starten</string>
+    <string name="pref_events_cat_3_title">Saisonale Ereignisse</string>
+    <string name="pref_seasonal_enabled_title_2">Saisonale Effekte</string>
+    <string name="pref_seasonal_enabled_summary_2">Weihnachten, Neujahr, St. Patrick\'s Day</string>
+    <string name="pref_events_cat_5_title">Schüttelgeste</string>
+    <string name="pref_shake_fireworks_enabled_title">Schütteln für Feuerwerk</string>
+    <string name="pref_shake_fireworks_enabled_summary">Gerät um die Längsachse kippen oder kräftig schütteln</string>
+    <string name="pref_events_choose_cat_2_title">Himmelsereignisse</string>
+    <string name="pref_event_airplane_title">Flugzeuge</string>
+    <string name="pref_event_airplane_summary">Flugzeuge mit Kondensstreifen</string>
+    <string name="pref_event_birds_title">Vogelschwärme</string>
+    <string name="pref_event_birds_summary">Schwärme in V-Formation</string>
+    <string name="pref_event_eagle_title">Adler</string>
+    <string name="pref_event_eagle_summary">Kreisende Silhouetten</string>
+    <string name="pref_event_owl_title">Eulen</string>
+    <string name="pref_event_owl_summary">Nur nachts aktiv</string>
+    <string name="pref_event_balloon_title">Heißluftballons</string>
+    <string name="pref_event_balloon_summary">Schweben bei gutem Wetter</string>
+    <string name="pref_event_shootingstar_title">Sternschnuppen</string>
+    <string name="pref_event_shootingstar_summary">Bei klarem Nachthimmel</string>
+    <string name="pref_event_perseids_title">Meteorschauer</string>
+    <string name="pref_event_perseids_summary">Perseiden (Aug), Geminiden (Dez) und Quadrantiden (Jan) zur echten Aktivitätszeit</string>
+    <string name="pref_event_starfall_title">Fallende Sterne</string>
+    <string name="pref_event_starfall_summary">Hintergrundsterne fallen herab und verglühen, neue erscheinen langsam (klare Nächte)</string>
+    <string name="pref_event_alien_title">UFOs</string>
+    <string name="pref_event_alien_summary">Sehr seltene Nachtsichtungen</string>
+    <string name="pref_events_choose_cat_3_title">Bodenereignisse</string>
+    <string name="pref_event_butterfly_title">Schmetterlinge</string>
+    <string name="pref_event_butterfly_summary">Nur Frühling &amp; Sommer</string>
+    <string name="pref_event_dragonfly_title">Libellen</string>
+    <string name="pref_event_dragonfly_summary">Nur Sommer – schwebende Insekten</string>
+    <string name="pref_event_rabbit_title">Hasen</string>
+    <string name="pref_event_rabbit_summary">Hüpfen über die Hügel</string>
+    <string name="pref_event_fox_title">Füchse</string>
+    <string name="pref_event_fox_summary">Streifen durch die Hügel</string>
+    <string name="pref_event_squirrel_title">Eichhörnchen</string>
+    <string name="pref_event_squirrel_summary">Vorwiegend im Herbst – sammeln Nüsse</string>
+    <string name="pref_event_fireflies_title">Glühwürmchen</string>
+    <string name="pref_event_fireflies_summary">Nur in Sommernächten</string>
+    <string name="pref_event_snowflake_title">Schneeflocken</string>
+    <string name="pref_event_snowflake_summary">Dekorative Winterflocken (wetterunabhängig)</string>
+    <string name="pref_event_bat_title">Fledermäuse</string>
+    <string name="pref_event_bat_summary">Nachtflieger mit unruhigem Flug</string>
+    <string name="pref_event_deer_title">Rehe</string>
+    <string name="pref_event_deer_summary">Herbst/Winter – grasend und schreitend</string>
+    <string name="pref_event_fish_title">Fische</string>
+    <string name="pref_event_fish_summary">Springen aus dem Wasser</string>
+    <string name="pref_event_duck_title">Enten</string>
+    <string name="pref_event_duck_summary">Watscheln über das Gelände</string>
+    <string name="pref_event_frog_title">Frösche</string>
+    <string name="pref_event_frog_summary">Frühling/Sommer – sitzen und hüpfen in der Dämmerung</string>
+    <string name="pref_events_seasonal_cat_2_title">Weihnachten</string>
+    <string name="pref_christmas_enabled_summary">Stern von Betlehem mit Schweif (um den 25. Dez.)</string>
+    <string name="pref_christmas_interval_title">Weihnachtszeitraum</string>
+    <string name="pref_christmas_interval_summary">±Tage um den 25. Dez. (0=nur 25. Dez., 15=10. Dez.–9. Jan.)</string>
+    <string name="pref_christmas_star_size_title">Sternengröße</string>
+    <string name="pref_christmas_star_size_summary">Größe des Weihnachtssterns (50–200%%)</string>
+    <string name="pref_christmas_star_trail_title">Schweiflänge</string>
+    <string name="pref_christmas_star_trail_summary">Lichtschweif-Länge (0–200%%)</string>
+    <string name="pref_events_seasonal_cat_3_title">Neujahr</string>
+    <string name="pref_newyear_enabled_summary">Feuerwerk (um den 1. Jan.)</string>
+    <string name="pref_newyear_interval_title">Neujahrszeitraum</string>
+    <string name="pref_newyear_interval_summary">±Tage um den 1. Jan. (0=nur 1. Jan., 15=17. Dez.–16. Jan.)</string>
+    <string name="pref_firework_frequency_title">Feuerwerkshäufigkeit</string>
+    <string name="pref_firework_frequency_summary">Wie oft Raketen starten (0=selten, 100=ständig)</string>
+    <string name="pref_firework_amount_title">Feuerwerksmenge</string>
+    <string name="pref_firework_amount_summary">Partikel pro Explosion (10=dezent, 200=spektakulär)</string>
+    <string name="pref_events_seasonal_cat_4_title">Chinesisches Neujahr</string>
+    <string name="pref_cn_newyear_enabled_summary">Drache + Feuerwerk (zweiter Neumond nach Wintersonnenwende, 21. Jan.–20. Feb.)</string>
+    <string name="pref_cn_newyear_interval_title">Zeitraum Chin. Neujahr</string>
+    <string name="pref_cn_newyear_interval_summary">±Tage um das berechnete Datum (0=nur dieser Tag)</string>
+    <string name="pref_events_seasonal_cat_5_title">St. Patrick\'s Day</string>
+    <string name="pref_st_patricks_enabled_summary">Regenbogen (um den 17. März)</string>
+    <string name="pref_st_patricks_interval_title">St.-Patrick\'s-Zeitraum</string>
+    <string name="pref_st_patricks_interval_summary">±Tage um den 17. März (0=nur 17. März, 10=7.–27. März)</string>
+    <string name="pref_rainbow_position_x_title">Regenbogen horizontal</string>
+    <string name="pref_rainbow_position_x_summary">Position links bis rechts (0=links, 100=rechts)</string>
+    <string name="pref_rainbow_position_y_title">Regenbogen vertikal</string>
+    <string name="pref_rainbow_position_y_summary">Position oben bis unten (0=oben, 100=unten)</string>
+    <string name="pref_rainbow_size_title">Regenbogengröße</string>
+    <string name="pref_rainbow_size_summary">Bogengröße (20=klein, 200=groß)</string>
+    <string name="pref_events_shake_cat_2_title">Schütteleinstellungen</string>
+    <string name="pref_shake_fireworks_count_title">Anzahl Raketen</string>
+    <string name="pref_shake_fireworks_count_summary">Anzahl der Feuerwerksraketen beim Schütteln (5–50)</string>
+    <string name="pref_shake_sensitivity_title">Schüttelempfindlichkeit</string>
+    <string name="pref_shake_sensitivity_summary">Wie stark geschüttelt werden muss (0=kräftig, 100=leicht)</string>
+    <string name="pref_shake_delay_title">Entsperr-Verzögerung</string>
+    <string name="pref_shake_delay_summary">Ignoriert Schütteln nach dem Einschalten (0–5000ms, gegen Fehlauslösungen)</string>
+    <string name="pref_scene_cat_2_title">Landschaft</string>
+    <string name="pref_random_seed_title">Zufalls-Seed</string>
+    <string name="pref_random_seed_summary">Ändert den Geländeaufbau (1–999)</string>
+    <string name="pref_scene_cat_3_title">Berge</string>
+    <string name="pref_mountain_density_title">Bergdichte</string>
+    <string name="pref_mountain_density_summary">Bergabdeckung (0=keine, 50=normal, 100=dicht)</string>
+    <string name="pref_nav_mountains_title">Bergdetails</string>
+    <string name="pref_nav_mountains_summary">Breite, Höhe, Rauheit, Grat, Position</string>
+    <string name="pref_scene_cat_5_title">Hügel</string>
+    <string name="pref_hill_count_title">Hügelebenen</string>
+    <string name="pref_hill_count_summary">Tiefenebenen im Gelände (0=keine, 5=normal, 20=viele)</string>
+    <string name="pref_nav_hills_title">Hügeldetails</string>
+    <string name="pref_nav_hills_summary">Position, Rauheit, Höhe, Frequenz, Tiefe</string>
+    <string name="pref_scene_cat_7_title">Bäume</string>
+    <string name="pref_tree_density_title">Baumdichte</string>
+    <string name="pref_tree_density_summary">Bewaldung (0=keine, 45=mäßig, 100=normal, 200=dicht)</string>
+    <string name="pref_nav_trees_title">Baumdetails</string>
+    <string name="pref_nav_trees_summary">Verteilung, Lichtungen, Größe, Breite, Segmente, Farbe</string>
+    <string name="pref_scene_hills_cat_2_title">Hügelgeometrie</string>
+    <string name="pref_hill_lower_start_title">Position ferne Hügel</string>
+    <string name="pref_hill_lower_start_summary">Startposition ferner Hügel (30–70%%)</string>
+    <string name="pref_hill_upper_end_title">Position nahe Hügel</string>
+    <string name="pref_hill_upper_end_summary">Endposition naher Hügel (60–100%%)</string>
+    <string name="pref_hill_roughness_title">Hügelrauheit</string>
+    <string name="pref_hill_roughness_summary">Konturdetail (0=sanft, 100=normal, 200=schroff)</string>
+    <string name="pref_hill_amplitude_title">Hügelhöhe</string>
+    <string name="pref_hill_amplitude_summary">Vertikale Skalierung (0=flach, 100=normal, 1000=extrem)</string>
+    <string name="pref_hill_frequency_title">Hügelfrequenz</string>
+    <string name="pref_hill_frequency_summary">Hügel pro Ebene (50=wenige, 100=normal, 200=viele)</string>
+    <string name="pref_hill_distance_title">Hügelentfernung</string>
+    <string name="pref_hill_distance_summary">Schiebt Hügel weiter weg (0=nah, 100=bei Bergen)</string>
+    <string name="pref_hill_depth_spread_title">Tiefenspreizung</string>
+    <string name="pref_hill_depth_spread_summary">Z-Achsen-Spreizung (0=flach, 100=tief gestaffelt)</string>
+    <string name="pref_scene_mountains_cat_2_title">Berggeometrie</string>
+    <string name="pref_mountain_width_title">Bergbreite</string>
+    <string name="pref_mountain_width_summary">Breitenskalierung (50=schmal, 100=normal, 200=breit)</string>
+    <string name="pref_mountain_height_title">Berghöhe</string>
+    <string name="pref_mountain_height_summary">Höhenskalierung (50=niedrig, 100=normal, 200=hoch)</string>
+    <string name="pref_mountain_roughness_title">Bergrauheit</string>
+    <string name="pref_mountain_roughness_summary">Zerklüftung (0=glatt, 100=normal, 200=schroff)</string>
+    <string name="pref_mountain_ridge_roughness_title">Gratrauheit</string>
+    <string name="pref_mountain_ridge_roughness_summary">Detailgrad des Mittelgrats (0=glatt, 100=gezackt)</string>
+    <string name="pref_mountain_bottom_offset_title">Bergposition</string>
+    <string name="pref_mountain_bottom_offset_summary">Berge nach oben verschieben (0=unten, 50=halb)</string>
+    <string name="pref_scene_trees_cat_2_title">Baumarten</string>
+    <string name="pref_leaf_tree_ratio_title">Laub-/Nadelbaum-Anteil</string>
+    <string name="pref_leaf_tree_ratio_summary">Anteil an Laubbäumen (0=nur Nadelbäume, 100=nur Laubbäume)</string>
+    <string name="pref_scene_trees_cat_3_title">Baumplatzierung</string>
+    <string name="pref_tree_spread_title">Baumverteilung</string>
+    <string name="pref_tree_spread_summary">Bereich auf Hügeln (0=Gipfel, 100=ganzer Hang)</string>
+    <string name="pref_tree_sparsity_title">Lichtungen</string>
+    <string name="pref_tree_sparsity_summary">Lückengröße (0=gleichmäßig, 25=natürlich, 80=locker)</string>
+    <string name="pref_scene_trees_cat_4_title">Baum-Aussehen</string>
+    <string name="pref_tree_size_randomness_title">Größenvariation</string>
+    <string name="pref_tree_size_randomness_summary">Unterschiede in der Baumgröße (0=einheitlich, 100=variabel)</string>
+    <string name="pref_tree_size_title">Baumgröße</string>
+    <string name="pref_tree_size_summary">Gesamtskalierung (50=klein, 100=normal, 200=groß)</string>
+    <string name="pref_tree_width_title">Baumbreite</string>
+    <string name="pref_tree_width_summary">Breitenverhältnis (50=schmal, 100=normal, 200=breit)</string>
+    <string name="pref_tree_segments_title">Baumsegmente</string>
+    <string name="pref_tree_segments_summary">Stufen pro Baum (1=einfach, 5=detailliert)</string>
+    <string name="pref_tree_color_variation_title">Farbvariation</string>
+    <string name="pref_tree_color_variation_summary">Farbvielfalt (0=einheitlich, 100=abwechslungsreich)</string>
+    <string name="pref_system_cat_2_title">Zeit &amp; Wetter</string>
+    <string name="pref_daynight_enabled_title">Autom. Tag/Nacht</string>
+    <string name="pref_daynight_enabled_summary">Himmelsfarben nach aktueller Uhrzeit</string>
+    <string name="pref_use_breezy_weather_title">Breezy Weather nutzen</string>
+    <string name="pref_use_breezy_weather_summary">Wetterdaten aus der Breezy-Weather-App beziehen</string>
+    <string name="pref_weather_enabled_title_2">Wettereffekte</string>
+    <string name="pref_weather_enabled_summary_2">Regen-, Schnee- und Gewitterpartikel</string>
+    <string name="pref_system_cat_3_title">Leistung</string>
+    <string name="pref_max_fps_title">Maximale FPS</string>
+    <string name="pref_max_fps_summary">Bildraten-Limit</string>
+    <string name="pref_idle_mode_enabled_title">Ruhemodus</string>
+    <string name="pref_idle_mode_enabled_summary">Ruhe-FPS und Wartezeit</string>
+    <string name="pref_system_cat_5_title">Testen</string>
+    <string name="pref_debug_enabled_title">Simulationsmodus</string>
+    <string name="pref_debug_enabled_summary">Zeit, Wind, Wetter und Jahreszeit manuell überschreiben</string>
+    <string name="pref_nav_about_title">Über &amp; Debug</string>
+    <string name="pref_nav_about_summary">Version, Protokoll, Wetterdaten, Export</string>
+    <string name="pref_system_cat_6_title">Wartung</string>
+    <string name="pref_reset_defaults_title">Alle Einstellungen zurücksetzen</string>
+    <string name="pref_reset_defaults_summary">Alle Einstellungen auf Standardwerte zurücksetzen</string>
+    <string name="pref_system_about_cat_2_title">Version</string>
+    <string name="pref_system_about_cat_3_title">Wetterdaten</string>
+    <string name="pref_check_breezy_title">Verbindung prüfen</string>
+    <string name="pref_check_breezy_summary">Verbindung zu Breezy Weather testen</string>
+    <string name="pref_copy_weather_data_title">Wetterdaten kopieren</string>
+    <string name="pref_copy_weather_data_summary">Roh-JSON zur Fehlersuche in die Zwischenablage kopieren</string>
+    <string name="pref_system_about_cat_4_title">Debug</string>
+    <string name="pref_debug_logging_title">Debug-Protokollierung</string>
+    <string name="pref_debug_logging_summary">Aufzeichnung aktivieren (kopiert Log beim Deaktivieren)</string>
+    <string name="pref_debug_frame_timing_title">Frame-Zeiten</string>
+    <string name="pref_debug_frame_timing_summary">Langsame Frames (&gt;16ms) zur Leistungsanalyse protokollieren</string>
+    <string name="pref_debug_overlay_enabled_title">🐞 Debug-Overlay</string>
+    <string name="pref_debug_overlay_enabled_summary">FPS, Frame-Zeit und Debug-Infos anzeigen</string>
+    <string name="pref_copy_crash_log_title">Letzten Absturzbericht kopieren</string>
+    <string name="pref_copy_crash_log_summary">Den zuletzt gespeicherten Absturzbericht kopieren</string>
+    <string name="pref_system_about_cat_5_title">Aktionen</string>
+    <string name="pref_copy_settings_title">Alle Einstellungen kopieren</string>
+    <string name="pref_copy_settings_summary">Jeden Einstellungswert in die Zwischenablage kopieren</string>
+    <string name="pref_preview_title">Hintergrundvorschau</string>
+    <string name="pref_preview_summary">Systemvorschau des Hintergrundbilds öffnen</string>
+    <string name="pref_idle_fps_title">Ruhe-FPS</string>
+    <string name="pref_idle_fps_summary">Bildrate im Ruhemodus (5–20)</string>
+    <string name="pref_idle_timeout_title">Ruhe-Verzögerung</string>
+    <string name="pref_idle_timeout_summary">Zeit bis zum Wechsel in den Ruhemodus</string>
+    <string name="pref_system_simulation_cat_2_title">Simulationswerte</string>
+    <string name="pref_manual_time_title">Tageszeit</string>
+    <string name="pref_manual_time_summary">Minuten seit Mitternacht (0–1439)</string>
+    <string name="pref_wind_strength_title">Windstärke</string>
+    <string name="pref_wind_strength_summary">Simulierter Wind (0=windstill, 100=Sturm)</string>
+    <string name="pref_weather_type_title">Wetterart</string>
+    <string name="pref_weather_type_summary">Bestimmtes Wetter erzwingen</string>
+    <string name="pref_debug_cloud_override_title">Wolkendichte</string>
+    <string name="pref_debug_cloud_override_summary">Wolkenmenge erzwingen</string>
+    <string name="pref_debug_season_title">Saison-Ereignis</string>
+    <string name="pref_debug_season_summary">Bestimmtes saisonales Ereignis erzwingen</string>
+    <string name="pref_terrain_season_title">Geländejahreszeit</string>
+    <string name="pref_terrain_season_summary">Landschaft überschreiben (Blumen, Gras, Schnee)</string>
+    <string name="pref_moon_phase_title">Mondphase</string>
+    <string name="pref_moon_phase_summary">0=Neumond, 50=Vollmond, 100=Neumond (Zyklusende)</string>
+    <string name="pref_season_day_override_title">Tag des Jahres</string>
+    <string name="pref_season_day_override_summary">Kalendertag überschreiben (0=Auto, 1=1. Jan., 365=31. Dez.)</string>
+    <string name="pref_system_simulation_cat_3_title">Wetterhistorie</string>
+    <string name="pref_weather_data_display_title">Gesammelte Wetterdaten</string>
+    <string name="pref_weather_data_display_summary">Wetterhistorie wird geladen…</string>
+    <string name="pref_sim_weather_history_title">Wetterhistorie überschreiben</string>
+    <string name="pref_sim_weather_history_summary">Schneehöhe und Flusspegel manuell setzen statt aus Wetterdaten abzuleiten</string>
+    <string name="pref_sim_snow_level_title">Schneehöhe</string>
+    <string name="pref_sim_snow_level_summary">Simulierter angesammelter Schnee (0=kein, 100=tief)</string>
+    <string name="pref_sim_river_level_title">Flusspegel</string>
+    <string name="pref_sim_river_level_summary">Simulierter Flusspegel (0=trocken, 100=Hochwasser)</string>
+    <string name="pref_sim_lake_level_title">Seepegel</string>
+    <string name="pref_sim_lake_level_summary">Simulierter Wasserstand des Sees (0=trocken, 100=voll)</string>
+</resources>

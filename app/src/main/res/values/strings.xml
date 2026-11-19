@@ -30,4 +30,403 @@
     <string name="toast_no_crash_log">No crash log recorded</string>
     <string name="randomize_seed">Randomize landscape</string>
     <string name="toast_new_seed">Landscape seed: %1$d</string>
+
+    <!-- Extracted preference titles and summaries -->
+    <string name="pref_effects_cat_2_title">Quick Settings</string>
+    <string name="pref_night_shade_strength_title">Night Shade Strength</string>
+    <string name="pref_night_shade_strength_summary">How dark nights appear (0=bright, 35=default, 100=very dark)</string>
+    <string name="pref_effects_cat_3_title">Customize</string>
+    <string name="pref_nav_sky_title">Sky &amp; Wind</string>
+    <string name="pref_nav_sky_summary">Sun, moon, celestial size, tree sway</string>
+    <string name="pref_parallax_enabled_title">3D Parallax</string>
+    <string name="pref_parallax_enabled_summary">Sensor, sensitivity, depth, smoothing</string>
+    <string name="pref_clouds_enabled_title">Clouds</string>
+    <string name="pref_clouds_enabled_summary">Fluffiness, shape, opacity, speed, render mode</string>
+    <string name="pref_weather_enabled_title">Weather &amp; Shadows</string>
+    <string name="pref_weather_enabled_summary">Rain/snow particles, shadow settings</string>
+    <string name="pref_seasonal_enabled_title">Seasonal Terrain</string>
+    <string name="pref_seasonal_enabled_summary">Flowers, leaves, mushrooms, pinecones, frost, snow</string>
+    <string name="pref_river_enabled_title">River</string>
+    <string name="pref_river_enabled_summary">Optional river with weather-driven water level</string>
+    <string name="pref_lake_enabled_title">Lake</string>
+    <string name="pref_lake_enabled_summary">Still body of water, reacts to weather</string>
+    <string name="pref_vignette_enabled_title">Edge Vignette</string>
+    <string name="pref_vignette_enabled_summary">Screen edge darkening (bottom, top, sides)</string>
+    <string name="pref_effects_clouds_cat_2_title">Cloud Appearance</string>
+    <string name="pref_cloud_density_title">Cloud Fluffiness</string>
+    <string name="pref_cloud_density_summary">Density per cloud (50=thin, 100=normal, 300=fluffy)</string>
+    <string name="pref_cloud_stretch_title">Cloud Shape</string>
+    <string name="pref_cloud_stretch_summary">Horizontal stretch (100=round, 400=wispy)</string>
+    <string name="pref_cloud_opacity_title">Cloud Opacity</string>
+    <string name="pref_cloud_opacity_summary">Transparency (10=faint, 40=normal, 100=solid)</string>
+    <string name="pref_cloud_speed_title">Cloud Speed</string>
+    <string name="pref_cloud_speed_summary">Movement speed (0=frozen, 50=normal, 100=fast)</string>
+    <string name="pref_lake_enabled_title_2">Enable Lake</string>
+    <string name="pref_lake_enabled_summary_2">Show a lake on the terrain</string>
+    <string name="pref_lake_position_title">Lake Position</string>
+    <string name="pref_lake_position_summary">Horizontal placement (0=left, 100=right)</string>
+    <string name="pref_lake_size_title">Lake Size</string>
+    <string name="pref_lake_size_summary">Width of lake area</string>
+    <string name="pref_lake_depth_title">Lake Depth Layer</string>
+    <string name="pref_lake_depth_summary">Which terrain layer (0=foreground, 100=background)</string>
+    <string name="pref_lake_opacity_title">Water Opacity</string>
+    <string name="pref_effects_parallax_cat_2_title">Sensor &amp; Input</string>
+    <string name="pref_parallax_sensor_mode_title">Sensor Mode</string>
+    <string name="pref_parallax_sensor_mode_summary">rotation_vector=robust (default), gyroscope=smooth</string>
+    <string name="pref_parallax_strength_title">Tilt Sensitivity</string>
+    <string name="pref_parallax_strength_summary">Response to phone tilt (1%%=subtle, 100%%=high)</string>
+    <string name="pref_parallax_max_offset_title">Max Movement</string>
+    <string name="pref_parallax_max_offset_summary">Scene shift as %% of screen height (2-40%%)</string>
+    <string name="pref_parallax_aspect_ratio_title">H/V Ratio</string>
+    <string name="pref_parallax_aspect_ratio_summary">Horizontal vs vertical movement (50=less H, 100=equal, 150=more H)</string>
+    <string name="pref_parallax_invert_x_title">Invert Horizontal</string>
+    <string name="pref_parallax_invert_x_summary">Reverse left/right parallax direction</string>
+    <string name="pref_parallax_invert_y_title">Invert Vertical</string>
+    <string name="pref_parallax_invert_y_summary">Reverse up/down parallax direction</string>
+    <string name="pref_effects_parallax_cat_3_title">Movement Feel</string>
+    <string name="pref_parallax_return_speed_title">Return Speed</string>
+    <string name="pref_parallax_return_speed_summary">Recenter speed (0=stay, 50=~0.3s, 100=instant)</string>
+    <string name="pref_parallax_smoothing_title">Smoothing</string>
+    <string name="pref_parallax_smoothing_summary">Movement smoothness (0=instant, 1=responsive, 100=floaty)</string>
+    <string name="pref_parallax_edge_easing_title">Edge Easing</string>
+    <string name="pref_parallax_edge_easing_summary">Slowdown near edges (0=linear, 50=soft, 100=center-only)</string>
+    <string name="pref_parallax_return_unlocked_title">Fast Return</string>
+    <string name="pref_parallax_return_unlocked_summary">Return to center ignores edge easing (always fast)</string>
+    <string name="pref_effects_parallax_cat_4_title">Depth</string>
+    <string name="pref_parallax_depth_title">Depth Effect</string>
+    <string name="pref_parallax_depth_summary">Layer separation (0=flat, 50=normal, 100=max 3D)</string>
+    <string name="pref_parallax_perspective_title">Perspective</string>
+    <string name="pref_parallax_perspective_summary">0=foreground moves (head tilts), 100=background moves (window shifts)</string>
+    <string name="pref_river_enabled_title_2">Enable River</string>
+    <string name="pref_river_enabled_summary_2">Show a river in the foreground terrain</string>
+    <string name="pref_river_style_title">River Style</string>
+    <string name="pref_river_style_summary">Visual rendering approach</string>
+    <string name="pref_river_width_title">River Width</string>
+    <string name="pref_river_width_summary">Width of the river (10=narrow, 100=wide)</string>
+    <string name="pref_river_opacity_summary">Transparency of water (0=clear, 100=opaque)</string>
+    <string name="pref_river_speed_title">Flow Speed</string>
+    <string name="pref_river_speed_summary">How fast the water flows (0=still, 100=fast)</string>
+    <string name="pref_effects_seasonal_cat_2_title">Season Transitions</string>
+    <string name="pref_weather_snow_enabled_title">Weather-Driven Snow</string>
+    <string name="pref_weather_snow_enabled_summary">Snow accumulates based on actual weather history</string>
+    <string name="pref_season_transition_days_title">Transition Duration</string>
+    <string name="pref_season_transition_days_summary">Days for gradual season change (0=instant, 30=slow)</string>
+    <string name="pref_effects_seasonal_cat_3_title">Spring</string>
+    <string name="pref_spring_flowers_title">Spring Flowers</string>
+    <string name="pref_spring_flowers_summary">Colorful flower dots on hills in spring</string>
+    <string name="pref_spring_flower_density_title">Flower Density</string>
+    <string name="pref_spring_flower_density_summary">Total flowers across all hills (0=few, 1000=many)</string>
+    <string name="pref_spring_flower_spread_title">Flower Spread</string>
+    <string name="pref_spring_flower_spread_summary">How far down hills flowers spread (0=on line, 100=full)</string>
+    <string name="pref_effects_seasonal_cat_4_title">Bushes</string>
+    <string name="pref_bushes_enabled_summary">Small round bushes scattered on hills</string>
+    <string name="pref_bush_density_title">Bush Density</string>
+    <string name="pref_bush_density_summary">How many bushes (0=few, 100=many)</string>
+    <string name="pref_bush_size_title">Bush Size</string>
+    <string name="pref_bush_size_summary">Size scale for bushes (50=small, 200=large)</string>
+    <string name="pref_berries_enabled_title">Berries on Bushes</string>
+    <string name="pref_berries_enabled_summary">Small berry clusters on bushes (summer)</string>
+    <string name="pref_berry_density_title">Berry Density</string>
+    <string name="pref_berry_density_summary">Probability of berries per bush (0=rare, 100=many)</string>
+    <string name="pref_effects_seasonal_cat_5_title">Autumn</string>
+    <string name="pref_autumn_grass_title">Autumn Grass Color</string>
+    <string name="pref_autumn_grass_summary">Browner grass color in autumn</string>
+    <string name="pref_autumn_grass_intensity_title">Autumn Intensity</string>
+    <string name="pref_autumn_grass_intensity_summary">How brown the grass becomes (0=subtle, 100=very brown)</string>
+    <string name="pref_fallen_leaves_enabled_title">Fallen Leaves</string>
+    <string name="pref_fallen_leaves_enabled_summary">Colorful fallen leaves scattered on hills</string>
+    <string name="pref_fallen_leaves_density_title">Leaf Density</string>
+    <string name="pref_fallen_leaves_density_summary">How many fallen leaves (0=few, 100=many)</string>
+    <string name="pref_mushrooms_enabled_title">Mushrooms</string>
+    <string name="pref_mushrooms_enabled_summary">Small mushrooms on hills (summer + autumn)</string>
+    <string name="pref_mushroom_density_title">Mushroom Density</string>
+    <string name="pref_mushroom_density_summary">How many mushrooms appear (0=few, 100=many)</string>
+    <string name="pref_pinecones_enabled_title">Pinecones</string>
+    <string name="pref_pinecones_enabled_summary">Pinecones hanging from trees (autumn + winter)</string>
+    <string name="pref_pinecone_density_title">Pinecone Density</string>
+    <string name="pref_pinecone_density_summary">Probability of pinecones per tree (0=rare, 100=many)</string>
+    <string name="pref_effects_seasonal_cat_6_title">Winter</string>
+    <string name="pref_winter_snow_hills_title">Winter Snow Patches</string>
+    <string name="pref_winter_snow_hills_summary">Snow patches on hill tops in winter</string>
+    <string name="pref_winter_snow_coverage_title">Snow Coverage</string>
+    <string name="pref_winter_snow_coverage_summary">How much of hill tops are covered (0=light, 100=heavy)</string>
+    <string name="pref_frost_enabled_title">Frost Effect</string>
+    <string name="pref_frost_enabled_summary">Subtle frost shimmer along hill edges</string>
+    <string name="pref_effects_sky_cat_2_title">Celestial Bodies</string>
+    <string name="pref_sun_enabled_title">Show Sun</string>
+    <string name="pref_sun_enabled_summary">Display sun in daytime sky</string>
+    <string name="pref_moon_enabled_title">Show Moon</string>
+    <string name="pref_moon_enabled_summary">Display moon at night</string>
+    <string name="pref_celestial_size_title">Sun/Moon Size</string>
+    <string name="pref_celestial_size_summary">Size of celestial bodies (50=small, 100=normal, 200=large)</string>
+    <string name="pref_celestial_arc_height_title">Arc Height</string>
+    <string name="pref_celestial_arc_height_summary">How high sun/moon travel (100=top, 50=middle, 0=near horizon)</string>
+    <string name="pref_effects_sky_cat_3_title">Wind Animation</string>
+    <string name="pref_wind_multiplier_title">Tree Flexibility</string>
+    <string name="pref_wind_multiplier_summary">How much trees bend in gusts (0=rigid, 100=normal, 300=very flexible)</string>
+    <string name="pref_tree_sway_speed_title">Sway Speed</string>
+    <string name="pref_tree_sway_speed_summary">How fast trees sway back (0=frozen, 100=normal, 200=fast)</string>
+    <string name="pref_effects_vignette_cat_2_title">Bottom Edge</string>
+    <string name="pref_vignette_bottom_distance_title">Bottom Distance</string>
+    <string name="pref_vignette_bottom_distance_summary">How far vignette extends into screen (0=off, 50=half)</string>
+    <string name="pref_vignette_bottom_fade_title">Bottom Fade</string>
+    <string name="pref_vignette_bottom_fade_summary">Fade zone size (5=sharp, 50=smooth)</string>
+    <string name="pref_vignette_bottom_alpha_title">Bottom Opacity</string>
+    <string name="pref_vignette_bottom_alpha_summary">How dark the solid part is (0=transparent, 100=black)</string>
+    <string name="pref_effects_vignette_cat_3_title">Top Edge</string>
+    <string name="pref_vignette_top_distance_title">Top Distance</string>
+    <string name="pref_vignette_top_distance_summary">How far vignette extends into screen (0=off)</string>
+    <string name="pref_vignette_top_fade_title">Top Fade</string>
+    <string name="pref_vignette_top_alpha_title">Top Opacity</string>
+    <string name="pref_effects_vignette_cat_4_title">Left Edge</string>
+    <string name="pref_vignette_left_distance_title">Left Distance</string>
+    <string name="pref_vignette_left_fade_title">Left Fade</string>
+    <string name="pref_vignette_left_alpha_title">Left Opacity</string>
+    <string name="pref_effects_vignette_cat_5_title">Right Edge</string>
+    <string name="pref_vignette_right_distance_title">Right Distance</string>
+    <string name="pref_vignette_right_fade_title">Right Fade</string>
+    <string name="pref_vignette_right_alpha_title">Right Opacity</string>
+    <string name="pref_effects_weather_shadows_cat_2_title">Weather Particles</string>
+    <string name="pref_weather_layers_title">Depth Layers</string>
+    <string name="pref_weather_layers_summary">Number of particle depth layers (1=flat, 3=default, 5=deep)</string>
+    <string name="pref_weather_layer_separation_title">Layer Separation</string>
+    <string name="pref_weather_layer_separation_summary">Size difference between layers (10=subtle, 30=default, 50=extreme)</string>
+    <string name="pref_weather_layer_depth_title">Layer Parallax Depth</string>
+    <string name="pref_weather_layer_depth_summary">How much back layers move with parallax (10=subtle, 20=default, 40=extreme)</string>
+    <string name="pref_effects_weather_shadows_cat_3_title">Shadows &amp; Lighting</string>
+    <string name="pref_mountain_shadows_enabled_title">Terrain Shadows</string>
+    <string name="pref_mountain_shadows_enabled_summary">Mountain sides darken and hill ridges cast shadows based on sun position</string>
+    <string name="pref_tree_shadows_enabled_title">Tree Shadows</string>
+    <string name="pref_tree_shadows_enabled_summary">Trees cast shadows on the ground</string>
+    <string name="pref_shadow_strength_title">Shadow Intensity</string>
+    <string name="pref_shadow_strength_summary">Darkness of shadows (0=subtle, 50=normal, 100=strong)</string>
+    <string name="pref_events_cat_2_title">Random Events</string>
+    <string name="pref_events_enabled_summary">Birds, planes, animals, and more</string>
+    <string name="pref_event_frequency_title">Event Frequency</string>
+    <string name="pref_event_frequency_summary">Spawn rate (0=rare, 50=normal, 100=frequent)</string>
+    <string name="pref_spawn_event_title">Spawn Random Event</string>
+    <string name="pref_spawn_event_summary">Manually trigger a random enabled event</string>
+    <string name="pref_events_cat_3_title">Seasonal Events</string>
+    <string name="pref_seasonal_enabled_title_2">Seasonal Effects</string>
+    <string name="pref_seasonal_enabled_summary_2">Christmas, New Year, St. Patrick\'s settings</string>
+    <string name="pref_events_cat_5_title">Shake Gesture</string>
+    <string name="pref_shake_fireworks_enabled_title">Shake for Fireworks</string>
+    <string name="pref_shake_fireworks_enabled_summary">Wiggle the phone around its long axis (or shake hard)</string>
+    <string name="pref_events_choose_cat_2_title">Sky Events</string>
+    <string name="pref_event_airplane_title">Airplanes</string>
+    <string name="pref_event_airplane_summary">Planes with contrails</string>
+    <string name="pref_event_birds_title">Bird Flocks</string>
+    <string name="pref_event_birds_summary">V-formation flocks</string>
+    <string name="pref_event_eagle_title">Eagles</string>
+    <string name="pref_event_eagle_summary">Soaring silhouettes</string>
+    <string name="pref_event_owl_title">Owls</string>
+    <string name="pref_event_owl_summary">Night-only silhouettes</string>
+    <string name="pref_event_balloon_title">Hot Air Balloons</string>
+    <string name="pref_event_balloon_summary">Drifting in good weather</string>
+    <string name="pref_event_shootingstar_title">Shooting Stars</string>
+    <string name="pref_event_shootingstar_summary">Clear night skies</string>
+    <string name="pref_event_perseids_title">Meteor Showers</string>
+    <string name="pref_event_perseids_summary">Perseids (Aug), Geminids (Dec) and Quadrantids (Jan) at their real activity; spawn shows the current shower</string>
+    <string name="pref_event_starfall_title">Falling Stars</string>
+    <string name="pref_event_starfall_summary">Background stars drop and burn out, new ones slowly appear (clear nights)</string>
+    <string name="pref_event_alien_title">UFOs</string>
+    <string name="pref_event_alien_summary">Very rare night sightings</string>
+    <string name="pref_events_choose_cat_3_title">Ground Events</string>
+    <string name="pref_event_butterfly_title">Butterflies</string>
+    <string name="pref_event_butterfly_summary">Spring &amp; Summer only</string>
+    <string name="pref_event_dragonfly_title">Dragonflies</string>
+    <string name="pref_event_dragonfly_summary">Summer only - hovering insects</string>
+    <string name="pref_event_rabbit_title">Rabbits</string>
+    <string name="pref_event_rabbit_summary">Hopping across terrain</string>
+    <string name="pref_event_fox_title">Foxes</string>
+    <string name="pref_event_fox_summary">Walking through hills</string>
+    <string name="pref_event_squirrel_title">Squirrels</string>
+    <string name="pref_event_squirrel_summary">Autumn mostly - gathering nuts</string>
+    <string name="pref_event_fireflies_title">Fireflies</string>
+    <string name="pref_event_fireflies_summary">Summer nights only</string>
+    <string name="pref_event_snowflake_title">Snowflakes</string>
+    <string name="pref_event_snowflake_summary">Winter decorative flakes (non-weather)</string>
+    <string name="pref_event_bat_title">Bats</string>
+    <string name="pref_event_bat_summary">Night flyers - chaotic movement</string>
+    <string name="pref_event_deer_title">Deer</string>
+    <string name="pref_event_deer_summary">Autumn/Winter - grazing and walking</string>
+    <string name="pref_event_fish_title">Fish</string>
+    <string name="pref_event_fish_summary">Fish jumping out of water</string>
+    <string name="pref_event_duck_title">Ducks</string>
+    <string name="pref_event_duck_summary">Ducks waddling across terrain</string>
+    <string name="pref_event_frog_title">Frogs</string>
+    <string name="pref_event_frog_summary">Spring/Summer - sitting and hopping at dusk</string>
+    <string name="pref_events_seasonal_cat_2_title">Christmas</string>
+    <string name="pref_christmas_enabled_summary">Bethlehem star with trail (around Dec 25)</string>
+    <string name="pref_christmas_interval_title">Christmas Interval</string>
+    <string name="pref_christmas_interval_summary">±days around Dec 25 (0=only Dec 25, 15=Dec 10 - Jan 9)</string>
+    <string name="pref_christmas_star_size_title">Christmas Star Size</string>
+    <string name="pref_christmas_star_size_summary">Bethlehem star size (50-200%%)</string>
+    <string name="pref_christmas_star_trail_title">Star Trail Length</string>
+    <string name="pref_christmas_star_trail_summary">Trailing light effect (0-200%%)</string>
+    <string name="pref_events_seasonal_cat_3_title">New Year</string>
+    <string name="pref_newyear_enabled_summary">Fireworks (around Jan 1)</string>
+    <string name="pref_newyear_interval_title">New Year Interval</string>
+    <string name="pref_newyear_interval_summary">±days around Jan 1 (0=only Jan 1, 15=Dec 17 - Jan 16)</string>
+    <string name="pref_firework_frequency_title">Firework Frequency</string>
+    <string name="pref_firework_frequency_summary">How often fireworks launch (0=rare, 100=constant)</string>
+    <string name="pref_firework_amount_title">Firework Amount</string>
+    <string name="pref_firework_amount_summary">Particles per explosion (10=subtle, 200=spectacular)</string>
+    <string name="pref_events_seasonal_cat_4_title">Chinese New Year</string>
+    <string name="pref_cn_newyear_enabled_summary">Dragon + fireworks (second new moon after the winter solstice, Jan 21 - Feb 20)</string>
+    <string name="pref_cn_newyear_interval_title">CN New Year Interval</string>
+    <string name="pref_cn_newyear_interval_summary">±days around the computed Chinese New Year date (0 = that day only)</string>
+    <string name="pref_events_seasonal_cat_5_title">St. Patrick\'s Day</string>
+    <string name="pref_st_patricks_enabled_summary">Rainbow (around Mar 17)</string>
+    <string name="pref_st_patricks_interval_title">St. Patrick\'s Interval</string>
+    <string name="pref_st_patricks_interval_summary">±days around Mar 17 (0=only Mar 17, 10=Mar 7 - Mar 27)</string>
+    <string name="pref_rainbow_position_x_title">Rainbow Horizontal Position</string>
+    <string name="pref_rainbow_position_x_summary">Left to right placement (0=left, 100=right)</string>
+    <string name="pref_rainbow_position_y_title">Rainbow Vertical Position</string>
+    <string name="pref_rainbow_position_y_summary">Top to bottom placement (0=top, 100=bottom)</string>
+    <string name="pref_rainbow_size_title">Rainbow Size</string>
+    <string name="pref_rainbow_size_summary">Arc size (20=small, 200=large)</string>
+    <string name="pref_events_shake_cat_2_title">Shake Settings</string>
+    <string name="pref_shake_fireworks_count_title">Firework Count</string>
+    <string name="pref_shake_fireworks_count_summary">Number of fireworks on shake (5-50)</string>
+    <string name="pref_shake_sensitivity_title">Shake Sensitivity</string>
+    <string name="pref_shake_sensitivity_summary">How fast and how often to wiggle or shake (0=deliberate, 100=gentle)</string>
+    <string name="pref_shake_delay_title">Unlock Delay</string>
+    <string name="pref_shake_delay_summary">Ignore shakes after screen on (0-5000ms, prevents accidental triggers)</string>
+    <string name="pref_scene_cat_2_title">Landscape</string>
+    <string name="pref_random_seed_title">Random Seed</string>
+    <string name="pref_random_seed_summary">Changes terrain layout (1-999)</string>
+    <string name="pref_scene_cat_3_title">Mountains</string>
+    <string name="pref_mountain_density_title">Mountain Density</string>
+    <string name="pref_mountain_density_summary">Mountain coverage (0=none, 50=normal, 100=dense)</string>
+    <string name="pref_nav_mountains_title">Mountain Details</string>
+    <string name="pref_nav_mountains_summary">Width, height, roughness, ridge, position</string>
+    <string name="pref_scene_cat_5_title">Hills</string>
+    <string name="pref_hill_count_title">Hill Layers</string>
+    <string name="pref_hill_count_summary">Terrain depth layers (0=none, 5=normal, 20=many)</string>
+    <string name="pref_nav_hills_title">Hill Details</string>
+    <string name="pref_nav_hills_summary">Position, roughness, height, frequency, depth</string>
+    <string name="pref_scene_cat_7_title">Trees</string>
+    <string name="pref_tree_density_title">Tree Density</string>
+    <string name="pref_tree_density_summary">Coverage (0=none, 45=moderate, 100=normal, 200=dense)</string>
+    <string name="pref_nav_trees_title">Tree Details</string>
+    <string name="pref_nav_trees_summary">Spread, gaps, size, width, segments, color</string>
+    <string name="pref_scene_hills_cat_2_title">Hill Geometry</string>
+    <string name="pref_hill_lower_start_title">Far Hills Position</string>
+    <string name="pref_hill_lower_start_summary">Where far hills start (30-70%%)</string>
+    <string name="pref_hill_upper_end_title">Near Hills Position</string>
+    <string name="pref_hill_upper_end_summary">Where near hills end (60-100%%)</string>
+    <string name="pref_hill_roughness_title">Hill Roughness</string>
+    <string name="pref_hill_roughness_summary">Curve detail (0=smooth, 100=normal, 200=rough)</string>
+    <string name="pref_hill_amplitude_title">Hill Height</string>
+    <string name="pref_hill_amplitude_summary">Vertical scale (0=flat, 100=normal, 1000=extreme)</string>
+    <string name="pref_hill_frequency_title">Hill Frequency</string>
+    <string name="pref_hill_frequency_summary">Hills per layer (50=few, 100=normal, 200=many)</string>
+    <string name="pref_hill_distance_title">Hill Distance</string>
+    <string name="pref_hill_distance_summary">Pushes hills away (0=at camera, 100=near mountains)</string>
+    <string name="pref_hill_depth_spread_title">Hill Depth Spread</string>
+    <string name="pref_hill_depth_spread_summary">Z-axis spread (0=flat layer, 100=deep range)</string>
+    <string name="pref_scene_mountains_cat_2_title">Mountain Geometry</string>
+    <string name="pref_mountain_width_title">Mountain Width</string>
+    <string name="pref_mountain_width_summary">Width scale (50=narrow, 100=normal, 200=wide)</string>
+    <string name="pref_mountain_height_title">Mountain Height</string>
+    <string name="pref_mountain_height_summary">Height scale (50=short, 100=normal, 200=tall)</string>
+    <string name="pref_mountain_roughness_title">Mountain Roughness</string>
+    <string name="pref_mountain_roughness_summary">Jaggedness (0=smooth, 100=normal, 200=rough)</string>
+    <string name="pref_mountain_ridge_roughness_title">Ridge Roughness</string>
+    <string name="pref_mountain_ridge_roughness_summary">Center ridge detail (0=smooth, 100=jagged)</string>
+    <string name="pref_mountain_bottom_offset_title">Mountain Position</string>
+    <string name="pref_mountain_bottom_offset_summary">Shift mountains up (0=bottom, 50=halfway)</string>
+    <string name="pref_scene_trees_cat_2_title">Tree Types</string>
+    <string name="pref_leaf_tree_ratio_title">Leaf / Needle Ratio</string>
+    <string name="pref_leaf_tree_ratio_summary">Percentage of deciduous (leaf) vs conifer trees (0=all needle, 100=all leaf)</string>
+    <string name="pref_scene_trees_cat_3_title">Tree Placement</string>
+    <string name="pref_tree_spread_title">Tree Spread</string>
+    <string name="pref_tree_spread_summary">Placement range (0=peaks, 100=full hills)</string>
+    <string name="pref_tree_sparsity_title">Tree Gaps</string>
+    <string name="pref_tree_sparsity_summary">Gap size (0=uniform, 25=natural, 80=sparse)</string>
+    <string name="pref_scene_trees_cat_4_title">Tree Appearance</string>
+    <string name="pref_tree_size_randomness_title">Size Variation</string>
+    <string name="pref_tree_size_randomness_summary">Tree size variety (0=uniform, 100=varied)</string>
+    <string name="pref_tree_size_title">Tree Size</string>
+    <string name="pref_tree_size_summary">Overall scale (50=small, 100=normal, 200=tall)</string>
+    <string name="pref_tree_width_title">Tree Width</string>
+    <string name="pref_tree_width_summary">Width ratio (50=thin, 100=normal, 200=wide)</string>
+    <string name="pref_tree_segments_title">Tree Segments</string>
+    <string name="pref_tree_segments_summary">Tiers per tree (1=simple, 5=detailed)</string>
+    <string name="pref_tree_color_variation_title">Color Variation</string>
+    <string name="pref_tree_color_variation_summary">Color diversity (0=uniform, 100=varied)</string>
+    <string name="pref_system_cat_2_title">Time &amp; Weather</string>
+    <string name="pref_daynight_enabled_title">Auto Day/Night</string>
+    <string name="pref_daynight_enabled_summary">Sky colors based on real time</string>
+    <string name="pref_use_breezy_weather_title">Use Breezy Weather</string>
+    <string name="pref_use_breezy_weather_summary">Get weather from Breezy Weather app</string>
+    <string name="pref_weather_enabled_title_2">Weather Effects</string>
+    <string name="pref_weather_enabled_summary_2">Rain, snow, lightning particles</string>
+    <string name="pref_system_cat_3_title">Performance</string>
+    <string name="pref_max_fps_title">Max FPS</string>
+    <string name="pref_max_fps_summary">Frame rate limit</string>
+    <string name="pref_idle_mode_enabled_title">Idle Mode</string>
+    <string name="pref_idle_mode_enabled_summary">Idle FPS, timeout duration</string>
+    <string name="pref_system_cat_5_title">Testing</string>
+    <string name="pref_debug_enabled_title">Simulation Mode</string>
+    <string name="pref_debug_enabled_summary">Time, wind, weather, season overrides</string>
+    <string name="pref_nav_about_title">About &amp; Debug</string>
+    <string name="pref_nav_about_summary">Version, logging, weather data, export</string>
+    <string name="pref_system_cat_6_title">Maintenance</string>
+    <string name="pref_reset_defaults_title">Reset All Settings</string>
+    <string name="pref_reset_defaults_summary">Restore all preferences to defaults</string>
+    <string name="pref_system_about_cat_2_title">Version</string>
+    <string name="pref_system_about_cat_3_title">Weather Data</string>
+    <string name="pref_check_breezy_title">Check Connection</string>
+    <string name="pref_check_breezy_summary">Test Breezy Weather connection</string>
+    <string name="pref_copy_weather_data_title">Copy Weather Data</string>
+    <string name="pref_copy_weather_data_summary">Copy raw JSON to clipboard for debugging</string>
+    <string name="pref_system_about_cat_4_title">Debug</string>
+    <string name="pref_debug_logging_title">Debug Logging</string>
+    <string name="pref_debug_logging_summary">Enable tracing (copies log when disabled)</string>
+    <string name="pref_debug_frame_timing_title">Frame Timing</string>
+    <string name="pref_debug_frame_timing_summary">Log slow frames (&gt;16ms) for performance analysis</string>
+    <string name="pref_debug_overlay_enabled_title">🐞 Debug Overlay</string>
+    <string name="pref_debug_overlay_enabled_summary">Show FPS, frame time, and debug info on screen</string>
+    <string name="pref_copy_crash_log_title">Copy Last Crash Log</string>
+    <string name="pref_copy_crash_log_summary">Copy the most recent crash report to clipboard</string>
+    <string name="pref_system_about_cat_5_title">Actions</string>
+    <string name="pref_copy_settings_title">Copy All Settings</string>
+    <string name="pref_copy_settings_summary">Copy every preference value to clipboard</string>
+    <string name="pref_preview_title">Preview Wallpaper</string>
+    <string name="pref_preview_summary">Open wallpaper preview</string>
+    <string name="pref_idle_fps_title">Idle FPS</string>
+    <string name="pref_idle_fps_summary">Frame rate when idle (5-20)</string>
+    <string name="pref_idle_timeout_title">Idle Timeout</string>
+    <string name="pref_idle_timeout_summary">Time before entering idle mode</string>
+    <string name="pref_system_simulation_cat_2_title">Simulation Overrides</string>
+    <string name="pref_manual_time_title">Time of Day</string>
+    <string name="pref_manual_time_summary">Minutes since midnight (0-1439)</string>
+    <string name="pref_wind_strength_title">Wind Strength</string>
+    <string name="pref_wind_strength_summary">Simulated wind (0=calm, 100=storm)</string>
+    <string name="pref_weather_type_title">Weather Type</string>
+    <string name="pref_weather_type_summary">Force specific weather</string>
+    <string name="pref_debug_cloud_override_title">Cloud Density</string>
+    <string name="pref_debug_cloud_override_summary">Force cloud amount</string>
+    <string name="pref_debug_season_title">Season Override</string>
+    <string name="pref_debug_season_summary">Force seasonal events</string>
+    <string name="pref_terrain_season_title">Terrain Season</string>
+    <string name="pref_terrain_season_summary">Override terrain (flowers, grass, snow)</string>
+    <string name="pref_moon_phase_title">Moon Phase</string>
+    <string name="pref_moon_phase_summary">0=New, 50=Full, 100=New (cycle end)</string>
+    <string name="pref_season_day_override_title">Day of Year</string>
+    <string name="pref_season_day_override_summary">Override calendar day (0=auto, 1=Jan 1, 365=Dec 31). Controls season, decorations, transitions.</string>
+    <string name="pref_system_simulation_cat_3_title">Weather History</string>
+    <string name="pref_weather_data_display_title">Collected Weather Data</string>
+    <string name="pref_weather_data_display_summary">Loading weather history…</string>
+    <string name="pref_sim_weather_history_title">Override Weather History</string>
+    <string name="pref_sim_weather_history_summary">Manually set snow depth and river level instead of deriving from weather data</string>
+    <string name="pref_sim_snow_level_title">Snow Depth</string>
+    <string name="pref_sim_snow_level_summary">Simulated accumulated snow (0=none, 100=deep)</string>
+    <string name="pref_sim_river_level_title">River Level</string>
+    <string name="pref_sim_river_level_summary">Simulated river/water level (0=dry, 100=flooded)</string>
+    <string name="pref_sim_lake_level_title">Lake Level</string>
+    <string name="pref_sim_lake_level_summary">Simulated lake water level (0=dry, 100=full)</string>
 </resources>
+

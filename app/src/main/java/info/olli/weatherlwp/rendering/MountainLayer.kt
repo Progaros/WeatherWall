@@ -180,6 +180,16 @@ class MountainLayer(private val context: Context) : SceneLayer {
 
         /** Cool shade of snow in the lee of the light. */
         private const val SNOW_SHADE = 0xFF5A6A8C.toInt()
+
+        /**
+         * Valley mist boost (0..1) driven by low visibility or high humidity.
+         * Returns 0 for normal clear air (visibility >= 0.75, humidity <= 0.75).
+         */
+        internal fun valleyMistFactor(visibility: Float, humidity: Float): Float {
+            val visTerm = ((0.75f - visibility) / 0.75f).coerceIn(0f, 1f)
+            val humTerm = ((humidity - 0.75f) / 0.25f).coerceIn(0f, 1f) * 0.45f
+            return maxOf(visTerm, humTerm).coerceIn(0f, 1f)
+        }
     }
 
     /**
@@ -417,28 +427,30 @@ class MountainLayer(private val context: Context) : SceneLayer {
             }
         }
         
-        // Draw atmospheric haze at the base of mountains (fog overlay)
-        // This blends the mountains into the terrain and adds depth
-        drawAtmosphericHaze(canvas, bucketedAmbientColor)
+        // Draw atmospheric haze at the base of mountains (fog/valley mist overlay)
+        // Scales smoothly with low visibility or high humidity from weather data
+        drawAtmosphericHaze(canvas, bucketedAmbientColor, valleyMistFactor(state.visibility, state.humidity))
     }
     
     /**
      * Draw a soft atmospheric haze at the bottom portion of the screen.
-     * This simulates fog/mist at the base of mountains.
+     * Simulates valley mist at the base of mountains, deepening when visibility drops or humidity rises.
      */
-    private fun drawAtmosphericHaze(canvas: Canvas, ambientColor: Int) {
-        val hazeStartY = height * RenderConstants.HAZE_START_Y
+    private fun drawAtmosphericHaze(canvas: Canvas, ambientColor: Int, mistFactor: Float) {
+        val hazeStartY = height * (RenderConstants.HAZE_START_Y - 0.10f * mistFactor)
         val hazeEndY = height * RenderConstants.HAZE_END_Y
-        val hazeBucket = ambientColorBucket(ambientColor)
+        val mistBucket = (mistFactor * 20f).toInt()
+        val hazeBucket = ambientColorBucket(ambientColor) or (mistBucket shl 20)
         
-        // Only recreate gradient if ambient color or height changed (avoids per-frame allocation)
+        // Only recreate gradient if ambient color, mist level, or height changed (avoids per-frame allocation)
         if (hazeBucket != cachedHazeAmbient || height != cachedHazeHeight) {
             cachedHazeAmbient = hazeBucket
             cachedHazeHeight = height
             
+            val hazeAlpha = (RenderConstants.HAZE_ALPHA + (95f * mistFactor).toInt()).coerceIn(0, 200)
             // Haze color blends with ambient for consistent atmosphere
             val hazeColor = Color.argb(
-                RenderConstants.HAZE_ALPHA,
+                hazeAlpha,
                 Color.red(ambientColor),
                 Color.green(ambientColor),
                 Color.blue(ambientColor)

@@ -2,17 +2,17 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <PreferenceCategory android:title="River">
+    <PreferenceCategory android:title="@string/pref_river_enabled_title">
         <SwitchPreferenceCompat
             android:key="pref_river_enabled"
-            android:title="Enable River"
-            android:summary="Show a river in the foreground terrain"
+            android:title="@string/pref_river_enabled_title_2"
+            android:summary="@string/pref_river_enabled_summary_2"
             android:defaultValue="false" />
 
         <ListPreference
             android:key="pref_river_style"
-            android:title="River Style"
-            android:summary="Visual rendering approach"
+            android:title="@string/pref_river_style_title"
+            android:summary="@string/pref_river_style_summary"
             android:entries="@array/river_style_options"
             android:entryValues="@array/river_style_values"
             android:defaultValue="wavy"
@@ -20,8 +20,8 @@
 
         <SeekBarPreference
             android:key="pref_river_width"
-            android:title="River Width"
-            android:summary="Width of the river (10=narrow, 100=wide)"
+            android:title="@string/pref_river_width_title"
+            android:summary="@string/pref_river_width_summary"
             android:defaultValue="40"
             android:max="100"
             app:min="10"
@@ -31,8 +31,8 @@
 
         <SeekBarPreference
             android:key="pref_river_opacity"
-            android:title="Water Opacity"
-            android:summary="Transparency of water (0=clear, 100=opaque)"
+            android:title="@string/pref_lake_opacity_title"
+            android:summary="@string/pref_river_opacity_summary"
             android:defaultValue="70"
             android:max="100"
             app:min="0"
@@ -42,8 +42,8 @@
 
         <SeekBarPreference
             android:key="pref_river_speed"
-            android:title="Flow Speed"
-            android:summary="How fast the water flows (0=still, 100=fast)"
+            android:title="@string/pref_river_speed_title"
+            android:summary="@string/pref_river_speed_summary"
             android:defaultValue="50"
             android:max="100"
             app:min="0"

@@ -7,6 +7,7 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Shader
+import androidx.core.graphics.withTranslation
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationSettings
@@ -151,74 +152,73 @@ class LakeLayer(private val context: Context) : SceneLayer {
         val px = parallaxCalculator.getOffsetXForDepth(depthFactor)
         val py = parallaxCalculator.getOffsetYForDepth(depthFactor)
 
-        canvas.save()
-        canvas.translate(px, py)
+        canvas.withTranslation(px, py) {
+            // Calculate lake bounds in screen coordinates using viewport transform
+            val lakeWidthPx = width * sizePercent * 1.2f  // slightly wider for natural feel
+            // Map position percent to world-space X: 0.0 = left edge, 0.5 = center, 1.0 = right edge
+            val lakeWorldX = (positionPercent - 0.5f) * transform.worldWidth
+            val lakeCenterX = transform.worldToScreenX(lakeWorldX)
+            val lakeLeft = lakeCenterX - lakeWidthPx / 2f
+            val lakeRight = lakeCenterX + lakeWidthPx / 2f
 
-        // Calculate lake bounds in screen coordinates using viewport transform
-        val lakeWidthPx = width * sizePercent * 1.2f  // slightly wider for natural feel
-        // Map position percent to world-space X: 0.0 = left edge, 0.5 = center, 1.0 = right edge
-        val lakeWorldX = (positionPercent - 0.5f) * transform.worldWidth
-        val lakeCenterX = transform.worldToScreenX(lakeWorldX)
-        val lakeLeft = lakeCenterX - lakeWidthPx / 2f
-        val lakeRight = lakeCenterX + lakeWidthPx / 2f
+            // Sample terrain Y to find the local valley in the lake area
+            val numSamples = 30
+            var minTerrainY = Float.MAX_VALUE
+            var maxTerrainY = Float.MIN_VALUE
+            for (i in 0..numSamples) {
+                val screenX = lakeLeft + (lakeRight - lakeLeft) * i.toFloat() / numSamples
+                val terrainY = worldProvider(transform.screenToWorldX(screenX), depthFactor) * height
+                terrainYsArray[i] = terrainY
+                if (terrainY < minTerrainY) minTerrainY = terrainY
+                if (terrainY > maxTerrainY) maxTerrainY = terrainY
+            }
 
-        // Sample terrain Y to find the local valley in the lake area
-        val numSamples = 30
-        var minTerrainY = Float.MAX_VALUE
-        var maxTerrainY = Float.MIN_VALUE
-        for (i in 0..numSamples) {
-            val screenX = lakeLeft + (lakeRight - lakeLeft) * i.toFloat() / numSamples
-            val terrainY = worldProvider(transform.screenToWorldX(screenX), depthFactor) * height
-            terrainYsArray[i] = terrainY
-            if (terrainY < minTerrainY) minTerrainY = terrainY
-            if (terrainY > maxTerrainY) maxTerrainY = terrainY
-        }
+            val valleyRange = maxTerrainY - minTerrainY
+            if (valleyRange < 2f) {
+                // Flat terrain - draw a simple oval lake
+                val lakeY = maxTerrainY
+                val lakeDepthPx = height * 0.025f * effectiveLevel
+                drawSimpleLake(canvas, lakeCenterX, lakeY, lakeWidthPx, lakeDepthPx, waterColor, isFrozen)
+                if (!isFrozen && effectiveLevel > 0.3f) {
+                    drawShimmer(canvas, state, lakeCenterX, lakeY, lakeWidthPx)
+                }
+                return@withTranslation
+            }
 
-        val valleyRange = maxTerrainY - minTerrainY
-        if (valleyRange < 2f) {
-            // Flat terrain - draw a simple oval lake
-            val lakeY = maxTerrainY
-            val lakeDepthPx = height * 0.025f * effectiveLevel
-            drawSimpleLake(canvas, lakeCenterX, lakeY, lakeWidthPx, lakeDepthPx, waterColor, isFrozen)
-            canvas.restore()
-            return
-        }
+            // Water surface fills the valley
+            val waterSurfaceY = maxTerrainY - valleyRange * effectiveLevel * 0.5f
 
-        // Water surface fills the valley
-        val waterSurfaceY = maxTerrainY - valleyRange * effectiveLevel * 0.5f
+            // Build lake path: water fills below waterSurfaceY within lake bounds
+            lakePath.reset()
+            var segmentStart = -1
+            val sampleStepX = (lakeRight - lakeLeft) / numSamples
 
-        // Build lake path: water fills below waterSurfaceY within lake bounds
-        lakePath.reset()
-        var segmentStart = -1
-        val sampleStepX = (lakeRight - lakeLeft) / numSamples
+            for (i in 0..numSamples) {
+                val terrainY = terrainYsArray[i]
 
-        for (i in 0..numSamples) {
-            val terrainY = terrainYsArray[i]
+                if (terrainY > waterSurfaceY) {
+                    if (segmentStart < 0) segmentStart = i
+                } else if (segmentStart >= 0) {
+                    buildAndDrawLakeSegment(
+                        canvas, segmentStart, i - 1, lakeLeft, sampleStepX,
+                        waterSurfaceY, isFrozen, waterColor, effectiveLevel, maxTerrainY
+                    )
+                    segmentStart = -1
+                }
+            }
 
-            if (terrainY > waterSurfaceY) {
-                if (segmentStart < 0) segmentStart = i
-            } else if (segmentStart >= 0) {
+            if (segmentStart >= 0) {
                 buildAndDrawLakeSegment(
-                    canvas, segmentStart, i - 1, lakeLeft, sampleStepX,
+                    canvas, segmentStart, numSamples, lakeLeft, sampleStepX,
                     waterSurfaceY, isFrozen, waterColor, effectiveLevel, maxTerrainY
                 )
-                segmentStart = -1
+            }
+
+            // Draw shimmer/sparkles and celestial reflection column on lake surface
+            if (!isFrozen && effectiveLevel > 0.3f) {
+                drawShimmer(canvas, state, lakeCenterX, waterSurfaceY, lakeWidthPx)
             }
         }
-
-        if (segmentStart >= 0) {
-            buildAndDrawLakeSegment(
-                canvas, segmentStart, numSamples, lakeLeft, sampleStepX,
-                waterSurfaceY, isFrozen, waterColor, effectiveLevel, maxTerrainY
-            )
-        }
-
-        // Draw shimmer/sparkles on lake surface
-        if (!isFrozen && effectiveLevel > 0.3f) {
-            drawShimmer(canvas, state, lakeCenterX, waterSurfaceY, lakeWidthPx)
-        }
-
-        canvas.restore()
     }
 
     /**
@@ -375,6 +375,32 @@ class LakeLayer(private val context: Context) : SceneLayer {
         val dayFactor = ((lightLevel - 0.15f) / 0.85f).coerceIn(0f, 1f)
         val intensity = dayFactor * lightLevel * 0.8f +
             (1f - dayFactor) * (state.moonIllumination * 0.5f + skyGlow).coerceAtMost(1f)
+
+        // Sun / moon shimmering reflection column aligned with the light direction
+        val clearSkyFactor = (1f - state.overcastFactor()).coerceIn(0f, 1f)
+        val columnStrength = (intensity * clearSkyFactor).coerceIn(0f, 1f)
+        if (columnStrength > 0.08f) {
+            val reflectX = (centerX + state.lightDirX * lakeWidth * 0.34f)
+                .coerceIn(centerX - lakeWidth * 0.42f, centerX + lakeWidth * 0.42f)
+            val tintR = if (dayFactor > 0.4f) 255 else 215
+            val tintG = if (dayFactor > 0.4f) 242 else 230
+            val tintB = if (dayFactor > 0.4f) 195 else 255
+            shimmerPaint.style = Paint.Style.STROKE
+            shimmerPaint.strokeCap = Paint.Cap.ROUND
+            val ribbons = 7
+            for (i in 0 until ribbons) {
+                val t = i.toFloat() / (ribbons - 1)
+                val ry = surfaceY + height * (0.002f + t * 0.022f)
+                val sway = sin((shimmerPhase * 2.4f + i * 1.35f).toDouble()).toFloat() * lakeWidth * 0.014f
+                val pulse = 0.65f + 0.35f * sin((shimmerPhase * 3.1f + i * 2.1f).toDouble()).toFloat()
+                val halfW = lakeWidth * (0.045f + t * 0.075f) * pulse
+                val alpha = (columnStrength * (1f - t * 0.55f) * 145f * opacity).toInt().coerceIn(8, 175)
+                shimmerPaint.color = Color.argb(alpha, tintR, tintG, tintB)
+                shimmerPaint.strokeWidth = (1.8f + t * 1.6f)
+                canvas.drawLine(reflectX - halfW + sway, ry, reflectX + halfW + sway, ry, shimmerPaint)
+            }
+            shimmerPaint.style = Paint.Style.FILL
+        }
 
         // Horizontal ripple lines
         val rippleAlpha = (intensity * 60 * opacity).toInt().coerceIn(10, 80)

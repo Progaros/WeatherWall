@@ -185,64 +185,60 @@ class RiverLayer(private val context: Context) : SceneLayer {
             val px = parallaxCalculator.getOffsetXForDepth(depth)
             val py = parallaxCalculator.getOffsetYForDepth(depth)
 
-            canvas.save()
-            canvas.translate(px, py)
+            canvas.withTranslation(px, py) {
+                // Sample terrain Y across the width to find valleys
+                val left = -extendedOffset - width * 0.05f
+                val right = width + extendedOffset + width * 0.05f
+                val totalW = right - left
+                val numSamples = 50
 
-            // Sample terrain Y across the width to find valleys
-            val left = -extendedOffset - width * 0.05f
-            val right = width + extendedOffset + width * 0.05f
-            val totalW = right - left
-            val numSamples = 50
+                // Find the valley floor (lowest Y = highest screen position, so we want MAX Y for valleys)
+                var minTerrainY = Float.MAX_VALUE
+                var maxTerrainY = Float.MIN_VALUE
+                for (i in 0..numSamples) {
+                    val screenX = left + i.toFloat() / numSamples * totalW
+                    val terrainY = worldProvider(transform.screenToWorldX(screenX), depth) * height
+                    terrainYsArray[i] = terrainY
+                    if (terrainY < minTerrainY) minTerrainY = terrainY
+                    if (terrainY > maxTerrainY) maxTerrainY = terrainY
+                }
 
-            // Find the valley floor (lowest Y = highest screen position, so we want MAX Y for valleys)
-            var minTerrainY = Float.MAX_VALUE
-            var maxTerrainY = Float.MIN_VALUE
-            for (i in 0..numSamples) {
-                val screenX = left + i.toFloat() / numSamples * totalW
-                val terrainY = worldProvider(transform.screenToWorldX(screenX), depth) * height
-                terrainYsArray[i] = terrainY
-                if (terrainY < minTerrainY) minTerrainY = terrainY
-                if (terrainY > maxTerrainY) maxTerrainY = terrainY
-            }
+                // The valley threshold: water fills from the deepest point up to a level
+                // determined by water level (0 = only deepest point, 1 = fills to peaks)
+                val valleyRange = maxTerrainY - minTerrainY
+                if (valleyRange < 2f) {
+                    return@withTranslation  // Flat terrain, skip
+                }
 
-            // The valley threshold: water fills from the deepest point up to a level
-            // determined by water level (0 = only deepest point, 1 = fills to peaks)
-            val valleyRange = maxTerrainY - minTerrainY
-            if (valleyRange < 2f) {
-                canvas.restore()
-                continue  // Flat terrain, skip
-            }
+                val waterSurfaceY = maxTerrainY - valleyRange * waterLevel * 0.6f
 
-            val waterSurfaceY = maxTerrainY - valleyRange * waterLevel * 0.6f
+                // Build river path: water fills below waterSurfaceY
+                riverPath.reset()
+                var segmentStart = -1
+                val sampleStepX = totalW / numSamples
 
-            // Build river path: water fills below waterSurfaceY
-            riverPath.reset()
-            var segmentStart = -1
-            val sampleStepX = totalW / numSamples
+                for (i in 0..numSamples) {
+                    val terrainY = terrainYsArray[i]
 
-            for (i in 0..numSamples) {
-                val terrainY = terrainYsArray[i]
+                    if (terrainY > waterSurfaceY) {
+                        if (segmentStart < 0) segmentStart = i
+                    } else if (segmentStart >= 0) {
+                        buildAndDrawSegment(
+                            canvas, state, segmentStart, i - 1, left, sampleStepX,
+                            waterSurfaceY, isFrozen, waterColor, layerAlpha, waterLevel, layerWidthFactor
+                        )
+                        segmentStart = -1
+                    }
+                }
 
-                if (terrainY > waterSurfaceY) {
-                    if (segmentStart < 0) segmentStart = i
-                } else if (segmentStart >= 0) {
+                // Close any remaining segment
+                if (segmentStart >= 0) {
                     buildAndDrawSegment(
-                        canvas, segmentStart, i - 1, left, sampleStepX,
+                        canvas, state, segmentStart, numSamples, left, sampleStepX,
                         waterSurfaceY, isFrozen, waterColor, layerAlpha, waterLevel, layerWidthFactor
                     )
-                    segmentStart = -1
                 }
             }
-
-            // Close any remaining segment
-            if (segmentStart >= 0) {
-                buildAndDrawSegment(
-                    canvas, segmentStart, numSamples, left, sampleStepX,
-                    waterSurfaceY, isFrozen, waterColor, layerAlpha, waterLevel, layerWidthFactor
-                )
-            }
-
-            canvas.restore()
         }
     }
 
@@ -291,61 +287,57 @@ class RiverLayer(private val context: Context) : SceneLayer {
         val px = parallaxCalculator.getOffsetXForDepth(depthFactor)
         val py = parallaxCalculator.getOffsetYForDepth(depthFactor)
 
-        canvas.save()
-        canvas.translate(px, py)
+        canvas.withTranslation(px, py) {
+            // Match TerrainLayer drawHill() bounds exactly so terrain sampling and river geometry align.
+            val left = -extendedOffset - width * 0.1f
+            val right = width + extendedOffset + width * 0.1f
+            val totalW = right - left
+            val numSamples = 50
+            val sampleStepX = totalW / numSamples
 
-        // Match TerrainLayer drawHill() bounds exactly so terrain sampling and river geometry align.
-        val left = -extendedOffset - width * 0.1f
-        val right = width + extendedOffset + width * 0.1f
-        val totalW = right - left
-        val numSamples = 50
-        val sampleStepX = totalW / numSamples
+            var minTerrainY = Float.MAX_VALUE
+            var maxTerrainY = Float.MIN_VALUE
+            for (i in 0..numSamples) {
+                val screenX = left + i * sampleStepX
+                val terrainY = worldProvider(transform.screenToWorldX(screenX), depthFactor) * height
+                terrainYsArray[i] = terrainY
+                if (terrainY < minTerrainY) minTerrainY = terrainY
+                if (terrainY > maxTerrainY) maxTerrainY = terrainY
+            }
 
-        var minTerrainY = Float.MAX_VALUE
-        var maxTerrainY = Float.MIN_VALUE
-        for (i in 0..numSamples) {
-            val screenX = left + i * sampleStepX
-            val terrainY = worldProvider(transform.screenToWorldX(screenX), depthFactor) * height
-            terrainYsArray[i] = terrainY
-            if (terrainY < minTerrainY) minTerrainY = terrainY
-            if (terrainY > maxTerrainY) maxTerrainY = terrainY
-        }
+            val valleyRange = maxTerrainY - minTerrainY
+            if (valleyRange < 2f) {
+                return@withTranslation
+            }
 
-        val valleyRange = maxTerrainY - minTerrainY
-        if (valleyRange < 2f) {
-            canvas.restore()
-            return
-        }
+            val waterSurfaceY = maxTerrainY - valleyRange * waterLevel * 0.6f
 
-        val waterSurfaceY = maxTerrainY - valleyRange * waterLevel * 0.6f
+            riverPath.reset()
+            var segmentStart = -1
 
-        riverPath.reset()
-        var segmentStart = -1
+            for (i in 0..numSamples) {
+                val terrainY = terrainYsArray[i]
 
-        for (i in 0..numSamples) {
-            val terrainY = terrainYsArray[i]
+                if (terrainY > waterSurfaceY) {
+                    if (segmentStart < 0) segmentStart = i
+                } else if (segmentStart >= 0) {
+                    // End of valley segment - build proper polygon and draw
+                    buildAndDrawSegment(
+                        canvas, state, segmentStart, i - 1, left, sampleStepX,
+                        waterSurfaceY, isFrozen, waterColor, layerAlpha, waterLevel, layerWidthFactor
+                    )
+                    segmentStart = -1
+                }
+            }
 
-            if (terrainY > waterSurfaceY) {
-                if (segmentStart < 0) segmentStart = i
-            } else if (segmentStart >= 0) {
-                // End of valley segment - build proper polygon and draw
+            // Trailing segment
+            if (segmentStart >= 0) {
                 buildAndDrawSegment(
-                    canvas, segmentStart, i - 1, left, sampleStepX,
+                    canvas, state, segmentStart, numSamples, left, sampleStepX,
                     waterSurfaceY, isFrozen, waterColor, layerAlpha, waterLevel, layerWidthFactor
                 )
-                segmentStart = -1
             }
         }
-
-        // Trailing segment
-        if (segmentStart >= 0) {
-            buildAndDrawSegment(
-                canvas, segmentStart, numSamples, left, sampleStepX,
-                waterSurfaceY, isFrozen, waterColor, layerAlpha, waterLevel, layerWidthFactor
-            )
-        }
-
-        canvas.restore()
     }
 
     /**
@@ -354,6 +346,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
      */
     private fun buildAndDrawSegment(
         canvas: Canvas,
+        state: SimulationState,
         startIdx: Int, endIdx: Int,
         left: Float, sampleStepX: Float,
         waterSurfaceY: Float, isFrozen: Boolean,
@@ -382,7 +375,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
         }
 
         riverPath.close()
-        drawRiverSegment(canvas, waterColor, layerAlpha, isFrozen, waterLevel, layerWidthFactor)
+        drawRiverSegment(canvas, state, waterColor, layerAlpha, isFrozen, waterLevel, layerWidthFactor)
     }
 
     /**
@@ -390,6 +383,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
      */
     private fun drawRiverSegment(
         canvas: Canvas,
+        state: SimulationState,
         color: Int, alphaFactor: Float, isFrozen: Boolean,
         waterLevel: Float, widthFactor: Float
     ) {
@@ -433,7 +427,7 @@ class RiverLayer(private val context: Context) : SceneLayer {
         foamPaint.style = Paint.Style.STROKE
         canvas.drawPath(riverPath, foamPaint)
 
-        // Flow lines — horizontal ripples near the water surface
+        // Flow lines & sun/moon shimmer glints near the water surface
         if (!isFrozen && waterLevel > 0.15f) {
             val rippleAlpha = (22 * alphaFactor).toInt().coerceIn(6, 40)
             foamPaint.color = Color.argb(rippleAlpha, 200, 230, 255)
@@ -444,6 +438,33 @@ class RiverLayer(private val context: Context) : SceneLayer {
             val waveOff2 = sin((flowPhase * 0.6f + 1.5f).toDouble()).toFloat() * 3f
             canvas.drawLine(bounds.left + 4f + waveOff1, rippleY1, bounds.right - 4f + waveOff1, rippleY1, foamPaint)
             canvas.drawLine(bounds.left + 8f + waveOff2, rippleY2, bounds.right - 8f + waveOff2, rippleY2, foamPaint)
+
+            // Celestial shimmer column (sun during day, moon/sky events at night)
+            val lightLevel = state.getLightLevel()
+            val dayFactor = ((lightLevel - 0.15f) / 0.85f).coerceIn(0f, 1f)
+            val shimmerIntensity = (dayFactor * lightLevel * 0.8f +
+                (1f - dayFactor) * (state.moonIllumination * 0.5f + skyGlow).coerceAtMost(1f)) *
+                (1f - state.overcastFactor()).coerceIn(0f, 1f)
+            val segW = bounds.width()
+            val segH = botY - topY
+            if (shimmerIntensity > 0.08f && segW > 12f && segH > 4f) {
+                val reflectX = (bounds.centerX() + state.lightDirX * segW * 0.32f)
+                    .coerceIn(bounds.left + segW * 0.12f, bounds.right - segW * 0.12f)
+                val tintR = if (dayFactor > 0.4f) 255 else 215
+                val tintG = if (dayFactor > 0.4f) 242 else 230
+                val tintB = if (dayFactor > 0.4f) 195 else 255
+                foamPaint.strokeCap = Paint.Cap.ROUND
+                for (r in 0..4) {
+                    val t = r / 4f
+                    val sy = topY + segH * (0.12f + t * 0.55f)
+                    val sway = sin((flowPhase * 2.2f + r * 1.4f).toDouble()).toFloat() * 3.5f
+                    val halfW = (segW * (0.08f + t * 0.08f)).coerceAtMost(segW * 0.35f)
+                    val glintAlpha = (shimmerIntensity * (1f - t * 0.5f) * 125f * alphaFactor).toInt().coerceIn(8, 150)
+                    foamPaint.color = Color.argb(glintAlpha, tintR, tintG, tintB)
+                    foamPaint.strokeWidth = 1.4f + t * 1.2f
+                    canvas.drawLine(reflectX - halfW + sway, sy, reflectX + halfW + sway, sy, foamPaint)
+                }
+            }
         }
 
         // Foam on surface (white froth)

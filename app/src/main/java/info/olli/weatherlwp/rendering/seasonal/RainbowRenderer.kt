@@ -47,8 +47,10 @@ internal class RainbowRenderer {
         screenWidth: Int,
         screenHeight: Int,
         parallaxOffsetX: Float = 0f,
-        parallaxOffsetY: Float = 0f
+        parallaxOffsetY: Float = 0f,
+        alphaScale: Float = 1f
     ) {
+        if (alphaScale <= 0.01f) return
         rainbowPhase = (rainbowPhase + 0.02f) % (2f * kotlin.math.PI.toFloat())
 
         // Position and size based on settings
@@ -99,7 +101,7 @@ internal class RainbowRenderer {
             val shimmer = kotlin.math.sin(rainbowPhase + i * 0.5f) * 0.1f + 0.9f
 
             // Base alpha for the center of the band
-            val centerAlpha = (90 * shimmer).toInt()
+            val centerAlpha = (90 * shimmer * alphaScale.coerceIn(0f, 1f)).toInt().coerceIn(0, 255)
 
             // Create a sweep gradient that fades at the edges of the arc
             // The gradient goes around the arc: transparent -> color -> color -> transparent

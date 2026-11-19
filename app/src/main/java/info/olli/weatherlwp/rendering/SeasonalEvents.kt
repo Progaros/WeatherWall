@@ -11,6 +11,7 @@ import info.olli.weatherlwp.rendering.seasonal.HolidaySchedule
 import info.olli.weatherlwp.rendering.seasonal.RainbowRenderer
 import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
+import info.olli.weatherlwp.weather.WeatherType
 import java.util.Calendar
 
 /**
@@ -41,6 +42,11 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
     private var initialized = false
     private var screenWidth = 0
     private var screenHeight = 0
+
+    // Post-rain daytime rainbow state (triggers when rain/storm clears during daylight)
+    private var lastObservedWeather: WeatherType? = null
+    private var postRainRainbowElapsedMs = 0L
+    private var postRainRainbowRemainingMs = 0L
 
     // Scale factor for height-relative sizing (uses RenderConstants.REFERENCE_HEIGHT)
     // All pixel values are designed for 1920px height and scaled proportionally
@@ -120,6 +126,11 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
 
     companion object {
         private const val TAG = "SeasonalEvents"
+        internal const val POST_RAIN_RAINBOW_DURATION_MS = 45_000L
+        private const val POST_RAIN_FADE_IN_MS = 5_000L
+        private const val POST_RAIN_FADE_OUT_MS = 10_000L
+        /** Post-rain rainbow stays delicate compared to the festive St. Patrick's Day arc. */
+        private const val POST_RAIN_PEAK_ALPHA_SCALE = 0.42f
 
         /**
          * Circular distance between two day-of-year values,
@@ -153,22 +164,33 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
     }
 
     /**
-     * Render elements that belong behind the terrain/mountains (e.g. St. Patrick's rainbow, Christmas star).
+     * Render elements that belong behind the terrain/mountains (e.g. St. Patrick's rainbow, Christmas star,
+     * and daytime post-rain rainbows).
      * This is called from the scene renderer just before MountainLayer is drawn.
      * These elements appear in the sky layer.
      * @param parallaxOffsetX X offset from parallax calculator for depth effect (default 0f)
      * @param parallaxOffsetY Y offset from parallax calculator for depth effect (default 0f)
      */
     fun renderBehindMountains(canvas: Canvas, enabled: Boolean, parallaxOffsetX: Float = 0f, parallaxOffsetY: Float = 0f) {
-        if (!enabled) return
+        val postRainAlpha = postRainRainbowAlpha()
+        if (!enabled && postRainAlpha <= 0.01f) return
         try {
-            val season = getCurrentSeason()
-            if (season == Season.NONE) return
+            val season = if (enabled) getCurrentSeason() else Season.NONE
+            if (season == Season.NONE && postRainAlpha <= 0.01f) return
             ensureInitialized(canvas.width, canvas.height)
             when (season) {
                 Season.ST_PATRICKS -> rainbow.draw(canvas, screenWidth, screenHeight, parallaxOffsetX, parallaxOffsetY)
-                Season.CHRISTMAS -> christmasStar.draw(canvas, parallaxOffsetX, parallaxOffsetY)
-                else -> {}
+                Season.CHRISTMAS -> {
+                    christmasStar.draw(canvas, parallaxOffsetX, parallaxOffsetY)
+                    if (postRainAlpha > 0.01f) {
+                        rainbow.draw(canvas, screenWidth, screenHeight, parallaxOffsetX, parallaxOffsetY, postRainAlpha * POST_RAIN_PEAK_ALPHA_SCALE)
+                    }
+                }
+                else -> {
+                    if (postRainAlpha > 0.01f) {
+                        rainbow.draw(canvas, screenWidth, screenHeight, parallaxOffsetX, parallaxOffsetY, postRainAlpha * POST_RAIN_PEAK_ALPHA_SCALE)
+                    }
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error rendering behind-mountain seasonal events", e)
@@ -235,8 +257,34 @@ class SeasonalEvents(private val context: Context? = null) : SceneLayer {
         }
     }
 
+    /** Current opacity (0..1) of a weather-triggered post-rain rainbow. */
+    internal fun postRainRainbowAlpha(): Float {
+        if (postRainRainbowRemainingMs <= 0L) return 0f
+        val fadeIn = (postRainRainbowElapsedMs.toFloat() / POST_RAIN_FADE_IN_MS).coerceIn(0f, 1f)
+        val fadeOut = (postRainRainbowRemainingMs.toFloat() / POST_RAIN_FADE_OUT_MS).coerceIn(0f, 1f)
+        return minOf(fadeIn, fadeOut)
+    }
+
+    private fun isRainyWeather(type: WeatherType?): Boolean =
+        type == WeatherType.RAIN || type == WeatherType.THUNDERSTORM || type == WeatherType.HAIL
+
+    private fun isSunbreakWeather(type: WeatherType): Boolean =
+        type == WeatherType.CLEAR || type == WeatherType.PARTLY_CLOUDY || type == WeatherType.CLOUDY
+
     override fun update(state: SimulationState, deltaTimeMs: Long) {
-        // Seasonal animation is frame-driven inside render methods
+        val prev = lastObservedWeather
+        val current = state.weather
+        if (isRainyWeather(prev) && isSunbreakWeather(current) && !state.isNight && state.getLightLevel() >= 0.35f) {
+            postRainRainbowElapsedMs = 0L
+            postRainRainbowRemainingMs = POST_RAIN_RAINBOW_DURATION_MS
+        } else if (state.isNight || isRainyWeather(current)) {
+            postRainRainbowRemainingMs = 0L
+        } else if (postRainRainbowRemainingMs > 0L) {
+            val dt = deltaTimeMs.coerceAtLeast(0L)
+            postRainRainbowElapsedMs += dt
+            postRainRainbowRemainingMs = (postRainRainbowRemainingMs - dt).coerceAtLeast(0L)
+        }
+        lastObservedWeather = current
     }
 
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
