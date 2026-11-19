@@ -119,12 +119,12 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         val bob = sin(localTime * 0.7f + bobPhase) * size * 0.04f
         val currentY = baseScreenY + bob
 
-        // Flap animation - owls have slow, deep wing beats
+        // Flap animation - owls have slow, deep, continuous silent wing beats with brief glide
         val cycleT = (localTime + wingPhase) % flapInterval
-        val burst01 = (1f - (cycleT / flapDuration)).coerceIn(0f, 1f)
-        val envelope = smoothstep01(burst01)
-        val beat = sin(localTime * flapRate * 6.28318f + wingPhase)
-        val wingAngle = beat * envelope * 25f  // Wing rotation in degrees
+        val burst01 = (1f - (cycleT / (flapDuration * 2.2f))).coerceIn(0f, 1f)
+        val envelope = 0.45f + 0.55f * smoothstep01(burst01)
+        val beat = sin(localTime * flapRate * 4.2f + wingPhase)
+        val wingAngle = beat * envelope * 34f  // Deep graceful wing stroke in degrees
 
         canvas.save()
         canvas.translate(px, py)
@@ -156,6 +156,17 @@ class OwlEvent(random: Random, override val spawnTimeMs: Long = System.currentTi
         path.close()
         canvas.drawPath(path, paint)
         canvas.restore()
+
+        // Fanned tail feathers behind the body so the silhouette clearly reads as an owl
+        paint.color = darkColor
+        path.reset()
+        path.moveTo(currentX - bodyW * 0.65f, currentY + bodyH * 0.05f)
+        path.lineTo(currentX - bodyW * 1.45f, currentY + bodyH * 0.02f)
+        path.quadTo(currentX - bodyW * 1.55f, currentY + bodyH * 0.32f,
+                    currentX - bodyW * 1.35f, currentY + bodyH * 0.55f)
+        path.lineTo(currentX - bodyW * 0.55f, currentY + bodyH * 0.45f)
+        path.close()
+        canvas.drawPath(path, paint)
 
         paint.color = bodyColor
         canvas.drawOval(

@@ -95,43 +95,40 @@ class BirdFlockEvent(random: Random, override val spawnTimeMs: Long = System.cur
 
             // Distant birds are more faded
             val alpha = (1f - distance * 0.3f)
-            strokePaint.color = RenderConstants.blendWithAmbient(
+            paint.color = RenderConstants.blendWithAmbient(
                 Color.argb((255 * alpha).toInt(), 30, 30, 30), ambientColor, 0.4f)
-            strokePaint.style = Paint.Style.STROKE
-            strokePaint.strokeCap = Paint.Cap.ROUND
+            paint.style = Paint.Style.FILL
 
             for (bird in birds) {
                 val size = bird.sizeVariation * unit * 4f
                 val birdX = (x + bird.offsetX) * width - extendedOffset
                 val birdY = EventTraversal.mapFieldY(y + bird.offsetY, height, extendedOffsetY)
 
-                // Smooth wing animation using sine
-                // During flap: fast wing beats with larger amplitude
-                // During glide: slow gentle movement with wings mostly up
-                val wingBeatSpeed = if (isFlapping) 10f else 1.5f
-                // A gliding bird holds a steady dihedral, so keep the trough of the
-                // oscillation well above strokeWidth (size * 0.15f) - otherwise the V
-                // collapses into the line thickness and the bird reads as a flat bar.
-                val wingAmplitude = if (isFlapping) size * 0.45f else size * 0.15f
-                // Base wing angle: wings curve upward (negative Y = up on screen)
-                val baseWingUp = if (isFlapping) size * 0.4f else size * 0.5f
-
-                // Wing lift oscillates around base position, always keeping wings angled up
+                // Continuous graceful flapping blended with brief soaring
+                val wingBeatSpeed = if (isFlapping) 8.5f else 5.5f
                 val sineValue = sin(elapsedSec * wingBeatSpeed + bird.wingPhase)
-                val wingLift = baseWingUp + sineValue * wingAmplitude
+                val wingLift = if (isFlapping) {
+                    size * (0.18f + sineValue * 0.52f)
+                } else {
+                    size * (0.38f + sineValue * 0.24f)
+                }
 
-                strokePaint.strokeWidth = (size * 0.15f).coerceAtLeast(1.2f)
-
-                // Draw bird as smooth curved V-shape (wings always curve up from body).
-                // The far wing is foreshortened so the bird reads as seen at an angle
-                // instead of as a symmetric tick mark.
+                // Tapered gull-wing silhouette: thick at shoulder/body, tapering cleanly to pointed tips.
+                // Far wing is foreshortened so the flock reads in 3/4 view.
                 val farSpan = size * 0.82f
                 val farLift = wingLift * 0.88f
+                val bodyHalfH = (size * 0.14f).coerceAtLeast(1.1f)
+                val elbowUp = size * 0.18f + wingLift * 0.35f
                 path.reset()
-                path.moveTo(birdX - farSpan, birdY - farLift)  // Far wingtip (above body)
-                path.quadTo(birdX - farSpan * 0.35f, birdY - farLift * 0.25f, birdX, birdY)  // Far wing curves down to body
-                path.quadTo(birdX + size * 0.35f, birdY - wingLift * 0.25f, birdX + size, birdY - wingLift)  // Near wing curves up to tip
-                canvas.drawPath(path, strokePaint)
+                // Upper edge: far tip -> far arch -> body -> near arch -> near tip
+                path.moveTo(birdX - farSpan, birdY - farLift)
+                path.quadTo(birdX - farSpan * 0.42f, birdY - elbowUp - bodyHalfH, birdX, birdY - bodyHalfH * 0.7f)
+                path.quadTo(birdX + size * 0.42f, birdY - elbowUp - bodyHalfH, birdX + size, birdY - wingLift)
+                // Lower edge back to far tip
+                path.quadTo(birdX + size * 0.40f, birdY - elbowUp + bodyHalfH * 0.7f, birdX, birdY + bodyHalfH)
+                path.quadTo(birdX - farSpan * 0.40f, birdY - elbowUp + bodyHalfH * 0.7f, birdX - farSpan, birdY - farLift)
+                path.close()
+                canvas.drawPath(path, paint)
             }
         }
     }

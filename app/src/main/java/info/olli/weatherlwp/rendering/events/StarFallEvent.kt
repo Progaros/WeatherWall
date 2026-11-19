@@ -138,6 +138,7 @@ class StarFallEvent(random: Random, override val spawnTimeMs: Long) : RandomEven
     }
 
     private val previewOverlay by lazy { StarFieldOverlay() }
+    private val previewPath = android.graphics.Path()
 
     override fun skyGlow(absoluteTimeMs: Long): Float {
         val elapsed = absoluteTimeMs - spawnTimeMs
@@ -168,8 +169,12 @@ class StarFallEvent(random: Random, override val spawnTimeMs: Long) : RandomEven
 
         fun drawStar(x: Float, y: Float, sizeFactor: Float, alpha: Float) {
             if (alpha <= 0f) return
-            paint.color = Color.argb((220 * alpha).toInt().coerceIn(0, 255), 255, 255, 245)
-            canvas.drawCircle(cx + (x - centerX) * spread, cy + (y - centerY) * spread, dot * sizeFactor, paint)
+            val sx = cx + (x - centerX) * spread
+            val sy = cy + (y - centerY) * spread
+            paint.color = Color.argb((65 * alpha).toInt().coerceIn(0, 255), 210, 230, 255)
+            canvas.drawCircle(sx, sy, dot * sizeFactor * 2.0f, paint)
+            paint.color = Color.argb((235 * alpha).toInt().coerceIn(0, 255), 255, 255, 245)
+            canvas.drawCircle(sx, sy, dot * sizeFactor * 0.85f, paint)
         }
 
         for (index in contextStars) drawStar(stars[index][0], stars[index][1], 0.8f, 0.8f)
@@ -180,17 +185,29 @@ class StarFallEvent(random: Random, override val spawnTimeMs: Long) : RandomEven
             drawStar(overlay.extraX[i], overlay.extraY[i], 0.6f + overlay.extraRadius[i] * 0.2f, overlay.extraAlpha[i])
         }
 
-        strokePaint.style = Paint.Style.STROKE
-        strokePaint.strokeCap = Paint.Cap.ROUND
-        strokePaint.strokeWidth = dot * 0.9f
+        // Tapered falling-star streaks instead of blunt uniform lines
         for (i in 0 until overlay.meteorCount) {
-            strokePaint.color = Color.argb((230 * overlay.meteorAlpha[i]).toInt(), 235, 240, 255)
-            canvas.drawLine(
-                cx + (overlay.meteorTailX[i] - centerX) * spread, cy + (overlay.meteorTailY[i] - centerY) * spread,
-                cx + (overlay.meteorHeadX[i] - centerX) * spread, cy + (overlay.meteorHeadY[i] - centerY) * spread,
-                strokePaint
-            )
-            drawStar(overlay.meteorHeadX[i], overlay.meteorHeadY[i], 1.2f, overlay.meteorAlpha[i])
+            val tx = cx + (overlay.meteorTailX[i] - centerX) * spread
+            val ty = cy + (overlay.meteorTailY[i] - centerY) * spread
+            val hx = cx + (overlay.meteorHeadX[i] - centerX) * spread
+            val hy = cy + (overlay.meteorHeadY[i] - centerY) * spread
+            val dx = hx - tx
+            val dy = hy - ty
+            val len = sqrt(dx * dx + dy * dy)
+            val mAlpha = overlay.meteorAlpha[i].coerceIn(0f, 1f)
+            if (len > 0.5f) {
+                val nx = -dy / len
+                val ny = dx / len
+                val halfW = dot * 0.7f
+                previewPath.reset()
+                previewPath.moveTo(tx, ty)
+                previewPath.lineTo(hx + nx * halfW, hy + ny * halfW)
+                previewPath.lineTo(hx - nx * halfW, hy - ny * halfW)
+                previewPath.close()
+                paint.color = Color.argb((190 * mAlpha).toInt(), 215, 232, 255)
+                canvas.drawPath(previewPath, paint)
+            }
+            drawStar(overlay.meteorHeadX[i], overlay.meteorHeadY[i], 1.15f, mAlpha)
         }
     }
 

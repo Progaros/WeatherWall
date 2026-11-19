@@ -5,16 +5,18 @@ import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.Shader
 import androidx.core.graphics.withTranslation
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.random.Random
 
 /**
- * Shooting Star - Night only, fast diagonal streak with gradient tail.
+ * Shooting Star - Night only, fast diagonal streak with tapered gradient tail.
  * Uses absolute time for deterministic position across preview/wallpaper.
  * Spawns off-screen (top-left) and fades out near end (burning up effect).
  */
@@ -28,7 +30,9 @@ class ShootingStarEvent internal constructor(
     /** Delay before the shooting star becomes visible. */
     private val spawnDelayMs: Long,
     /** Travel distance before fade-out completes. */
-    private val totalTravel: Float
+    private val totalTravel: Float,
+    /** Relative brightness/width scale (e.g., mix of bright bolides and faint streaks in showers). */
+    private val brightness: Float = 1f
 ) : RandomEvent {
 
     // Argument order is the order of random draws; keep it so seeded spawns stay unchanged.
@@ -70,29 +74,39 @@ class ShootingStarEvent internal constructor(
                 startY = shower.radiantY + sin(angle) * offset,
                 angle = angle,
                 speed = (0.00028f + random.nextFloat() * 0.00009f) * shower.speedScale,
-                length = 0.05f + random.nextFloat() * 0.05f,
+                length = 0.08f + random.nextFloat() * 0.09f,
                 spawnDelayMs = 0L,
-                totalTravel = 0.45f + random.nextFloat() * 0.35f
+                totalTravel = 0.50f + random.nextFloat() * 0.35f,
+                brightness = 0.65f + random.nextFloat() * 0.45f
             )
         }
     }
     
     private val trailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.ROUND
+        style = Paint.Style.FILL
     }
+    private val trailPath = Path()
 
-    // Unit-length (0,0)->(1,0) gradients at full strength; fade-out is applied via paint alpha
+    // Unit-length (0,0)->(1,0) gradients at full strength; fade-out is applied via paint alpha.
+    // Tail fades cleanly to transparent through cool ionized blue-cyan to warm incandescent head.
     private val glowShader = LinearGradient(
         0f, 0f, 1f, 0f,
-        Color.argb(0, 180, 200, 255),
-        Color.argb(90, 200, 215, 255),
+        intArrayOf(
+            Color.argb(0, 140, 175, 255),
+            Color.argb(35, 165, 200, 255),
+            Color.argb(115, 215, 232, 255)
+        ),
+        floatArrayOf(0f, 0.55f, 1f),
         Shader.TileMode.CLAMP
     )
     private val coreShader = LinearGradient(
         0f, 0f, 1f, 0f,
-        Color.argb(0, 255, 255, 255),
-        Color.argb(255, 255, 255, 240),
+        intArrayOf(
+            Color.argb(0, 200, 225, 255),
+            Color.argb(130, 235, 245, 255),
+            Color.argb(255, 255, 252, 238)
+        ),
+        floatArrayOf(0f, 0.6f, 1f),
         Shader.TileMode.CLAMP
     )
     private val trailMatrix = Matrix()
@@ -171,6 +185,14 @@ class ShootingStarEvent internal constructor(
             // Similarity transform mapping (0,0)->tail and (1,0)->head
             val dx = headX - tailX
             val dy = headY - tailY
+            val segLen = sqrt(dx * dx + dy * dy)
+            if (segLen < 0.5f) return@withTranslation
+
+            val dirX = dx / segLen
+            val dirY = dy / segLen
+            val nx = -dirY
+            val ny = dirX
+
             trailMatrixValues[Matrix.MSCALE_X] = dx
             trailMatrixValues[Matrix.MSKEW_X] = -dy
             trailMatrixValues[Matrix.MTRANS_X] = tailX
@@ -182,24 +204,51 @@ class ShootingStarEvent internal constructor(
             trailMatrixValues[Matrix.MPERSP_2] = 1f
             trailMatrix.setValues(trailMatrixValues)
 
-            // Faint wide glow under a thin bright core, both fading towards the tail
+            val scale = unit * brightness * (0.65f + 0.35f * fadeAlpha)
+
+            // Tapered outer atmospheric glow: needle point at tail widening smoothly to head.
+            val glowHalfW = scale * 0.95f
+            val noseGlow = scale * 1.4f
+            trailPath.reset()
+            trailPath.moveTo(tailX, tailY)
+            trailPath.lineTo(headX + nx * glowHalfW, headY + ny * glowHalfW)
+            trailPath.quadTo(headX + dirX * noseGlow, headY + dirY * noseGlow, headX - nx * glowHalfW, headY - ny * glowHalfW)
+            trailPath.close()
             trailPaint.alpha = headAlpha
             glowShader.setLocalMatrix(trailMatrix)
             trailPaint.shader = glowShader
-            trailPaint.strokeWidth = 1.6f * unit
-            canvas.drawLine(tailX, tailY, headX, headY, trailPaint)
+            canvas.drawPath(trailPath, trailPaint)
 
+            // Tapered incandescent core: razor-sharp needle streak.
+            val coreHalfW = scale * 0.28f
+            val noseCore = scale * 0.55f
+            trailPath.reset()
+            trailPath.moveTo(tailX, tailY)
+            trailPath.lineTo(headX + nx * coreHalfW, headY + ny * coreHalfW)
+            trailPath.quadTo(headX + dirX * noseCore, headY + dirY * noseCore, headX - nx * coreHalfW, headY - ny * coreHalfW)
+            trailPath.close()
             coreShader.setLocalMatrix(trailMatrix)
             trailPaint.shader = coreShader
-            trailPaint.strokeWidth = 0.45f * unit
-            canvas.drawLine(tailX, tailY, headX, headY, trailPaint)
+            canvas.drawPath(trailPath, trailPaint)
 
-            // Small hot head with a soft halo
-            val headSize = unit * (0.5f + 0.5f * fadeAlpha)
-            paint.color = Color.argb((glowAlpha * 0.25f).toInt(), 235, 240, 255)
-            canvas.drawCircle(headX, headY, headSize * 1.5f, paint)
-            paint.color = Color.argb(headAlpha, 255, 255, 250)
-            canvas.drawCircle(headX, headY, headSize * 0.7f, paint)
+            // Soft atmospheric bloom + delicate 4-point star glint at the leading tip (no blunt pin-head ball).
+            paint.style = Paint.Style.FILL
+            paint.color = Color.argb((glowAlpha * 0.18f).toInt(), 210, 230, 255)
+            canvas.drawCircle(headX, headY, scale * 1.35f, paint)
+            paint.color = Color.argb((headAlpha * 0.85f).toInt(), 255, 252, 240)
+            val glintLong = scale * 1.3f
+            val glintShort = scale * 0.16f
+            trailPath.reset()
+            trailPath.moveTo(headX - glintLong, headY)
+            trailPath.lineTo(headX - glintShort, headY - glintShort)
+            trailPath.lineTo(headX, headY - glintLong)
+            trailPath.lineTo(headX + glintShort, headY - glintShort)
+            trailPath.lineTo(headX + glintLong, headY)
+            trailPath.lineTo(headX + glintShort, headY + glintShort)
+            trailPath.lineTo(headX, headY + glintLong)
+            trailPath.lineTo(headX - glintShort, headY + glintShort)
+            trailPath.close()
+            canvas.drawPath(trailPath, paint)
 
             trailPaint.shader = null
         }

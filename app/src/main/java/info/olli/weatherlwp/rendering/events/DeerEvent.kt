@@ -170,11 +170,12 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         val swingA = sin(walkPhase)
         val swingB = sin(walkPhase + Math.PI.toFloat())
 
-        val legWidth = unit * 0.85f
-        val thighWidth = unit * 1.3f
-        val hoofSize = unit * 0.38f
-        val hipY = bodyY + unit * 1.5f
-        val strideAmp = unit * 0.65f
+        val legWidth = unit * 0.65f
+        val thighWidth = unit * 1.15f
+        val hoofSize = unit * 0.34f
+        val hindHipY = bodyY + unit * 0.7f
+        val foreHipY = bodyY + unit * 1.1f
+        val strideAmp = unit * 0.7f
         val liftAmp = unit * 0.5f
         val hoofColor = Color.argb((190 * alpha).toInt(), 45, 35, 28)
 
@@ -186,47 +187,44 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
                 (Color.blue(brownBase) * 0.72f).toInt()),
             ambientColor, 0.25f)
 
-        val thighLen = unit * 1.57f
-        val shinLen = unit * 1.76f
-        val hindCannonLen = unit * 2.1f
-        val upperArmLen = unit * 1.4f
-        val forearmLen = unit * 2.15f
+        val thighLen = unit * 1.95f
+        val shinLen = unit * 1.95f
+        val hindCannonLen = unit * 2.0f
+        val upperArmLen = unit * 1.75f
+        val forearmLen = unit * 2.1f
         val foreCannonLen = unit * 1.6f
 
-        // Hind: a long, near-vertical cannon up to a high hock that sits behind the hoof, with
-        // the stifle solved forward under the belly. The hock flexes as the hoof lifts.
-        // plantX braces the hoof for the grazing stance, where the gait swing is zero.
+        // Hind: hip starts inside the haunch; a near-vertical cannon meets a gently angled
+        // hock so the leg has a natural deer curve without an exaggerated Z-bend.
         fun drawHindLeg(hipX: Float, swing: Float, legColor: Int, plantX: Float) {
             val liftT = maxOf(0f, swing) * gaitActivity
             val hoofX = hipX + swing * strideAmp * gaitActivity + plantX
             val hoofY = -liftT * liftAmp
-            val hockTilt = 0.12f + liftT * 0.5f
+            val hockTilt = 0.07f + liftT * 0.32f
             val hockX = hoofX - sin(hockTilt) * hindCannonLen
             val hockY = hoofY - cos(hockTilt) * hindCannonLen
-            JointedLeg.drawSolved(canvas, path, strokePaint, paint, hipX, hipY, thighLen, shinLen, true,
+            JointedLeg.drawSolved(canvas, path, strokePaint, paint, hipX, hindHipY, thighLen, shinLen, true,
                 hockX, hockY, hoofX, hoofY, legWidth, legColor, hoofColor, hoofSize, 0.5f, thighWidth)
         }
 
-        // Fore: a straight column in stance (elbow tucked back under the chest); as the hoof
-        // lifts the cannon folds back so the knee leads, split about the stride point.
+        // Fore: a slender straight column in stance; as the hoof lifts the cannon folds back
+        // so the knee leads, split about the stride point.
         fun drawForeLeg(hipX: Float, swing: Float, legColor: Int, plantX: Float) {
             val liftT = maxOf(0f, swing) * gaitActivity
             val baseX = hipX + swing * strideAmp * gaitActivity + plantX
             val hoofY = -liftT * liftAmp
-            val fold = liftT * 0.9f
+            val fold = liftT * 0.85f
             val foldX = sin(fold) * foreCannonLen * 0.5f
             val kneeY = hoofY - cos(fold) * foreCannonLen
-            JointedLeg.drawSolved(canvas, path, strokePaint, paint, hipX, hipY, upperArmLen, forearmLen, false,
+            JointedLeg.drawSolved(canvas, path, strokePaint, paint, hipX, foreHipY, upperArmLen, forearmLen, false,
                 baseX + foldX, kneeY, baseX - foldX, hoofY, legWidth, legColor, hoofColor, hoofSize, 0.5f)
         }
 
         // Leg anchors (profile view): a near and far leg for each pair; far drawn darker.
-        // Front and rear pairs are kept equidistant from the body centre, otherwise the
-        // stance reads as lopsided.
-        val frontNearX = unit * 2.9f
-        val frontFarX = unit * 2.2f
-        val backNearX = -unit * 2.3f
-        val backFarX = -unit * 3.0f
+        val frontNearX = unit * 2.8f
+        val frontFarX = unit * 2.15f
+        val backNearX = -unit * 2.25f
+        val backFarX = -unit * 2.9f
 
         // Grazing stance: the fore legs splay so the chest drops toward the grass, and the
         // hind legs brace back slightly.
@@ -234,9 +232,9 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
         val frontFarPlant = grazeProgress * unit * -0.5f
         val backPlant = grazeProgress * unit * -0.35f
 
-        // --- Back legs (drawn behind the body) ---
+        // --- Far-side legs (both hind and fore drawn behind the body) ---
         drawHindLeg(backFarX, swingA, legFarColor, backPlant)
-        drawHindLeg(backNearX, swingB, bodyColor, backPlant)
+        drawForeLeg(frontFarX, swingB, legFarColor, frontFarPlant)
 
         paint.color = bodyColor
 
@@ -372,8 +370,8 @@ class DeerEvent(random: Random, override val spawnTimeMs: Long = System.currentT
 
         canvas.restore()
 
-        // --- Front legs (drawn in front of the body) ---
-        drawForeLeg(frontFarX, swingB, legFarColor, frontFarPlant)
+        // --- Near-side legs (drawn in front of the body in matching fur tone) ---
+        drawHindLeg(backNearX, swingB, bodyColor, backPlant)
         drawForeLeg(frontNearX, swingA, bodyColor, frontNearPlant)
 
         canvas.restore()

@@ -77,12 +77,15 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
         
         saveFacing(canvas, cx, cy)
 
-        // Leg gather in body units (multiplied by s where drawn).
-        val hopLeg = sin(hopPhase) * 0.2f
-        // 0 while grounded, 1 at the apex: legs pull up and the ears lean back in flight.
+        // 0 while grounded, 1 at the apex: body pitches up on takeoff, levels, then tilts to land.
         val airborne = sin(hopPhase).coerceAtLeast(0f)
-        // Capped so the tucked hoof never rises above the body silhouette and vanishes.
-        val legTuck = airborne * 0.2f
+        val hopSlope = cos(hopPhase) * airborne
+        canvas.rotate(-hopSlope * 11f, 0f, 0f)
+
+        // Bounding gait: hind legs kick back on push-off and gather forward to land;
+        // fore legs tuck under the chest on takeoff and reach forward for landing.
+        val hindGather = (airborne * 0.55f - hopSlope * 0.35f).coerceIn(-0.25f, 0.72f)
+        val foreGather = (airborne * 0.55f + hopSlope * 0.35f).coerceIn(-0.25f, 0.72f)
 
         // Three-segment legs so the hop reads as gathered legs rather than blocky stumps.
         // Fur is captured up front because the leg draw mutates the shared paint and the
@@ -133,9 +136,10 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
         val frontNearX = 0.8f * s
 
         // Far-side legs go behind the body and near-side legs in front, so the darker far
-        // pair never paints a stripe across the belly.
-        drawHindLeg(backFarX, legTuck + hopLeg, legFarColor)
-        drawForeLeg(frontFarX, legTuck + hopLeg, legFarColor)
+        // pair never paints a stripe across the belly. Both legs in a pair bound together
+        // (with a tiny phase offset so both silhouettes stay readable).
+        drawHindLeg(backFarX, (hindGather + 0.08f).coerceAtMost(0.75f), legFarColor)
+        drawForeLeg(frontFarX, (foreGather + 0.08f).coerceAtMost(0.75f), legFarColor)
 
         // Body + haunch
         paint.color = fur
@@ -176,8 +180,8 @@ class RabbitEvent(random: Random, override val spawnTimeMs: Long = System.curren
         canvas.drawCircle(-2.15f * s, -0.15f * s, 0.32f * s, paint)
 
         // Near-side legs, drawn over the body they share a colour with.
-        drawHindLeg(backNearX, legTuck - hopLeg, fur)
-        drawForeLeg(frontNearX, legTuck - hopLeg, fur)
+        drawHindLeg(backNearX, hindGather, fur)
+        drawForeLeg(frontNearX, foreGather, fur)
 
         // Whiskers
         strokePaint.color = Color.argb(100, 80, 70, 60)
