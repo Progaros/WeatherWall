@@ -20,6 +20,10 @@ import android.view.View
 import android.view.ViewConfiguration
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.edit
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updateLayoutParams
+import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import androidx.preference.PreferenceManager
@@ -124,6 +128,8 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
     
     private fun doPreferenceReload() {
         lastPrefReloadTime = SystemClock.elapsedRealtime()
+        previewTargetFps = PreferenceManager.getDefaultSharedPreferences(this)
+            .getString("pref_max_fps", PreferenceDefaults.MAX_FPS)?.toIntOrNull()?.coerceIn(10, 60) ?: TARGET_FPS
         // ParallaxScene.loadPrefs() handles all layer settings including weather and seasonal
         previewScene?.loadPrefs()
     }
@@ -138,6 +144,26 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
 
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
         setSupportActionBar(toolbar)
+
+        // Android 15 (targetSdk 35) enforces edge-to-edge: pad toolbar, bottom tabs, and FAB for system bars.
+        val rootView = findViewById<View>(android.R.id.content)
+        tabLayout = findViewById(R.id.tab_layout)
+        val fabView = findViewById<ExtendedFloatingActionButton>(R.id.fab_apply).also { fabApply = it }
+        val baseTabHeight = tabLayout.layoutParams.height
+        val baseTabPaddingBottom = tabLayout.paddingBottom
+        val baseFabBottomMargin = (fabView.layoutParams as? android.view.ViewGroup.MarginLayoutParams)?.bottomMargin ?: 0
+        ViewCompat.setOnApplyWindowInsetsListener(rootView) { _, windowInsets ->
+            val bars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
+            toolbar.updatePadding(top = bars.top)
+            tabLayout.updatePadding(bottom = baseTabPaddingBottom + bars.bottom)
+            if (baseTabHeight > 0) {
+                tabLayout.updateLayoutParams { height = baseTabHeight + bars.bottom }
+            }
+            fabView.updateLayoutParams<android.view.ViewGroup.MarginLayoutParams> {
+                bottomMargin = baseFabBottomMargin + bars.bottom
+            }
+            windowInsets
+        }
         
         // Initialize density and screen dimensions for dp to px conversions
         density = resources.displayMetrics.density
@@ -204,23 +230,21 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
 
         // Setup tabbed settings
         viewPager = findViewById(R.id.view_pager)
-        tabLayout = findViewById(R.id.tab_layout)
         settingsDetailContainer = findViewById(R.id.settings_detail_container)
         
         viewPager.adapter = SettingsPagerAdapter(this)
         
         TabLayoutMediator(tabLayout, viewPager) { tab, position ->
             tab.text = when (position) {
-                0 -> "Scene"
-                1 -> "Effects"
-                2 -> "Events"
-                3 -> "System"
+                0 -> getString(R.string.tab_scene)
+                1 -> getString(R.string.tab_effects)
+                2 -> getString(R.string.tab_events)
+                3 -> getString(R.string.tab_system)
                 else -> null
             }
         }.attach()
         
         // Setup FAB for applying wallpaper
-        fabApply = findViewById(R.id.fab_apply)
         fabApply?.setOnClickListener {
             openWallpaperChooser()
         }
@@ -325,7 +349,11 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
             it.vibrate(VibrationEffect.createOneShot(35, VibrationEffect.DEFAULT_AMPLITUDE))
         }
 
-        Toast.makeText(this, if (enabled) "Debug overlay enabled" else "Debug overlay disabled", Toast.LENGTH_SHORT).show()
+        Toast.makeText(
+            this,
+            if (enabled) R.string.toast_debug_overlay_enabled else R.string.toast_debug_overlay_disabled,
+            Toast.LENGTH_SHORT
+        ).show()
     }
     
     override fun onSupportNavigateUp(): Boolean {
@@ -435,9 +463,12 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
                     val deltaY = event.rawY - dragStartY
                     val newHeight = (dragStartHeight + deltaY).toInt()
                     val minPx = (PREVIEW_HEIGHT_MIN_DP * density).toInt()
-                    // Calculate max as 90% of available screen height (minus toolbar ~56dp and tabs ~48dp)
-                    val toolbarAndTabsHeight = (104 * density).toInt()  // toolbar + tabs
-                    val maxPx = ((screenHeightPx - toolbarAndTabsHeight) * PREVIEW_HEIGHT_MAX_PERCENT).toInt()
+                    // Use live container/window height and actual toolbar + tab bar heights
+                    val currentScreenHeight = window.decorView.height.takeIf { it > 0 } ?: screenHeightPx
+                    val toolbarHeight = findViewById<View>(R.id.toolbar)?.height?.takeIf { it > 0 } ?: (56 * density).toInt()
+                    val tabsHeight = tabLayout.height.takeIf { it > 0 } ?: (72 * density).toInt()
+                    val maxPx = ((currentScreenHeight - toolbarHeight - tabsHeight) * PREVIEW_HEIGHT_MAX_PERCENT)
+                        .toInt().coerceAtLeast(minPx)
                     previewHeightPx = newHeight.coerceIn(minPx, maxPx)
                     updatePreviewHeight(previewContainer)
                     true

@@ -17,4 +17,15 @@
     <string name="toast_no_weather_data">No weather data available. Open Breezy Weather first.</string>
     <string name="toast_settings_copied">All settings copied to clipboard</string>
     <string name="toast_preview_failed">Could not open preview</string>
+    <string name="tab_scene">Scene</string>
+    <string name="tab_effects">Effects</string>
+    <string name="tab_events">Events</string>
+    <string name="tab_system">System</string>
+    <string name="toast_debug_overlay_enabled">Debug overlay enabled</string>
+    <string name="toast_debug_overlay_disabled">Debug overlay disabled</string>
+    <string name="reset_settings_title">Reset All Settings</string>
+    <string name="reset_settings_message">This will restore all preferences to their default values. This cannot be undone.</string>
+    <string name="reset_settings_confirm">Reset</string>
+    <string name="toast_crash_log_copied">Crash log copied to clipboard</string>
+    <string name="toast_no_crash_log">No crash log recorded</string>
 </resources>

@@ -15,6 +15,7 @@ import android.service.wallpaper.WallpaperService
 import android.util.Log
 import android.view.Choreographer
 import android.view.SurfaceHolder
+import androidx.core.content.ContextCompat
 import info.olli.weatherlwp.BuildConfig
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.simulation.SimulationSettings
@@ -124,8 +125,10 @@ class WeatherWallpaper : WallpaperService() {
                 // onVisibilityChanged(true) first. Treat a created surface as visible.
                 isVisible = true
                 preferHardwareCanvas = true
-                runCatching { scene.start() }
-                    .onFailure { Log.e(TAG, "scene.start() failed, continuing without sensors", it) }
+                if (::scene.isInitialized) {
+                    runCatching { scene.start() }
+                        .onFailure { Log.e(TAG, "scene.start() failed, continuing without sensors", it) }
+                }
                 startRender()
                 // Paint at least one frame immediately so previews don't stay black.
                 drawFrame(System.nanoTime())
@@ -138,7 +141,9 @@ class WeatherWallpaper : WallpaperService() {
             try {
                 isVisible = false
                 stopRender()
-                scene.stop()
+                if (::scene.isInitialized) {
+                    scene.stop()
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error in onSurfaceDestroyed", e)
             }
@@ -171,13 +176,17 @@ class WeatherWallpaper : WallpaperService() {
                     preferHardwareCanvas = true
                     // scene.start() resets parallax to center and starts sensors.
                     // First frame will always render centered (no stale offset).
-                    runCatching { scene.start() }
-                        .onFailure { Log.e(TAG, "scene.start() failed, continuing without sensors", it) }
+                    if (::scene.isInitialized) {
+                        runCatching { scene.start() }
+                            .onFailure { Log.e(TAG, "scene.start() failed, continuing without sensors", it) }
+                    }
                     startRender()
                 } else {
                     Log.d(TAG, "Wallpaper hidden - stopping render loop and sensors (battery optimization)")
                     stopRender()
-                    scene.stop()
+                    if (::scene.isInitialized) {
+                        scene.stop()
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error in onVisibilityChanged", e)
@@ -266,11 +275,29 @@ class WeatherWallpaper : WallpaperService() {
                         RenderConstants.HILL_BASE_COLOR
                     )
                 }
-                return WallpaperColors(
-                    Color.valueOf(primary),
-                    Color.valueOf(secondary),
-                    Color.valueOf(tertiary)
-                )
+                val hints = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    when (phase) {
+                        2 -> WallpaperColors.HINT_SUPPORTS_DARK_TEXT
+                        0 -> WallpaperColors.HINT_SUPPORTS_DARK_THEME
+                        else -> 0
+                    }
+                } else {
+                    0
+                }
+                return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    WallpaperColors(
+                        Color.valueOf(primary),
+                        Color.valueOf(secondary),
+                        Color.valueOf(tertiary),
+                        hints
+                    )
+                } else {
+                    WallpaperColors(
+                        Color.valueOf(primary),
+                        Color.valueOf(secondary),
+                        Color.valueOf(tertiary)
+                    )
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error in onComputeColors", e)
                 return null
@@ -296,8 +323,11 @@ class WeatherWallpaper : WallpaperService() {
             }
             powerSaveReceiver = receiver
             runCatching {
-                this@WeatherWallpaper.registerReceiver(
-                    receiver, IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
+                ContextCompat.registerReceiver(
+                    this@WeatherWallpaper,
+                    receiver,
+                    IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED),
+                    ContextCompat.RECEIVER_NOT_EXPORTED
                 )
             }.onFailure { Log.e(TAG, "Failed to register power-save receiver", it) }
         }
@@ -346,6 +376,7 @@ class WeatherWallpaper : WallpaperService() {
         
         // Check if there's any scene activity (parallax movement, weather, etc.)
         private fun checkSceneActivity(): Boolean {
+            if (!::scene.isInitialized) return false
             // Consider active if:
             // 1. Parallax is moving (sensor input detected)
             // 2. Weather effects are active
@@ -377,10 +408,14 @@ class WeatherWallpaper : WallpaperService() {
             lastFrameTimeMs = 0L
         }
 
-        private fun postNextFrameCallback() {
+        private fun postNextFrameCallback(delayMs: Long = 0L) {
             if (frameCallbackPosted || !isVisible) return
             val choreographerInstance = choreographer ?: Choreographer.getInstance().also { choreographer = it }
-            choreographerInstance.postFrameCallback(this)
+            if (delayMs > 0L) {
+                choreographerInstance.postFrameCallbackDelayed(this, delayMs)
+            } else {
+                choreographerInstance.postFrameCallback(this)
+            }
             frameCallbackPosted = true
         }
 
@@ -388,6 +423,7 @@ class WeatherWallpaper : WallpaperService() {
             frameCallbackPosted = false
             if (!isVisible) return
 
+            var nextDelayMs = 0L
             try {
                 // Idle mode: check for scene activity and adjust effective FPS.
                 val nowMs = SystemClock.uptimeMillis()
@@ -408,8 +444,8 @@ class WeatherWallpaper : WallpaperService() {
                 val effectiveFps = (if (isIdle) idleFps else activeFps).coerceAtLeast(1)
                 val minFrameIntervalNanos = 1_000_000_000L / effectiveFps.toLong()
                 val renderThresholdNanos = (minFrameIntervalNanos - FRAME_PACING_SLACK_NANOS).coerceAtLeast(1L)
-                val shouldRender =
-                    lastDrawFrameNanos == 0L || (frameTimeNanos - lastDrawFrameNanos) >= renderThresholdNanos
+                val elapsedNanos = if (lastDrawFrameNanos == 0L) Long.MAX_VALUE else frameTimeNanos - lastDrawFrameNanos
+                val shouldRender = elapsedNanos >= renderThresholdNanos
 
                 if (shouldRender) {
                     val start = SystemClock.uptimeMillis()
@@ -427,9 +463,10 @@ class WeatherWallpaper : WallpaperService() {
                         totalDrawTimeMs += dt
                         if (dt > maxFrameTimeMs) maxFrameTimeMs = dt
 
-                        if (start - lastLogTime > 5000) {
+                        val elapsedLogMs = start - lastLogTime
+                        if (elapsedLogMs > 5000) {
                             val avgFrameMs = if (frameCount > 0) totalDrawTimeMs / frameCount else 0
-                            val actualFps = if (avgFrameMs > 0) 1000 / avgFrameMs else 0
+                            val actualFps = (frameCount * 1000L) / elapsedLogMs
                             val idleInfo = if (isIdle) " (IDLE)" else ""
                             Log.d(TAG, "Perf: ${frameCount} frames, avg=${avgFrameMs}ms, max=${maxFrameTimeMs}ms, ~${actualFps}fps$idleInfo")
                             frameCount = 0L
@@ -440,12 +477,22 @@ class WeatherWallpaper : WallpaperService() {
                     }
 
                     lastDrawFrameNanos = frameTimeNanos
+                    // Sleep until close to the next target frame so idle/capped FPS does not wake at 120Hz.
+                    val targetDelayMs = (renderThresholdNanos / 1_000_000L) - dt
+                    if (targetDelayMs >= 8L) {
+                        nextDelayMs = targetDelayMs
+                    }
+                } else {
+                    val remainingMs = (renderThresholdNanos - elapsedNanos) / 1_000_000L
+                    if (remainingMs >= 8L) {
+                        nextDelayMs = remainingMs
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error in frame callback", e)
             } finally {
                 if (isVisible) {
-                    postNextFrameCallback()
+                    postNextFrameCallback(nextDelayMs)
                 }
             }
         }
@@ -454,6 +501,7 @@ class WeatherWallpaper : WallpaperService() {
         private var lastFrameTimeMs = 0L
 
         private fun drawFrame(frameTimeNanos: Long) {
+            if (!::scene.isInitialized) return
             val holder = surfaceHolder ?: return
             
             // Calculate real frame delta for accurate physics

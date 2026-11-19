@@ -27,19 +27,14 @@ class SystemSettingsFragment : PreferenceFragmentCompat() {
 
     private fun showResetConfirmationDialog() {
         AlertDialog.Builder(requireContext())
-            .setTitle("Reset All Settings")
-            .setMessage("This will restore all preferences to their default values. This cannot be undone.")
-            .setPositiveButton("Reset") { _, _ ->
+            .setTitle(R.string.reset_settings_title)
+            .setMessage(R.string.reset_settings_message)
+            .setPositiveButton(R.string.reset_settings_confirm) { _, _ ->
                 SettingsResetManager.resetAllToDefaults(requireContext())
-                // Reload this fragment to reflect the changes
-                preferenceScreen.removeAll()
-                setPreferencesFromResource(R.xml.pref_system, null)
-                findPreference<Preference>("pref_reset_defaults")?.setOnPreferenceClickListener {
-                    showResetConfirmationDialog()
-                    true
-                }
+                // Recreate the host Activity so all ViewPager tabs refresh to their default values.
+                activity?.recreate()
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
     

@@ -146,4 +146,16 @@ class BreezyWeatherReceiverTest {
             assertEquals("code $code", type, BreezyWeatherReceiver.mapConditionCode(code))
         }
     }
+
+    @Test
+    fun `condition text fallback maps common English and German strings`() {
+        assertEquals(WeatherType.THUNDERSTORM, BreezyWeatherReceiver.mapConditionText("Thunderstorm"))
+        assertEquals(WeatherType.RAIN, BreezyWeatherReceiver.mapConditionText("Light Rain"))
+        assertEquals(WeatherType.SNOW, BreezyWeatherReceiver.mapConditionText("Schnee"))
+        assertEquals(WeatherType.FOG, BreezyWeatherReceiver.mapConditionText("Fog"))
+        assertEquals(WeatherType.OVERCAST, BreezyWeatherReceiver.mapConditionText("Overcast"))
+        assertEquals(WeatherType.PARTLY_CLOUDY, BreezyWeatherReceiver.mapConditionText("Partly Cloudy"))
+        assertEquals(WeatherType.CLOUDY, BreezyWeatherReceiver.mapConditionText("Bewölkt"))
+        assertEquals(WeatherType.CLEAR, BreezyWeatherReceiver.mapConditionText(null))
+    }
 }

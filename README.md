@@ -7,7 +7,7 @@ Android live wallpaper with a low-poly procedural landscape, weather effects, se
 No analytics. No internet permission.
 
 <p align="center">
-  <img src="app/src/main/res/logo.png" width="128" alt="WeatherWall Logo">
+  <img src="docs/logo.png" width="128" alt="WeatherWall Logo">
 </p>
 
 ## Screenshots

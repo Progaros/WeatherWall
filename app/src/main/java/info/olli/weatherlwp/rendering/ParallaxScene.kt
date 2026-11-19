@@ -213,9 +213,10 @@ class ParallaxScene(
         sensor.setShakeListener(this)
     }
     
-    // Temporary references for ground event drawer callback
+    // Temporary canvas reference for ground event drawer callback; lastState is retained
+    // between frames so WeatherWallpaper.onComputeColors() / notifyColorsChanged() can read it.
     private var lastCanvas: Canvas? = null
-    private var lastState: SimulationState? = null
+    @Volatile private var lastState: SimulationState? = null
 
     /**
      * Get the current simulation state snapshot.
@@ -434,9 +435,9 @@ class ParallaxScene(
                 }
             }
             
-            // Clear temporary references to avoid holding canvas/state across frames
+            // Clear temporary canvas reference to avoid holding it across frames.
+            // Keep lastState so WeatherWallpaper can inspect atmosphere phase after render().
             lastCanvas = null
-            lastState = null
         } catch (e: Exception) {
             Log.e(TAG, "Error rendering scene", e)
         }

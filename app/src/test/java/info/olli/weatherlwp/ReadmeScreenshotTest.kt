@@ -45,15 +45,20 @@ class ReadmeScreenshotTest {
 
     // Each shot gets its own landscape seed (terrain, mountains, clouds) and wind, so the GIFs differ.
     private val shots = listOf(
-        Shot("Screenshot_1.gif", 5 * 60 + 50, WeatherType.CLOUDY, 70, 0, "spring", 208, 2f),          // Dawn clouds
-        Shot("Screenshot_2.gif", 13 * 60, WeatherType.PARTLY_CLOUDY, 20, 0, "summer", 42, 4f),        // Clear day
-        Shot("Screenshot_3.gif", 11 * 60, WeatherType.SNOW, 90, 90, "winter", 517, 1.5f, mapOf(      // Snowy day
+        Shot("Screenshot_1.gif", 5 * 60 + 50, WeatherType.CLOUDY, 70, 0, "spring", 208, 2f, mapOf(      // Dawn clouds + lake
+            "pref_lake_enabled" to true
+        )),
+        Shot("Screenshot_2.gif", 13 * 60, WeatherType.PARTLY_CLOUDY, 20, 0, "summer", 42, 4f, mapOf(   // Clear day + river
+            "pref_river_enabled" to true
+        )),
+        Shot("Screenshot_3.gif", 11 * 60, WeatherType.SNOW, 90, 90, "winter", 517, 1.5f, mapOf(        // Snowy day
             "pref_sim_weather_history" to true,
             "pref_sim_snow_level" to 80
         )),
-        Shot("Screenshot_4.gif", 19 * 60 + 40, WeatherType.RAIN, 85, 85, "autumn", 733, 7f),          // Rainy dusk
-        Shot("Screenshot_5.gif", 23 * 60, WeatherType.CLEAR, 5, 0, "summer", 96, 3f, mapOf(           // Night sky
-            "pref_moon_phase" to 40
+        Shot("Screenshot_4.gif", 19 * 60 + 40, WeatherType.RAIN, 85, 85, "autumn", 733, 7f),           // Rainy dusk
+        Shot("Screenshot_5.gif", 23 * 60, WeatherType.CLEAR, 5, 0, "summer", 96, 3f, mapOf(            // Night sky + fireflies
+            "pref_moon_phase" to 40,
+            "pref_night_shade_strength" to 15
         ))
     )
 
@@ -141,10 +146,10 @@ class ReadmeScreenshotTest {
     }
 
     private companion object {
-        const val GIF_WIDTH = 360
-        const val GIF_HEIGHT = 780
-        const val FRAMES_PER_ORBIT = 60
-        const val GIF_DELAY_CS = 5
+        const val GIF_WIDTH = 300
+        const val GIF_HEIGHT = 650
+        const val FRAMES_PER_ORBIT = 45
+        const val GIF_DELAY_CS = 7
         const val TILT = 0.6
     }
 }

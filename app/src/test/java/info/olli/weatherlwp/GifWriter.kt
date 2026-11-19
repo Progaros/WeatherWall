@@ -11,7 +11,8 @@ import java.io.File
 internal object GifWriter {
 
     private val BAYER = intArrayOf(0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5)
-    private const val DITHER_SPREAD = 22
+    private const val DITHER_SPREAD = 10
+    private const val TRANSPARENT_INDEX = 255
 
     fun write(file: File, width: Int, height: Int, frames: List<IntArray>, delayCs: Int) {
         val palette = buildPalette(frames)
@@ -19,26 +20,64 @@ internal object GifWriter {
         val out = ByteArrayOutputStream()
         out.write("GIF89a".toByteArray())
         writeShort(out, width); writeShort(out, height)
-        out.write(0xF7); out.write(0); out.write(0)  // global table, 256 entries
+        out.write(0xF7); out.write(0); out.write(0)  // global table, 256 entries (255 colors + 1 transparent)
         for (rgb in palette) { out.write(rgb shr 16 and 0xFF); out.write(rgb shr 8 and 0xFF); out.write(rgb and 0xFF) }
         // NETSCAPE2.0 application extension: loop forever
         out.write(byteArrayOf(0x21, 0xFF.toByte(), 0x0B) + "NETSCAPE2.0".toByteArray() + byteArrayOf(3, 1, 0, 0, 0))
-        val indices = ByteArray(width * height)
-        for (frame in frames) {
-            out.write(byteArrayOf(0x21, 0xF9.toByte(), 4, 0x04))  // graphic control, disposal "keep"
-            writeShort(out, delayCs); out.write(0); out.write(0)
-            out.write(0x2C); writeShort(out, 0); writeShort(out, 0)
-            writeShort(out, width); writeShort(out, height); out.write(0)
+        val prevIndices = ByteArray(width * height)
+        val currIndices = ByteArray(width * height)
+        for ((frameIdx, frame) in frames.withIndex()) {
             for (i in frame.indices) {
                 val d = (BAYER[(i / width and 3) * 4 + (i % width and 3)] * 2 - 15) * DITHER_SPREAD / 30
                 val p = frame[i]
                 val r = ((p shr 16 and 0xFF) + d).coerceIn(0, 255)
                 val g = ((p shr 8 and 0xFF) + d).coerceIn(0, 255)
                 val b = ((p and 0xFF) + d).coerceIn(0, 255)
-                indices[i] = lookup[(r shr 2 shl 12) or (g shr 2 shl 6) or (b shr 2)]
+                currIndices[i] = lookup[(r shr 2 shl 12) or (g shr 2 shl 6) or (b shr 2)]
             }
-            out.write(8)
-            writeSubBlocks(out, lzw(indices))
+
+            if (frameIdx == 0) {
+                out.write(byteArrayOf(0x21, 0xF9.toByte(), 4, 0x04))  // disposal "keep", no transparency
+                writeShort(out, delayCs); out.write(0); out.write(0)
+                out.write(0x2C); writeShort(out, 0); writeShort(out, 0)
+                writeShort(out, width); writeShort(out, height); out.write(0)
+                out.write(8)
+                writeSubBlocks(out, lzw(currIndices))
+            } else {
+                // Find tight bounding box of changed pixels and emit unchanged ones as transparent.
+                var minX = width; var minY = height; var maxX = -1; var maxY = -1
+                for (y in 0 until height) {
+                    val row = y * width
+                    for (x in 0 until width) {
+                        val idx = row + x
+                        if (currIndices[idx] != prevIndices[idx]) {
+                            if (x < minX) minX = x
+                            if (x > maxX) maxX = x
+                            if (y < minY) minY = y
+                            if (y > maxY) maxY = y
+                        }
+                    }
+                }
+                if (maxX < minX) { minX = 0; minY = 0; maxX = 0; maxY = 0 }
+                val subW = maxX - minX + 1
+                val subH = maxY - minY + 1
+                val delta = ByteArray(subW * subH)
+                for (y in 0 until subH) {
+                    val srcRow = (minY + y) * width + minX
+                    val dstRow = y * subW
+                    for (x in 0 until subW) {
+                        val c = currIndices[srcRow + x]
+                        delta[dstRow + x] = if (c == prevIndices[srcRow + x]) TRANSPARENT_INDEX.toByte() else c
+                    }
+                }
+                out.write(byteArrayOf(0x21, 0xF9.toByte(), 4, 0x05))  // disposal "keep" + transparent index
+                writeShort(out, delayCs); out.write(TRANSPARENT_INDEX); out.write(0)
+                out.write(0x2C); writeShort(out, minX); writeShort(out, minY)
+                writeShort(out, subW); writeShort(out, subH); out.write(0)
+                out.write(8)
+                writeSubBlocks(out, lzw(delta))
+            }
+            System.arraycopy(currIndices, 0, prevIndices, 0, currIndices.size)
         }
         out.write(0x3B)
         file.writeBytes(out.toByteArray())
@@ -52,9 +91,9 @@ internal object GifWriter {
         val used = counts.indices.filter { counts[it] > 0 }.toIntArray()
 
         fun channel(k: Int, c: Int) = k shr (10 - 5 * c) and 31
-        // Median cut: repeatedly split the box with the widest (count-weighted) channel range.
+        // Median cut: 255 colors, leaving index 255 for transparent delta pixels.
         val boxes = mutableListOf(used)
-        while (boxes.size < 256) {
+        while (boxes.size < TRANSPARENT_INDEX) {
             var bestIdx = -1; var bestScore = 0L; var bestChannel = 0
             for ((idx, box) in boxes.withIndex()) {
                 if (box.size < 2) continue
@@ -81,11 +120,11 @@ internal object GifWriter {
         }
     }
 
-    /** Nearest palette entry for every 6-bit-per-channel colour (finer than the 5-bit palette boxes). */
+    /** Nearest palette entry (0..254) for every 6-bit-per-channel colour. */
     private fun buildLookup(palette: IntArray): ByteArray = ByteArray(262144) { k ->
         val r = (k shr 12 and 63) * 4 + 2; val g = (k shr 6 and 63) * 4 + 2; val b = (k and 63) * 4 + 2
         var best = 0; var bestDist = Int.MAX_VALUE
-        for (i in palette.indices) {
+        for (i in 0 until TRANSPARENT_INDEX) {
             val c = palette[i]
             val dr = r - (c shr 16 and 0xFF); val dg = g - (c shr 8 and 0xFF); val db = b - (c and 0xFF)
             val d = 2 * dr * dr + 4 * dg * dg + 3 * db * db

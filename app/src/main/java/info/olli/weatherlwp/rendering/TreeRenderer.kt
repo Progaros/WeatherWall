@@ -93,7 +93,7 @@ class TreeRenderer {
         private const val TREE_GROVE_SIZE = 45f
         private const val GROVE_BIAS = 0.8f
         /** Max blend of the lit side of foliage toward warm sunlight. */
-        private const val CROWN_HIGHLIGHT = 0.28f
+        private const val CROWN_HIGHLIGHT = 0.22f
         private const val SUNLIT_FOLIAGE = 0xFFFFF2C8.toInt()
         private const val BARK_COLOR = 0xFF5A4128.toInt()      // rgb(90, 65, 40)
         private const val PINECONE_COLOR = 0xFF78501E.toInt()  // rgb(120, 80, 30)
@@ -674,35 +674,41 @@ class TreeRenderer {
                     canvas.drawPath(treePath, crownPaint)
                 }
 
-                // Snow on the tip and along the bough tiers, so green needles show between the layers
+                // Snow on the tip and staggered bough tufts so conifers look snow-laden rather than striped
                 val needleSnow = treeSnowAmount()
                 if (needleSnow > 0f) {
                     val snow = needleSnow.coerceIn(0.01f, 0.8f)
                     val swayDelta = localBaseSway - localTipSway
 
-                    // Tip cap with a drooping lower rim
-                    val capF = 0.15f + 0.3f * snow
+                    // Scalloped tip cap
+                    val capF = 0.18f + 0.24f * snow
                     val capY = segTipY + segmentHeight * capF
                     val capX = x + localTipSway + swayDelta * capF
-                    val capHalf = segWidth * capF * 1.05f
+                    val capHalf = segWidth * capF * 1.03f
                     treeSnowPath.reset()
                     treeSnowPath.moveTo(x + localTipSway, segTipY)
                     treeSnowPath.lineTo(capX - capHalf, capY)
-                    treeSnowPath.quadTo(capX, capY + segmentHeight * 0.08f * snow, capX + capHalf, capY)
+                    treeSnowPath.quadTo(capX - capHalf * 0.45f, capY + segmentHeight * 0.06f * snow, capX, capY + segmentHeight * 0.02f * snow)
+                    treeSnowPath.quadTo(capX + capHalf * 0.45f, capY + segmentHeight * 0.07f * snow, capX + capHalf, capY)
                     treeSnowPath.close()
                     canvas.drawPath(treeSnowPath, treeSnowPaint)
 
-                    // Shelves on the boughs below: arched on top, sagging underneath
-                    val shelfThickness = segmentHeight * (0.02f + 0.05f * snow)
+                    // Staggered snow tufts resting on alternating left/right boughs
+                    val tuftThickness = segmentHeight * (0.025f + 0.045f * snow)
+                    val sideSign = if ((treeIndex and 1) == 0) 1f else -1f
                     for (tier in 1..3) {
-                        val f = capF + (0.92f - capF) * tier / 3f
-                        val shelfY = segTipY + segmentHeight * f
-                        val shelfX = x + localTipSway + swayDelta * f
-                        val half = segWidth * f * 0.97f
+                        val f = capF + (0.86f - capF) * (tier / 3.2f)
+                        val tierY = segTipY + segmentHeight * f
+                        val tierX = x + localTipSway + swayDelta * f
+                        val half = segWidth * f * 0.96f
+                        val dir = if ((tier and 1) == 1) sideSign else -sideSign
+                        val outerX = tierX + dir * half
+                        val innerX = tierX - dir * half * (0.18f + 0.22f * snow)
+                        val midX = (outerX + innerX) * 0.5f
                         treeSnowPath.reset()
-                        treeSnowPath.moveTo(shelfX - half, shelfY)
-                        treeSnowPath.quadTo(shelfX, shelfY - shelfThickness * 1.4f, shelfX + half, shelfY)
-                        treeSnowPath.quadTo(shelfX, shelfY + shelfThickness * 1.2f, shelfX - half, shelfY)
+                        treeSnowPath.moveTo(innerX, tierY + tuftThickness * 0.2f)
+                        treeSnowPath.quadTo(midX, tierY - tuftThickness * 1.15f, outerX, tierY + tuftThickness * 0.1f)
+                        treeSnowPath.quadTo(midX, tierY + tuftThickness * 0.95f, innerX, tierY + tuftThickness * 0.2f)
                         treeSnowPath.close()
                         canvas.drawPath(treeSnowPath, treeSnowPaint)
                     }
@@ -864,8 +870,8 @@ class TreeRenderer {
                 else 255
                 // Sunlit side of each puff gives the crown volume; fades out in diffuse light
                 val highlight = sunlitHighlight(state)
-                val lightOffX = state.lightDirX * 0.18f
-                val lightOffY = -0.1f - 0.1f * state.lightElevation01
+                val lightOffX = state.lightDirX * 0.11f
+                val lightOffY = -0.07f - 0.07f * state.lightElevation01
                 val radiusX = crownRadius * crownScale * tree.crownAspectX
                 val radiusY = crownRadius * crownScale * tree.crownAspectY
                 val crownX = x + tree.crownLean * crownRadius * crownScale
@@ -880,13 +886,13 @@ class TreeRenderer {
                     crownPaint.alpha = crownAlpha
                     canvas.drawOval(cx - rx, cy - ry, cx + rx, cy + ry, crownPaint)
                 }
-                // Highlights after all puffs: one lit mass, shade only along the crown's far rim
+                // Highlights after all puffs: one lit mass, gentle shade along the crown's far rim
                 if (highlight > 0.01f) {
                     for (circle in tree.crownCircles) {
                         val cx = crownX + circle.xOffset * radiusX + lightOffX * radiusX * circle.radiusScale
                         val cy = crownY + circle.yOffset * radiusY + lightOffY * radiusY * circle.radiusScale
-                        val rx = radiusX * circle.radiusScale * 0.72f
-                        val ry = radiusY * circle.radiusScale * 0.72f
+                        val rx = radiusX * circle.radiusScale * 0.85f
+                        val ry = radiusY * circle.radiusScale * 0.85f
                         crownPaint.color = RenderConstants.lerpColor(
                             darkenColor(treePaint.color, circle.darkenFactor), SUNLIT_FOLIAGE, highlight
                         )

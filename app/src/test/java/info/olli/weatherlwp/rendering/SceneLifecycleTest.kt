@@ -60,4 +60,20 @@ class SceneLifecycleTest {
             scene.destroy()
         }
     }
+
+    @Test
+    fun `simulation state remains readable after render for Material You colors`() {
+        try {
+            val bitmap = android.graphics.Bitmap.createBitmap(120, 200, android.graphics.Bitmap.Config.ARGB_8888)
+            val canvas = android.graphics.Canvas(bitmap)
+            scene.render(canvas, 16L)
+            org.junit.Assert.assertNotNull(
+                "getSimulationState() must stay populated after render() for WeatherWallpaper.onComputeColors()",
+                scene.getSimulationState()
+            )
+            bitmap.recycle()
+        } finally {
+            scene.destroy()
+        }
+    }
 }

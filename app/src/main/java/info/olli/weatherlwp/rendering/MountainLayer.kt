@@ -559,10 +559,11 @@ class MountainLayer(private val context: Context) : SceneLayer {
         val leftRidgeShade = (-lightBias).coerceAtLeast(0f) * ridgeShade
         val rightRidgeShade = lightBias.coerceAtLeast(0f) * ridgeShade
 
-        // Shadow intensity for each side (base shadow + directional component)
-        // Both sides always have some shadow when sun is low, but one side is darker
+        // Shadow intensity for each side (base shadow + directional component + subtle low-poly facet floor)
+        // A gentle baseline facet difference keeps daytime midday peaks from reading as flat grey triangles.
+        val facetFloor = if (state.mountainShadowsEnabled) 0.11f * (1f - frameDullness * 0.5f) else 0f
         val leftShadow = (frontShadowBase + leftRidgeShade).coerceIn(0f, 0.55f)
-        val rightShadow = (frontShadowBase + rightRidgeShade).coerceIn(0f, 0.55f)
+        val rightShadow = (frontShadowBase + rightRidgeShade + facetFloor).coerceIn(0f, 0.58f)
         
         // Cone-style: shadow is STRONGER at base (where mountain blocks more light)
         // and WEAKER at peak (which catches more direct sunlight)

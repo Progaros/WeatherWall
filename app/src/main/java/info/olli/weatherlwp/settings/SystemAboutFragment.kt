@@ -98,6 +98,12 @@ class SystemAboutFragment : PreferenceFragmentCompat() {
             copyAllSettingsToClipboard()
             true
         }
+
+        // Copy last crash log to clipboard (if any)
+        findPreference<Preference>("pref_copy_crash_log")?.setOnPreferenceClickListener {
+            copyLastCrashLogToClipboard()
+            true
+        }
         
         // Preview wallpaper
         findPreference<Preference>("pref_preview")?.setOnPreferenceClickListener {
@@ -146,6 +152,17 @@ class SystemAboutFragment : PreferenceFragmentCompat() {
         val export = SettingsExporter.export(context)
         WeatherWallApp.copyToClipboard(context, export, "WeatherWall Settings")
         Toast.makeText(context, R.string.toast_settings_copied, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun copyLastCrashLogToClipboard() {
+        val context = requireContext()
+        val log = WeatherWallApp.loadCrashLogFromFile(context) ?: WeatherWallApp.getLastCrashLog()
+        if (log != null) {
+            WeatherWallApp.copyToClipboard(context, log, "WeatherWall Crash Log")
+            Toast.makeText(context, R.string.toast_crash_log_copied, Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, R.string.toast_no_crash_log, Toast.LENGTH_SHORT).show()
+        }
     }
     
     private fun openWallpaperPreview() {

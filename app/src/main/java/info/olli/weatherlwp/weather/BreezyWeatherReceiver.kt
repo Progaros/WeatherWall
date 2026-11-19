@@ -29,7 +29,7 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
 
         // The receiver is exported without a permission, so every value below arrives from an
         // untrusted sender and is bounded before it can reach storage or the renderer.
-        private const val MAX_PAYLOAD_CHARS = 64 * 1024
+        private const val MAX_PAYLOAD_CHARS = 128 * 1024
         private const val MAX_WIND_KMH = 500.0
         private const val MIN_TEMP_C = -120f
         private const val MAX_TEMP_C = 80f
@@ -72,6 +72,23 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
             803 -> WeatherType.CLOUDY
             804 -> WeatherType.OVERCAST
             else -> WeatherType.CLEAR
+        }
+
+        /** Fallback text mapping when a broadcast omits currentConditionCode. */
+        fun mapConditionText(condition: String?): WeatherType {
+            val text = condition?.lowercase(java.util.Locale.ROOT)?.trim().orEmpty()
+            return when {
+                text.isEmpty() -> WeatherType.CLEAR
+                "thunder" in text || "storm" in text || "gewitter" in text -> WeatherType.THUNDERSTORM
+                "hail" in text || "sleet" in text || "hagel" in text -> WeatherType.HAIL
+                "snow" in text || "schnee" in text -> WeatherType.SNOW
+                "rain" in text || "drizzle" in text || "shower" in text || "regen" in text -> WeatherType.RAIN
+                "fog" in text || "mist" in text || "haze" in text || "nebel" in text -> WeatherType.FOG
+                "overcast" in text || "bedeckt" in text -> WeatherType.OVERCAST
+                "partly" in text || "teilweise" in text -> WeatherType.PARTLY_CLOUDY
+                "cloud" in text || "bewölkt" in text || "wolk" in text -> WeatherType.CLOUDY
+                else -> WeatherType.CLEAR
+            }
         }
     }
 
@@ -120,8 +137,12 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
             
             // Weather condition code (OpenWeatherMap style)
             // Breezy sends 'currentConditionCode' (Int) or 'currentCondition' (String)
-            val conditionCode = data.optInt("currentConditionCode", 800)
-            val weatherType = mapConditionCode(conditionCode)
+            val conditionCode = data.optInt("currentConditionCode", -1)
+            val weatherType = if (conditionCode >= 0) {
+                mapConditionCode(conditionCode)
+            } else {
+                mapConditionText(data.optString("currentCondition", ""))
+            }
             
             // Sunrise/sunset (Unix timestamps in seconds)
             val sunrise = sanitizeEpochSeconds(data.optLong("sunRise", data.optLong("todaySunrise", -1)))
@@ -163,8 +184,13 @@ class BreezyWeatherReceiver : BroadcastReceiver() {
                 dewPointCelsius = dewC
             )
             
+            val latitude = if (data.has("latitude")) data.optDouble("latitude", Double.NaN) else Double.NaN
+
             // Store in repository (including raw JSON for debugging)
-            WeatherRepository.updateWeather(context, weatherType, sunrise, sunset, windSpeed, json, extendedData)
+            WeatherRepository.updateWeather(
+                context, weatherType, sunrise, sunset, windSpeed, json, extendedData,
+                latitude = latitude.takeIf { it.isFinite() }
+            )
             
             Log.i(TAG, "Weather updated: $weatherType (code=$conditionCode), wind=${windSpeed}m/s, " +
                 "temp=${if (tempC.isNaN()) "?" else "%.1f°C".format(tempC)}, " +

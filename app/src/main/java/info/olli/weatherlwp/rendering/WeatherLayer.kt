@@ -3,6 +3,7 @@ package info.olli.weatherlwp.rendering
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import androidx.core.graphics.withTranslation
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.simulation.SimulationState
 import info.olli.weatherlwp.weather.WeatherType as AppWeatherType
@@ -287,7 +288,7 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
         }
 
         when (currentEffect) {
-            EffectType.RAIN -> renderRain(canvas)
+            EffectType.RAIN -> renderRain(canvas, state)
             EffectType.SNOW -> renderSnow(canvas)
             EffectType.HAIL -> renderHail(canvas)
             EffectType.LIGHTNING -> renderLightning(canvas, state)
@@ -441,17 +442,26 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
     private fun bucketDepth(bucket: Int): Float =
         (NEAR_PARALLAX_DEPTH - (RAIN_DEPTH_NEAR - bucket) * layerDepthOffset).coerceIn(0f, 1f)
 
-    private fun renderRain(canvas: Canvas) {
+    private fun renderRain(canvas: Canvas, state: SimulationState) {
         // Dim the world during rain (atmospheric effect)
         // Intensity affects dimming: light rain = subtle, heavy = more dim
         val dimAlpha = (20 + intensity * 40).toInt()
         rainDimPaint.color = Color.argb(dimAlpha, 100, 105, 115)
         canvas.drawRect(0f, 0f, screenWidth.toFloat(), screenHeight.toFloat(), rainDimPaint)
 
+        // Blend rain tint with ambient light so dusk/dawn/night rain sits naturally in the sky.
+        val ambient = RenderConstants.getAmbientColor(
+            state.timeOfDayHours, state.isNight, state.isDawn, state.isDusk,
+            state.nightShadeStrength, state.sunriseHours, state.sunsetHours
+        )
+        rainPaintFar.color = RenderConstants.lerpColor(Color.rgb(165, 185, 210), ambient, 0.45f)
+        rainPaintMedium.color = RenderConstants.lerpColor(Color.rgb(175, 195, 220), ambient, 0.40f)
+        rainPaintNear.color = RenderConstants.lerpColor(Color.rgb(185, 205, 228), ambient, 0.35f)
+
         // Slightly boost visual dynamics by varying alpha per depth batch.
-        rainPaintFar.alpha = (105 + intensity * 55f).toInt().coerceIn(70, 200)
-        rainPaintMedium.alpha = (145 + intensity * 65f).toInt().coerceIn(100, 225)
-        rainPaintNear.alpha = (180 + intensity * 70f).toInt().coerceIn(130, 255)
+        rainPaintFar.alpha = (80 + intensity * 45f).toInt().coerceIn(55, 160)
+        rainPaintMedium.alpha = (115 + intensity * 55f).toInt().coerceIn(85, 190)
+        rainPaintNear.alpha = (145 + intensity * 60f).toInt().coerceIn(110, 215)
 
         if (rainFarCoordCount > 0) {
             withBucketParallax(canvas, RAIN_DEPTH_FAR) {
@@ -536,7 +546,7 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
         drawStormClouds(canvas, state.timeSeconds)
         
         // Also render rain during thunderstorm
-        renderRain(canvas)
+        renderRain(canvas, state)
         
         // Lightning flash state is managed in update() - draw only here
         if (lightningFlash) {
@@ -924,10 +934,9 @@ class WeatherLayer(private val random: Random = Random.Default) : SceneLayer {
             block()
             return
         }
-        canvas.save()
-        canvas.translate(dx, dy)
-        block()
-        canvas.restore()
+        canvas.withTranslation(dx, dy) {
+            block()
+        }
     }
 
     /**

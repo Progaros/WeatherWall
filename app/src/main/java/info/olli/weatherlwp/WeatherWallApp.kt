@@ -117,20 +117,13 @@ class WeatherWallApp : Application() {
             lastCrashLog = crashLog
             Log.e(TAG, crashLog)
             
-            // Write crash log to file (reliable — no Binder IPC, survives process death)
+            // Write crash log to file (reliable — no Binder IPC, survives process death).
+            // Users can copy it explicitly from Settings -> System -> About -> Copy Last Crash Log.
             try {
                 val file = File(filesDir, CRASH_LOG_FILE)
                 file.writeText(crashLog)
             } catch (e: Exception) {
                 Log.e(TAG, "Could not write crash log to file", e)
-            }
-            
-            // Best-effort clipboard copy (may fail during crash due to Binder)
-            try {
-                copyToClipboard(this, crashLog, "WeatherWall Crash")
-            } catch (e: Exception) {
-                // Clipboard may not be available during crash
-                Log.e(TAG, "Could not copy crash log to clipboard", e)
             }
             
         } catch (e: Exception) {

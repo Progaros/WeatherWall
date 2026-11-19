@@ -25,6 +25,7 @@ import info.olli.weatherlwp.simulation.SimulationState
 object GroundShadow {
 
     private const val MASK_SIZE = 64
+    private const val SNOW_SHADOW_COLOR = 0xFF3C4D6E.toInt()
     private var mask: Bitmap? = null
 
     // Reused across calls to avoid a per-frame RectF allocation.
@@ -88,11 +89,18 @@ object GroundShadow {
         tipSwayX: Float = 0f,
         clipPath: Path? = null
     ) {
-        val alpha = state.groundShadowAlpha()
-        if (alpha <= 0) return
+        val rawAlpha = state.groundShadowAlpha()
+        if (rawAlpha <= 0) return
+        val snow = state.snowLevel.coerceIn(0f, 1f)
+        val shadowColor = if (snow > 0.01f) {
+            RenderConstants.lerpColor(Color.BLACK, SNOW_SHADOW_COLOR, snow * 0.85f)
+        } else {
+            Color.BLACK
+        }
+        val alpha = (rawAlpha * (1f - snow * 0.25f)).toInt().coerceAtLeast(1)
         drawRaw(
             canvas, paint, baseX, groundY, objectHeight, objectWidth,
-            state.shadowDirX, state.shadowLengthFactor(), alpha, tipSwayX, clipPath
+            state.shadowDirX, state.shadowLengthFactor(), alpha, tipSwayX, clipPath, shadowColor
         )
     }
 
@@ -112,7 +120,8 @@ object GroundShadow {
         shadowLengthFactor: Float,
         alpha: Int,
         tipSwayX: Float = 0f,
-        clipPath: Path? = null
+        clipPath: Path? = null,
+        shadowColor: Int = Color.BLACK
     ) {
         if (alpha <= 0) return
 
@@ -122,7 +131,7 @@ object GroundShadow {
         val halfThickness = (objectHeight * 0.03f).coerceAtLeast(1.6f)
 
         // ALPHA_8 mask: RGB comes from the paint color, shape/softness from the bitmap alpha.
-        paint.color = Color.BLACK
+        paint.color = shadowColor
         paint.alpha = alpha
         paint.isFilterBitmap = true
         destRect.set(centerX - halfLength, groundY - halfThickness, centerX + halfLength, groundY + halfThickness)

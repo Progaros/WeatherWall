@@ -39,6 +39,11 @@
             android:title="🐞 Debug Overlay"
             android:summary="Show FPS, frame time, and debug info on screen"
             android:defaultValue="false" />
+
+        <Preference
+            android:key="pref_copy_crash_log"
+            android:title="Copy Last Crash Log"
+            android:summary="Copy the most recent crash report to clipboard" />
     </PreferenceCategory>
 
     <PreferenceCategory android:title="Actions">

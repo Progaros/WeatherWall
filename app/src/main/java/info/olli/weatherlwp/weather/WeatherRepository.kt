@@ -64,14 +64,17 @@ object WeatherRepository {
     
     @Volatile private var cached: WeatherCache? = null
     
-    // SharedPreferences listener to invalidate cache when weather data changes
-    private val cacheInvalidationListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+    // SharedPreferences listener to invalidate cache when weather data changes externally
+    private val cacheInvalidationListener = SharedPreferences.OnSharedPreferenceChangeListener { sp, key ->
         if (key != null && key in WEATHER_KEYS) {
-            cached = null  // Force re-read on next access
+            val current = cached
+            if (current == null || sp.getLong(KEY_LAST_UPDATE, 0L) != current.lastUpdate) {
+                cached = null  // Force re-read on next access
+            }
         }
     }
 
-    private class Binding(val app: Context, val prefs: SharedPreferences)
+    private class Binding(val appRef: java.lang.ref.WeakReference<Context>, val prefs: SharedPreferences)
     @Volatile private var binding: Binding? = null
     
     /**
@@ -99,15 +102,32 @@ object WeatherRepository {
         sunset: Long,
         windSpeed: Float = 0f,
         rawJson: String? = null,
-        extendedData: ExtendedWeatherData? = null
+        extendedData: ExtendedWeatherData? = null,
+        latitude: Double? = null
     ) {
+        val updateTimeMs = System.currentTimeMillis()
+        val resolvedExtended = extendedData ?: cached?.extended ?: ExtendedWeatherData()
+
+        // Populate cache before committing to SP so our own listener sees matching lastUpdate
+        cached = WeatherCache(
+            weatherType = type,
+            sunrise = sunrise,
+            sunset = sunset,
+            windSpeed = windSpeed,
+            lastUpdate = updateTimeMs,
+            extended = resolvedExtended
+        )
+
         prefs(context).edit {
             putString(KEY_WEATHER_TYPE, type.name)
             putLong(KEY_SUNRISE, sunrise)
             putLong(KEY_SUNSET, sunset)
             putFloat(KEY_WIND_SPEED, windSpeed)
-            putLong(KEY_LAST_UPDATE, System.currentTimeMillis())
-            if (sunrise > 0 && sunset > 0) {
+            putLong(KEY_LAST_UPDATE, updateTimeMs)
+            val validLat = latitude?.takeIf { it.isFinite() && it in -90.0..90.0 }
+            if (validLat != null) {
+                putFloat(KEY_INFERRED_LATITUDE, validLat.toFloat())
+            } else if (sunrise > 0 && sunset > 0) {
                 Astronomy.locationFromSunTimes(sunrise * 1000L, sunset * 1000L)?.first?.let {
                     putFloat(KEY_INFERRED_LATITUDE, it.toFloat())
                 }
@@ -128,28 +148,25 @@ object WeatherRepository {
                 putLong(KEY_MOON_RISE, extendedData.moonRise)
                 putLong(KEY_MOON_SET, extendedData.moonSet)
                 putInt(KEY_WIND_DIRECTION, extendedData.windDirection)
-                // Temperature stored as Celsius * 10 for 0.1° precision in Int storage
+                // Temperature stored as Celsius * 10 for 0.1° precision in Int storage;
+                // clear stale keys when a newer broadcast omits temperature.
                 if (!extendedData.temperatureCelsius.isNaN()) {
                     putInt(KEY_TEMPERATURE, (extendedData.temperatureCelsius * 10).toInt())
+                } else {
+                    remove(KEY_TEMPERATURE)
                 }
                 if (!extendedData.feelsLikeCelsius.isNaN()) {
                     putInt(KEY_TEMPERATURE_FEELS, (extendedData.feelsLikeCelsius * 10).toInt())
+                } else {
+                    remove(KEY_TEMPERATURE_FEELS)
                 }
                 if (!extendedData.dewPointCelsius.isNaN()) {
                     putInt(KEY_DEW_POINT, (extendedData.dewPointCelsius * 10).toInt())
+                } else {
+                    remove(KEY_DEW_POINT)
                 }
             }
         }
-        
-        // Atomically populate cache from the values we just wrote (avoid re-reading SP)
-        cached = WeatherCache(
-            weatherType = type,
-            sunrise = sunrise,
-            sunset = sunset,
-            windSpeed = windSpeed,
-            lastUpdate = System.currentTimeMillis(),
-            extended = extendedData ?: cached?.extended ?: ExtendedWeatherData()
-        )
         
         Log.d(TAG, "Weather updated: type=$type, sunrise=$sunrise, sunset=$sunset, wind=$windSpeed m/s" +
             (extendedData?.let { ", precip=${it.precipProbability}%, clouds=${it.cloudCover}%" } ?: ""))
@@ -161,14 +178,14 @@ object WeatherRepository {
      */
     private fun prefs(context: Context): SharedPreferences {
         val app = context.applicationContext ?: context
-        binding?.takeIf { it.app === app }?.let { return it.prefs }
+        binding?.takeIf { it.appRef.get() === app }?.let { return it.prefs }
         synchronized(this) {
-            binding?.takeIf { it.app === app }?.let { return it.prefs }
+            binding?.takeIf { it.appRef.get() === app }?.let { return it.prefs }
             val prefs = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             migrateLegacyKeys(PreferenceManager.getDefaultSharedPreferences(app), prefs)
             binding?.prefs?.unregisterOnSharedPreferenceChangeListener(cacheInvalidationListener)
             prefs.registerOnSharedPreferenceChangeListener(cacheInvalidationListener)
-            binding = Binding(app, prefs)
+            binding = Binding(java.lang.ref.WeakReference(app), prefs)
             cached = null
             return prefs
         }

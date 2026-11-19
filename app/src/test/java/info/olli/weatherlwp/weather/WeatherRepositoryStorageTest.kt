@@ -59,4 +59,22 @@ class WeatherRepositoryStorageTest {
         assertTrue(defaults.contains("pref_debug_enabled"))
         assertEquals(1_718_424_000L, weatherPrefs.getLong("weather_sunrise", -1L))
     }
+
+    @Test
+    fun `updateWeather clears stale temperature on NaN and stores explicit latitude`() {
+        WeatherRepository.updateWeather(
+            context, WeatherType.CLOUDY, 1_718_424_000L, 1_718_474_400L, 3f,
+            extendedData = WeatherRepository.ExtendedWeatherData(temperatureCelsius = 12.5f),
+            latitude = 48.14
+        )
+        assertEquals(12.5f, WeatherRepository.getExtendedData(context).temperatureCelsius, 0.1f)
+        assertEquals(48.14, WeatherRepository.getInferredLatitude(context)!!, 0.01)
+
+        WeatherRepository.updateWeather(
+            context, WeatherType.CLEAR, 1_718_424_000L, 1_718_474_400L, 1f,
+            extendedData = WeatherRepository.ExtendedWeatherData(temperatureCelsius = Float.NaN)
+        )
+        assertFalse(weatherPrefs.contains("weather_temperature"))
+        assertTrue(WeatherRepository.getExtendedData(context).temperatureCelsius.isNaN())
+    }
 }
