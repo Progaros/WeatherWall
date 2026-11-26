@@ -51,6 +51,9 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
         // Sensor warmup: ignore first N sensor events after start() to prevent stale queued events
         // from triggering shakes immediately after unlock (in addition to time-based delay)
         private const val SHAKE_WARMUP_SAMPLES = 120
+
+        /** Requested sampling interval for the active parallax sensor (~100 Hz; hardware caps as needed). */
+        private const val PARALLAX_SENSOR_DELAY_US = 10_000
     }
     
     interface Listener {
@@ -83,14 +86,16 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
     private val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     private val gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
     
-    // Active sensor depends on mode
-    private var activeSensor: Sensor? = rotationVector ?: gameRotationVector ?: gravitySensor ?: accelerometer
+    // Active sensor depends on mode (prefer GAME_ROTATION_VECTOR: gyro+accel fused, no magnetometer jumps)
+    private var activeSensor: Sensor? = gameRotationVector ?: rotationVector ?: gravitySensor ?: accelerometer
     
     // Parallax mode - can be changed at runtime
     private var parallaxMode = ParallaxMode.ROTATION_VECTOR
     
     private val rotationMatrix = FloatArray(9)
     private val remappedMatrix = FloatArray(9)
+    private val prevRemappedMatrix = FloatArray(9)
+    private var hasPrevMatrix = false
     private val orientationAngles = FloatArray(3)  // azimuth, pitch, roll
 
     private var filteredX = 0f
@@ -284,10 +289,11 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
     }
 
     fun start() {
-        // Select sensor based on mode
+        // Select sensor based on mode. Prefer GAME_ROTATION_VECTOR over ROTATION_VECTOR
+        // because it fuses gyro+accel without magnetometer interference/jumps.
         activeSensor = when (parallaxMode) {
-            ParallaxMode.GYROSCOPE -> gyroscope ?: rotationVector ?: gameRotationVector ?: gravitySensor
-            ParallaxMode.ROTATION_VECTOR -> rotationVector ?: gameRotationVector ?: gravitySensor ?: accelerometer
+            ParallaxMode.GYROSCOPE -> gyroscope ?: gameRotationVector ?: rotationVector ?: gravitySensor
+            ParallaxMode.ROTATION_VECTOR -> gameRotationVector ?: rotationVector ?: gravitySensor ?: accelerometer
         }
         
         if (activeSensor == null) {
@@ -300,6 +306,7 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
             prevPitch = 0f
             prevRoll = 0f
             isFirstSample = true
+            hasPrevMatrix = false
             accumulatedX = 0f
             accumulatedY = 0f
             lastDisplayRotation = getCurrentDisplayRotation()
@@ -311,7 +318,7 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
             avgYaw.reset()
             avgPitch.reset()
             avgRoll.reset()
-            lastGyroTime = System.nanoTime()
+            lastGyroTime = 0L
             
             // Reset shake state
             shakeCount = 0
@@ -326,10 +333,9 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
             // This prevents stale queued events from triggering shakes immediately after unlock
             shakeWarmupSamplesRemaining = SHAKE_WARMUP_SAMPLES
             
-            // Use SENSOR_DELAY_GAME (~20ms, 50Hz) for responsive parallax
-            // Battery savings come from unregistering when not visible (done in stop())
-            val sensorRate = SensorManager.SENSOR_DELAY_GAME
-            val okActive = sensorManager.registerListener(this, activeSensor, sensorRate)
+            // Request ~100Hz (10ms) for the active parallax sensor to match 60/90/120Hz displays
+            // smoothly. Battery savings come from unregistering when not visible (done in stop()).
+            val okActive = sensorManager.registerListener(this, activeSensor, PARALLAX_SENSOR_DELAY_US)
             Log.d(TAG, "Active sensor registered=$okActive type=${activeSensor?.type} name=${activeSensor?.name}")
             
             // Register shake detection sensors using the helper
@@ -351,12 +357,14 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
     fun recalibrate() {
         // Reset delta tracking - next sample will be new reference
         isFirstSample = true
+        hasPrevMatrix = false
         accumulatedX = 0f
         accumulatedY = 0f
         // Reset gyroscope state
         gyroYaw = 0f
         gyroPitch = 0f
         gyroRoll = 0f
+        lastGyroTime = 0L
         avgYaw.reset()
         avgPitch.reset()
         avgRoll.reset()
@@ -461,7 +469,7 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
 
             when (event.sensor.type) {
                 Sensor.TYPE_GYROSCOPE -> {
-                    handleGyroscope(event.values, displayRotation)
+                    handleGyroscope(event.values, displayRotation, event.timestamp)
                 }
                 Sensor.TYPE_ROTATION_VECTOR, Sensor.TYPE_GAME_ROTATION_VECTOR -> {
                     handleRotationVector(event.values, displayRotation)
@@ -500,7 +508,7 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
      * 4. No decay - angles hold their values until moved
      * 5. Display rotation applied AFTER accumulation when converting to tiltX/tiltY
      */
-    private fun handleGyroscope(values: FloatArray, displayRotation: Int) {
+    private fun handleGyroscope(values: FloatArray, displayRotation: Int, timestampNanos: Long = 0L) {
         // Gyroscope axis mapping:
         // values[0] = rotation rate around X axis (pitch rate - tilting forward/back)
         // values[1] = rotation rate around Y axis (roll rate - tilting left/right)
@@ -511,8 +519,8 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
         avgPitch.add(values[1])  // Y-axis rate
         avgRoll.add(values[2])   // Z-axis rate
         
-        // Step 2: Calculate time delta
-        val currentTime = System.nanoTime()
+        // Step 2: Calculate time delta using hardware IMU timestamp (avoids OS thread scheduling jitter)
+        val currentTime = if (timestampNanos > 0L) timestampNanos else System.nanoTime()
         val deltaTimeNanos = currentTime - lastGyroTime
         
         // Skip first sample or stale data (>100ms gap)
@@ -705,26 +713,50 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
             else -> { axisX = SensorManager.AXIS_X; axisY = SensorManager.AXIS_Y }
         }
         SensorManager.remapCoordinateSystem(rotationMatrix, axisX, axisY, remappedMatrix)
-        
-        // Use Android's getOrientation() for proper pitch/roll extraction
-        // This is the recommended approach after remapCoordinateSystem()
-        // orientationAngles[0] = azimuth (rotation around Z axis)
-        // orientationAngles[1] = pitch (rotation around X axis, -π to π)
-        // orientationAngles[2] = roll (rotation around Y axis, -π/2 to π/2)
-        SensorManager.getOrientation(remappedMatrix, orientationAngles)
-        
-        val pitch = orientationAngles[1]  // Forward/backward tilt → Y parallax
-        val roll = orientationAngles[2]   // Left/right tilt → X parallax
-        
-        // remappedMatrix[8] is the Z component of the device's Z-axis in world space.
-        // When phone is flat, |Z[8]| ≈ 1. When phone is vertical (screen-facing), |Z[8]| ≈ 0.
-        // Use hysteresis to prevent flip-flopping near vertical (gimbal lock region)
-        val zCompRaw = remappedMatrix[8]
-        updateScreenDownState(zCompRaw)
-        val zComponent = abs(zCompRaw)
-        poseGain = (zComponent / 0.3f).coerceIn(0f, 1f)  // Fade sensitivity below 0.3
-        
-        processOrientationAngles(pitch, roll)
+
+        // Compute gimbal-lock-free relative rotation in screen coordinates:
+        // R_rel = prevRemappedMatrix^T * remappedMatrix.
+        // Unlike Euler getOrientation(), this has no singularity when the phone is held
+        // upright (60-90°) or overhead, and needs no poseGain drop-off or screen-down flip.
+        if (!hasPrevMatrix) {
+            remappedMatrix.copyInto(prevRemappedMatrix)
+            hasPrevMatrix = true
+            return
+        }
+
+        val prev = prevRemappedMatrix
+        val curr = remappedMatrix
+        val r00 = prev[0] * curr[0] + prev[3] * curr[3] + prev[6] * curr[6]
+        val r02 = prev[0] * curr[2] + prev[3] * curr[5] + prev[6] * curr[8]
+        val r11 = prev[1] * curr[1] + prev[4] * curr[4] + prev[7] * curr[7]
+        val r12 = prev[1] * curr[2] + prev[4] * curr[5] + prev[7] * curr[8]
+        val r20 = prev[2] * curr[0] + prev[5] * curr[3] + prev[8] * curr[6]
+        val r21 = prev[2] * curr[1] + prev[5] * curr[4] + prev[8] * curr[7]
+        val r22 = prev[2] * curr[2] + prev[5] * curr[5] + prev[8] * curr[8]
+
+        curr.copyInto(prev)
+
+        var deltaPitch = atan2(r21 - r12, r11 + r22)  // rotation around screen X axis
+        var deltaRoll = atan2(r02 - r20, r00 + r22)   // rotation around screen Y axis
+
+        deltaPitch = deltaPitch.coerceIn(-FULL_TILT_RADIANS * 0.5f, FULL_TILT_RADIANS * 0.5f)
+        deltaRoll = deltaRoll.coerceIn(-FULL_TILT_RADIANS * 0.5f, FULL_TILT_RADIANS * 0.5f)
+
+        val sensitivity = 2.0f
+        accumulatedX = (accumulatedX - deltaRoll * sensitivity).coerceIn(-1f, 1f)
+        accumulatedY = (accumulatedY - deltaPitch * sensitivity).coerceIn(-1f, 1f)
+
+        if (autoReturnRate < 1f) {
+            val motionMag = sqrt(deltaPitch * deltaPitch + deltaRoll * deltaRoll)
+            if (motionMag < 0.002f) {
+                accumulatedX *= autoReturnRate
+                accumulatedY *= autoReturnRate
+            }
+        }
+
+        filteredX = accumulatedX
+        filteredY = accumulatedY
+        listener?.onTiltChanged(filteredX, -filteredY)
     }
     
     private fun handleGravityVector(values: FloatArray, displayRotation: Int) {

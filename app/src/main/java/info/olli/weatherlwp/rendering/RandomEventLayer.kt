@@ -6,11 +6,9 @@ import android.graphics.Color
 import android.graphics.Paint
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.rendering.events.*
-import info.olli.weatherlwp.simulation.CloudDensity
 import info.olli.weatherlwp.simulation.SimulationSettings
 import info.olli.weatherlwp.simulation.SimulationState
 import info.olli.weatherlwp.util.SeasonHelper
-import info.olli.weatherlwp.weather.WeatherType
 import kotlin.math.pow
 import kotlin.random.Random
 
@@ -42,11 +40,11 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     companion object {
         private const val TAG = "RandomEventLayer"
         private const val EVENT_ERROR_LOG_INTERVAL_MS = 5000L
-        private const val SHOWER_SEED_OFFSET = 7777L
+        private const val TREE_SPAWN_SEED_OFFSET = 54321L
     }
 
-    // Use a fixed base seed - actual randomness comes from absoluteTimeMs
-    private val baseSeed = 4000L
+    // Reworked deterministic time-bucket spawner & cross-scene synchronizer
+    private val spawner = EventSpawner(baseSeed = 4000L)
     private val paint = Paint().apply {
         isAntiAlias = true
         style = Paint.Style.FILL
@@ -73,6 +71,10 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     /** Convert an event's normalized x (in extended field space) to screen pixels. */
     fun eventXToScreenX(x: Float): Float = x * extendedWidth - extendedOffset
 
+    /** Convert a screen pixel X to normalized x in extended event field space. */
+    fun screenXToEventX(screenX: Float): Float =
+        if (extendedWidth > 0f) (screenX + extendedOffset) / extendedWidth else 0.5f
+
     // Cached per-frame ambient color (computed in update, used by multiple draw methods)
     private var cachedAmbientColor = 0
     private var eventsEnabled = true
@@ -86,6 +88,9 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
 
     /** World-space hill info provider. Returns actual hill depthFactor for given worldX and requested depth. */
     var hillInfoWorldProvider: ((worldX: Float, requestedDepthFactor: Float) -> Float)? = null
+
+    /** Deterministic tree-crown spawn provider for tree-anchored events (e.g. falling leaves). */
+    var treeSpawnProvider: EventTreeSpawnProvider? = null
     
     // Reusable ground-event entries to avoid per-frame Pair/lambda allocation.
     private val groundEventResults = ArrayList<TerrainLayer.GroundEventDrawEntry>(32)
@@ -244,13 +249,7 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
         
         // Update existing events and remove finished ones
         for (event in events) {
-            // Events get proportionally longer lifetime at smaller screen heights
-            // so their height-scaled traversal can complete before expiry.
-            // Cap to prevent active-event explosion at very small heights.
-            val scaledDurationMs = (event.durationMs / EventTraversal.heightScale(height)).toLong()
-                .coerceAtMost(event.durationMs * 3L)
-            val isStillAlive = (state.absoluteTimeMs - event.spawnTimeMs) < scaledDurationMs
-            if (!isStillAlive) {
+            if (!isEventAlive(event, state.absoluteTimeMs)) {
                 if (currentEvents == null) {
                     currentEvents = events.toMutableList()
                 }
@@ -258,51 +257,28 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
                 needsListUpdate = true
             }
         }
-        
-        // Spawn new events using time-bucket based determinism
-        // Each 500ms time bucket has a deterministic spawn decision
-        // Both preview and wallpaper checking the same bucket will get the same result
-        val currentBucket = state.absoluteTimeMs / 500
-        if (currentBucket != lastSpawnBucket) {
-            lastSpawnBucket = currentBucket
-            
-            // Use the time bucket as seed - all instances get same random sequence
-            val spawnSeed = currentBucket + baseSeed
-            val spawnRandom = Random(spawnSeed)
-            
-            // Spawn chance is already scaled appropriately in reloadSettings()
-            // 0.0001 (rare) to 0.5 (very frequent) per 500ms bucket check
-            val eventCount = currentEvents?.size ?: events.size
-            if (spawnRandom.nextFloat() < spawnChance && eventCount < 8) {
-                // Use bucket + offset as seed for event creation (deterministic)
-                val eventRandom = Random(spawnSeed + 12345)
-                val spawnTime = currentBucket * 500  // Aligned spawn time for position sync
+
+        // Evaluate deterministic time buckets (with startup lookback and idle catch-up)
+        // so preview and wallpaper always stay synchronized on in-flight events.
+        val pendingSpawns = spawner.collectAutomaticSpawns(
+            state = state,
+            season = currentSeason,
+            spawnChance = spawnChance,
+            enabledEvents = enabledEvents,
+            meteorShowersEnabled = meteorShowersEnabled
+        )
+        if (pendingSpawns.isNotEmpty()) {
+            for (request in pendingSpawns) {
+                val activeCount = currentEvents?.size ?: events.size
+                if (activeCount >= EventSpawner.MAX_ACTIVE_EVENTS) break
+                val event = instantiateSpawnRequest(request) ?: continue
+                // Skip lookback events that would already have finished by now
+                if (!isEventAlive(event, state.absoluteTimeMs)) continue
                 if (currentEvents == null) {
                     currentEvents = events.toMutableList()
                 }
-                spawnRandomEvent(state, currentEvents, eventRandom, spawnTime)
+                currentEvents.add(event)
                 needsListUpdate = true
-            }
-
-            // Annual meteor showers: extra meteors at rates following the real activity profiles.
-            if (meteorShowersEnabled && state.isNight && !isPrecipitating(state) &&
-                (state.cloudDensity == CloudDensity.LIGHT || state.cloudDensity == CloudDensity.MEDIUM)
-            ) {
-                refreshShowerActivity(state.absoluteTimeMs)
-                val baseChance = (spawnChance * 1.5f).coerceAtMost(0.05f)
-                for (shower in MeteorShowers.Shower.entries) {
-                    val activity = showerActivity[shower.ordinal]
-                    if (activity <= 0f) continue
-                    val showerRandom = Random(spawnSeed + SHOWER_SEED_OFFSET + shower.ordinal * 101L)
-                    val count = currentEvents?.size ?: events.size
-                    if (showerRandom.nextFloat() < activity * shower.relativeRate * baseChance && count < 8) {
-                        if (currentEvents == null) {
-                            currentEvents = events.toMutableList()
-                        }
-                        currentEvents.add(ShootingStarEvent.showerMeteor(showerRandom, currentBucket * 500, shower))
-                        needsListUpdate = true
-                    }
-                }
             }
         }
         
@@ -311,24 +287,39 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
             events = currentEvents.toList()
         }
     }
-    
-    private var lastSpawnBucket = 0L
 
     private var meteorShowersEnabled = true
-    private val showerActivity = FloatArray(MeteorShowers.Shower.entries.size)
-    private var showerActivityMs = Long.MIN_VALUE / 2
 
-    /** Shower activity changes over days; refresh once a minute. */
-    private fun refreshShowerActivity(nowMs: Long) {
-        if (kotlin.math.abs(nowMs - showerActivityMs) < 60_000L) return
-        val longitude = info.olli.weatherlwp.simulation.Astronomy.solarLongitude(nowMs)
-        for (shower in MeteorShowers.Shower.entries) showerActivity[shower.ordinal] = shower.activityAt(longitude)
-        showerActivityMs = nowMs
+    private fun isEventAlive(event: RandomEvent, absoluteTimeMs: Long): Boolean {
+        // Events get proportionally longer lifetime at smaller screen heights
+        // so their height-scaled traversal can complete before expiry.
+        // Cap to prevent active-event explosion at very small heights.
+        val scaledDurationMs = (event.durationMs / EventTraversal.heightScale(height)).toLong()
+            .coerceAtMost(event.durationMs * 3L)
+        return (absoluteTimeMs - event.spawnTimeMs) < scaledDurationMs
     }
 
-    private fun isPrecipitating(state: SimulationState): Boolean =
-        state.weather == WeatherType.RAIN || state.weather == WeatherType.THUNDERSTORM ||
-            state.weather == WeatherType.SNOW || state.weather == WeatherType.HAIL
+    private fun resolveSpawnPosition(
+        spec: EventSpec,
+        seed: Long,
+        explicitPosition: EventSpawnPosition?
+    ): EventSpawnPosition? {
+        if (explicitPosition != null) return explicitPosition
+        return when (spec.spawnSource) {
+            EventSpawnSource.DEFAULT -> null
+            EventSpawnSource.TREE_CROWN -> treeSpawnProvider?.invoke(Random(seed + TREE_SPAWN_SEED_OFFSET))
+        }
+    }
+
+    private fun instantiateSpawnRequest(request: EventSpawner.SpawnRequest): RandomEvent? = when (request) {
+        is EventSpawner.SpawnRequest.SpecSpawn -> {
+            val pos = resolveSpawnPosition(request.spec, request.seed, request.explicitPosition)
+            request.spec.create(Random(request.seed), request.spawnTimeMs, viewportRatio, pos)
+        }
+        is EventSpawner.SpawnRequest.ShowerMeteorSpawn -> {
+            ShootingStarEvent.showerMeteor(Random(request.seed), request.spawnTimeMs, request.shower)
+        }
+    }
 
     /** Combined light (0..1) active events cast over the night landscape, for water glints. */
     fun skyGlow(absoluteTimeMs: Long): Float {
@@ -356,30 +347,6 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
             event.applyTo(overlay, absoluteTimeMs)
         }
         return any
-    }
-    
-    private fun spawnRandomEvent(state: SimulationState, currentEvents: MutableList<RandomEvent>, random: Random, spawnTime: Long) {
-        val conditions = EventSpawnConditions(
-            isNight = state.isNight,
-            isDusk = state.isDusk,
-            season = currentSeason,
-            weather = state.weather,
-            cloudDensity = state.cloudDensity
-        )
-        // Registry order and the enabled-first short-circuit fix which conditions draw from [random].
-        val availableEvents = ArrayList<EventSpec>(EventSpec.entries.size)
-        for (spec in EventSpec.entries) {
-            if (spec.id in enabledEvents && spec.canSpawn(conditions, random)) {
-                availableEvents.add(spec)
-            }
-        }
-        
-        if (availableEvents.isEmpty()) return
-        
-        // Use deterministic selection based on spawnTime
-        val selectionRandom = Random(spawnTime + 99999)
-        val spec = availableEvents[selectionRandom.nextInt(availableEvents.size)]
-        currentEvents.add(spec.createForSpawn(spawnTime, viewportRatio))
     }
     
     override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
@@ -558,14 +525,24 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     }
     
     /**
-     * Spawn a specific event type by id (manual trigger from settings).
+     * Spawn a specific event type by id (manual trigger from settings or tests).
      * @param seed Seeds the event's randomness; the same seed gives the same event in preview and wallpaper.
      * @param spawnTimeMs When the event starts (absolute time).
+     * @param spawnPosition Optional explicit spawn position; when null, tree-anchored events resolve a tree crown.
      */
-    fun spawnSpecificEvent(eventType: String, seed: Long, spawnTimeMs: Long = seed) {
-        val event = EventSpec.fromId(eventType)?.create(Random(seed), spawnTimeMs, viewportRatio) ?: return
+    fun spawnSpecificEvent(
+        eventType: String,
+        seed: Long,
+        spawnTimeMs: Long = seed,
+        spawnPosition: EventSpawnPosition? = null
+    ) {
+        val spec = EventSpec.fromId(eventType) ?: return
+        val key = EventSpawner.SpawnKey(spec.id, spawnTimeMs, manual = true)
+        if (!spawner.recordSpawned(key)) return
+        val resolvedPosition = resolveSpawnPosition(spec, seed, spawnPosition)
+        val event = spec.create(Random(seed), spawnTimeMs, viewportRatio, resolvedPosition)
         events = events + event
-        android.util.Log.d("RandomEventLayer", "Spawned specific event: $eventType (seed: $seed)")
+        android.util.Log.d("RandomEventLayer", "Spawned specific event: $eventType (seed: $seed, pos: $resolvedPosition)")
     }
     
     override fun reloadSettings(settings: SimulationSettings) {
@@ -600,5 +577,6 @@ class RandomEventLayer(private val context: Context) : SceneLayer {
     
     override fun destroy() {
         events = emptyList()
+        spawner.reset()
     }
 }

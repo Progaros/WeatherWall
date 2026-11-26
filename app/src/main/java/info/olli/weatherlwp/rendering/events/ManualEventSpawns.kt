@@ -18,26 +18,53 @@ object ManualEventSpawns {
     const val MAX_AGE_MS = 10 * 60_000L
     private const val MAX_ENTRIES = 32
 
-    data class Entry(val eventId: String, val triggerMs: Long)
+    data class Entry(
+        val eventId: String,
+        val triggerMs: Long,
+        val spawnPosition: EventSpawnPosition? = null
+    )
 
     fun parse(raw: String?): List<Entry> {
         if (raw.isNullOrBlank()) return emptyList()
         return raw.split(',').mapNotNull { token ->
-            val at = token.lastIndexOf('@')
-            if (at <= 0) return@mapNotNull null
-            val time = token.substring(at + 1).toLongOrNull() ?: return@mapNotNull null
-            Entry(token.substring(0, at), time)
+            val parts = token.split('@')
+            if (parts.size < 2 || parts[0].isEmpty()) return@mapNotNull null
+            val time = parts[1].toLongOrNull() ?: return@mapNotNull null
+            val pos = if (parts.size >= 3 && parts[2].isNotEmpty()) parsePosition(parts[2]) else null
+            Entry(parts[0], time, pos)
         }
     }
 
-    fun format(entries: List<Entry>): String = entries.joinToString(",") { "${it.eventId}@${it.triggerMs}" }
+    fun format(entries: List<Entry>): String = entries.joinToString(",") { entry ->
+        val pos = entry.spawnPosition
+        if (pos == null) {
+            "${entry.eventId}@${entry.triggerMs}"
+        } else {
+            val depthPart = pos.depthFactor?.let { ":$it" } ?: ""
+            "${entry.eventId}@${entry.triggerMs}@${pos.x}:${pos.y}$depthPart"
+        }
+    }
+
+    private fun parsePosition(raw: String): EventSpawnPosition? {
+        val coords = raw.split(':')
+        if (coords.size < 2) return null
+        val x = coords[0].toFloatOrNull() ?: return null
+        val y = coords[1].toFloatOrNull() ?: return null
+        val depth = coords.getOrNull(2)?.toFloatOrNull()
+        return EventSpawnPosition(x, y, depth)
+    }
 
     /** Append a press; returns the stored entry (trigger times stay unique and increasing). */
-    fun enqueue(prefs: SharedPreferences, eventId: String, nowMs: Long = System.currentTimeMillis()): Entry {
+    fun enqueue(
+        prefs: SharedPreferences,
+        eventId: String,
+        nowMs: Long = System.currentTimeMillis(),
+        spawnPosition: EventSpawnPosition? = null
+    ): Entry {
         synchronized(this) {
             val kept = parse(prefs.getString(PREF_KEY, null)).filter { nowMs - it.triggerMs < MAX_AGE_MS }
             val triggerMs = maxOf(nowMs, (kept.maxOfOrNull { it.triggerMs } ?: Long.MIN_VALUE) + 1)
-            val entry = Entry(eventId, triggerMs)
+            val entry = Entry(eventId, triggerMs, spawnPosition)
             prefs.edit { putString(PREF_KEY, format((kept + entry).takeLast(MAX_ENTRIES))) }
             return entry
         }

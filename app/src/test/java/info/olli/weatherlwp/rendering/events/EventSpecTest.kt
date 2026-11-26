@@ -19,7 +19,7 @@ class EventSpecTest {
             "balloon" to 4L, "rabbit" to 5L, "fox" to 6L, "squirrel" to 12L, "shootingstar" to 7L,
             "fireflies" to 8L, "owl" to 9L, "snowflake" to 13L, "bat" to 14L, "deer" to 15L,
             "alien" to 10L, "fish" to 16L, "duck" to 17L, "frog" to 18L,
-            "perseids" to 19L, "starfall" to 20L
+            "perseids" to 19L, "starfall" to 20L, "fallingleaf" to 21L
         )
         assertEquals(legacy, EventSpec.entries.map { it.id to it.spawnSeedOffset })
     }
@@ -29,7 +29,7 @@ class EventSpecTest {
         val legacy = listOf(
             "airplane", "birds", "eagle", "butterfly", "rabbit", "fox", "shootingstar", "fireflies",
             "owl", "balloon", "alien", "squirrel", "dragonfly", "snowflake", "bat", "deer", "fish",
-            "duck", "frog", "perseids", "starfall"
+            "duck", "frog", "perseids", "starfall", "fallingleaf"
         )
         assertEquals(legacy, EventSpec.DEBUG_SPAWN_ORDER.map { it.id })
     }

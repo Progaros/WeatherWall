@@ -138,6 +138,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
 
         // Band nearness (0 = farthest, 1 = nearest) below which small ground detail is skipped
         private const val FLOWER_MIN_NEARNESS = 0.6f
+        private const val LEAF_MIN_NEARNESS = 0.25f
         private const val GROUND_DECOR_MIN_NEARNESS = 0.4f
         private const val SNOW_COLOR = 0xFFF6F9FF.toInt()
         private const val SNOW_GROUND_COLOR = 0xFFE8EDF5.toInt()
@@ -145,8 +146,8 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         private const val GRASS_TILE = 160
         private const val GRASS_TEXTURE_ALPHA = 26f
         /** Fallen leaf half-length range (screen-height fraction) on the nearest hill. */
-        private const val LEAF_SIZE_MIN = 0.0016f
-        private const val LEAF_SIZE_RANGE = 0.002f
+        private const val LEAF_SIZE_MIN = 0.0018f
+        private const val LEAF_SIZE_RANGE = 0.0024f
 
         /**
          * Left+right width fraction added to decoration bitmaps for parallax headroom.
@@ -470,7 +471,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         
         // Cell sizes for each decoration type (world units)
         val flowerCellSize = 5f
-        val leafCellSize = 8f
+        val leafCellSize = 3.5f
         val mushroomCellSize = 20f
         
         // Generate spring flowers using cell-based placement (with optional clustering)
@@ -570,15 +571,17 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             flowersByHill = emptyMap()
         }
         
-        // Generate fallen leaves with optional tree-biased accumulation
+        // Generate fallen leaves with rich tree-biased carpets and full-slope scatter.
+        // Pre-baked into per-hill DecorationBitmapCache bitmaps so high counts cost zero per-frame draw calls.
         if (fallenLeavesEnabled) {
             val leafColors = intArrayOf(
-                Color.rgb(200, 80, 20),    // Orange-red
-                Color.rgb(180, 120, 30),   // Golden
-                Color.rgb(160, 50, 20),    // Dark red
-                Color.rgb(210, 150, 40),   // Yellow-gold
-                Color.rgb(140, 70, 20),    // Brown
-                Color.rgb(220, 100, 30)    // Bright orange
+                Color.rgb(205, 78, 22),    // Burnt orange-red
+                Color.rgb(190, 128, 30),   // Golden amber
+                Color.rgb(162, 46, 22),    // Deep crimson
+                Color.rgb(220, 162, 42),   // Warm yellow-gold
+                Color.rgb(142, 72, 24),    // Russet brown
+                Color.rgb(228, 106, 28),   // Bright autumn orange
+                Color.rgb(176, 94, 24)     // Warm ochre
             )
             val newLeaves = mutableMapOf<Int, List<FallenLeafData>>()
             val densityFraction = (fallenLeavesDensity / 100f).coerceIn(0.05f, 1f)
@@ -603,7 +606,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             for (hillIndex in currentHills.indices) {
                 val hillLeaves = mutableListOf<FallenLeafData>()
                 val nearness = RenderConstants.bandNearness(hillIndex, currentHills.size)
-                if (nearness < GROUND_DECOR_MIN_NEARNESS) {
+                if (nearness < LEAF_MIN_NEARNESS) {
                     newLeaves[hillIndex] = hillLeaves
                     continue
                 }
@@ -611,50 +614,51 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                 val leafDepthScale = 0.35f + 0.65f * nearness
                 val hillTrees = treesByHillIndex[hillIndex] ?: emptyList()
                 
-                // Tree-biased leaves: every tree with foliage produces leaves.
-                // Count scales with bias and tree type. No random skip of entire trees.
+                // Tree-biased leaf carpets: deciduous trees shed thick carpets underneath and downwind.
                 if (hillTrees.isNotEmpty() && foliageUnderTreeBias > 0.01f) {
                     for (tree in hillTrees) {
                         val treeSeed = randomSeed + 8500 + tree.index
                         val treeRandom = DeterministicLayout.random(treeSeed, section = 820, index = hillIndex)
                         
-                        // Deciduous trees produce more leaves; conifers shed very few
+                        // Deciduous trees produce rich carpets; conifers shed very few
                         val typeBias = if (tree.treeType == TreeRenderer.TreeType.LEAF)
                             1f + foliageMatchingTreeBias
                         else
-                            0.3f
+                            0.2f
                         
                         // Leaf count proportional to bias, density, and tree scale (canopy proxy)
                         val canopyFactor = tree.scale.coerceIn(0.5f, 2f)
-                        val numLeaves = (foliageUnderTreeBias * typeBias * densityFraction * canopyFactor * 6f)
-                            .toInt().coerceIn(1, 10)
+                        val numLeaves = (foliageUnderTreeBias * typeBias * densityFraction * canopyFactor * 36f)
+                            .toInt().coerceIn(3, 70)
                         
                         // Scatter radius scales with tree canopy (larger trees → wider scatter)
-                        val scatterRadius = foliageRandomScatter * leafCellSize * canopyFactor * 1.5f
+                        val scatterRadius = (0.4f + foliageRandomScatter) * leafCellSize * canopyFactor * 2.8f
                         
                         for (l in 0 until numLeaves) {
-                            // Uniform-disk sampling around tree base
+                            // Biased disk sampling: denser near the trunk, tapering outward
                             val scatterAngle = treeRandom.nextFloat() * 2f * kotlin.math.PI.toFloat()
-                            val rawDist = kotlin.math.sqrt(treeRandom.nextFloat().toDouble()).toFloat() * scatterRadius
+                            val radialU = treeRandom.nextFloat()
+                            val rawDist = (radialU * 0.6f + kotlin.math.sqrt(radialU.toDouble()).toFloat() * 0.4f) * scatterRadius
                             
-                            // Distance-based falloff: leaves closer to trunk are larger
                             val distFraction = (rawDist / scatterRadius.coerceAtLeast(0.01f)).coerceIn(0f, 1f)
-                            val sizeFalloff = 1f - distFraction * 0.4f
+                            val sizeFalloff = 1f - distFraction * 0.35f
                             
                             var worldX = tree.worldX +
                                 kotlin.math.cos(scatterAngle.toDouble()).toFloat() * rawDist
                             
-                            // Wind scatter: asymmetric offset (stronger downwind, weaker crosswind)
-                            val windMagnitude = foliageWindScatterStrength * leafCellSize * treeRandom.nextFloat()
-                            // Add crosswind jitter for natural asymmetry
-                            val crossWind = (treeRandom.nextFloat() - 0.5f) * windMagnitude * 0.3f
+                            // Wind scatter: asymmetric drift downwind
+                            val windMagnitude = foliageWindScatterStrength * leafCellSize * 2.2f * treeRandom.nextFloat()
+                            val crossWind = (treeRandom.nextFloat() - 0.5f) * windMagnitude * 0.35f
                             worldX += windDirX * windMagnitude + crossWind
+                            
+                            val slopeBias = treeRandom.nextFloat()
+                            val ySpread = (slopeBias * slopeBias * 0.11f + 0.003f +
+                                windDirY * foliageWindScatterStrength * 0.025f).coerceAtLeast(0.002f)
                             
                             val colorIdx = treeRandom.nextInt(leafColors.size)
                             hillLeaves.add(FallenLeafData(
                                 worldX = worldX,
-                                yOffset = treeRandom.nextFloat() * 0.04f +
-                                    windDirY * foliageWindScatterStrength * 0.02f,
+                                yOffset = ySpread,
                                 color = leafColors[colorIdx],
                                 size = (LEAF_SIZE_MIN + treeRandom.nextFloat() * LEAF_SIZE_RANGE) * sizeFalloff * leafDepthScale,
                                 rotation = treeRandom.nextFloat() * 360f
@@ -663,28 +667,32 @@ class TerrainLayer(private val context: Context) : SceneLayer {
                     }
                 }
                 
-                // Base uniform scatter (always present for ambient ground cover)
+                // Ambient slope scatter across the hill (multiple leaves per active cell)
+                val baseCellChance = if (foliageUnderTreeBias > 0.01f && hillTrees.isNotEmpty())
+                    (0.35f + densityFraction * 0.65f) * (1f - foliageUnderTreeBias * 0.25f)
+                else
+                    (0.45f + densityFraction * 0.55f)
+                val maxLeavesPerCell = (1 + (densityFraction * 5f).toInt()).coerceIn(1, 6)
                 for (cellIndex in leafIndexRange) {
                     val cellSeed = randomSeed + 8000 + hillIndex
                     val h = DeterministicLayout.hashToFloat(cellSeed, cellIndex, 0)
-                    // Reduce uniform density when tree-biased leaves are present
-                    val uniformDensity = if (foliageUnderTreeBias > 0.01f && hillTrees.isNotEmpty())
-                        densityFraction * (1f - foliageUnderTreeBias * 0.5f)
-                    else
-                        densityFraction
-                    if (h > uniformDensity) continue
+                    if (h > baseCellChance) continue
                     
-                    val worldX = cellIndex * leafCellSize +
-                        (DeterministicLayout.hashToFloat(cellSeed, cellIndex, 1) - 0.5f) * leafCellSize * 0.9f
-                    val colorIdx = (DeterministicLayout.hashToFloat(cellSeed, cellIndex, 2) * leafColors.size).toInt()
-                        .coerceIn(0, leafColors.size - 1)
-                    hillLeaves.add(FallenLeafData(
-                        worldX = worldX,
-                        yOffset = DeterministicLayout.hashToFloat(cellSeed, cellIndex, 3) * 0.04f,
-                        color = leafColors[colorIdx],
-                        size = (LEAF_SIZE_MIN + DeterministicLayout.hashToFloat(cellSeed, cellIndex, 4) * LEAF_SIZE_RANGE) * leafDepthScale,
-                        rotation = DeterministicLayout.hashToFloat(cellSeed, cellIndex, 5) * 360f
-                    ))
+                    val cellRandom = DeterministicLayout.random(cellSeed, section = 810, index = cellIndex)
+                    val count = 1 + cellRandom.nextInt(maxLeavesPerCell)
+                    for (k in 0 until count) {
+                        val worldX = cellIndex * leafCellSize + (cellRandom.nextFloat() - 0.5f) * leafCellSize * 0.95f
+                        val colorIdx = cellRandom.nextInt(leafColors.size)
+                        val slopeU = cellRandom.nextFloat()
+                        val ySpread = 0.004f + slopeU * slopeU * 0.17f
+                        hillLeaves.add(FallenLeafData(
+                            worldX = worldX,
+                            yOffset = ySpread,
+                            color = leafColors[colorIdx],
+                            size = (LEAF_SIZE_MIN + cellRandom.nextFloat() * LEAF_SIZE_RANGE) * leafDepthScale,
+                            rotation = cellRandom.nextFloat() * 360f
+                        ))
+                    }
                 }
                 newLeaves[hillIndex] = hillLeaves
             }
@@ -839,6 +847,73 @@ class TerrainLayer(private val context: Context) : SceneLayer {
 
     /** Project a screen-pixel X to world space using the current viewport. */
     fun screenToWorldX(screenX: Float): Float = cachedTransform.screenToWorldX(screenX)
+
+    /** Project a world-space X to screen pixels using the current viewport. */
+    fun worldToScreenX(worldX: Float): Float = cachedTransform.worldToScreenX(worldX)
+
+    /** Total pre-generated fallen leaves across all hills (for tests/diagnostics). */
+    internal fun fallenLeafCount(): Int = fallenLeavesByHill.values.sumOf { it.size }
+
+    /**
+     * Tree crown spawn point in world/screen-ratio coordinates for tree-anchored events
+     * such as falling leaves.
+     */
+    data class TreeCrownSpawn(
+        val worldX: Float,
+        val yRatio: Float,
+        val depthFactor: Float,
+        val crownRadiusRatio: Float
+    )
+
+    /**
+     * Deterministically pick a visible deciduous (LEAF) tree crown — falling back to any
+     * visible tree if no deciduous trees exist — using [random].
+     *
+     * Candidates are restricted to the core visible world span and ordered deterministically
+     * by `(depthFactor, worldX)` so preview and live wallpaper choose the same tree.
+     */
+    fun pickTreeCrownSpawn(random: kotlin.random.Random): TreeCrownSpawn? {
+        if (width <= 0f || height <= 0f) return null
+        val allTrees = treeRenderer.treesByDepth
+        if (allTrees.isEmpty()) return null
+
+        val visibleWorldHalf = RenderConstants.getVisibleWorldHalf(width, height) * 0.9f
+        val leafCandidates = ArrayList<TreeRenderer.TreeData>()
+        val fallbackCandidates = ArrayList<TreeRenderer.TreeData>()
+
+        for ((_, list) in allTrees) {
+            for (tree in list) {
+                if (kotlin.math.abs(tree.worldX) > visibleWorldHalf) continue
+                if (tree.treeType == TreeRenderer.TreeType.LEAF) {
+                    leafCandidates.add(tree)
+                } else {
+                    fallbackCandidates.add(tree)
+                }
+            }
+        }
+
+        val pool = if (leafCandidates.isNotEmpty()) leafCandidates else fallbackCandidates
+        if (pool.isEmpty()) return null
+        pool.sortWith(compareBy<TreeRenderer.TreeData> { it.depthFactor }.thenBy { it.worldX })
+
+        val chosen = pool[random.nextInt(pool.size)]
+        val crownRadius = treeRenderer.crownRadiusRatio(chosen)
+        val crownCenterY = treeRenderer.crownCenterYRatio(chosen)
+        // Small deterministic scatter inside the lower-middle crown so consecutive leaves
+        // detach from varied twigs on the canopy.
+        val jitterAngle = random.nextFloat() * 2f * kotlin.math.PI.toFloat()
+        val jitterDist = kotlin.math.sqrt(random.nextFloat().toDouble()).toFloat() * 0.65f
+        val jitterWorldX = (kotlin.math.cos(jitterAngle.toDouble()).toFloat() * jitterDist * crownRadius * height) /
+            cachedTransform.heightScale.coerceAtLeast(1f)
+        val jitterY = kotlin.math.sin(jitterAngle.toDouble()).toFloat() * jitterDist * crownRadius * 0.6f + crownRadius * 0.25f
+
+        return TreeCrownSpawn(
+            worldX = chosen.worldX + jitterWorldX,
+            yRatio = (crownCenterY + jitterY).coerceIn(0.05f, chosen.yRatio - 0.01f),
+            depthFactor = chosen.depthFactor,
+            crownRadiusRatio = crownRadius
+        )
+    }
     
     /**
      * Get full hill info (Y position and actual depthFactor) at given world-space X.
@@ -1636,30 +1711,41 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         }
         }
         
-        // Fallen leaves: autumn only; the season blend fades them out as winter arrives
+        // Fallen leaves: autumn only; the season blend fades them out as winter arrives.
+        // Clipped to the hill silhouette so leaves printed onto the hill never float above the ridge.
         val leafAlpha = autumnWeight.coerceIn(0f, 1f) * decorSnowVisibility
         if (leafAlpha > 0.01f) {
-        fallenLeavesByHill[hillIndex]?.let { leaves ->
-            leafPaint.alpha = (255 * leafAlpha).toInt()
-            for (leaf in leaves) {
-                val x = transform.worldToScreenX(leaf.worldX)
-                if (x < cullLeft || x > cullRight) continue
-                
-                val yRatio = getHillY(leaf.worldX, hill)
-                val y = yRatio * height + leaf.yOffset * height
-                
-                val blendedColor = decorColor(leaf.color, decorHaze)
-                leafPaint.color = blendedColor
-                leafPaint.alpha = (Color.alpha(blendedColor) * leafAlpha).toInt()
-                val leafSize = leaf.size * height
-                
-                // Oval leaf shape
-                canvas.withRotation(leaf.rotation, x, y) {
-                    canvas.drawOval(x - leafSize, y - leafSize * 0.5f, x + leafSize, y + leafSize * 0.5f, leafPaint)
+            fallenLeavesByHill[hillIndex]?.let { leaves ->
+                if (leaves.isNotEmpty()) {
+                    val clipPath = hillPaths.getOrNull(hillIndex)
+                    val drawLeaves = {
+                        leafPaint.alpha = (255 * leafAlpha).toInt()
+                        for (leaf in leaves) {
+                            val x = transform.worldToScreenX(leaf.worldX)
+                            if (x < cullLeft || x > cullRight) continue
+
+                            val yRatio = getHillY(leaf.worldX, hill)
+                            val y = yRatio * height + leaf.yOffset * height
+
+                            val blendedColor = decorColor(leaf.color, decorHaze)
+                            leafPaint.color = blendedColor
+                            leafPaint.alpha = (Color.alpha(blendedColor) * leafAlpha).toInt()
+                            val leafSize = leaf.size * height
+
+                            // Oval leaf shape baked once into the per-hill bitmap
+                            canvas.withRotation(leaf.rotation, x, y) {
+                                canvas.drawOval(x - leafSize, y - leafSize * 0.52f, x + leafSize, y + leafSize * 0.52f, leafPaint)
+                            }
+                        }
+                        leafPaint.alpha = 255
+                    }
+                    if (clipPath != null) {
+                        canvas.withClip(clipPath) { drawLeaves() }
+                    } else {
+                        drawLeaves()
+                    }
                 }
             }
-            leafPaint.alpha = 255
-        }
         }
         
         // Mushrooms: visible in summer + autumn

@@ -256,6 +256,8 @@
     <string name="pref_event_duck_summary">Ducks waddling across terrain</string>
     <string name="pref_event_frog_title">Frogs</string>
     <string name="pref_event_frog_summary">Spring/Summer - sitting and hopping at dusk</string>
+    <string name="pref_event_fallingleaf_title">Falling Leaves</string>
+    <string name="pref_event_fallingleaf_summary">Autumn leaves detaching from trees and fluttering down</string>
     <string name="pref_events_seasonal_cat_2_title">Christmas</string>
     <string name="pref_christmas_enabled_summary">Bethlehem star with trail (around Dec 25)</string>
     <string name="pref_christmas_interval_title">Christmas Interval</string>

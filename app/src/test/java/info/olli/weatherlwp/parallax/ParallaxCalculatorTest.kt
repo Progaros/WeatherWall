@@ -734,9 +734,9 @@ class ParallaxCalculatorTest {
         rampTilt(calcSlow, 1.0f, 0f, 20)
         val xSlow = calcSlow.getOffsetX()
 
-        // Direct integration: smoothing is ignored, both converge equally
-        assertEquals("Direct integration ignores smoothing (fast=$xFast, slow=$xSlow)",
-            xFast, xSlow, 1.0f)
+        // Higher smoothing uses a longer critically damped spring time constant, slowing convergence
+        assertTrue("High smoothing should slow convergence (fast=$xFast, slow=$xSlow)",
+            xSlow < xFast - 1.0f)
     }
 
     // ============== Tilt noise deadzone ==============
@@ -1001,9 +1001,9 @@ class ParallaxCalculatorTest {
         calcSlow.update(32) // 30fps frame
         val x32ms = calcSlow.getOffsetX()
 
-        // Direct delta: same tilt change, same offset regardless of dt
-        assertEquals("Same tilt delta should produce same offset (32ms=$x32ms, 16ms=$x16ms)",
-            x16ms, x32ms, 1.0f)
+        // Critically damped spring: a longer frame interval advances further toward the target
+        assertTrue("Longer dt should converge further (32ms=$x32ms, 16ms=$x16ms)",
+            x32ms > x16ms)
     }
 
     // ============== Return speed proportional ==============

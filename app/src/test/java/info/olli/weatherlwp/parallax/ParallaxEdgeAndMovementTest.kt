@@ -255,6 +255,55 @@ class ParallaxEdgeAndMovementTest {
         assertTrue("Should have returned toward center", finalPos < edgePos * 0.5f)
     }
 
+    @Test
+    fun `critically damped spring interpolates smoothly across zero-sensor frames`() {
+        val calc = createCalculator().apply {
+            smoothing = 0.10f
+            returnSpeed = 0f
+        }
+        calc.updateFromSensor(0f, 0f)
+        calc.update(8)
+
+        // Simulate 50Hz sensor (every 20ms) on a 120Hz display (8ms frames):
+        // sensor arrives on frame 0, then 2 frames with no new sensor event.
+        calc.updateFromSensor(0.15f, 0f)
+        calc.update(8)
+        val x0 = calc.getOffsetX()
+        calc.update(8)
+        val x1 = calc.getOffsetX()
+        calc.update(8)
+        val x2 = calc.getOffsetX()
+
+        assertTrue("Spring should continue gliding smoothly between sensor ticks ($x0 < $x1 < $x2)",
+            x0 > 0f && x1 > x0 && x2 > x1)
+    }
+
+    @Test
+    fun `smoothstep deadzone produces no discontinuous jump across boundary`() {
+        val calc = createCalculator().apply {
+            smoothing = 0f
+            returnSpeed = 0f
+        }
+        calc.updateFromSensor(0.034f, 0f)
+        calc.update(16)
+        val before = calc.getOffsetX()
+
+        var prev = before
+        var maxStep = 0f
+        var tilt = 0.036f
+        while (tilt <= 0.070f) {
+            calc.updateFromSensor(tilt, 0f)
+            calc.update(16)
+            val curr = calc.getOffsetX()
+            val step = abs(curr - prev)
+            if (step > maxStep) maxStep = step
+            prev = curr
+            tilt += 0.002f
+        }
+        assertTrue("Crossing deadzone should ramp smoothly without a step jump (maxStep=$maxStep)",
+            maxStep < 8f)
+    }
+
     // ============== Bounded Output ==============
 
     @Test

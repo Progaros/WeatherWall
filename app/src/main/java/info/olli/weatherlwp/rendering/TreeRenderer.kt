@@ -751,6 +751,18 @@ class TreeRenderer {
      * Draw a deciduous (leaf) tree: trunk + round crown in spring-autumn, bare branches in winter.
      * Crown fades out in late autumn and regrows in spring using season transition weights.
      */
+    /** Screen-height ratio of a tree's crown center (matching [drawLeafTree]). */
+    fun crownCenterYRatio(tree: TreeData): Float {
+        val totalHeightRatio = RenderConstants.TREE_HEIGHT_FACTOR * tree.scale * treeSizeScale
+        return tree.yRatio - totalHeightRatio * 0.65f
+    }
+
+    /** Screen-height ratio of a tree's crown radius (matching [drawLeafTree]). */
+    fun crownRadiusRatio(tree: TreeData): Float {
+        val totalHeightRatio = RenderConstants.TREE_HEIGHT_FACTOR * tree.scale * treeSizeScale
+        return totalHeightRatio * 0.32f
+    }
+
     private fun drawLeafTree(canvas: Canvas, tree: TreeData, state: SimulationState) {
         val x = cachedTransform.worldToScreenX(tree.worldX)
         val groundY = tree.yRatio * height

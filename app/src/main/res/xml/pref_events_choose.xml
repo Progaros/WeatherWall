@@ -132,6 +132,12 @@
             android:title="@string/pref_event_frog_title"
             android:summary="@string/pref_event_frog_summary"
             android:defaultValue="true" />
+
+        <info.olli.weatherlwp.settings.SpawnSwitchPreference
+            android:key="pref_event_fallingleaf"
+            android:title="@string/pref_event_fallingleaf_title"
+            android:summary="@string/pref_event_fallingleaf_summary"
+            android:defaultValue="true" />
     </PreferenceCategory>
 
 </PreferenceScreen>

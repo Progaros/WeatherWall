@@ -36,8 +36,9 @@ class ParallaxCalculator {
         /** Precomputed 1/tan(MAX_TILT_ANGLE) for normalizing tan() output. */
         private val TAN_NORMALIZER = 1f / tan(MAX_TILT_ANGLE)
 
-        /** Ignore tiny tilt noise so return-to-center can engage on a still device. */
-        private const val TILT_NOISE_DEADZONE = 0.06f
+        /** C1-continuous smoothstep deadzone around zero tilt: 0 below inner, full value above outer. */
+        private const val TILT_DEADZONE_INNER = 0.035f
+        private const val TILT_DEADZONE_OUTER = 0.065f
 
         /** Enter stillness when tilt velocity (units/second) is below this. */
         private const val STILL_VELOCITY_ENTER = 0.72f
@@ -49,7 +50,7 @@ class ParallaxCalculator {
         private const val STILL_HOLD_MS = 500L
 
         /** Exponential damping rate for return-to-center when close (higher = faster). */
-        private const val RECENTER_DAMPING_NEAR = 2.0f
+        private const val RECENTER_DAMPING_NEAR = 2.2f
 
         /** Exponential damping rate for return-to-center when far from center. */
         private const val RECENTER_DAMPING_FAR = 5.0f
@@ -64,8 +65,8 @@ class ParallaxCalculator {
          */
         private const val MAX_DELTA_RATE = 6.0f
 
-        /** Per-frame delta deadzone: deltas smaller than this are zeroed to suppress sensor noise. */
-        private const val NOISE_EPSILON = 0.0015f
+        /** Soft deadzone rate (units/second) to suppress sensor micro-jitter frame-rate independently without a step jump. */
+        private const val NOISE_RATE = 0.10f
 
         /** Only treat as sensor reset if delta exceeds this (much larger than any tilt). */
         private const val SENSOR_RESET_THRESHOLD = 0.6f
@@ -94,6 +95,15 @@ class ParallaxCalculator {
          * Rate-based for the same reason as [MAX_DELTA_RATE] (15.0/s == 0.25 at 60 fps).
          */
         private const val MAX_ACCUMULATED_RATE = 15.0f
+
+        /** Minimum critically damped spring time constant (seconds) when smoothing > 0. */
+        private const val MIN_SMOOTH_TIME_S = 0.014f
+
+        /** Maximum critically damped spring time constant (seconds) at max smoothing. */
+        private const val MAX_SMOOTH_TIME_S = 0.22f
+
+        /** Minimum pending delta magnitude to wake idle mode. */
+        private const val PENDING_MOTION_EPSILON = 0.0015f
     }
 
     // Lock-free tilt input (sensor thread → render thread)
@@ -114,9 +124,15 @@ class ParallaxCalculator {
     private var rawPositionX = 0f
     private var rawPositionY = 0f
 
-    // Display offset in pixels (soft-limited from raw, render thread only)
+    // Soft-limited target offset in pixels (render thread only)
+    private var targetPositionX = 0f
+    private var targetPositionY = 0f
+
+    // Smoothed display offset in pixels & critically damped spring velocity (render thread only)
     private var positionX = 0f
     private var positionY = 0f
+    private var velocityX = 0f
+    private var velocityY = 0f
 
     // Previous filtered tilt for computing per-frame delta
     private var prevTiltX = 0f
@@ -220,8 +236,10 @@ class ParallaxCalculator {
      * render frames are properly summed rather than only sampling the latest value.
      */
     fun updateFromSensor(tiltX: Float, tiltY: Float) {
-        val adjustedX = if (invertX) -tiltX else tiltX
-        val adjustedY = if (invertY) -tiltY else tiltY
+        val rawX = if (invertX) -tiltX else tiltX
+        val rawY = if (invertY) -tiltY else tiltY
+        val adjustedX = smoothTiltDeadzone(rawX)
+        val adjustedY = smoothTiltDeadzone(rawY)
         pendingTilt.set(TiltPair(adjustedX, adjustedY))
 
         // Accumulate delta from sensor thread for frame-rate independence
@@ -254,32 +272,32 @@ class ParallaxCalculator {
         // If multiple sensor events arrived between frames, their sum is used.
         val accum = accumulatedDelta.getAndSet(DeltaAccum(0f, 0f, 0))
 
-        // Read latest tilt and apply deadzone
+        // Read latest tilt without a hard step deadzone (soft deadzone is applied to deltas below)
         val tilt = pendingTilt.get()
-        val filteredTiltX = if (kotlin.math.abs(tilt.x) < TILT_NOISE_DEADZONE) 0f else tilt.x
-        val filteredTiltY = if (kotlin.math.abs(tilt.y) < TILT_NOISE_DEADZONE) 0f else tilt.y
+        val currentTiltX = tilt.x
+        val currentTiltY = tilt.y
 
         // First frame after reset: set baseline, do not move
         if (!hasPreviousTilt) {
-            prevTiltX = filteredTiltX
-            prevTiltY = filteredTiltY
+            prevTiltX = currentTiltX
+            prevTiltY = currentTiltY
             hasPreviousTilt = true
             return
         }
 
-        // Use accumulated delta if sensor events arrived AND tilt is outside deadzone,
-        // otherwise fallback to frame-based delta (works for tests and single-event-per-frame scenarios).
+        // Use accumulated delta whenever sensor events arrived; fallback to frame-based delta
+        // when updateFromSensor was called once before baseline.
         val maxAccumulated = MAX_ACCUMULATED_RATE * dt
         val rawDeltaX: Float
         val rawDeltaY: Float
-        if (accum.count > 0 && (filteredTiltX != 0f || filteredTiltY != 0f)) {
+        if (accum.count > 0) {
             val accumMag = kotlin.math.sqrt(accum.dx * accum.dx + accum.dy * accum.dy)
             // Check for sensor reset BEFORE clamping (huge jump = orientation change)
             if (accumMag > SENSOR_RESET_THRESHOLD) {
                 resetDeltaSmoothing()
                 accumulatedDelta.set(DeltaAccum(0f, 0f, 0))
-                prevTiltX = filteredTiltX
-                prevTiltY = filteredTiltY
+                prevTiltX = currentTiltX
+                prevTiltY = currentTiltY
                 return
             } else if (accumMag > maxAccumulated) {
                 // Clamp accumulated magnitude to prevent huge jumps from burst events
@@ -291,15 +309,17 @@ class ParallaxCalculator {
                 rawDeltaY = accum.dy
             }
         } else {
-            rawDeltaX = filteredTiltX - prevTiltX
-            rawDeltaY = filteredTiltY - prevTiltY
+            rawDeltaX = currentTiltX - prevTiltX
+            rawDeltaY = currentTiltY - prevTiltY
         }
-        prevTiltX = filteredTiltX
-        prevTiltY = filteredTiltY
+        prevTiltX = currentTiltX
+        prevTiltY = currentTiltY
 
-        // Suppress micro-jitter: zero out deltas below noise floor
-        var deltaTiltX = if (kotlin.math.abs(rawDeltaX) < NOISE_EPSILON) 0f else rawDeltaX
-        var deltaTiltY = if (kotlin.math.abs(rawDeltaY) < NOISE_EPSILON) 0f else rawDeltaY
+        // Rate-based continuous soft deadzone: suppresses sensor micro-jitter identically at
+        // 30, 60, 90, and 120 fps without a sticky step jump.
+        val noiseFloor = NOISE_RATE * dt
+        var deltaTiltX = softDeadzone(rawDeltaX, noiseFloor)
+        var deltaTiltY = softDeadzone(rawDeltaY, noiseFloor)
 
         val motionMagnitude = kotlin.math.sqrt(
             deltaTiltX * deltaTiltX + deltaTiltY * deltaTiltY
@@ -401,9 +421,64 @@ class ParallaxCalculator {
             rawPositionY *= (1f - t)
         }
 
-        // Compute display position from raw via soft-limit
+        // Compute soft-limited target position from raw
         val maxDist = effectiveMaxOffset * kotlin.math.max(hComp, vComp)
         applyRadialSoftLimit(maxDist)
+
+        // Snap raw & target to zero when very small
+        val rawLen = kotlin.math.sqrt(rawPositionX * rawPositionX + rawPositionY * rawPositionY)
+        if (rawLen < SNAP_EPSILON) {
+            rawPositionX = 0f
+            rawPositionY = 0f
+            targetPositionX = 0f
+            targetPositionY = 0f
+        }
+
+        // Smooth display position toward target using an exact critically damped spring.
+        // Bridges 50-100Hz sensor ticks across 60/90/120Hz display frames with C1-continuous
+        // velocity and zero overshoot. smoothing <= 0 bypasses directly for deterministic tests.
+        if (smoothing <= 0f) {
+            positionX = targetPositionX
+            positionY = targetPositionY
+            velocityX = 0f
+            velocityY = 0f
+        } else {
+            val smoothTime = (MIN_SMOOTH_TIME_S + smoothing * 0.18f).coerceIn(MIN_SMOOTH_TIME_S, MAX_SMOOTH_TIME_S)
+            val omega = 2f / smoothTime
+            val e = exp(-omega * dt)
+
+            val dx = positionX - targetPositionX
+            val tempX = (velocityX + omega * dx) * dt
+            positionX = targetPositionX + (dx + tempX) * e
+            velocityX = (velocityX - omega * tempX) * e
+
+            val dy = positionY - targetPositionY
+            val tempY = (velocityY + omega * dy) * dt
+            positionY = targetPositionY + (dy + tempY) * e
+            velocityY = (velocityY - omega * tempY) * e
+
+            // Clamp radially to maxDist so a sudden direction reversal never exceeds the bound
+            if (maxDist > 0f) {
+                val posMag = kotlin.math.sqrt(positionX * positionX + positionY * positionY)
+                if (posMag > maxDist) {
+                    val clamp = maxDist / posMag
+                    positionX *= clamp
+                    positionY *= clamp
+                }
+            }
+
+            // Snap display position to zero once settled near center
+            if (targetPositionX == 0f && targetPositionY == 0f) {
+                val dispLen = kotlin.math.sqrt(positionX * positionX + positionY * positionY)
+                val velLen = kotlin.math.sqrt(velocityX * velocityX + velocityY * velocityY)
+                if (dispLen < SNAP_EPSILON && velLen < 1f) {
+                    positionX = 0f
+                    positionY = 0f
+                    velocityX = 0f
+                    velocityY = 0f
+                }
+            }
+        }
 
         // Debug validation: position must never exceed soft-limit bound
         if (BuildConfig.DEBUG) {
@@ -412,15 +487,6 @@ class ParallaxCalculator {
                 android.util.Log.w("ParallaxCalc",
                     "Position exceeded max: |pos|=$posMag > max=$maxDist")
             }
-        }
-
-        // Snap to zero
-        val rawLen = kotlin.math.sqrt(rawPositionX * rawPositionX + rawPositionY * rawPositionY)
-        if (rawLen < SNAP_EPSILON) {
-            rawPositionX = 0f
-            rawPositionY = 0f
-            positionX = 0f
-            positionY = 0f
         }
     }
 
@@ -440,8 +506,15 @@ class ParallaxCalculator {
     fun hasPendingSensorMotion(): Boolean {
         val accum = accumulatedDelta.get()
         if (accum.count == 0) return false
-        return kotlin.math.abs(accum.dx) > NOISE_EPSILON ||
-            kotlin.math.abs(accum.dy) > NOISE_EPSILON
+        return kotlin.math.abs(accum.dx) > PENDING_MOTION_EPSILON ||
+            kotlin.math.abs(accum.dy) > PENDING_MOTION_EPSILON
+    }
+
+    /** True while the critically damped spring is still gliding toward its target offset. */
+    fun isSettling(): Boolean {
+        val dx = targetPositionX - positionX
+        val dy = targetPositionY - positionY
+        return (dx * dx + dy * dy) > 0.04f || (velocityX * velocityX + velocityY * velocityY) > 1f
     }
 
     fun getOffsetForDepth(depthFactor: Float): Pair<Float, Float> {
@@ -482,8 +555,12 @@ class ParallaxCalculator {
     fun reset() {
         rawPositionX = 0f
         rawPositionY = 0f
+        targetPositionX = 0f
+        targetPositionY = 0f
         positionX = 0f
         positionY = 0f
+        velocityX = 0f
+        velocityY = 0f
         prevTiltX = 0f
         prevTiltY = 0f
         hasPreviousTilt = false
@@ -601,17 +678,32 @@ class ParallaxCalculator {
     // offset on both axes regardless of orientation ("up/down barely moves in landscape"
     // is fixed). Callers inline these two factors to avoid per-frame Pair allocation.
 
+    private fun smoothTiltDeadzone(value: Float): Float {
+        val absVal = kotlin.math.abs(value)
+        if (absVal <= TILT_DEADZONE_INNER) return 0f
+        if (absVal >= TILT_DEADZONE_OUTER) return value
+        val t = (absVal - TILT_DEADZONE_INNER) / (TILT_DEADZONE_OUTER - TILT_DEADZONE_INNER)
+        val gain = t * t * (3f - 2f * t)
+        return value * gain
+    }
+
+    private fun softDeadzone(value: Float, epsilon: Float): Float {
+        val absVal = kotlin.math.abs(value)
+        if (absVal <= epsilon) return 0f
+        return if (value > 0f) value - epsilon else value + epsilon
+    }
+
     private fun applyRadialSoftLimit(maxOffset: Float) {
-        if (maxOffset <= 0f) { positionX = 0f; positionY = 0f; return }
+        if (maxOffset <= 0f) { targetPositionX = 0f; targetPositionY = 0f; return }
         val len = kotlin.math.sqrt(rawPositionX * rawPositionX + rawPositionY * rawPositionY)
-        if (len <= 0f) { positionX = 0f; positionY = 0f; return }
+        if (len <= 0f) { targetPositionX = 0f; targetPositionY = 0f; return }
         val normalized = len / maxOffset
         val baseLimit = tanh(normalized)
         val easedLimit = normalized / kotlin.math.sqrt(1f + normalized * normalized)
         val easing = edgeEasing.coerceIn(0f, 1f)
         val limitedLen = maxOffset * (baseLimit + (easedLimit - baseLimit) * easing)
         val scale = limitedLen / len
-        positionX = rawPositionX * scale
-        positionY = rawPositionY * scale
+        targetPositionX = rawPositionX * scale
+        targetPositionY = rawPositionY * scale
     }
 }

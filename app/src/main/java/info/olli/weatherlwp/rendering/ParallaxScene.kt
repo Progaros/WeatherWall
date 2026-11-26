@@ -10,6 +10,7 @@ import info.olli.weatherlwp.DebugTracer
 import info.olli.weatherlwp.PreferenceDefaults
 import info.olli.weatherlwp.parallax.ParallaxCalculator
 import info.olli.weatherlwp.parallax.ParallaxSensorManager
+import info.olli.weatherlwp.rendering.events.EventSpawnPosition
 import info.olli.weatherlwp.rendering.events.ManualEventSpawns
 import info.olli.weatherlwp.simulation.SimulationController
 import info.olli.weatherlwp.simulation.SimulationSettings
@@ -171,6 +172,19 @@ class ParallaxScene(
         randomEventLayer.hillInfoWorldProvider = { worldX, requestedDepthFactor ->
             terrainLayer.getHillInfoAtWorldX(worldX, requestedDepthFactor).second
         }
+
+        // Wire tree-crown spawn provider so tree-anchored events (e.g. falling leaves)
+        // detach deterministically from a visible deciduous tree crown.
+        randomEventLayer.treeSpawnProvider = { random ->
+            terrainLayer.pickTreeCrownSpawn(random)?.let { crown ->
+                val screenX = terrainLayer.worldToScreenX(crown.worldX)
+                EventSpawnPosition(
+                    x = randomEventLayer.screenXToEventX(screenX),
+                    y = crown.yRatio,
+                    depthFactor = crown.depthFactor
+                )
+            }
+        }
         
         // Wire river layer to terrain data so water flows through valleys
         riverLayer.terrainYWorldProvider = { worldX, depthFactor ->
@@ -245,9 +259,9 @@ class ParallaxScene(
      * Used for idle mode battery optimization.
      */
     fun isParallaxActive(): Boolean {
-        // Unconsumed sensor motion counts as active so idle mode wakes up on the very
-        // first frame of a movement instead of after the offset has already drifted.
-        if (parallaxCalculator.hasPendingSensorMotion()) return true
+        // Unconsumed sensor motion or spring settling counts as active so idle mode wakes
+        // up immediately and never cuts off a smooth glide before it settles.
+        if (parallaxCalculator.hasPendingSensorMotion() || parallaxCalculator.isSettling()) return true
         val (x, y) = parallaxCalculator.getOffset()
         // Consider active if offset is non-zero and changing
         val magnitude = kotlin.math.sqrt(x * x + y * y)
@@ -321,7 +335,7 @@ class ParallaxScene(
             lastState = state
             
             // Process manual spawn triggers from the latest settings snapshot.
-            processManualSpawnTriggers()
+            processManualSpawnTriggers(state.absoluteTimeMs)
             
             // Update parallax physics with real frame delta for accurate smoothing
             parallaxCalculator.update(deltaTimeMs)
@@ -443,15 +457,20 @@ class ParallaxScene(
         }
     }
 
-    private fun processManualSpawnTriggers() {
+    private fun processManualSpawnTriggers(nowMs: Long) {
         val raw = currentSettings.getNullableString(ManualEventSpawns.PREF_KEY)
         if (raw == lastManualSpawnsRaw) return
         lastManualSpawnsRaw = raw
-        val started = manualSpawnReplayer.takeNew(ManualEventSpawns.parse(raw), System.currentTimeMillis())
+        val started = manualSpawnReplayer.takeNew(ManualEventSpawns.parse(raw), nowMs)
         for ((entry, spawnTimeMs) in started) {
-            randomEventLayer.spawnSpecificEvent(entry.eventId, seed = entry.triggerMs, spawnTimeMs = spawnTimeMs)
+            randomEventLayer.spawnSpecificEvent(
+                eventType = entry.eventId,
+                seed = entry.triggerMs,
+                spawnTimeMs = spawnTimeMs,
+                spawnPosition = entry.spawnPosition
+            )
             Log.d(TAG, "Manual spawn [${if (isPreview) "preview" else "wallpaper"}]: ${entry.eventId} " +
-                "(pressed ${System.currentTimeMillis() - entry.triggerMs}ms ago)")
+                "(pressed ${nowMs - entry.triggerMs}ms ago)")
         }
     }
     

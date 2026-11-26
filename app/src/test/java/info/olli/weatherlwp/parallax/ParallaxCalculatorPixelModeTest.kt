@@ -329,7 +329,7 @@ class ParallaxCalculatorPixelModeTest {
 
         assertTrue("Both paths should produce positive offset",
             directOffset > 0f && smoothedOffset > 0f)
-        assertEquals("Direct integration ignores smoothing setting",
-            directOffset, smoothedOffset, 0.1f)
+        assertTrue("Smoothing should delay single-frame response (direct=$directOffset, smoothed=$smoothedOffset)",
+            smoothedOffset < directOffset)
     }
 }

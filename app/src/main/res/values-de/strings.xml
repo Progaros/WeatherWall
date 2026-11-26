@@ -257,6 +257,8 @@
     <string name="pref_event_duck_summary">Watscheln über das Gelände</string>
     <string name="pref_event_frog_title">Frösche</string>
     <string name="pref_event_frog_summary">Frühling/Sommer – sitzen und hüpfen in der Dämmerung</string>
+    <string name="pref_event_fallingleaf_title">Fallendes Laub</string>
+    <string name="pref_event_fallingleaf_summary">Herbstblätter lösen sich von Bäumen und schweben herab</string>
     <string name="pref_events_seasonal_cat_2_title">Weihnachten</string>
     <string name="pref_christmas_enabled_summary">Stern von Betlehem mit Schweif (um den 25. Dez.)</string>
     <string name="pref_christmas_interval_title">Weihnachtszeitraum</string>
