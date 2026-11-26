@@ -533,13 +533,12 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
         // DEG_TO_RAD = 0.017453292 = π/180
         val f = deltaTimeNanos * 1e-8f * 6.0f * 0.017453292f
         
-        // Step 4: Accumulate averaged angular velocity into angles
-        // No deadzone check, no decay - angles hold until moved
-        // Hard clamp at physical tilt limit; smooth deceleration is applied
-        // downstream in ParallaxCalculator.softLimit() to avoid double-tanh compression.
-        gyroYaw = (gyroYaw + avgYaw.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
-        gyroPitch = (gyroPitch + avgPitch.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
-        gyroRoll = (gyroRoll + avgRoll.calc() * f).coerceIn(-MAX_TILT_RAD, MAX_TILT_RAD)
+        // Step 4: Accumulate averaged angular velocity into continuous angles without a hard
+        // clamp. Clamping on the sensor side would stall motion after recentering; smooth
+        // saturation is applied once downstream in ParallaxCalculator.applyRadialSoftLimit().
+        gyroYaw += avgYaw.calc() * f
+        gyroPitch += avgPitch.calc() * f
+        gyroRoll += avgRoll.calc() * f
         
         // Update time AFTER accumulation
         lastGyroTime = currentTime
@@ -557,11 +556,10 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
             else -> { rawTiltX = -gyroPitch; rawTiltY = gyroYaw }  // ROTATION_0
         }
         
-        // Convert angles from radians to normalized -1..1 range.
-        // Hard clamp preserves full input range; ParallaxCalculator.softLimit()
-        // is the single point of tanh saturation for the visual offset.
-        val tiltX = (rawTiltX / MAX_TILT_RAD).coerceIn(-1f, 1f)
-        val tiltY = (rawTiltY / MAX_TILT_RAD).coerceIn(-1f, 1f)
+        // Normalize in MAX_TILT_RAD units without hard-clamping so continuous deltas
+        // remain active at any holding angle even after recentering.
+        val tiltX = rawTiltX / MAX_TILT_RAD
+        val tiltY = rawTiltY / MAX_TILT_RAD
         
         // Output directly - no additional filtering on sensor side
         filteredX = tiltX
@@ -743,16 +741,8 @@ class ParallaxSensorManager(private val context: Context) : SensorEventListener 
         deltaRoll = deltaRoll.coerceIn(-FULL_TILT_RADIANS * 0.5f, FULL_TILT_RADIANS * 0.5f)
 
         val sensitivity = 2.0f
-        accumulatedX = (accumulatedX - deltaRoll * sensitivity).coerceIn(-1f, 1f)
-        accumulatedY = (accumulatedY - deltaPitch * sensitivity).coerceIn(-1f, 1f)
-
-        if (autoReturnRate < 1f) {
-            val motionMag = sqrt(deltaPitch * deltaPitch + deltaRoll * deltaRoll)
-            if (motionMag < 0.002f) {
-                accumulatedX *= autoReturnRate
-                accumulatedY *= autoReturnRate
-            }
-        }
+        accumulatedX -= deltaRoll * sensitivity
+        accumulatedY -= deltaPitch * sensitivity
 
         filteredX = accumulatedX
         filteredY = accumulatedY

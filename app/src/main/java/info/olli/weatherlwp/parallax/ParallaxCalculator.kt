@@ -97,7 +97,7 @@ class ParallaxCalculator {
         private const val MAX_ACCUMULATED_RATE = 15.0f
 
         /** Minimum critically damped spring time constant (seconds) when smoothing > 0. */
-        private const val MIN_SMOOTH_TIME_S = 0.014f
+        private const val MIN_SMOOTH_TIME_S = 0.015f
 
         /** Maximum critically damped spring time constant (seconds) at max smoothing. */
         private const val MAX_SMOOTH_TIME_S = 0.22f
@@ -344,12 +344,15 @@ class ParallaxCalculator {
         // motion behaves identically at 30, 60 and 120 fps.
         val motionRate = motionMagnitude / dt
 
-        // Adaptive smoothing: the moving average costs ~1 frame of latency, so blend it
-        // out as motion gets faster. Slow movement stays filtered, flicks stay responsive.
-        smoothDelta(deltaTiltX, deltaTiltY)
-        val rawWeight = (motionRate / SMOOTHING_BYPASS_RATE).coerceIn(0f, MAX_RAW_WEIGHT)
-        deltaTiltX = filteredDeltaX + (deltaTiltX - filteredDeltaX) * rawWeight
-        deltaTiltY = filteredDeltaY + (deltaTiltY - filteredDeltaY) * rawWeight
+        // Adaptive delta smoothing: when the critically damped spring is active (smoothing > 0)
+        // it already filters high-frequency noise with C1 continuity and less phase lag than a
+        // boxcar average, so only apply delta averaging when smoothing == 0.
+        if (smoothing <= 0f) {
+            smoothDelta(deltaTiltX, deltaTiltY)
+            val rawWeight = (motionRate / SMOOTHING_BYPASS_RATE).coerceIn(0f, MAX_RAW_WEIGHT)
+            deltaTiltX = filteredDeltaX + (deltaTiltX - filteredDeltaX) * rawWeight
+            deltaTiltY = filteredDeltaY + (deltaTiltY - filteredDeltaY) * rawWeight
+        }
 
         // Stillness hysteresis
         if (isDeviceStill) {

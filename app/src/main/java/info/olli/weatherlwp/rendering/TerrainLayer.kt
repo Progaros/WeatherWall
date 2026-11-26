@@ -57,6 +57,59 @@ class TerrainLayer(private val context: Context) : SceneLayer {
     }
     private var grassPaint: Paint? = null
     private var grassScaleHeight = 0f
+    private var leafCarpetPaint: Paint? = null
+    private val leafCarpetMatrix = android.graphics.Matrix()
+
+    /**
+     * Seamless tileable autumn leaf-bed texture used to bake full-coverage leaf carpets
+     * onto hills at medium-to-high [fallenLeavesDensity] (reaching 100% coverage at 100).
+     */
+    private fun getLeafCarpetPaint(): Paint {
+        return leafCarpetPaint ?: Paint().apply {
+            isAntiAlias = true
+            isFilterBitmap = true
+            val tile = createBitmap(LEAF_CARPET_TILE, LEAF_CARPET_TILE)
+            val tileCanvas = Canvas(tile)
+            // Warm leaf-litter base so no green grass peeks through at 100% density
+            tileCanvas.drawColor(Color.rgb(126, 62, 22))
+            val leafDrawPaint = Paint().apply { style = Paint.Style.FILL; isAntiAlias = true }
+            val palette = intArrayOf(
+                Color.rgb(205, 78, 22),    // Burnt orange-red
+                Color.rgb(190, 128, 30),   // Golden amber
+                Color.rgb(162, 46, 22),    // Deep crimson
+                Color.rgb(220, 162, 42),   // Warm yellow-gold
+                Color.rgb(142, 72, 24),    // Russet brown
+                Color.rgb(228, 106, 28),   // Bright autumn orange
+                Color.rgb(176, 94, 24)     // Warm ochre
+            )
+            val rng = kotlin.random.Random(913)
+            val tileF = LEAF_CARPET_TILE.toFloat()
+            repeat(850) {
+                val lx = rng.nextFloat() * tileF
+                val ly = rng.nextFloat() * tileF
+                val rx = 5f + rng.nextFloat() * 7f
+                val ry = rx * (0.45f + rng.nextFloat() * 0.22f)
+                val rot = rng.nextFloat() * 360f
+                val baseColor = palette[rng.nextInt(palette.size)]
+                val shade = 0.78f + rng.nextFloat() * 0.28f
+                leafDrawPaint.color = Color.rgb(
+                    (Color.red(baseColor) * shade).toInt().coerceIn(0, 255),
+                    (Color.green(baseColor) * shade).toInt().coerceIn(0, 255),
+                    (Color.blue(baseColor) * shade).toInt().coerceIn(0, 255)
+                )
+                // Wrap across tile edges for seamless tiling
+                for (ox in -1..1) for (oy in -1..1) {
+                    val cx = lx + ox * tileF
+                    val cy = ly + oy * tileF
+                    if (cx + rx < 0f || cx - rx > tileF || cy + rx < 0f || cy - rx > tileF) continue
+                    tileCanvas.withRotation(rot, cx, cy) {
+                        tileCanvas.drawOval(cx - rx, cy - ry, cx + rx, cy + ry, leafDrawPaint)
+                    }
+                }
+            }
+            shader = android.graphics.BitmapShader(tile, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
+        }.also { leafCarpetPaint = it }
+    }
 
     /** Tileable dark/light blade strokes; drawn with low alpha so they only add texture. */
     private fun grassTexturePaint(): Paint {
@@ -145,9 +198,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         private const val SNOW_SHADE_COLOR = 0xFF7888A8.toInt()
         private const val GRASS_TILE = 160
         private const val GRASS_TEXTURE_ALPHA = 26f
+        private const val LEAF_CARPET_TILE = 256
         /** Fallen leaf half-length range (screen-height fraction) on the nearest hill. */
-        private const val LEAF_SIZE_MIN = 0.0018f
-        private const val LEAF_SIZE_RANGE = 0.0024f
+        private const val LEAF_SIZE_MIN = 0.0022f
+        private const val LEAF_SIZE_RANGE = 0.0028f
 
         /**
          * Left+right width fraction added to decoration bitmaps for parallax headroom.
@@ -1265,7 +1319,7 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             val snowColor = RenderConstants.sceneLight(SNOW_COLOR, ambientColor, bandHaze, dullness, night)
             treeRenderer.snowColor = snowColor
             bushRenderer.snowColor = snowColor
-            drawHill(canvas, index, hillColor, snowColor)
+            drawHill(canvas, index, hillColor, snowColor, ambientColor, bandHaze)
             
             canvas.restore()
             
@@ -1576,7 +1630,14 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         return (winterSnowCoverage / 100f * seasonWeight).coerceIn(0f, 1f)
     }
 
-    private fun drawHill(canvas: Canvas, hillIndex: Int, hillColor: Int, snowColor: Int) {
+    private fun drawHill(
+        canvas: Canvas,
+        hillIndex: Int,
+        hillColor: Int,
+        snowColor: Int,
+        ambientColor: Int,
+        bandHaze: Float
+    ) {
         val path = hillPaths.getOrNull(hillIndex) ?: return
         val bottomY = height + height * 0.3f
         val minY = hillMinYs.getOrElse(hillIndex) { bottomY }
@@ -1633,6 +1694,39 @@ class TerrainLayer(private val context: Context) : SceneLayer {
             val paint = grassTexturePaint()
             paint.alpha = grassAlpha.coerceAtMost(255)
             canvas.drawPath(path, paint)
+        }
+
+        // Pre-rendered tileable autumn leaf carpet printed directly across the hill silhouette
+        // (scales from 0% at density<=25 to 100% full coverage at density=100, zero extra bitmap RAM).
+        if (fallenLeavesEnabled && fallenLeavesDensity > 25) {
+            val autumnWeight = getSeasonWeight("autumn")
+            val leafAlpha = autumnWeight.coerceIn(0f, 1f) * decorSnowVisibility
+            if (leafAlpha > 0.01f) {
+                val densityFrac = (fallenLeavesDensity / 100f).coerceIn(0f, 1f)
+                val carpetCoverage = ((densityFrac - 0.25f) / 0.75f).coerceIn(0f, 1f)
+                val carpetAlpha = (255f * carpetCoverage * leafAlpha).toInt().coerceIn(0, 255)
+                if (carpetAlpha > 2) {
+                    val nearness = RenderConstants.bandNearness(hillIndex, hillPaths.size)
+                    val carpetPaint = getLeafCarpetPaint()
+                    val tileScale = (height / RenderConstants.REFERENCE_HEIGHT).coerceAtLeast(0.45f) *
+                        (0.45f + 0.55f * nearness)
+                    leafCarpetMatrix.setScale(tileScale, tileScale)
+                    leafCarpetMatrix.postTranslate((hillIndex * 73f) % LEAF_CARPET_TILE, 0f)
+                    carpetPaint.shader.setLocalMatrix(leafCarpetMatrix)
+                    val nightDim = 0.45f + 0.55f * ((decorLightLevel - 0.15f) / 0.85f).coerceIn(0f, 1f)
+                    val decorNight = RenderConstants.nightFactor(decorLightLevel)
+                    val decorHaze = maxOf(0.15f, bandHaze)
+                    val mulTint = ColorMath.darkenColor(
+                        RenderConstants.sceneLight(Color.WHITE, ambientColor, decorHaze, dullness, decorNight),
+                        nightDim
+                    )
+                    carpetPaint.colorFilter = android.graphics.LightingColorFilter(mulTint, 0)
+                    carpetPaint.alpha = carpetAlpha
+                    canvas.drawPath(path, carpetPaint)
+                    carpetPaint.colorFilter = null
+                    carpetPaint.alpha = 255
+                }
+            }
         }
 
         // White on white: a shaded rim keeps snowy bands apart from the ones behind them
@@ -1714,10 +1808,10 @@ class TerrainLayer(private val context: Context) : SceneLayer {
         // Fallen leaves: autumn only; the season blend fades them out as winter arrives.
         // Clipped to the hill silhouette so leaves printed onto the hill never float above the ridge.
         val leafAlpha = autumnWeight.coerceIn(0f, 1f) * decorSnowVisibility
-        if (leafAlpha > 0.01f) {
+        if (leafAlpha > 0.01f && fallenLeavesEnabled) {
+            val clipPath = hillPaths.getOrNull(hillIndex)
             fallenLeavesByHill[hillIndex]?.let { leaves ->
                 if (leaves.isNotEmpty()) {
-                    val clipPath = hillPaths.getOrNull(hillIndex)
                     val drawLeaves = {
                         leafPaint.alpha = (255 * leafAlpha).toInt()
                         for (leaf in leaves) {

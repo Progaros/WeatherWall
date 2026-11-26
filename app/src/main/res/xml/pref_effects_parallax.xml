@@ -69,7 +69,7 @@
             android:key="pref_parallax_smoothing"
             android:title="@string/pref_parallax_smoothing_title"
             android:summary="@string/pref_parallax_smoothing_summary"
-            android:defaultValue="1"
+            android:defaultValue="35"
             android:max="100"
             app:min="0"
             app:showSeekBarValue="true"

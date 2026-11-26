@@ -169,4 +169,53 @@ class EventSpawnerAndFallingLeafTest {
             layer.destroy()
         }
     }
+
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun `leaf density 100 carpets the foreground hill in autumn leaves`() {
+        val layer = TerrainLayer(RuntimeEnvironment.getApplication())
+        val baseSettings = mapOf(
+            "pref_random_seed" to 42,
+            "pref_hill_count" to 5,
+            "pref_tree_density" to 0,
+            "pref_bush_density" to 0,
+            "pref_autumn_grass" to false,
+            "pref_mushrooms_enabled" to false,
+            "pref_fallen_leaves_enabled" to true
+        )
+        val state = autumnDayState(1_700_000_000_000L).copy(screenWidth = 360f, screenHeight = 640f)
+        val calc = ParallaxCalculator().apply { setCanvasSize(360f, 640f); reset() }
+        val bmpOff = Bitmap.createBitmap(360, 640, Bitmap.Config.ARGB_8888)
+        val bmpFull = Bitmap.createBitmap(360, 640, Bitmap.Config.ARGB_8888)
+        try {
+            layer.resize(360f, 640f)
+            layer.reloadSettings(SimulationSettings.fromSnapshot(baseSettings + ("pref_fallen_leaves_enabled" to false)))
+            layer.update(state, 16L)
+            layer.draw(Canvas(bmpOff), state, calc)
+
+            layer.reloadSettings(SimulationSettings.fromSnapshot(baseSettings + ("pref_fallen_leaves_density" to 100)))
+            layer.update(state, 16L)
+            layer.draw(Canvas(bmpFull), state, calc)
+
+            // Sample bottom band (foreground hill surface): density 100 must cover virtually all of it.
+            var total = 0
+            var changed = 0
+            for (y in 560 until 630) {
+                for (x in 20 until 340) {
+                    val p0 = bmpOff.getPixel(x, y)
+                    val p1 = bmpFull.getPixel(x, y)
+                    if (Color.alpha(p0) < 200) continue
+                    total++
+                    if (p0 != p1) changed++
+                }
+            }
+            val coverage = changed.toFloat() / total.coerceAtLeast(1)
+            assertTrue("Expected near-full leaf carpet coverage at density=100, got ${(coverage * 100).toInt()}%",
+                coverage > 0.90f)
+        } finally {
+            layer.destroy()
+            bmpOff.recycle()
+            bmpFull.recycle()
+        }
+    }
 }

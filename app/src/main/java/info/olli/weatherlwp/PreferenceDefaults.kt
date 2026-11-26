@@ -31,7 +31,7 @@ object PreferenceDefaults {
     const val PARALLAX_STRENGTH = 16  // 1-100%, log scale (subtle but responsive)
     const val PARALLAX_MAX_OFFSET = 30  // % of screen height (balanced depth vs edge coverage)
     const val PARALLAX_RETURN_SPEED = 47  // 0-100 (faster re-centering)
-    const val PARALLAX_SMOOTHING = 1  // 1-100 (very responsive, minimal lag)
+    const val PARALLAX_SMOOTHING = 35  // 0-100 (critically damped spring smoothing)
     const val PARALLAX_DEPTH = 70  // 0-100 (strong 3D layer separation)
     const val PARALLAX_PERSPECTIVE = 100  // 0-100
     const val PARALLAX_ASPECT_RATIO = 100  // 50-150
