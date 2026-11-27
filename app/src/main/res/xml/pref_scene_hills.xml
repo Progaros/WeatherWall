@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="@string/pref_scene_hills_cat_2_title">
+        <SeekBarPreference
+            android:key="pref_hill_lower_start"
+            android:title="@string/pref_hill_lower_start_title"
+            android:summary="@string/pref_hill_lower_start_summary"
+            android:defaultValue="60"
+            android:max="70"
+            app:min="30"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_hill_upper_end"
+            android:title="@string/pref_hill_upper_end_title"
+            android:summary="@string/pref_hill_upper_end_summary"
+            android:defaultValue="95"
+            android:max="100"
+            app:min="60"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_hill_roughness"
+            android:title="@string/pref_hill_roughness_title"
+            android:summary="@string/pref_hill_roughness_summary"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_hill_amplitude"
+            android:title="@string/pref_hill_amplitude_title"
+            android:summary="@string/pref_hill_amplitude_summary"
+            android:defaultValue="354"
+            android:max="1000"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_hill_frequency"
+            android:title="@string/pref_hill_frequency_title"
+            android:summary="@string/pref_hill_frequency_summary"
+            android:defaultValue="170"
+            android:max="200"
+            app:min="25"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_hill_distance"
+            android:title="@string/pref_hill_distance_title"
+            android:summary="@string/pref_hill_distance_summary"
+            android:defaultValue="0"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_hill_depth_spread"
+            android:title="@string/pref_hill_depth_spread_title"
+            android:summary="@string/pref_hill_depth_spread_summary"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

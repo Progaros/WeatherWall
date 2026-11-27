@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="@string/pref_effects_sky_cat_2_title">
+        <SwitchPreferenceCompat
+            android:key="pref_sun_enabled"
+            android:title="@string/pref_sun_enabled_title"
+            android:summary="@string/pref_sun_enabled_summary"
+            android:defaultValue="true" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_moon_enabled"
+            android:title="@string/pref_moon_enabled_title"
+            android:summary="@string/pref_moon_enabled_summary"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_celestial_size"
+            android:title="@string/pref_celestial_size_title"
+            android:summary="@string/pref_celestial_size_summary"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="25"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_celestial_arc_height"
+            android:title="@string/pref_celestial_arc_height_title"
+            android:summary="@string/pref_celestial_arc_height_summary"
+            android:defaultValue="66"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_effects_sky_cat_3_title">
+        <SeekBarPreference
+            android:key="pref_wind_multiplier"
+            android:title="@string/pref_wind_multiplier_title"
+            android:summary="@string/pref_wind_multiplier_summary"
+            android:defaultValue="200"
+            android:max="300"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_tree_sway_speed"
+            android:title="@string/pref_tree_sway_speed_title"
+            android:summary="@string/pref_tree_sway_speed_summary"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

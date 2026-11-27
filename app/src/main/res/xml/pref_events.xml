@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <!-- Events - Essential toggles only, details in sub-screens -->
+    <PreferenceCategory android:title="@string/pref_events_cat_2_title">
+        <info.olli.weatherlwp.settings.ToggleNavPreference
+            android:key="pref_events_enabled"
+            android:title="@string/pref_events_cat_2_title"
+            android:summary="@string/pref_events_enabled_summary"
+            android:defaultValue="true"
+            app:fragment="info.olli.weatherlwp.settings.EventsChooseFragment" />
+
+        <SeekBarPreference
+            android:key="pref_event_frequency"
+            android:title="@string/pref_event_frequency_title"
+            android:summary="@string/pref_event_frequency_summary"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_events_enabled" />
+
+        <Preference
+            android:key="pref_spawn_event"
+            android:title="@string/pref_spawn_event_title"
+            android:summary="@string/pref_spawn_event_summary"
+            android:dependency="pref_events_enabled" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_events_cat_3_title">
+        <info.olli.weatherlwp.settings.ToggleNavPreference
+            android:key="pref_seasonal_enabled"
+            android:title="@string/pref_seasonal_enabled_title_2"
+            android:summary="@string/pref_seasonal_enabled_summary_2"
+            android:defaultValue="true"
+            app:fragment="info.olli.weatherlwp.settings.XmlPreferenceFragment">
+            <extra android:name="xml" android:value="pref_events_seasonal" />
+        </info.olli.weatherlwp.settings.ToggleNavPreference>
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_events_cat_5_title">
+        <info.olli.weatherlwp.settings.ToggleNavPreference
+            android:key="pref_shake_fireworks_enabled"
+            android:title="@string/pref_shake_fireworks_enabled_title"
+            android:summary="@string/pref_shake_fireworks_enabled_summary"
+            android:defaultValue="true"
+            app:fragment="info.olli.weatherlwp.settings.XmlPreferenceFragment">
+            <extra android:name="xml" android:value="pref_events_shake" />
+        </info.olli.weatherlwp.settings.ToggleNavPreference>
+    </PreferenceCategory>
+
+</PreferenceScreen>

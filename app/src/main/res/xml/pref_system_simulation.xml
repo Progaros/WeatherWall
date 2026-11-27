@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="@string/pref_system_simulation_cat_2_title">
+        <SeekBarPreference
+            android:key="pref_manual_time"
+            android:title="@string/pref_manual_time_title"
+            android:summary="@string/pref_manual_time_summary"
+            android:defaultValue="720"
+            android:max="1439"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_wind_strength"
+            android:title="@string/pref_wind_strength_title"
+            android:summary="@string/pref_wind_strength_summary"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <ListPreference
+            android:key="pref_weather_type"
+            android:title="@string/pref_weather_type_title"
+            android:summary="@string/pref_weather_type_summary"
+            android:entries="@array/weather_options"
+            android:entryValues="@array/weather_values"
+            android:defaultValue="auto" />
+
+        <ListPreference
+            android:key="pref_debug_cloud_override"
+            android:title="@string/pref_debug_cloud_override_title"
+            android:summary="@string/pref_debug_cloud_override_summary"
+            android:entries="@array/cloud_density_options"
+            android:entryValues="@array/cloud_density_values"
+            android:defaultValue="auto" />
+
+        <ListPreference
+            android:key="pref_debug_season"
+            android:title="@string/pref_debug_season_title"
+            android:summary="@string/pref_debug_season_summary"
+            android:entries="@array/season_options"
+            android:entryValues="@array/season_values"
+            android:defaultValue="auto" />
+
+        <ListPreference
+            android:key="pref_terrain_season"
+            android:title="@string/pref_terrain_season_title"
+            android:summary="@string/pref_terrain_season_summary"
+            android:entries="@array/terrain_season_options"
+            android:entryValues="@array/terrain_season_values"
+            android:defaultValue="auto" />
+
+        <SeekBarPreference
+            android:key="pref_moon_phase"
+            android:title="@string/pref_moon_phase_title"
+            android:summary="@string/pref_moon_phase_summary"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_season_day_override"
+            android:title="@string/pref_season_day_override_title"
+            android:summary="@string/pref_season_day_override_summary"
+            android:defaultValue="0"
+            android:max="365"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_system_simulation_cat_3_title">
+        <Preference
+            android:key="pref_weather_data_display"
+            android:title="@string/pref_weather_data_display_title"
+            android:summary="@string/pref_weather_data_display_summary"
+            android:selectable="false" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_sim_weather_history"
+            android:title="@string/pref_sim_weather_history_title"
+            android:summary="@string/pref_sim_weather_history_summary"
+            android:defaultValue="false" />
+
+        <SeekBarPreference
+            android:key="pref_sim_snow_level"
+            android:title="@string/pref_sim_snow_level_title"
+            android:summary="@string/pref_sim_snow_level_summary"
+            android:defaultValue="0"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_sim_weather_history" />
+
+        <SeekBarPreference
+            android:key="pref_sim_river_level"
+            android:title="@string/pref_sim_river_level_title"
+            android:summary="@string/pref_sim_river_level_summary"
+            android:defaultValue="0"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_sim_weather_history" />
+
+        <SeekBarPreference
+            android:key="pref_sim_lake_level"
+            android:title="@string/pref_sim_lake_level_title"
+            android:summary="@string/pref_sim_lake_level_summary"
+            android:defaultValue="0"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_sim_weather_history" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

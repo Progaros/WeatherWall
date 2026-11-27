@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="@string/pref_effects_weather_shadows_cat_2_title">
+        <SeekBarPreference
+            android:key="pref_weather_layers"
+            android:title="@string/pref_weather_layers_title"
+            android:summary="@string/pref_weather_layers_summary"
+            android:defaultValue="3"
+            android:max="5"
+            app:min="1"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_weather_layer_separation"
+            android:title="@string/pref_weather_layer_separation_title"
+            android:summary="@string/pref_weather_layer_separation_summary"
+            android:defaultValue="30"
+            android:max="50"
+            app:min="10"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_weather_layer_depth"
+            android:title="@string/pref_weather_layer_depth_title"
+            android:summary="@string/pref_weather_layer_depth_summary"
+            android:defaultValue="20"
+            android:max="40"
+            app:min="10"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_effects_weather_shadows_cat_3_title">
+        <SwitchPreferenceCompat
+            android:key="pref_mountain_shadows_enabled"
+            android:title="@string/pref_mountain_shadows_enabled_title"
+            android:summary="@string/pref_mountain_shadows_enabled_summary"
+            android:defaultValue="true" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_tree_shadows_enabled"
+            android:title="@string/pref_tree_shadows_enabled_title"
+            android:summary="@string/pref_tree_shadows_enabled_summary"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_shadow_strength"
+            android:title="@string/pref_shadow_strength_title"
+            android:summary="@string/pref_shadow_strength_summary"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

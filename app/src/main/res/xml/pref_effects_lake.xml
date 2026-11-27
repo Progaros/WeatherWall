@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <PreferenceCategory android:title="@string/pref_lake_enabled_title">
+        <SwitchPreferenceCompat
+            android:key="pref_lake_enabled"
+            android:title="@string/pref_lake_enabled_title_2"
+            android:summary="@string/pref_lake_enabled_summary_2"
+            android:defaultValue="false" />
+        <SeekBarPreference
+            android:key="pref_lake_position"
+            android:title="@string/pref_lake_position_title"
+            android:summary="@string/pref_lake_position_summary"
+            android:defaultValue="50" android:max="100" app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_lake_enabled" />
+        <SeekBarPreference
+            android:key="pref_lake_size"
+            android:title="@string/pref_lake_size_title"
+            android:summary="@string/pref_lake_size_summary"
+            android:defaultValue="40" android:max="100" app:min="10"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_lake_enabled" />
+        <SeekBarPreference
+            android:key="pref_lake_depth"
+            android:title="@string/pref_lake_depth_title"
+            android:summary="@string/pref_lake_depth_summary"
+            android:defaultValue="40" android:max="100" app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_lake_enabled" />
+        <SeekBarPreference
+            android:key="pref_lake_opacity"
+            android:title="@string/pref_lake_opacity_title"
+            android:defaultValue="75" android:max="100" app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_lake_enabled" />
+    </PreferenceCategory>
+</PreferenceScreen>

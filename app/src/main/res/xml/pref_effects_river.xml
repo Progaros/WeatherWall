@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="@string/pref_river_enabled_title">
+        <SwitchPreferenceCompat
+            android:key="pref_river_enabled"
+            android:title="@string/pref_river_enabled_title_2"
+            android:summary="@string/pref_river_enabled_summary_2"
+            android:defaultValue="false" />
+
+        <ListPreference
+            android:key="pref_river_style"
+            android:title="@string/pref_river_style_title"
+            android:summary="@string/pref_river_style_summary"
+            android:entries="@array/river_style_options"
+            android:entryValues="@array/river_style_values"
+            android:defaultValue="wavy"
+            android:dependency="pref_river_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_river_width"
+            android:title="@string/pref_river_width_title"
+            android:summary="@string/pref_river_width_summary"
+            android:defaultValue="40"
+            android:max="100"
+            app:min="10"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_river_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_river_opacity"
+            android:title="@string/pref_lake_opacity_title"
+            android:summary="@string/pref_river_opacity_summary"
+            android:defaultValue="70"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_river_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_river_speed"
+            android:title="@string/pref_river_speed_title"
+            android:summary="@string/pref_river_speed_summary"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_river_enabled" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

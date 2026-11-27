@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="@string/pref_effects_clouds_cat_2_title">
+        <SeekBarPreference
+            android:key="pref_cloud_density"
+            android:title="@string/pref_cloud_density_title"
+            android:summary="@string/pref_cloud_density_summary"
+            android:defaultValue="120"
+            android:max="300"
+            app:min="50"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_cloud_stretch"
+            android:title="@string/pref_cloud_stretch_title"
+            android:summary="@string/pref_cloud_stretch_summary"
+            android:defaultValue="300"
+            android:max="500"
+            app:min="50"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_cloud_opacity"
+            android:title="@string/pref_cloud_opacity_title"
+            android:summary="@string/pref_cloud_opacity_summary"
+            android:defaultValue="68"
+            android:max="100"
+            app:min="10"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_cloud_speed"
+            android:title="@string/pref_cloud_speed_title"
+            android:summary="@string/pref_cloud_speed_summary"
+            android:defaultValue="45"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+    </PreferenceCategory>
+
+</PreferenceScreen>

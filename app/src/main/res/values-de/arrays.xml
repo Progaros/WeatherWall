@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="fps_options">
+        <item>15 FPS (Energiesparmodus)</item>
+        <item>20 FPS</item>
+        <item>30 FPS</item>
+        <item>45 FPS</item>
+        <item>60 FPS (Am flüssigsten)</item>
+    </string-array>
+
+    <string-array name="weather_options">
+        <item>Auto (Breezy Weather)</item>
+        <item>Keines</item>
+        <item>Regen</item>
+        <item>Schnee</item>
+        <item>Gewitter</item>
+        <item>Nebel</item>
+    </string-array>
+
+    <string-array name="cloud_density_options">
+        <item>Auto (Breezy Weather)</item>
+        <item>Keine</item>
+        <item>Leicht</item>
+        <item>Mittel</item>
+        <item>Stark</item>
+        <item>Bedeckt</item>
+    </string-array>
+
+    <string-array name="season_options">
+        <item>Auto (Echtes Datum)</item>
+        <item>Normal</item>
+        <item>Weihnachten</item>
+        <item>Neujahr</item>
+        <item>Chinesisches Neujahr</item>
+        <item>St. Patrick\'s Day</item>
+    </string-array>
+
+    <string-array name="terrain_season_options">
+        <item>Auto (Echtes Datum)</item>
+        <item>Frühling</item>
+        <item>Sommer</item>
+        <item>Herbst</item>
+        <item>Winter</item>
+    </string-array>
+
+    <string-array name="parallax_sensor_mode_entries">
+        <item>Rotationsvektor (Robust)</item>
+        <item>Gyroskop (Flüssig)</item>
+    </string-array>
+
+    <string-array name="idle_timeout_entries">
+        <item>5 Sekunden</item>
+        <item>10 Sekunden</item>
+        <item>30 Sekunden</item>
+        <item>1 Minute</item>
+        <item>2 Minuten</item>
+        <item>5 Minuten</item>
+    </string-array>
+
+    <string-array name="river_style_options">
+        <item>Flach (Einfach)</item>
+        <item>Wellig (Animiert)</item>
+        <item>Reflektierend (Himmelsspiegel)</item>
+    </string-array>
+</resources>

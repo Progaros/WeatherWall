@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <!-- Christmas -->
+    <PreferenceCategory android:title="@string/pref_events_seasonal_cat_2_title">
+        <SwitchPreferenceCompat
+            android:key="pref_christmas_enabled"
+            android:title="@string/pref_events_seasonal_cat_2_title"
+            android:summary="@string/pref_christmas_enabled_summary"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_christmas_interval"
+            android:title="@string/pref_christmas_interval_title"
+            android:summary="@string/pref_christmas_interval_summary"
+            android:defaultValue="1"
+            android:max="30"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_christmas_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_christmas_star_size"
+            android:title="@string/pref_christmas_star_size_title"
+            android:summary="@string/pref_christmas_star_size_summary"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="50"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_christmas_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_christmas_star_trail"
+            android:title="@string/pref_christmas_star_trail_title"
+            android:summary="@string/pref_christmas_star_trail_summary"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_christmas_enabled" />
+    </PreferenceCategory>
+
+    <!-- New Year -->
+    <PreferenceCategory android:title="@string/pref_events_seasonal_cat_3_title">
+        <SwitchPreferenceCompat
+            android:key="pref_newyear_enabled"
+            android:title="@string/pref_events_seasonal_cat_3_title"
+            android:summary="@string/pref_newyear_enabled_summary"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_newyear_interval"
+            android:title="@string/pref_newyear_interval_title"
+            android:summary="@string/pref_newyear_interval_summary"
+            android:defaultValue="1"
+            android:max="30"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_newyear_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_firework_frequency"
+            android:title="@string/pref_firework_frequency_title"
+            android:summary="@string/pref_firework_frequency_summary"
+            android:defaultValue="45"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_newyear_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_firework_amount"
+            android:title="@string/pref_firework_amount_title"
+            android:summary="@string/pref_firework_amount_summary"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="10"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_newyear_enabled" />
+    </PreferenceCategory>
+
+    <!-- Chinese New Year -->
+    <PreferenceCategory android:title="@string/pref_events_seasonal_cat_4_title">
+        <SwitchPreferenceCompat
+            android:key="pref_cn_newyear_enabled"
+            android:title="@string/pref_events_seasonal_cat_4_title"
+            android:summary="@string/pref_cn_newyear_enabled_summary"
+            android:defaultValue="false" />
+
+        <SeekBarPreference
+            android:key="pref_cn_newyear_interval"
+            android:title="@string/pref_cn_newyear_interval_title"
+            android:summary="@string/pref_cn_newyear_interval_summary"
+            android:defaultValue="0"
+            android:max="30"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_cn_newyear_enabled" />
+    </PreferenceCategory>
+
+    <!-- St. Patrick's Day -->
+    <PreferenceCategory android:title="@string/pref_events_seasonal_cat_5_title">
+        <SwitchPreferenceCompat
+            android:key="pref_st_patricks_enabled"
+            android:title="@string/pref_events_seasonal_cat_5_title"
+            android:summary="@string/pref_st_patricks_enabled_summary"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_st_patricks_interval"
+            android:title="@string/pref_st_patricks_interval_title"
+            android:summary="@string/pref_st_patricks_interval_summary"
+            android:defaultValue="0"
+            android:max="30"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_st_patricks_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_rainbow_position_x"
+            android:title="@string/pref_rainbow_position_x_title"
+            android:summary="@string/pref_rainbow_position_x_summary"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_st_patricks_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_rainbow_position_y"
+            android:title="@string/pref_rainbow_position_y_title"
+            android:summary="@string/pref_rainbow_position_y_summary"
+            android:defaultValue="40"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_st_patricks_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_rainbow_size"
+            android:title="@string/pref_rainbow_size_title"
+            android:summary="@string/pref_rainbow_size_summary"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="20"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_st_patricks_enabled" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

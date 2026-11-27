@@ -1,0 +1,304 @@
+package info.olli.weatherlwp.rendering
+
+import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Typeface
+import info.olli.weatherlwp.parallax.ParallaxCalculator
+import info.olli.weatherlwp.simulation.SimulationSettings
+import info.olli.weatherlwp.simulation.SimulationState
+import java.util.Locale
+
+/**
+ * Debug overlay layer that displays performance and state information.
+ * Renders on top of vignette so it's always visible.
+ * 
+ * Displays selectable info:
+ * - FPS (current and average)
+ * - Frame time in ms
+ * - Power saving / idle mode status
+ * - Time of day
+ * - Weather type
+ * - Wind strength
+ * - Cloud density
+ * - Active events count
+ * - Moon phase (at night)
+ * - Parallax offset
+ */
+class DebugOverlayLayer(private val context: Context) : SceneLayer {
+    override val layerType = LayerType.DEBUG_OVERLAY
+    
+    // Available debug data items
+    enum class DebugItem(val key: String, val label: String) {
+        FPS("fps", "FPS"),
+        FRAME_TIME("frame_time", "Frame Time"),
+        POWER_MODE("power_mode", "Power Mode"),
+        TIME_OF_DAY("time_of_day", "Time of Day"),
+        WEATHER("weather", "Weather"),
+        WIND("wind", "Wind"),
+        CLOUDS("clouds", "Cloud Density"),
+        EVENTS("events", "Active Events"),
+        MOON("moon", "Moon Phase"),
+        PARALLAX("parallax", "Parallax Offset"),
+        SIMULATION("simulation", "Simulation")
+    }
+    
+    private var enabled = false
+    private var enabledItems = mutableSetOf<DebugItem>()
+    private var simulationEnabled = false
+    
+    private var height = 0f
+    
+    // Frame timing
+    private var lastFrameTimeNanos = 0L
+    private var currentFps = 0f
+    private var avgFps = 0f
+    private var frameTimeMs = 0f
+    private var frameCount = 0
+    private var fpsAccumulator = 0f
+    private val FPS_SAMPLE_SIZE = 30
+    
+    // External state (set by ParallaxScene)
+    var activeEventCount: Int = 0
+    var isIdleMode: Boolean = false
+    var parallaxOffsetX: Float = 0f
+    var parallaxOffsetY: Float = 0f
+    
+    private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(180, 0, 0, 0)
+        style = Paint.Style.FILL
+    }
+    
+    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textSize = 28f
+        typeface = Typeface.MONOSPACE
+    }
+    
+    private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(255, 150, 255, 150)  // Light green for values
+        textSize = 28f
+        typeface = Typeface.MONOSPACE
+    }
+    
+    private val warningPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(255, 255, 150, 100)  // Orange for warnings
+        textSize = 28f
+        typeface = Typeface.MONOSPACE
+    }
+    
+    private val enabledPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(255, 80, 220, 80)  // Green for enabled
+        textSize = 28f
+        typeface = Typeface.MONOSPACE
+    }
+    
+    private val disabledPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(255, 220, 80, 80)  // Red for disabled
+        textSize = 28f
+        typeface = Typeface.MONOSPACE
+    }
+    
+    init {
+        reloadSettings(SimulationSettings.fromSnapshot(emptyMap<String, Any?>()))
+    }
+    
+    override fun resize(w: Float, h: Float) {
+        height = h
+        // Scale text size based on screen density
+        val scaleFactor = (h / 2000f).coerceIn(0.6f, 1.5f)
+        textPaint.textSize = 28f * scaleFactor
+        valuePaint.textSize = 28f * scaleFactor
+        warningPaint.textSize = 28f * scaleFactor
+        enabledPaint.textSize = 28f * scaleFactor
+        disabledPaint.textSize = 28f * scaleFactor
+    }
+    
+    override fun update(state: SimulationState, deltaTimeMs: Long) {
+        if (!enabled) return
+        
+        // Calculate FPS
+        val currentNanos = System.nanoTime()
+        if (lastFrameTimeNanos > 0) {
+            val deltaNanos = currentNanos - lastFrameTimeNanos
+            frameTimeMs = deltaNanos / 1_000_000f
+            currentFps = 1_000_000_000f / deltaNanos
+            
+            // Accumulate for average
+            fpsAccumulator += currentFps
+            frameCount++
+            
+            if (frameCount >= FPS_SAMPLE_SIZE) {
+                avgFps = fpsAccumulator / frameCount
+                fpsAccumulator = 0f
+                frameCount = 0
+            }
+        }
+        lastFrameTimeNanos = currentNanos
+    }
+    
+    override fun draw(canvas: Canvas, state: SimulationState, parallaxCalculator: ParallaxCalculator) {
+        if (!enabled || enabledItems.isEmpty()) return
+        
+        val lines = mutableListOf<Triple<String, String, Boolean>>()  // label, value, isWarning
+        
+        // Build lines based on enabled items
+        for (item in enabledItems) {
+            val (label, value, isWarning) = when (item) {
+                DebugItem.FPS -> {
+                    val fpsStr = String.format(Locale.US, "%.1f / %.1f", currentFps, avgFps)
+                    val warn = currentFps < 25f
+                    Triple("FPS (cur/avg)", fpsStr, warn)
+                }
+                DebugItem.FRAME_TIME -> {
+                    val ftStr = String.format(Locale.US, "%.1f ms", frameTimeMs)
+                    val warn = frameTimeMs > 30f
+                    Triple("Frame Time", ftStr, warn)
+                }
+                DebugItem.POWER_MODE -> {
+                    val modeStr = if (isIdleMode) "IDLE (Power Save)" else "Normal"
+                    Triple("Power Mode", modeStr, isIdleMode)
+                }
+                DebugItem.TIME_OF_DAY -> {
+                    val hours = state.timeOfDayHours.toInt()
+                    val minutes = ((state.timeOfDayHours - hours) * 60).toInt()
+                    val timeStr = String.format(Locale.US, "%02d:%02d", hours, minutes)
+                    val period = when {
+                        state.isNight -> "Night"
+                        state.isDawn -> "Dawn"
+                        state.isDusk -> "Dusk"
+                        else -> "Day"
+                    }
+                    Triple("Time", "$timeStr ($period)", false)
+                }
+                DebugItem.WEATHER -> {
+                    Triple("Weather", state.weather.name, false)
+                }
+                DebugItem.WIND -> {
+                    val windStr = String.format(Locale.US, "%.0f%% @ %.0f°", state.windStrength * 100, state.windDirection)
+                    val warn = state.windStrength > 0.8f
+                    Triple("Wind", windStr, warn)
+                }
+                DebugItem.CLOUDS -> {
+                    val cloudCount = state.getCloudCount()
+                    val modeStr = if (state.cloudDensity.name == "AUTO") {
+                        "${cloudCount} (${(state.cloudCover * 100).toInt()}%)"
+                    } else {
+                        "${cloudCount} (${state.cloudDensity.name})"
+                    }
+                    Triple("Clouds", modeStr, false)
+                }
+                DebugItem.EVENTS -> {
+                    Triple("Events", activeEventCount.toString(), false)
+                }
+                DebugItem.MOON -> {
+                    if (state.isNight) {
+                        val phaseStr = when {
+                            state.moonPhase < 0.1f || state.moonPhase > 0.9f -> "New"
+                            state.moonPhase < 0.25f -> "Waxing Crescent"
+                            state.moonPhase < 0.35f -> "First Quarter"
+                            state.moonPhase < 0.45f -> "Waxing Gibbous"
+                            state.moonPhase < 0.55f -> "Full"
+                            state.moonPhase < 0.65f -> "Waning Gibbous"
+                            state.moonPhase < 0.75f -> "Last Quarter"
+                            else -> "Waning Crescent"
+                        }
+                        Triple("Moon", phaseStr, false)
+                    } else {
+                        Triple("Moon", "N/A (day)", false)
+                    }
+                }
+                DebugItem.PARALLAX -> {
+                    val offsetStr = String.format(Locale.US, "%.1f, %.1f", parallaxOffsetX, parallaxOffsetY)
+                    Triple("Parallax", offsetStr, false)
+                }
+                DebugItem.SIMULATION -> {
+                    Triple("Simulation", if (simulationEnabled) "true" else "false", false)
+                }
+            }
+            lines.add(Triple(label, value, isWarning))
+        }
+        
+        if (lines.isEmpty()) return
+        
+        // Check if simulation item is present (needs extra line for button)
+        val hasSimulation = enabledItems.contains(DebugItem.SIMULATION)
+        val buttonLineExtra = if (hasSimulation) textPaint.textSize * 1.3f else 0f
+        
+        // Calculate background size dynamically based on content
+        val padding = 16f
+        val lineHeight = textPaint.textSize * 1.4f
+        val bgHeight = lines.size * lineHeight + buttonLineExtra + padding * 2
+        
+        // Calculate minimum width needed for label + gap + value
+        var maxContentWidth = 0f
+        val labelValueGap = textPaint.textSize * 2f  // Gap between label and value
+        for ((label, value, isWarning) in lines) {
+            val labelWidth = textPaint.measureText("$label:")
+            val paint = if (isWarning) warningPaint else valuePaint
+            val valueWidth = paint.measureText(value)
+            val totalWidth = labelWidth + labelValueGap + valueWidth
+            if (totalWidth > maxContentWidth) maxContentWidth = totalWidth
+        }
+        
+        // Minimum width to avoid overlapping (at least 400 scaled, or content width + padding)
+        val minWidth = 400f * (textPaint.textSize / 28f)
+        val bgWidth = maxOf(maxContentWidth + padding * 2, minWidth)
+        
+        // Position at bottom-left, above vignette
+        val bgLeft = padding
+        val bgTop = height - bgHeight - padding - (height * 0.08f)  // Above bottom vignette
+        
+        // Draw background
+        canvas.drawRoundRect(bgLeft, bgTop, bgLeft + bgWidth, bgTop + bgHeight, 12f, 12f, backgroundPaint)
+        
+        // Draw lines
+        var y = bgTop + padding + textPaint.textSize
+        for ((label, value, isWarning) in lines) {
+            // Draw label
+            canvas.drawText("$label:", bgLeft + padding, y, textPaint)
+            
+            // Draw value (right-aligned area)
+            val paint = if (isWarning) warningPaint else valuePaint
+            val valueWidth = paint.measureText(value)
+            canvas.drawText(value, bgLeft + bgWidth - padding - valueWidth, y, paint)
+            
+            y += lineHeight
+            
+            // Draw centered "Enabled"/"Disabled" button below simulation line
+            if (label == "Simulation") {
+                val buttonPaint = if (simulationEnabled) enabledPaint else disabledPaint
+                val buttonText = if (simulationEnabled) "Enabled" else "Disabled"
+                val buttonWidth = buttonPaint.measureText(buttonText)
+                val buttonX = bgLeft + (bgWidth - buttonWidth) / 2f
+                canvas.drawText(buttonText, buttonX, y, buttonPaint)
+                y += textPaint.textSize * 1.3f
+            }
+        }
+    }
+    
+    override fun reloadSettings(settings: SimulationSettings) {
+        enabled = settings.getBoolean("pref_debug_overlay_enabled", false)
+        simulationEnabled = settings.debugEnabled
+
+        // Load enabled items from settings snapshot
+        enabledItems.clear()
+        val raw = settings.snapshot["pref_debug_overlay_items"]
+        val itemsSet = raw as? Set<*>
+        if (itemsSet != null) {
+            for (key in itemsSet) {
+                val keyString = key as? String ?: continue
+                DebugItem.entries.find { it.key == keyString }?.let { enabledItems.add(it) }
+            }
+        } else {
+            // Default: show FPS and Frame Time
+            enabledItems.add(DebugItem.FPS)
+            enabledItems.add(DebugItem.FRAME_TIME)
+        }
+    }
+    
+    override fun destroy() {
+        // No resources to release
+    }
+}

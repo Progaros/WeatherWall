@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="@string/pref_effects_parallax_cat_2_title">
+        <ListPreference
+            android:key="pref_parallax_sensor_mode"
+            android:title="@string/pref_parallax_sensor_mode_title"
+            android:summary="@string/pref_parallax_sensor_mode_summary"
+            android:defaultValue="gyroscope"
+            android:entries="@array/parallax_sensor_mode_entries"
+            android:entryValues="@array/parallax_sensor_mode_values" />
+
+        <SeekBarPreference
+            android:key="pref_parallax_strength"
+            android:title="@string/pref_parallax_strength_title"
+            android:summary="@string/pref_parallax_strength_summary"
+            android:defaultValue="16"
+            android:max="100"
+            app:min="1"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_parallax_max_offset"
+            android:title="@string/pref_parallax_max_offset_title"
+            android:summary="@string/pref_parallax_max_offset_summary"
+            android:defaultValue="30"
+            android:max="40"
+            app:min="2"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_parallax_aspect_ratio"
+            android:title="@string/pref_parallax_aspect_ratio_title"
+            android:summary="@string/pref_parallax_aspect_ratio_summary"
+            android:defaultValue="100"
+            android:max="150"
+            app:min="50"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_parallax_invert_x"
+            android:title="@string/pref_parallax_invert_x_title"
+            android:summary="@string/pref_parallax_invert_x_summary"
+            android:defaultValue="false" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_parallax_invert_y"
+            android:title="@string/pref_parallax_invert_y_title"
+            android:summary="@string/pref_parallax_invert_y_summary"
+            android:defaultValue="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_effects_parallax_cat_3_title">
+        <SeekBarPreference
+            android:key="pref_parallax_return_speed"
+            android:title="@string/pref_parallax_return_speed_title"
+            android:summary="@string/pref_parallax_return_speed_summary"
+            android:defaultValue="47"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_parallax_smoothing"
+            android:title="@string/pref_parallax_smoothing_title"
+            android:summary="@string/pref_parallax_smoothing_summary"
+            android:defaultValue="35"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_parallax_edge_easing"
+            android:title="@string/pref_parallax_edge_easing_title"
+            android:summary="@string/pref_parallax_edge_easing_summary"
+            android:defaultValue="10"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_parallax_return_unlocked"
+            android:title="@string/pref_parallax_return_unlocked_title"
+            android:summary="@string/pref_parallax_return_unlocked_summary"
+            android:defaultValue="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_effects_parallax_cat_4_title">
+        <SeekBarPreference
+            android:key="pref_parallax_depth"
+            android:title="@string/pref_parallax_depth_title"
+            android:summary="@string/pref_parallax_depth_summary"
+            android:defaultValue="70"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_parallax_perspective"
+            android:title="@string/pref_parallax_perspective_title"
+            android:summary="@string/pref_parallax_perspective_summary"
+            android:defaultValue="100"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

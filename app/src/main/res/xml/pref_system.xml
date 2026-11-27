@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <!-- System - Essential settings only, details in sub-screens -->
+    <PreferenceCategory android:title="@string/pref_system_cat_2_title">
+        <SwitchPreferenceCompat
+            android:key="pref_daynight_enabled"
+            android:title="@string/pref_daynight_enabled_title"
+            android:summary="@string/pref_daynight_enabled_summary"
+            android:defaultValue="true" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_use_breezy_weather"
+            android:title="@string/pref_use_breezy_weather_title"
+            android:summary="@string/pref_use_breezy_weather_summary"
+            android:defaultValue="true" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_weather_enabled"
+            android:title="@string/pref_weather_enabled_title_2"
+            android:summary="@string/pref_weather_enabled_summary_2"
+            android:defaultValue="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_system_cat_3_title">
+        <ListPreference
+            android:key="pref_max_fps"
+            android:title="@string/pref_max_fps_title"
+            android:summary="@string/pref_max_fps_summary"
+            android:entries="@array/fps_options"
+            android:entryValues="@array/fps_values"
+            android:defaultValue="30" />
+
+        <info.olli.weatherlwp.settings.ToggleNavPreference
+            android:key="pref_idle_mode_enabled"
+            android:title="@string/pref_idle_mode_enabled_title"
+            android:summary="@string/pref_idle_mode_enabled_summary"
+            android:defaultValue="true"
+            app:fragment="info.olli.weatherlwp.settings.XmlPreferenceFragment">
+            <extra android:name="xml" android:value="pref_system_idle" />
+        </info.olli.weatherlwp.settings.ToggleNavPreference>
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_system_cat_5_title">
+        <info.olli.weatherlwp.settings.ToggleNavPreference
+            android:key="pref_debug_enabled"
+            android:title="@string/pref_debug_enabled_title"
+            android:summary="@string/pref_debug_enabled_summary"
+            android:defaultValue="false"
+            app:fragment="info.olli.weatherlwp.settings.SystemSimulationFragment" />
+
+        <Preference
+            android:key="pref_nav_about"
+            android:title="@string/pref_nav_about_title"
+            android:summary="@string/pref_nav_about_summary"
+            app:fragment="info.olli.weatherlwp.settings.SystemAboutFragment" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_system_cat_6_title">
+        <Preference
+            android:key="pref_reset_defaults"
+            android:title="@string/pref_reset_defaults_title"
+            android:summary="@string/pref_reset_defaults_summary" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

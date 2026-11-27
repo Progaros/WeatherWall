@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="@string/pref_system_about_cat_2_title">
+        <Preference
+            android:key="pref_version"
+            android:title="@string/pref_system_about_cat_2_title"
+            android:selectable="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_system_about_cat_3_title">
+        <Preference
+            android:key="pref_check_breezy"
+            android:title="@string/pref_check_breezy_title"
+            android:summary="@string/pref_check_breezy_summary" />
+
+        <Preference
+            android:key="pref_copy_weather_data"
+            android:title="@string/pref_copy_weather_data_title"
+            android:summary="@string/pref_copy_weather_data_summary" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_system_about_cat_4_title">
+        <SwitchPreferenceCompat
+            android:key="pref_debug_logging"
+            android:title="@string/pref_debug_logging_title"
+            android:summary="@string/pref_debug_logging_summary"
+            android:defaultValue="false" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_debug_frame_timing"
+            android:title="@string/pref_debug_frame_timing_title"
+            android:summary="@string/pref_debug_frame_timing_summary"
+            android:defaultValue="false" />
+
+        <info.olli.weatherlwp.settings.DebugOverlayPreference
+            android:key="pref_debug_overlay_enabled"
+            android:title="@string/pref_debug_overlay_enabled_title"
+            android:summary="@string/pref_debug_overlay_enabled_summary"
+            android:defaultValue="false" />
+
+        <Preference
+            android:key="pref_copy_crash_log"
+            android:title="@string/pref_copy_crash_log_title"
+            android:summary="@string/pref_copy_crash_log_summary" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_system_about_cat_5_title">
+        <Preference
+            android:key="pref_copy_settings"
+            android:title="@string/pref_copy_settings_title"
+            android:summary="@string/pref_copy_settings_summary" />
+
+        <Preference
+            android:key="pref_preview"
+            android:title="@string/pref_preview_title"
+            android:summary="@string/pref_preview_summary" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

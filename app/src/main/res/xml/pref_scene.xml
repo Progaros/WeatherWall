@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <!-- Scene Settings - Essential controls only, details in sub-screens -->
+    <PreferenceCategory android:title="@string/pref_scene_cat_2_title">
+        <SeekBarPreference
+            android:key="pref_random_seed"
+            android:title="@string/pref_random_seed_title"
+            android:summary="@string/pref_random_seed_summary"
+            android:defaultValue="208"
+            android:max="999"
+            app:min="1"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_scene_cat_3_title">
+        <SeekBarPreference
+            android:key="pref_mountain_density"
+            android:title="@string/pref_mountain_density_title"
+            android:summary="@string/pref_mountain_density_summary"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <Preference
+            android:key="pref_nav_mountains"
+            android:title="@string/pref_nav_mountains_title"
+            android:summary="@string/pref_nav_mountains_summary"
+            app:fragment="info.olli.weatherlwp.settings.XmlPreferenceFragment">
+            <extra android:name="xml" android:value="pref_scene_mountains" />
+        </Preference>
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_scene_cat_5_title">
+        <SeekBarPreference
+            android:key="pref_hill_count"
+            android:title="@string/pref_hill_count_title"
+            android:summary="@string/pref_hill_count_summary"
+            android:defaultValue="5"
+            android:max="20"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <Preference
+            android:key="pref_nav_hills"
+            android:title="@string/pref_nav_hills_title"
+            android:summary="@string/pref_nav_hills_summary"
+            app:fragment="info.olli.weatherlwp.settings.XmlPreferenceFragment">
+            <extra android:name="xml" android:value="pref_scene_hills" />
+        </Preference>
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_scene_cat_7_title">
+        <SeekBarPreference
+            android:key="pref_tree_density"
+            android:title="@string/pref_tree_density_title"
+            android:summary="@string/pref_tree_density_summary"
+            android:defaultValue="45"
+            android:max="200"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <Preference
+            android:key="pref_nav_trees"
+            android:title="@string/pref_nav_trees_title"
+            android:summary="@string/pref_nav_trees_summary"
+            app:fragment="info.olli.weatherlwp.settings.XmlPreferenceFragment">
+            <extra android:name="xml" android:value="pref_scene_trees" />
+        </Preference>
+    </PreferenceCategory>
+
+</PreferenceScreen>

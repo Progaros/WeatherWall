@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Launcher icon background color (sky blue to match app theme) -->
+    <color name="ic_launcher_background">#4fc3f7</color>
+
+    <!-- Material 3 fallback palette (Light) - atmospheric sky & slate -->
+    <color name="md_primary">#216487</color>
+    <color name="md_on_primary">#FFFFFF</color>
+    <color name="md_primary_container">#C6E7FF</color>
+    <color name="md_on_primary_container">#001E2E</color>
+    <color name="md_secondary">#4F616E</color>
+    <color name="md_on_secondary">#FFFFFF</color>
+    <color name="md_secondary_container">#D2E5F5</color>
+    <color name="md_on_secondary_container">#0B1D29</color>
+    <color name="md_surface">#F6FAFE</color>
+    <color name="md_surface_container_low">#F0F4F8</color>
+    <color name="md_surface_container">#EAEFF4</color>
+    <color name="md_surface_container_high">#E4E9EE</color>
+    <color name="md_on_surface">#181C20</color>
+    <color name="md_on_surface_variant">#41484D</color>
+    <color name="md_outline_variant">#C1C7CE</color>
+</resources>

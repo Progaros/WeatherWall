@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="@string/pref_effects_seasonal_cat_2_title">
+        <SwitchPreferenceCompat
+            android:key="pref_weather_snow_enabled"
+            android:title="@string/pref_weather_snow_enabled_title"
+            android:summary="@string/pref_weather_snow_enabled_summary"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_season_transition_days"
+            android:title="@string/pref_season_transition_days_title"
+            android:summary="@string/pref_season_transition_days_summary"
+            android:defaultValue="14"
+            android:max="30"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_effects_seasonal_cat_3_title">
+        <SwitchPreferenceCompat
+            android:key="pref_spring_flowers"
+            android:title="@string/pref_spring_flowers_title"
+            android:summary="@string/pref_spring_flowers_summary"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_spring_flower_density"
+            android:title="@string/pref_spring_flower_density_title"
+            android:summary="@string/pref_spring_flower_density_summary"
+            android:defaultValue="500"
+            android:max="1000"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_spring_flowers" />
+
+        <SeekBarPreference
+            android:key="pref_spring_flower_spread"
+            android:title="@string/pref_spring_flower_spread_title"
+            android:summary="@string/pref_spring_flower_spread_summary"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_spring_flowers" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_effects_seasonal_cat_4_title">
+        <SwitchPreferenceCompat
+            android:key="pref_bushes_enabled"
+            android:title="@string/pref_effects_seasonal_cat_4_title"
+            android:summary="@string/pref_bushes_enabled_summary"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_bush_density"
+            android:title="@string/pref_bush_density_title"
+            android:summary="@string/pref_bush_density_summary"
+            android:defaultValue="30"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_bushes_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_bush_size"
+            android:title="@string/pref_bush_size_title"
+            android:summary="@string/pref_bush_size_summary"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="50"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_bushes_enabled" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_berries_enabled"
+            android:title="@string/pref_berries_enabled_title"
+            android:summary="@string/pref_berries_enabled_summary"
+            android:defaultValue="true"
+            android:dependency="pref_bushes_enabled" />
+
+        <SeekBarPreference
+            android:key="pref_berry_density"
+            android:title="@string/pref_berry_density_title"
+            android:summary="@string/pref_berry_density_summary"
+            android:defaultValue="30"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_berries_enabled" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_effects_seasonal_cat_5_title">
+        <SwitchPreferenceCompat
+            android:key="pref_autumn_grass"
+            android:title="@string/pref_autumn_grass_title"
+            android:summary="@string/pref_autumn_grass_summary"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_autumn_grass_intensity"
+            android:title="@string/pref_autumn_grass_intensity_title"
+            android:summary="@string/pref_autumn_grass_intensity_summary"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_autumn_grass" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_fallen_leaves_enabled"
+            android:title="@string/pref_fallen_leaves_enabled_title"
+            android:summary="@string/pref_fallen_leaves_enabled_summary"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_fallen_leaves_density"
+            android:title="@string/pref_fallen_leaves_density_title"
+            android:summary="@string/pref_fallen_leaves_density_summary"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_fallen_leaves_enabled" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_mushrooms_enabled"
+            android:title="@string/pref_mushrooms_enabled_title"
+            android:summary="@string/pref_mushrooms_enabled_summary"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_mushroom_density"
+            android:title="@string/pref_mushroom_density_title"
+            android:summary="@string/pref_mushroom_density_summary"
+            android:defaultValue="12"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_mushrooms_enabled" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_pinecones_enabled"
+            android:title="@string/pref_pinecones_enabled_title"
+            android:summary="@string/pref_pinecones_enabled_summary"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_pinecone_density"
+            android:title="@string/pref_pinecone_density_title"
+            android:summary="@string/pref_pinecone_density_summary"
+            android:defaultValue="30"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_pinecones_enabled" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_effects_seasonal_cat_6_title">
+        <SwitchPreferenceCompat
+            android:key="pref_winter_snow_hills"
+            android:title="@string/pref_winter_snow_hills_title"
+            android:summary="@string/pref_winter_snow_hills_summary"
+            android:defaultValue="true" />
+
+        <SeekBarPreference
+            android:key="pref_winter_snow_coverage"
+            android:title="@string/pref_winter_snow_coverage_title"
+            android:summary="@string/pref_winter_snow_coverage_summary"
+            android:defaultValue="25"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true"
+            android:dependency="pref_winter_snow_hills" />
+
+        <SwitchPreferenceCompat
+            android:key="pref_frost_enabled"
+            android:title="@string/pref_frost_enabled_title"
+            android:summary="@string/pref_frost_enabled_summary"
+            android:defaultValue="true" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Cloud silhouette -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M33,44 C29.5,44 27,41.5 27,38.5 C27,35.8 29,33.6 31.6,33.1 C32.7,30.1 35.6,28 39,28 C42.8,28 46,30.6 46.8,34.1 C49.2,34.5 51,36.5 51,39 C51,41.8 48.8,44 46,44 Z" />
+    <!-- Sun/moon disc behind peak -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M66,46 A7,7 0 1,0 66,60 A7,7 0 1,0 66,46 Z" />
+    <!-- Low-poly mountain peak -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M54,36 L82,80 L26,80 Z" />
+</vector>

@@ -1,0 +1,102 @@
+when:
+  event: [push, pull_request, tag, manual]
+
+steps:
+  # 1. Prepare & Download Dependencies
+  - name: prepare
+    # DEFINE ANCHOR HERE: &img
+    image: &img ghcr.io/cirruslabs/android-sdk:35
+    environment:
+      # DEFINE ANCHOR HERE: &cache_path
+      GRADLE_USER_HOME: &cache_path .gradle
+    commands:
+      - chmod +x gradlew
+      # Signals when Google stops rejecting this runner's IP, so the mirror can be dropped again
+      - curl -sS -o /dev/null -w 'dl.google.com=%{http_code}\n' --max-time 30 https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/8.11.1/gradle-8.11.1.pom || true
+      - ./gradlew :app:dependencies --no-daemon
+      - yes | sdkmanager --licenses || true
+
+  # 2. Lint Analysis
+  - name: lint
+    image: *img  # Reuse anchor
+    environment:
+      GRADLE_USER_HOME: *cache_path  # Reuse anchor
+    commands:
+      - ./gradlew lintDebug --no-daemon
+      - echo "Lint report available at app/build/reports/lint-results-debug.html"
+    when:
+      event: [pull_request, push, manual]
+
+  # 3. Unit Tests
+  - name: test
+    image: *img
+    environment:
+      GRADLE_USER_HOME: *cache_path
+    commands:
+      - ./gradlew testDebugUnitTest --no-daemon
+
+  # 4. Build APK
+  - name: build
+    image: *img
+    environment:
+      GRADLE_USER_HOME: *cache_path
+    commands:
+      - ./gradlew assembleRelease --no-daemon
+      - ./gradlew -q :app:printVersionName --no-daemon > .version
+      - |
+        if [ "$(grep -c '' .version)" != 1 ] || ! grep -Eqx '[0-9A-Za-z._-]+' .version; then
+          echo "printVersionName returned an empty or invalid version:"
+          cat .version
+          exit 1
+        fi
+      - VERSION=$(cat .version)
+      - echo "Built version $VERSION"
+      - cp app/build/outputs/apk/release/app-release.apk "WeatherWall-v$VERSION.apk"
+
+  # 5. Publish Release
+  - name: release
+    image: curlimages/curl:8.6.0
+    environment:
+      FORGEJO_TOKEN:
+        from_secret: forgejo_token
+    commands:
+      - VERSION=$(cat .version)
+      - APK_FILE="WeatherWall-v$VERSION.apk"
+      - |
+        echo "Checking release v$VERSION..."
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token $FORGEJO_TOKEN" "https://git.olli.info/api/v1/repos/Oliver/WeatherWall/releases/tags/v$VERSION")
+        
+        if [ "$HTTP_CODE" = "200" ]; then 
+          echo "Release v$VERSION already exists. Skipping."
+          exit 0
+        fi
+
+        echo "Creating release v$VERSION..."
+        CREATE_CODE=$(curl -sS -o release.json -w '%{http_code}' -X POST -H "Authorization: token $FORGEJO_TOKEN" -H "Content-Type: application/json" \
+          -d "{\"tag_name\": \"v$VERSION\", \"name\": \"v$VERSION\", \"body\": \"Automated release v$VERSION\"}" \
+          "https://git.olli.info/api/v1/repos/Oliver/WeatherWall/releases")
+
+        if [ "$CREATE_CODE" != "201" ]; then
+          echo "Error creating release (HTTP $CREATE_CODE). Response:"
+          cat release.json
+          exit 1
+        fi
+
+        # The release object's own id is its first key; nested ids (author, assets) come later.
+        REL_ID=$(tr -d '\r\n' < release.json | grep -oE '^[[:space:]]*\{[[:space:]]*"id"[[:space:]]*:[[:space:]]*[0-9]+' | grep -oE '[0-9]+$' || true)
+
+        if [ -z "$REL_ID" ]; then
+          echo "Could not parse release id. Response:"
+          cat release.json
+          exit 1
+        fi
+
+        echo "Uploading $APK_FILE..."
+        curl -sS --fail-with-body -X POST -H "Authorization: token $FORGEJO_TOKEN" -H "Content-Type: application/octet-stream" \
+          --data-binary "@$APK_FILE" \
+          "https://git.olli.info/api/v1/repos/Oliver/WeatherWall/releases/$REL_ID/assets?name=$APK_FILE"
+        
+        echo "Done!"
+    when:
+      branch: [main, develop]
+      event: push

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="@string/pref_events_shake_cat_2_title">
+        <SeekBarPreference
+            android:key="pref_shake_fireworks_count"
+            android:title="@string/pref_shake_fireworks_count_title"
+            android:summary="@string/pref_shake_fireworks_count_summary"
+            android:defaultValue="15"
+            android:max="50"
+            app:min="5"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_shake_sensitivity"
+            android:title="@string/pref_shake_sensitivity_title"
+            android:summary="@string/pref_shake_sensitivity_summary"
+            android:defaultValue="5"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_shake_delay"
+            android:title="@string/pref_shake_delay_title"
+            android:summary="@string/pref_shake_delay_summary"
+            android:defaultValue="3500"
+            android:max="5000"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

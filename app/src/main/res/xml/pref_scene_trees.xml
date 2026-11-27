@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="@string/pref_scene_trees_cat_2_title">
+        <SeekBarPreference
+            android:key="pref_leaf_tree_ratio"
+            android:title="@string/pref_leaf_tree_ratio_title"
+            android:summary="@string/pref_leaf_tree_ratio_summary"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_scene_trees_cat_3_title">
+        <SeekBarPreference
+            android:key="pref_tree_spread"
+            android:title="@string/pref_tree_spread_title"
+            android:summary="@string/pref_tree_spread_summary"
+            android:defaultValue="75"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_tree_sparsity"
+            android:title="@string/pref_tree_sparsity_title"
+            android:summary="@string/pref_tree_sparsity_summary"
+            android:defaultValue="25"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_scene_trees_cat_4_title">
+        <SeekBarPreference
+            android:key="pref_tree_size_randomness"
+            android:title="@string/pref_tree_size_randomness_title"
+            android:summary="@string/pref_tree_size_randomness_summary"
+            android:defaultValue="20"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_tree_size"
+            android:title="@string/pref_tree_size_title"
+            android:summary="@string/pref_tree_size_summary"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="25"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_tree_width"
+            android:title="@string/pref_tree_width_title"
+            android:summary="@string/pref_tree_width_summary"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="20"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_tree_segments"
+            android:title="@string/pref_tree_segments_title"
+            android:summary="@string/pref_tree_segments_summary"
+            android:defaultValue="1"
+            android:max="5"
+            app:min="1"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_tree_color_variation"
+            android:title="@string/pref_tree_color_variation_title"
+            android:summary="@string/pref_tree_color_variation_summary"
+            android:defaultValue="50"
+            android:max="100"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

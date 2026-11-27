@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="@string/pref_scene_mountains_cat_2_title">
+        <SeekBarPreference
+            android:key="pref_mountain_width"
+            android:title="@string/pref_mountain_width_title"
+            android:summary="@string/pref_mountain_width_summary"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="50"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_mountain_height"
+            android:title="@string/pref_mountain_height_title"
+            android:summary="@string/pref_mountain_height_summary"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="25"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_mountain_roughness"
+            android:title="@string/pref_mountain_roughness_title"
+            android:summary="@string/pref_mountain_roughness_summary"
+            android:defaultValue="80"
+            android:max="200"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_mountain_ridge_roughness"
+            android:title="@string/pref_mountain_ridge_roughness_title"
+            android:summary="@string/pref_mountain_ridge_roughness_summary"
+            android:defaultValue="50"
+            android:max="200"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+
+        <SeekBarPreference
+            android:key="pref_mountain_bottom_offset"
+            android:title="@string/pref_mountain_bottom_offset_title"
+            android:summary="@string/pref_mountain_bottom_offset_summary"
+            android:defaultValue="0"
+            android:max="50"
+            app:min="0"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="true" />
+    </PreferenceCategory>
+
+</PreferenceScreen>
